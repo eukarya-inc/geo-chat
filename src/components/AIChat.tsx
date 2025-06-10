@@ -11,6 +11,7 @@ interface AIChatProps {
     db: AsyncDuckDB;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function AIChat({ db }: AIChatProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
