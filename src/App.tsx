@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import AIChat from './components/AIChat';
 import MapComponent from './components/Map';
 import RemoteFile from './components/RemoteFile';
 import TableList from './components/TableList';
@@ -41,6 +42,7 @@ function App() {
                     selectedColumns={selectedColumns[selectedTable || ''] || []}
                 />
             )}
+            {db && <AIChat db={db} />}
         </>
     );
 }

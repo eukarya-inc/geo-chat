@@ -1,5 +1,7 @@
+/// <reference types="vitest" />
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
+
 // https://vite.dev/config/
 export default defineConfig({
     base: '/duckdb-wasm-prototype/',
@@ -13,6 +15,7 @@ export default defineConfig({
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
     },
+    //@ts-expect-error vitest config is not typed
     test: {
         globals: true,
         environment: 'jsdom',
