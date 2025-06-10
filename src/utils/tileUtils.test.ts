@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import { getTileEnvelope, getZxyFromUrl } from './tileUtils';
 
 describe('getTileEnvelope', () => {
