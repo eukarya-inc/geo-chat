@@ -16,6 +16,8 @@ export default function AIChat({ db }: AIChatProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [streamingMessage, setStreamingMessage] = useState<string>('');
+    const [isStreaming, setIsStreaming] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -26,15 +28,18 @@ export default function AIChat({ db }: AIChatProps) {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, streamingMessage]);
 
     const sendMessage = async () => {
         if (!input.trim() || !apiKey) return;
 
         const userMessage: Message = { role: 'user', content: input };
+        const currentInput = input;
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
+        setIsStreaming(true);
+        setStreamingMessage('');
 
         try {
             const anthropic = new Anthropic({
@@ -42,7 +47,7 @@ export default function AIChat({ db }: AIChatProps) {
                 dangerouslyAllowBrowser: true // プロトタイプなのでブラウザから直接呼び出し
             });
 
-            const response = await anthropic.messages.create({
+            const stream = await anthropic.messages.stream({
                 model: 'claude-3-5-sonnet-20241022',
                 max_tokens: 1000,
                 messages: [
@@ -50,16 +55,28 @@ export default function AIChat({ db }: AIChatProps) {
                         role: msg.role,
                         content: msg.content
                     })),
-                    { role: 'user', content: input }
+                    { role: 'user', content: currentInput }
                 ]
             });
 
+            let fullContent = '';
+            
+            for await (const chunk of stream) {
+                if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                    fullContent += chunk.delta.text;
+                    setStreamingMessage(fullContent);
+                }
+            }
+
+            // ストリーミング完了後、最終メッセージを追加
             const assistantMessage: Message = {
                 role: 'assistant',
-                content: response.content[0].type === 'text' ? response.content[0].text : 'エラーが発生しました'
+                content: fullContent || 'エラーが発生しました'
             };
 
             setMessages(prev => [...prev, assistantMessage]);
+            setStreamingMessage('');
+            setIsStreaming(false);
         } catch (error) {
             console.error('AI API Error:', error);
             const errorMessage: Message = {
@@ -67,6 +84,8 @@ export default function AIChat({ db }: AIChatProps) {
                 content: 'エラーが発生しました。APIキーが正しく設定されているか確認してください。'
             };
             setMessages(prev => [...prev, errorMessage]);
+            setStreamingMessage('');
+            setIsStreaming(false);
         }
 
         setLoading(false);
@@ -98,15 +117,22 @@ export default function AIChat({ db }: AIChatProps) {
     }
 
     return (
-        <div style={{
-            padding: '20px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '8px',
-            margin: '20px 0',
-            color: '#333',
-            textAlign: 'left'
-        }}>
-            <h3 style={{ color: '#333', margin: '0 0 16px 0' }}>AI Chat with Claude</h3>
+        <>
+            <style>{`
+                @keyframes blink {
+                    0%, 50% { opacity: 1; }
+                    51%, 100% { opacity: 0; }
+                }
+            `}</style>
+            <div style={{
+                padding: '20px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '8px',
+                margin: '20px 0',
+                color: '#333',
+                textAlign: 'left'
+            }}>
+                <h3 style={{ color: '#333', margin: '0 0 16px 0' }}>AI Chat with Claude</h3>
 
             <div style={{
                 height: '300px',
@@ -136,7 +162,26 @@ export default function AIChat({ db }: AIChatProps) {
                         </div>
                     </div>
                 ))}
-                {loading && (
+                {isStreaming && streamingMessage && (
+                    <div style={{
+                        marginBottom: '10px',
+                        padding: '8px',
+                        backgroundColor: '#f1f8e9',
+                        borderRadius: '4px',
+                        color: '#333'
+                    }}>
+                        <strong style={{ color: '#333' }}>Claude:</strong>
+                        <div style={{ marginTop: '4px', whiteSpace: 'pre-wrap', color: '#333' }}>
+                            {streamingMessage}
+                            <span style={{ 
+                                opacity: 0.7, 
+                                animation: 'blink 1s infinite',
+                                marginLeft: '2px'
+                            }}>▊</span>
+                        </div>
+                    </div>
+                )}
+                {loading && !isStreaming && (
                     <div style={{
                         padding: '8px',
                         backgroundColor: '#f1f8e9',
@@ -166,23 +211,24 @@ export default function AIChat({ db }: AIChatProps) {
                         backgroundColor: '#fff',
                         color: '#333'
                     }}
-                    disabled={loading}
+                    disabled={loading || isStreaming}
                 />
                 <button
                     onClick={sendMessage}
-                    disabled={loading || !input.trim()}
+                    disabled={loading || isStreaming || !input.trim()}
                     style={{
                         padding: '10px 20px',
-                        backgroundColor: loading || !input.trim() ? '#ccc' : '#007bff',
+                        backgroundColor: loading || isStreaming || !input.trim() ? '#ccc' : '#007bff',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: loading || !input.trim() ? 'not-allowed' : 'pointer'
+                        cursor: loading || isStreaming || !input.trim() ? 'not-allowed' : 'pointer'
                     }}
                 >
-                    {loading ? '送信中...' : '送信'}
+                    {loading ? '送信中...' : isStreaming ? 'Claude 回答中...' : '送信'}
                 </button>
             </div>
         </div>
+        </>
     );
 }
