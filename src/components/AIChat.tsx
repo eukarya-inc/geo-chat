@@ -62,17 +62,17 @@ export default function AIChat({ db }: AIChatProps) {
                 }
             `}</style>
             <div style={{
-                padding: '20px',
+                padding: '10px',
                 backgroundColor: '#f5f5f5',
-                borderRadius: '8px',
-                margin: '20px 0',
                 color: '#333',
-                textAlign: 'left'
+                textAlign: 'left',
+                height: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
             }}>
-                <h3 style={{ color: '#333', margin: '0 0 16px 0' }}>AI Chat with Claude</h3>
-
                 <div style={{
-                    height: '300px',
+                    flex: 1,
                     overflowY: 'auto',
                     backgroundColor: 'white',
                     border: '1px solid #ddd',
@@ -125,7 +125,11 @@ export default function AIChat({ db }: AIChatProps) {
                     <div ref={messagesEndRef} />
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
+                <form onSubmit={handleSubmit} style={{ 
+                    display: 'flex', 
+                    gap: '10px',
+                    flexShrink: 0
+                }}>
                     <textarea
                         value={input}
                         onChange={handleInputChange}
@@ -136,8 +140,8 @@ export default function AIChat({ db }: AIChatProps) {
                             padding: '10px',
                             border: '1px solid #ddd',
                             borderRadius: '4px',
-                            resize: 'vertical',
-                            minHeight: '40px',
+                            resize: 'none',
+                            height: '60px',
                             backgroundColor: '#fff',
                             color: '#333'
                         }}
@@ -152,7 +156,8 @@ export default function AIChat({ db }: AIChatProps) {
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer'
+                            cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
+                            height: '60px'
                         }}
                     >
                         {isLoading ? 'Claude 回答中...' : '送信'}
