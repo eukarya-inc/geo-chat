@@ -64,15 +64,13 @@ export function useDuckDB() {
             }
         }
 
-        // 初期化されていない場合のみinitDBを実行
         if (!isInitialized.current) {
             console.log("Initializing DuckDB...");
             initDB();
-            isInitialized.current = true; // 初期化フラグを設定
+            isInitialized.current = true;
         }
 
         return () => {
-            // クリーンアップ
             if (db) {
                 db.terminate();
             }

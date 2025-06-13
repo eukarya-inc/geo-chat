@@ -17,7 +17,7 @@ export default function AIChat({ db }: AIChatProps) {
         isLoading,
         // error,
         isApiKeyConfigured,
-    } = useAIChat();
+    } = useAIChat(db);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -46,3 +46,7 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 4. User selects table and columns for display
 5. Map component queries selected table and renders data
 6. Column data appears in map popups when features are clicked
+
+### Code Organization Principles
+
+- If the contents of a function become large, such as dozens of lines, aggressively split it into separate files or separate functions, and give it an easy-to-understand name.
