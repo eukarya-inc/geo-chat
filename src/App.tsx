@@ -4,7 +4,7 @@ import AIChat from './components/AIChat';
 import MapComponent from './components/Map';
 import RemoteFile from './components/RemoteFile';
 import TableList from './components/TableList';
-import { useDuckDB } from './hooks/useDuckDB';
+import { useDuckDB } from './lib/duckdb/useDuckDB';
 
 function App() {
     const { db } = useDuckDB();

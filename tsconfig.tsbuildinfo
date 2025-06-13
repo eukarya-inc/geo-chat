@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/aichat.tsx","./src/components/map.tsx","./src/components/remotefile.tsx","./src/components/tablelist.tsx","./src/hooks/useduckdb.ts","./src/utils/tileutils.test.ts","./src/utils/tileutils.ts","./src/utils/vectortileutils.ts"],"version":"5.7.3"}
