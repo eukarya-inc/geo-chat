@@ -3,6 +3,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { CoreMessage, streamText } from 'ai';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
+import { completionTool, type SuggestedPrompt } from './tools/completionTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 
 export function useAIChat(db?: AsyncDuckDB | null) {
@@ -11,9 +12,14 @@ export function useAIChat(db?: AsyncDuckDB | null) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [suggestedPrompts, setSuggestedPrompts] = useState<SuggestedPrompt[]>([]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
+  }, []);
+
+  const handleSuggestedPromptClick = useCallback((promptText: string) => {
+    setInput(promptText);
   }, []);
 
 
@@ -27,6 +33,7 @@ export function useAIChat(db?: AsyncDuckDB | null) {
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setSuggestedPrompts([]);
     setIsLoading(true);
     setError(null);
 
@@ -44,7 +51,10 @@ export function useAIChat(db?: AsyncDuckDB | null) {
         model: anthropicClient('claude-3-5-sonnet-20241022'),
         system: generateSystemPrompt(),
         messages: allMessages,
-        tools: { ...(db && {  duckdb_query: createDuckDBTool(db) }) },
+        tools: { 
+          ...(db && { duckdb_query: createDuckDBTool(db) }),
+          completion: completionTool
+        },
         maxSteps: 50,
         maxTokens: 1000,
         maxRetries: 30,
@@ -68,17 +78,27 @@ export function useAIChat(db?: AsyncDuckDB | null) {
             });
             break;
 
-          case 'tool-call':
+          case 'tool-call': {
             // Show tool call execution
-            const args = part.args as any;
-            const toolCallText = `\n\n🔧 **SQL実行中:** \`${args?.sql || 'クエリ実行中'}\`\n`;
-            fullContent += toolCallText;
+            const args = part.args as Record<string, unknown>;
+            if (part.toolName === 'completion') {
+              // Handle completion tool call
+              if (args?.suggestedPrompts) {
+                setSuggestedPrompts(args.suggestedPrompts as SuggestedPrompt[]);
+              }
+              // Don't add completion message here to avoid duplicates
+            } else {
+              // Handle DuckDB tool call
+              const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
+              fullContent += toolCallText;
+            }
             setMessages(prev => {
               const updated = [...prev];
               updated[updated.length - 1] = { role: 'assistant', content: fullContent };
               return updated;
             });
             break;
+          }
         }
       }
 
@@ -128,5 +148,7 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     isLoading,
     error,
     isApiKeyConfigured,
+    suggestedPrompts,
+    handleSuggestedPromptClick,
   };
 }

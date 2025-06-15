@@ -6,7 +6,6 @@ interface AIChatProps {
     db: AsyncDuckDB;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function AIChat({ db }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const {
@@ -17,6 +16,8 @@ export default function AIChat({ db }: AIChatProps) {
         isLoading,
         // error,
         isApiKeyConfigured,
+        suggestedPrompts,
+        handleSuggestedPromptClick,
     } = useAIChat(db);
 
     const scrollToBottom = () => {
@@ -124,6 +125,58 @@ export default function AIChat({ db }: AIChatProps) {
                     )}
                     <div ref={messagesEndRef} />
                 </div>
+
+                {suggestedPrompts.length > 0 && (
+                    <div style={{
+                        marginBottom: '10px',
+                        padding: '10px',
+                        backgroundColor: 'white',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        flexShrink: 0
+                    }}>
+                        <div style={{
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            marginBottom: '8px',
+                            color: '#333'
+                        }}>
+                            おすすめの質問:
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px'
+                        }}>
+                            {suggestedPrompts.map((prompt) => (
+                                <button
+                                    key={prompt.id}
+                                    onClick={() => handleSuggestedPromptClick(prompt.text)}
+                                    style={{
+                                        padding: '8px 12px',
+                                        textAlign: 'left',
+                                        backgroundColor: '#f8f9fa',
+                                        border: '1px solid #e9ecef',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        color: '#495057',
+                                        transition: 'background-color 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#e9ecef';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#f8f9fa';
+                                    }}
+                                    title={prompt.description}
+                                >
+                                    {prompt.text}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} style={{ 
                     display: 'flex', 
