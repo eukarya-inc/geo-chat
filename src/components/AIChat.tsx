@@ -1,9 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { useAIChat } from '../lib/ai/useAIChat';
+import MessageRenderer from './MessageRenderer';
 
 interface AIChatProps {
     db: AsyncDuckDB;
@@ -185,14 +183,11 @@ export default function AIChat({ db }: AIChatProps) {
                                             {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                         </div>
                                     ) : (
-                                        <div className="markdown-content">
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                rehypePlugins={[rehypeHighlight]}
-                                            >
-                                                {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
-                                            </ReactMarkdown>
-                                        </div>
+                                        <MessageRenderer
+                                            content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                            className="markdown-content"
+                                            db={db}
+                                        />
                                     )}
                                     {isStreamingMessage && (
                                         <span style={{
