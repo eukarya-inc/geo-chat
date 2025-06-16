@@ -19,8 +19,17 @@ export function useAIChat(db?: AsyncDuckDB | null) {
   }, []);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
-    setInput(promptText);
-  }, []);
+    if (input.trim() === promptText.trim()) {
+      // If the suggestion matches current input, submit directly
+      const syntheticEvent = {
+        preventDefault: () => {},
+      } as React.FormEvent;
+      handleSubmit(syntheticEvent);
+    } else {
+      // Otherwise, just set the input
+      setInput(promptText);
+    }
+  }, [input, handleSubmit]);
 
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
