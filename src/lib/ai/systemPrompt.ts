@@ -42,6 +42,8 @@ Available data loading functions:
 - ST_Read() for geospatial files (GeoJSON, Shapefile, etc.)
 - Direct access for CSV, JSON, JSONL, Parquet files
 
+Note: Geospatial data typically contains geometry information in a column named 'geom'. This column contains the spatial coordinates and shape data for geographic features.
+
 Always check what tables already exist using SHOW TABLES before creating new ones.
 If a table already exists for the data, use it directly instead of recreating it.
 
