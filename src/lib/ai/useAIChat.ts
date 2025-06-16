@@ -18,6 +18,73 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     setInput(e.target.value);
   }, []);
 
+  const handleTextDelta = useCallback((textDelta: string, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+    const newContent = fullContent + textDelta;
+    setMessages(prev => {
+      const updated = [...prev];
+      updated[updated.length - 1] = { role: 'assistant', content: newContent };
+      return updated;
+    });
+    return newContent;
+  }, []);
+
+  const handleToolCall = useCallback((part: any, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>, setSuggestedPrompts: React.Dispatch<React.SetStateAction<SuggestedPrompt[]>>) => {
+    const args = part.args as Record<string, unknown>;
+    let newContent = fullContent;
+    
+    if (part.toolName === 'completion') {
+      // Handle completion tool call
+      if (args?.suggestedPrompts) {
+        setSuggestedPrompts(args.suggestedPrompts as SuggestedPrompt[]);
+      }
+      // Don't add completion message here to avoid duplicates
+    } else {
+      // Handle DuckDB tool call
+      const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
+      newContent += toolCallText;
+    }
+    
+    setMessages(prev => {
+      const updated = [...prev];
+      updated[updated.length - 1] = { role: 'assistant', content: newContent };
+      return updated;
+    });
+    return newContent;
+  }, []);
+
+  const handleToolResult = useCallback((part: any, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+    let newContent = fullContent;
+    
+    if (part.toolName !== 'completion') {
+      const result = part.result as any;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **エラー:** ${result.error}\n`;
+      } else if (result?.data) {
+        // Truncate long results
+        const data = Array.isArray(result.data) ? result.data : [result.data];
+        const dataStr = JSON.stringify(data, null, 2);
+        
+        if (dataStr.length > 500) {
+          const truncated = dataStr.substring(0, 500) + '...';
+          const rowCount = Array.isArray(result.data) ? result.data.length : 1;
+          resultText = `\n✅ **結果:** (${rowCount}行)\n\`\`\`json\n${truncated}\n\`\`\`\n`;
+        } else {
+          resultText = `\n✅ **結果:**\n\`\`\`json\n${dataStr}\n\`\`\`\n`;
+        }
+      }
+      
+      newContent += resultText;
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { role: 'assistant', content: newContent };
+        return updated;
+      });
+    }
+    return newContent;
+  }, []);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -65,35 +132,16 @@ export function useAIChat(db?: AsyncDuckDB | null) {
       for await (const part of result.fullStream) {
         switch (part.type) {
           case 'text-delta':
-            fullContent += part.textDelta;
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: fullContent };
-              return updated;
-            });
+            fullContent = handleTextDelta(part.textDelta, fullContent, setMessages);
             break;
 
-          case 'tool-call': {
-            // Show tool call execution
-            const args = part.args as Record<string, unknown>;
-            if (part.toolName === 'completion') {
-              // Handle completion tool call
-              if (args?.suggestedPrompts) {
-                setSuggestedPrompts(args.suggestedPrompts as SuggestedPrompt[]);
-              }
-              // Don't add completion message here to avoid duplicates
-            } else {
-              // Handle DuckDB tool call
-              const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
-              fullContent += toolCallText;
-            }
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: fullContent };
-              return updated;
-            });
+          case 'tool-call':
+            fullContent = handleToolCall(part, fullContent, setMessages, setSuggestedPrompts);
             break;
-          }
+
+          case 'tool-result':
+            fullContent = handleToolResult(part, fullContent, setMessages);
+            break;
         }
       }
 

@@ -1,5 +1,8 @@
 import { useRef, useEffect } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { useAIChat } from '../lib/ai/useAIChat';
 
 interface AIChatProps {
@@ -61,6 +64,83 @@ export default function AIChat({ db }: AIChatProps) {
                     0%, 50% { opacity: 1; }
                     51%, 100% { opacity: 0; }
                 }
+                
+                /* Markdown styling */
+                .markdown-content h1, .markdown-content h2, .markdown-content h3, 
+                .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+                    margin: 1em 0 0.5em 0;
+                    font-weight: bold;
+                    color: #333;
+                }
+                
+                .markdown-content p {
+                    margin: 0.5em 0;
+                    line-height: 1.5;
+                }
+                
+                .markdown-content code {
+                    background-color: #f4f4f4;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 0.9em;
+                }
+                
+                .markdown-content pre {
+                    background-color: #f8f8f8;
+                    border: 1px solid #e1e1e1;
+                    border-radius: 4px;
+                    padding: 12px;
+                    overflow-x: auto;
+                    margin: 1em 0;
+                }
+                
+                .markdown-content pre code {
+                    background-color: transparent;
+                    padding: 0;
+                    border-radius: 0;
+                }
+                
+                .markdown-content ul, .markdown-content ol {
+                    margin: 0.5em 0;
+                    padding-left: 2em;
+                }
+                
+                .markdown-content li {
+                    margin: 0.2em 0;
+                }
+                
+                .markdown-content blockquote {
+                    border-left: 4px solid #ddd;
+                    margin: 1em 0;
+                    padding-left: 1em;
+                    color: #666;
+                }
+                
+                .markdown-content table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 1em 0;
+                }
+                
+                .markdown-content th, .markdown-content td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }
+                
+                .markdown-content th {
+                    background-color: #f2f2f2;
+                    font-weight: bold;
+                }
+                
+                .markdown-content strong {
+                    font-weight: bold;
+                }
+                
+                .markdown-content em {
+                    font-style: italic;
+                }
             `}</style>
             <div style={{
                 padding: '10px',
@@ -99,8 +179,21 @@ export default function AIChat({ db }: AIChatProps) {
                                 color: '#333'
                             }}>
                                 <strong style={{ color: '#333' }}>{message.role === 'user' ? 'あなた' : 'Claude'}:</strong>
-                                <div style={{ marginTop: '4px', whiteSpace: 'pre-wrap', color: '#333' }}>
-                                    {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                <div style={{ marginTop: '4px', color: '#333' }}>
+                                    {message.role === 'user' ? (
+                                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                                            {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                        </div>
+                                    ) : (
+                                        <div className="markdown-content">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                rehypePlugins={[rehypeHighlight]}
+                                            >
+                                                {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                            </ReactMarkdown>
+                                        </div>
+                                    )}
                                     {isStreamingMessage && (
                                         <span style={{
                                             opacity: 0.7,
