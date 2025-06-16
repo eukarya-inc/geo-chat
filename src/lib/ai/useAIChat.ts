@@ -4,6 +4,7 @@ import { CoreMessage, streamText } from 'ai';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool, type SuggestedPrompt } from './tools/completionTool';
+import { createVegaLiteTool } from './tools/vegaLiteTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 
 export function useAIChat(db?: AsyncDuckDB | null) {
@@ -28,8 +29,8 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     return newContent;
   }, []);
 
-  const handleToolCall = useCallback((part: any, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>, setSuggestedPrompts: React.Dispatch<React.SetStateAction<SuggestedPrompt[]>>) => {
-    const args = part.args as Record<string, unknown>;
+  const handleToolCall = useCallback((part: { toolName: string; args: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>, setSuggestedPrompts: React.Dispatch<React.SetStateAction<SuggestedPrompt[]>>) => {
+    const args = part.args;
     let newContent = fullContent;
     
     if (part.toolName === 'completion') {
@@ -38,9 +39,13 @@ export function useAIChat(db?: AsyncDuckDB | null) {
         setSuggestedPrompts(args.suggestedPrompts as SuggestedPrompt[]);
       }
       // Don't add completion message here to avoid duplicates
-    } else {
+    } else if (part.toolName === 'duckdb_query') {
       // Handle DuckDB tool call
       const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'vega_lite_chart') {
+      // Handle VegaLite tool call
+      const toolCallText = `\n\n📊 **チャート作成中:** ${(args?.plotType as string) || 'プロット'}チャートを生成中...\n`;
       newContent += toolCallText;
     }
     
@@ -52,31 +57,79 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     return newContent;
   }, []);
 
-  const handleToolResult = useCallback((part: any, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+  const handleToolResult = useCallback((part: { toolName: string; result: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
     let newContent = fullContent;
     
-    if (part.toolName !== 'completion') {
-      const result = part.result as any;
+    if (part.toolName === 'vega_lite_chart') {
+      // Handle VegaLite chart results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **チャート作成エラー:** ${result.error}\n`;
+      } else if (result?.vegaSpec) {
+        // Add the chart using the special format that MessageRenderer looks for
+        const vegaSpecJson = JSON.stringify(result.vegaSpec, null, 2);
+        resultText = `\n📊 **チャート完成:**\n\n<!--VEGA_SPEC_START-->\n${vegaSpecJson}\n<!--VEGA_SPEC_END-->\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'duckdb_query') {
+      // Handle DuckDB query results
+      const result = part.result;
       let resultText = '';
       
       if (result?.error) {
         resultText = `\n❌ **エラー:** ${result.error}\n`;
       } else if (result?.data) {
-        // Truncate long results
         const data = Array.isArray(result.data) ? result.data : [result.data];
-        const dataStr = JSON.stringify(data, null, 2);
+        const rowCount = Array.isArray(result.data) ? result.data.length : 1;
         
-        if (dataStr.length > 500) {
-          const truncated = dataStr.substring(0, 500) + '...';
-          const rowCount = Array.isArray(result.data) ? result.data.length : 1;
-          resultText = `\n✅ **結果:** (${rowCount}行)\n\`\`\`json\n${truncated}\n\`\`\`\n`;
+        // Smart truncation based on data size and type
+        if (rowCount > 100) {
+          // For very large datasets, show summary + first few rows + last few rows
+          const firstRows = data.slice(0, 3);
+          const lastRows = data.slice(-2);
+          const sampleData = [...firstRows, { "...": `${rowCount - 5} more rows` }, ...lastRows];
+          const dataStr = JSON.stringify(sampleData, null, 2);
+          resultText = `\n✅ **結果:** (${rowCount}行 - 抜粋表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📊 **データサマリー:** 全${rowCount}行のうち最初の3行と最後の2行を表示。完全なデータを確認するには、LIMITクエリまたは集計クエリをお試しください。\n`;
+        } else if (rowCount > 20) {
+          // For medium datasets, show first 10 and indicate there are more
+          const firstRows = data.slice(0, 10);
+          const dataStr = JSON.stringify(firstRows, null, 2);
+          resultText = `\n✅ **結果:** (${rowCount}行 - 最初の10行を表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📋 残り${rowCount - 10}行があります。すべてを確認するには、データの絞り込みまたは集計をお試しください。\n`;
         } else {
-          resultText = `\n✅ **結果:**\n\`\`\`json\n${dataStr}\n\`\`\`\n`;
+          // For small datasets, show all data but with size limit
+          const dataStr = JSON.stringify(data, null, 2);
+          
+          if (dataStr.length > 8000) {
+            // Even small datasets can have very wide rows - truncate but show more than before
+            const truncated = dataStr.substring(0, 8000) + '...';
+            resultText = `\n✅ **結果:** (${rowCount}行 - 表示が切り詰められています)\n\`\`\`json\n${truncated}\n\`\`\`\n\n⚠️ データが長すぎるため一部が省略されました。特定の列のみを選択するか、データを集計してみてください。\n`;
+          } else {
+            resultText = `\n✅ **結果:** (${rowCount}行)\n\`\`\`json\n${dataStr}\n\`\`\`\n`;
+          }
         }
-      }
+        
+        // Add column information if available
+        if ('columns' in result && Array.isArray(result.columns) && 'columnCount' in result) {
+          const columns = result.columns as string[];
+          const columnCount = result.columnCount as number;
+          resultText += `\n📋 **カラム情報:** ${columnCount}列 (${columns.slice(0, 5).join(', ')}${columns.length > 5 ? ', ...' : ''})\n`;
+        }
+        
+        // Add suggestions for working with the data
+        if ('suggestions' in result && Array.isArray(result.suggestions)) {
+          const suggestions = result.suggestions as string[];
+          if (suggestions.length > 0) {
+            resultText += `\n💡 **提案:**\n${suggestions.map((s: string) => `• ${s}`).join('\n')}\n`;
+          }
+        }
       
       newContent += resultText;
-      setMessages(prev => {
+    }
+    
+    setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: 'assistant', content: newContent };
         return updated;
@@ -114,11 +167,14 @@ export function useAIChat(db?: AsyncDuckDB | null) {
         system: generateSystemPrompt(),
         messages: allMessages,
         tools: { 
-          ...(db && { duckdb_query: createDuckDBTool(db) }),
+          ...(db && { 
+            duckdb_query: createDuckDBTool(db),
+            vega_lite_chart: createVegaLiteTool(db)
+          }),
           completion: completionTool
         },
         maxSteps: 50,
-        maxTokens: 1000,
+        maxTokens: 4000,
         maxRetries: 30,
       });
 
@@ -179,7 +235,7 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [input, apiKey, isLoading, messages, db]);
+  }, [input, apiKey, isLoading, messages, db, handleTextDelta, handleToolCall, handleToolResult]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {
