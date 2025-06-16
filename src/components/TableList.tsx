@@ -1,5 +1,5 @@
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 interface TableListProps {
     db: AsyncDuckDB;
@@ -25,10 +25,10 @@ const TableList: React.FC<TableListProps> = ({ db, selectedTable, onTableSelect,
     const [tables, setTables] = useState<TableInfo[]>([]);
     const [tableColumns, setTableColumns] = useState<Record<string, ColumnInfo[]>>({});
     const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
-    const [queryResult, setQueryResult] = useState<Array<Record<string, any>> | null>(null);
+    const [queryResult, setQueryResult] = useState<Array<Record<string, string | number | boolean | object | null>> | null>(null);
     const [queryError, setQueryError] = useState<string | null>(null);
 
-    const fetchTableColumns = async (tableName: string) => {
+    const fetchTableColumns = useCallback(async (tableName: string) => {
         if (!db) return;
 
         try {
@@ -46,9 +46,9 @@ const TableList: React.FC<TableListProps> = ({ db, selectedTable, onTableSelect,
         } catch (err) {
             console.error('Error fetching table columns:', err);
         }
-    };
+    }, [db]);
 
-    const fetchTables = async () => {
+    const fetchTables = useCallback(async () => {
         if (!db) return;
 
         try {
@@ -78,14 +78,14 @@ const TableList: React.FC<TableListProps> = ({ db, selectedTable, onTableSelect,
         } catch (err) {
             console.error('Error fetching tables:', err);
         }
-    };
+    }, [db, fetchTableColumns]);
 
     useEffect(() => {
         if (onTableCreated) {
             onTableCreated();
         }
         fetchTables();
-    }, [db]);
+    }, [db, onTableCreated, fetchTables]);
 
     const handleTableNameClick = (tableName: string) => {
         setVisibleColumns(prev => ({

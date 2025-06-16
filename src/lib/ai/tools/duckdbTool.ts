@@ -14,6 +14,21 @@ export function createDuckDBTool(db: AsyncDuckDB) {
         const conn = await db.connect();
         try {
           const result = await conn.query(sql);
+          
+          // If this looks like a DDL statement (CREATE, DROP, ALTER), commit and checkpoint to ensure visibility
+          const upperSql = sql.trim().toUpperCase();
+          const containsDDL = upperSql.includes('CREATE ') || upperSql.includes('DROP ') || upperSql.includes('ALTER ');
+          if (containsDDL) {
+            try {
+              await conn.query('COMMIT;');
+              await conn.query('CHECKPOINT;');
+              console.log('Committed and checkpointed DDL statement for cross-connection visibility');
+            } catch (commitError) {
+              console.warn('Failed to commit/checkpoint DDL statement:', commitError);
+              // Continue anyway, as the statement might still have succeeded
+            }
+          }
+          
           const data = result.toArray().map(row => {
             const obj = Object.fromEntries(row);
             // Convert BigInt values to strings for JSON serialization
@@ -25,12 +40,46 @@ export function createDuckDBTool(db: AsyncDuckDB) {
             );
           });
           console.log('Query result:', data);
-          return {
+          
+          // Add metadata for large datasets
+          const metadata: {
+            success: boolean;
+            data: Record<string, unknown>[];
+            rowCount: number;
+            sql: string;
+            columns?: string[];
+            columnCount?: number;
+            suggestions?: string[];
+          } = {
             success: true,
             data,
             rowCount: data.length,
             sql: sql
           };
+          
+          // Add column info for better understanding
+          if (data.length > 0) {
+            metadata.columns = Object.keys(data[0]);
+            metadata.columnCount = metadata.columns.length;
+          }
+          
+          // Add suggestions for large datasets
+          if (data.length > 100) {
+            metadata.suggestions = [
+              'データが多いです。特定の条件でフィルタしてみませんか？',
+              'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
+              'LIMIT句を使って必要な行数のみを取得できます',
+              'GROUP BYを使ってカテゴリ別の集計ができます'
+            ];
+          } else if (data.length > 20) {
+            metadata.suggestions = [
+              'データをさらに絞り込みたい場合はWHERE句を使用してください',
+              'ORDER BYでデータを並び替えられます',
+              '集計関数でデータの概要を把握できます'
+            ];
+          }
+          
+          return metadata;
         } catch (error) {
           console.error('Error executing SQL:', error);
           return {
