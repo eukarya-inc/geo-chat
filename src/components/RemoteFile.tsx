@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 interface RemoteFileProps {
     db: AsyncDuckDB;
-    onTableCreated?: () => void;
+    onTableCreated?: (tableName: string) => void;
 }
 
 const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
@@ -17,15 +17,29 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
     };
 
     const createTableFromUrl = async () => {
-        if (!db || !url.trim()) return;
+        console.log('RemoteFile: createTableFromUrl called with:', { db: !!db, url: url.trim() });
+        if (!db || !url.trim()) {
+            console.log('RemoteFile: Early return - missing db or url');
+            return;
+        }
 
+        console.log('RemoteFile: Starting table creation process for URL:', url);
         setIsCreatingTable(true);
         document.body.classList.add('creating-table');
         let conn = null;
 
         try {
+            console.log('RemoteFile: Database instance ID:', (db as any).__instanceId || 'no-id');
             conn = await db.connect();
             await conn.query('LOAD spatial;');
+            
+            // Load httpfs extension for HTTP access
+            try {
+                await conn.query("INSTALL httpfs;");
+                await conn.query("LOAD httpfs;");
+            } catch (httpfsError) {
+                console.warn('Could not load httpfs extension:', httpfsError);
+            }
 
             // URLからファイル名を抽出
             const fileName = url.split('/').pop() || 'remote_file';
@@ -35,16 +49,107 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
             }
 
             const isParquet = url.toLowerCase().endsWith('.parquet');
-            const query = isParquet ? `CREATE TABLE ${tableName} AS SELECT * FROM '${url}'` : `CREATE TABLE ${tableName} AS SELECT * FROM st_read('${url}')`;
+            const isGeoJSON = url.toLowerCase().endsWith('.geojson') || url.toLowerCase().endsWith('.json') || url.includes('geojson');
+            
+            let query;
+            if (isParquet) {
+                query = `CREATE TABLE ${tableName} AS SELECT * FROM '${url}'`;
+            } else if (isGeoJSON) {
+                // For GeoJSON, fetch the data client-side first to avoid DuckDB URL issues
+                console.log('RemoteFile: Fetching GeoJSON data from:', url);
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch GeoJSON: ${response.status} ${response.statusText}`);
+                }
+                console.log('RemoteFile: Fetch successful, parsing response...');
+                const geojsonText = await response.text();
+                console.log('RemoteFile: Response text length:', geojsonText.length);
+                
+                // Parse the GeoJSON to validate it
+                const geojsonData = JSON.parse(geojsonText);
+                console.log('RemoteFile: JSON parsed successfully, type:', geojsonData.type);
+                if (geojsonData.type !== 'FeatureCollection') {
+                    throw new Error('Invalid GeoJSON: Must be a FeatureCollection');
+                }
+                
+                console.log(`RemoteFile: Loaded GeoJSON with ${geojsonData.features?.length || 0} features`);
+                
+                // Create table directly without temp table for now
+                console.log('RemoteFile: Creating table schema...');
+                await conn.query(`CREATE TABLE ${tableName} (properties JSON, geom GEOMETRY);`);
+                console.log('RemoteFile: Table schema created successfully');
+                
+                // Insert features one by one to avoid JSON parsing issues
+                console.log('RemoteFile: Starting feature insertion...');
+                for (let i = 0; i < geojsonData.features.length; i++) {
+                    if (i % 50 === 0) {
+                        console.log(`RemoteFile: Inserting feature ${i + 1}/${geojsonData.features.length}`);
+                    }
+                    
+                    const feature = geojsonData.features[i];
+                    const propertiesJson = JSON.stringify(feature.properties || {});
+                    const geometryJson = JSON.stringify(feature.geometry);
+                    
+                    try {
+                        await conn.query(`
+                            INSERT INTO ${tableName} (properties, geom) 
+                            VALUES (
+                                '${propertiesJson.replace(/'/g, "''")}',
+                                ST_GeomFromGeoJSON('${geometryJson.replace(/'/g, "''")}')
+                            )
+                        `);
+                    } catch (insertError) {
+                        console.error(`RemoteFile: Error inserting feature ${i}:`, insertError);
+                        console.error('RemoteFile: Feature data:', feature);
+                        throw insertError;
+                    }
+                }
+                console.log('RemoteFile: Feature insertion completed');
+                
+                // Skip the main query since we already created and populated the table
+                query = null;
+            } else {
+                // Try direct st_read for other formats
+                query = `CREATE TABLE ${tableName} AS SELECT * FROM st_read('${url}')`;
+            }
 
-            await conn.query(query);
+            if (query) {
+                await conn.query(query);
+            }
             await conn.query(`CREATE INDEX ${tableName}_idx ON ${tableName} USING RTREE (geom);`);
             await conn.query('CHECKPOINT;');
 
             console.log('Table created and checkpoint executed:', tableName);
+            
+            // Verify table was created by checking if it exists
+            try {
+                const tableCheck = await conn.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+                const rowCount = tableCheck.toArray()[0].count;
+                console.log(`RemoteFile: Table ${tableName} verified with ${rowCount} rows`);
+            } catch (verifyError) {
+                console.error('RemoteFile: Error verifying table:', verifyError);
+            }
+            
             setError(null);
             setUrl(''); // 入力をクリア
-            onTableCreated?.();
+            console.log('RemoteFile: Calling onTableCreated callback with tableName:', tableName);
+            onTableCreated?.(tableName);
+            
+            // Debug: Check what tables actually exist
+            try {
+                const debugConn = await db.connect();
+                const tablesResult = await debugConn.query('SHOW TABLES;');
+                console.log('RemoteFile: Tables in database after creation:', tablesResult.toArray());
+                
+                // Check the actual row count
+                const countResult = await debugConn.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+                const actualCount = countResult.toArray()[0]?.count;
+                console.log(`RemoteFile: Actual row count in ${tableName}:`, actualCount);
+                
+                await debugConn.close();
+            } catch (debugError) {
+                console.error('RemoteFile: Error during debug check:', debugError);
+            }
         } catch (err) {
             console.error('Query error:', err);
             setError(err instanceof Error ? err.message : 'Unknown error occurred');
