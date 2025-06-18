@@ -216,6 +216,7 @@ function App() {
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
                             onMapReady={handleMapReady}
+                            mapStyleManager={mapStyleManager || undefined}
                         />
                     )}
                 </div>
