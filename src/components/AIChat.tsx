@@ -2,24 +2,30 @@ import { useRef, useEffect } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/ai/useAIChat';
 import MessageRenderer from './MessageRenderer';
+import type { MapStyleManager } from '../utils/mapStyleManager';
+import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
 interface AIChatProps {
     db: AsyncDuckDB;
+    dbStateManager?: DBStateManager;
+    mapStyleManager?: MapStyleManager;
+    apiKey?: string;
 }
 
-export default function AIChat({ db }: AIChatProps) {
+export default function AIChat({ db, dbStateManager, mapStyleManager, apiKey }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const {
         messages,
         input,
         handleInputChange,
         handleSubmit,
+        handleStop,
         isLoading,
         // error,
         isApiKeyConfigured,
         suggestedPrompts,
         handleSuggestedPromptClick,
-    } = useAIChat(db);
+    } = useAIChat(db, dbStateManager, mapStyleManager, apiKey);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -187,6 +193,7 @@ export default function AIChat({ db }: AIChatProps) {
                                             content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                             className="markdown-content"
                                             db={db}
+                                            dbStateManager={dbStateManager}
                                         />
                                     )}
                                     {isStreamingMessage && (
@@ -288,21 +295,42 @@ export default function AIChat({ db }: AIChatProps) {
                         }}
                         disabled={isLoading}
                     />
-                    <button
-                        type="submit"
-                        disabled={isLoading || !input.trim()}
-                        style={{
-                            padding: '10px 20px',
-                            backgroundColor: isLoading || !input.trim() ? '#ccc' : '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
-                            height: '60px'
-                        }}
-                    >
-                        {isLoading ? 'Claude 回答中...' : '送信'}
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <button
+                            type="submit"
+                            disabled={isLoading || !input.trim()}
+                            style={{
+                                padding: '10px 20px',
+                                backgroundColor: isLoading || !input.trim() ? '#ccc' : '#007bff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
+                                height: '27px',
+                                fontSize: '14px'
+                            }}
+                        >
+                            {isLoading ? 'Claude 回答中...' : '送信'}
+                        </button>
+                        {isLoading && (
+                            <button
+                                type="button"
+                                onClick={handleStop}
+                                style={{
+                                    padding: '5px 15px',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    height: '27px',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                停止
+                            </button>
+                        )}
+                    </div>
                 </form>
             </div>
         </>
