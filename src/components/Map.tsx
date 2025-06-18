@@ -732,12 +732,8 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             <div
                 id="map"
                 style={{
-                    height: '90%',
-                    aspectRatio: '1/1',
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
+                    width: '100%',
+                    height: '100%',
                 }}
             ></div>
             {isLoading && (
