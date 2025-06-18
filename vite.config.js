@@ -14,6 +14,19 @@ export default defineConfig({
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                // Ensure proper headers for WASM files
+                assetFileNames: function (assetInfo) {
+                    if (assetInfo.name && assetInfo.name.endsWith('.wasm')) {
+                        return 'assets/[name]-[hash][extname]';
+                    }
+                    return 'assets/[name]-[hash][extname]';
+                }
+            }
+        }
+    },
     //@ts-expect-error vitest config is not typed
     test: {
         globals: true,
