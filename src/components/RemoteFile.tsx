@@ -29,7 +29,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
         let conn = null;
 
         try {
-            console.log('RemoteFile: Database instance ID:', (db as any).__instanceId || 'no-id');
+            console.log('RemoteFile: Database instance ID:', (db as { __instanceId?: string }).__instanceId || 'no-id');
             conn = await db.connect();
             await conn.query('LOAD spatial;');
             
