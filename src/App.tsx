@@ -7,6 +7,7 @@ import TableList from './components/TableList';
 import { useDuckDB } from './lib/duckdb/useDuckDB';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
 import type { MapStyleManager } from './utils/mapStyleManager';
+import { storeEncryptedApiKey, retrieveEncryptedApiKey } from './utils/encryption';
 
 function App() {
     const { db, dbStateManager } = useDuckDB();
@@ -14,7 +15,8 @@ function App() {
     const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({});
     const [mapStyleManager, setMapStyleManager] = useState<MapStyleManager | null>(null);
     const [apiKey, setApiKey] = useState<string>('');
-    const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(!import.meta.env.VITE_ANTHROPIC_API_KEY);
+    const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
+    const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
     
     console.log('App: Render with database:', !!db, 'dbStateManager:', !!dbStateManager);
 
@@ -37,6 +39,34 @@ function App() {
     };
 
     // No longer needed - state manager handles table refresh automatically
+
+    // Initialize API key from encrypted storage or environment variable
+    useEffect(() => {
+        const initializeApiKey = async () => {
+            setIsLoadingApiKey(true);
+            try {
+                const storedKey = await retrieveEncryptedApiKey();
+                const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+                
+                if (storedKey) {
+                    setApiKey(storedKey);
+                    setShowApiKeyInput(false);
+                } else if (envKey) {
+                    setApiKey(envKey);
+                    setShowApiKeyInput(false);
+                } else {
+                    setShowApiKeyInput(true);
+                }
+            } catch (error) {
+                console.error('Failed to load API key:', error);
+                setShowApiKeyInput(true);
+            } finally {
+                setIsLoadingApiKey(false);
+            }
+        };
+        
+        initializeApiKey();
+    }, []);
 
     // Log state changes for debugging
     useEffect(() => {
@@ -73,7 +103,7 @@ function App() {
                 flexDirection: 'column',
                 overflow: 'hidden'
             }}>
-                {showApiKeyInput && (
+                {(showApiKeyInput && !isLoadingApiKey) && (
                     <div style={{ 
                         padding: '15px', 
                         backgroundColor: '#f8f9fa', 
@@ -98,7 +128,18 @@ function App() {
                                 }}
                             />
                             <button
-                                onClick={() => setShowApiKeyInput(false)}
+                                onClick={async () => {
+                                    if (apiKey.trim()) {
+                                        try {
+                                            // Save encrypted API key to localStorage
+                                            await storeEncryptedApiKey(apiKey.trim());
+                                            setShowApiKeyInput(false);
+                                        } catch (error) {
+                                            console.error('Failed to save API key:', error);
+                                            alert('APIキーの保存に失敗しました。');
+                                        }
+                                    }
+                                }}
                                 disabled={!apiKey.trim()}
                                 style={{
                                     padding: '8px 16px',
@@ -114,11 +155,20 @@ function App() {
                             </button>
                         </div>
                         <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
-                            Your API key is stored locally and never sent to our servers.
+                            Your API key is encrypted and stored locally in your browser and never sent to our servers.
                         </div>
                     </div>
                 )}
-                {db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {isLoadingApiKey && (
+                    <div style={{ 
+                        padding: '20px', 
+                        textAlign: 'center',
+                        color: '#666'
+                    }}>
+                        APIキーを読み込み中...
+                    </div>
+                )}
+                {!isLoadingApiKey && db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
             </div>
             
             {/* Right Half - DuckDB and Map */}
