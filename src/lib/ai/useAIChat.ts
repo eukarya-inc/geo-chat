@@ -8,6 +8,7 @@ import { createVegaLiteTool } from './tools/vegaLiteTool';
 import { createMapStyleTool } from './tools/mapStyleTool';
 import { createListLayersTool } from './tools/listLayersTool';
 import { createDebugLayersTool } from './tools/debugLayersTool';
+import { createGeocodingTools } from './tools/geocodingTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
 import type { DBStateManager } from '../duckdb/dbStateManager';
@@ -76,6 +77,23 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     } else if (part.toolName === 'debug_database') {
       // Handle debug database tool call
       const toolCallText = `\n\n🔧 **データベースデバッグ中:** ${(args?.action as string) || 'デバッグ実行中'}\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'geocode_address') {
+      // Handle single address geocoding
+      const toolCallText = `\n\n🌍 **住所をジオコーディング中:** ${(args?.address as string) || 'アドレス処理中'}\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'geocode_multiple_addresses') {
+      // Handle batch geocoding
+      const count = (args?.addresses as string[])?.length || 0;
+      const toolCallText = `\n\n🌍 **複数住所をジオコーディング中:** ${count}件のアドレスを処理中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'analyze_table_for_geocoding') {
+      // Handle table analysis for geocoding
+      const toolCallText = `\n\n🔍 **テーブル分析中:** ${(args?.tableName as string) || 'テーブル'}のジオコーディング可能な列を検索中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'add_geocoded_columns_to_table') {
+      // Handle adding geocoded columns
+      const toolCallText = `\n\n🏗️ **テーブル拡張中:** ${(args?.tableName as string) || 'テーブル'}にジオコーディング列を追加中...\n`;
       newContent += toolCallText;
     }
     
@@ -223,6 +241,63 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'geocode_address') {
+      // Handle single address geocoding results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **ジオコーディングエラー:** ${result.error}\n`;
+      } else if (result?.success && result?.data) {
+        const data = result.data as { latitude: number; longitude: number; display_name: string };
+        resultText = `\n✅ **ジオコーディング完了:**\n📍 座標: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}\n📍 住所: ${data.display_name}\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'geocode_multiple_addresses') {
+      // Handle batch geocoding results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **バッチジオコーディングエラー:** ${result.error}\n`;
+      } else if (result?.success && result?.data) {
+        const data = result.data as { results: unknown[]; errors: unknown[] };
+        resultText = `\n✅ **バッチジオコーディング完了:** ${data.results.length}件成功, ${data.errors.length}件失敗\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'analyze_table_for_geocoding') {
+      // Handle table analysis results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **テーブル分析エラー:** ${result.error}\n`;
+      } else if (result?.success && result?.data) {
+        const data = result.data as { tableName: string; addressColumns: unknown[]; recommendations: string[] };
+        resultText = `\n✅ **テーブル分析完了:** "${data.tableName}"\n`;
+        resultText += `📋 住所列候補: ${(data.addressColumns as unknown[]).length}件\n`;
+        if (data.recommendations.length > 0) {
+          resultText += `💡 **推奨事項:**\n${data.recommendations.map(r => `• ${r}`).join('\n')}\n`;
+        }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'add_geocoded_columns_to_table') {
+      // Handle table enhancement results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **テーブル拡張エラー:** ${result.error}\n`;
+      } else if (result?.success && result?.data) {
+        const data = result.data as { total: number; successful: number; failed: number };
+        resultText = `\n✅ **テーブル拡張完了:**\n📊 ${data.total}件中 ${data.successful}件成功, ${data.failed}件失敗\n`;
+        resultText += `✨ 新しい列が追加されました: geocoded_lat, geocoded_lng, geocoded_display_name\n`;
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -269,6 +344,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           ...(db && { 
             duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
             vega_lite_chart: createVegaLiteTool(db, dbStateManager || undefined),
+            ...createGeocodingTools(db),
           }),
           ...(mapStyleManager && {
             update_map_style: createMapStyleTool(mapStyleManager),

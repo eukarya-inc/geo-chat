@@ -107,6 +107,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
     useEffect(() => {
         selectedTableRef.current = selectedTable;
         selectedColumnsRef.current = selectedColumns;
+        
     }, [selectedTable, selectedColumns]);
 
     // Export functions
@@ -1030,6 +1031,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     エラー: {mapError}
                 </div>
             )}
+
         </div>
     );
 };

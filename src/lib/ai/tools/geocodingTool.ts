@@ -1,0 +1,105 @@
+import { tool } from 'ai';
+import { z } from 'zod';
+import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import { geocodeSingleAddress, geocodeMultipleAddresses } from '../../../utils/geocoding';
+import { analyzeTableForGeocoding, addGeocodedColumnsToTable } from '../../../tools/geocodingTools';
+
+export function createGeocodingTools(db: AsyncDuckDB) {
+  return {
+    geocode_address: tool({
+      description: `Geocode a single address using OpenStreetMap Nominatim API. Returns latitude, longitude and full address.`,
+      parameters: z.object({
+        address: z.string().describe('The address to geocode (e.g., "1600 Pennsylvania Avenue, Washington, DC")')
+      }),
+      execute: async ({ address }) => {
+        try {
+          const result = await geocodeSingleAddress(address);
+          return {
+            success: true,
+            data: result,
+            message: `Successfully geocoded "${address}"`
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            message: `Failed to geocode "${address}"`
+          };
+        }
+      }
+    }),
+
+    geocode_multiple_addresses: tool({
+      description: `Geocode multiple addresses with rate limiting. Useful for batch processing.`,
+      parameters: z.object({
+        addresses: z.array(z.string()).describe('Array of addresses to geocode'),
+        rateLimitMs: z.number().optional().default(1000).describe('Milliseconds to wait between API calls (default: 1000)')
+      }),
+      execute: async ({ addresses, rateLimitMs = 1000 }) => {
+        try {
+          const { results, errors } = await geocodeMultipleAddresses(addresses, rateLimitMs);
+          return {
+            success: true,
+            data: { results, errors },
+            message: `Geocoded ${results.length} addresses successfully, ${errors.length} failed`
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            message: 'Batch geocoding failed'
+          };
+        }
+      }
+    }),
+
+    analyze_table_for_geocoding: tool({
+      description: `Analyze a DuckDB table to find columns that might contain addresses suitable for geocoding.`,
+      parameters: z.object({
+        tableName: z.string().describe('Name of the table to analyze')
+      }),
+      execute: async ({ tableName }) => {
+        try {
+          const analysis = await analyzeTableForGeocoding(db, tableName);
+          return {
+            success: true,
+            data: analysis,
+            message: `Found ${analysis.addressColumns.length} potential address columns in table "${tableName}"`
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            message: `Failed to analyze table "${tableName}"`
+          };
+        }
+      }
+    }),
+
+    add_geocoded_columns_to_table: tool({
+      description: `Add latitude, longitude, and display_name columns to a table by geocoding an existing address column. This modifies the table structure.`,
+      parameters: z.object({
+        tableName: z.string().describe('Name of the table to modify'),
+        addressColumn: z.string().describe('Name of the column containing addresses'),
+        batchSize: z.number().optional().default(10).describe('Number of addresses to process in each batch'),
+        rateLimitMs: z.number().optional().default(1000).describe('Milliseconds to wait between API calls')
+      }),
+      execute: async ({ tableName, addressColumn, batchSize = 10, rateLimitMs = 1000 }) => {
+        try {
+          const result = await addGeocodedColumnsToTable(db, tableName, addressColumn, batchSize, rateLimitMs);
+          return {
+            success: result.success,
+            data: result.stats,
+            message: result.message
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            message: `Failed to add geocoded columns to table "${tableName}"`
+          };
+        }
+      }
+    })
+  };
+}

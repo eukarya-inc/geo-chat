@@ -2,15 +2,29 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { MapStyleManager, MapStyleUpdate } from '../../../utils/mapStyleManager';
 
+
 export function createMapStyleTool(styleManager: MapStyleManager) {
   return tool({
-    description: `Update MapLibre GL map styles including colors, opacity, visibility, and other visual properties.
+    description: `Update MapLibre GL map styles including colors, opacity, visibility, and conditional styling using MapLibre GL expressions.
 
 IMPORTANT: Always check available layers first before applying styles. Layer names depend on data source:
 - DuckDB data creates: duckdb-polygons, duckdb-lines, duckdb-points
 - GeoJSON data creates: geojson-polygons, geojson-lines, geojson-points
 
 Use 'auto' as layer_id to automatically detect the best matching layer.
+
+CONDITIONAL STYLING WITH MAPLIBRE GL EXPRESSIONS:
+You can create conditional styles using MapLibre GL expression syntax:
+- Basic conditional: ["case", ["<", ["get", "property"], 100], "red", "blue"]
+- Multi-condition: ["case", ["<", ["get", "pop"], 1000], "#fee", ["<", ["get", "pop"], 10000], "#fcc", "#f00"]
+- Categorical: ["case", ["==", ["get", "type"], "urban"], "red", ["==", ["get", "type"], "rural"], "green", "gray"]
+- Interpolated: ["interpolate", ["linear"], ["get", "value"], 0, "blue", 100, "red"]
+
+For choropleth maps, use expressions like:
+["interpolate", ["linear"], ["get", "property_name"], min_value, "light_color", max_value, "dark_color"]
+
+For categorical styling:
+["case", ["==", ["get", "category"], "A"], "red", ["==", ["get", "category"], "B"], "blue", "gray"]
 
 Common paint properties:
 - fill-color, fill-opacity, fill-outline-color (for polygons)
