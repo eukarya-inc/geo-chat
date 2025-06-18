@@ -87,7 +87,6 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [selectedZoom, setSelectedZoom] = useState<number>(5); // デフォルトズームレベル
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
     const connectionRef = useRef<DuckDBConnection | null>(null);
@@ -102,11 +101,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         selectedColumnsRef.current = selectedColumns;
     }, [selectedTable, selectedColumns]);
 
-    // ズームレベル変更ハンドラー
-    const handleZoomChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        const newZoom = parseInt(event.target.value, 10);
-        setSelectedZoom(newZoom);
-    };
 
     // Define popup inside the component
     const popup = useRef(new maplibregl.Popup({
@@ -651,7 +645,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 // マップの初期化
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
-                    zoom: selectedZoom, // 初期ズームレベルを状態から設定
+                    zoom: 5, // 初期ズームレベル
                     center: [139.7482, 35.6591], // 東京付近の座標
                     style: {
                         version: 8,
@@ -731,7 +725,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         };
 
         initMap();
-    }, [db, selectedTable, selectedColumns, selectedZoom, geojsonUrl, onMapReady, updateMapLayers]);
+    }, [db, selectedTable, selectedColumns, geojsonUrl, onMapReady, updateMapLayers]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
@@ -746,35 +740,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     transform: 'translate(-50%, -50%)',
                 }}
             ></div>
-            {/* ズームレベル選択 */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: '10px',
-                    right: '10px',
-                    zIndex: 1,
-                    background: 'white',
-                    padding: '5px',
-                    borderRadius: '5px',
-                    boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-                }}
-            >
-                <select
-                    value={selectedZoom}
-                    onChange={handleZoomChange}
-                    style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: '1px solid #ccc',
-                    }}
-                >
-                    {Array.from({ length: 31 }, (_, i) => (
-                        <option key={i} value={i}>
-                            ズームレベル {i}
-                        </option>
-                    ))}
-                </select>
-            </div>
             {isLoading && (
                 <div
                     style={{
