@@ -5,19 +5,33 @@ import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool, type SuggestedPrompt } from './tools/completionTool';
 import { createVegaLiteTool } from './tools/vegaLiteTool';
+import { createMapStyleTool } from './tools/mapStyleTool';
+import { createListLayersTool } from './tools/listLayersTool';
+import { createDebugLayersTool } from './tools/debugLayersTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { MapStyleManager } from '../../utils/mapStyleManager';
+import type { DBStateManager } from '../duckdb/dbStateManager';
 
-export function useAIChat(db?: AsyncDuckDB | null) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
+  const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [suggestedPrompts, setSuggestedPrompts] = useState<SuggestedPrompt[]>([]);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
   }, []);
+
+  const handleStop = useCallback(() => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsLoading(false);
+    }
+  }, [abortController]);
 
   const handleTextDelta = useCallback((textDelta: string, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
     const newContent = fullContent + textDelta;
@@ -46,6 +60,22 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     } else if (part.toolName === 'vega_lite_chart') {
       // Handle VegaLite tool call
       const toolCallText = `\n\n📊 **チャート作成中:** ${(args?.plotType as string) || 'プロット'}チャートを生成中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'update_map_style') {
+      // Handle map style tool call
+      const toolCallText = `\n\n🎨 **マップスタイル更新中:** ${(args?.description as string) || 'スタイルを変更中'}\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'list_map_layers') {
+      // Handle list layers tool call
+      const toolCallText = `\n\n🗺️ **レイヤー情報取得中...**\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'debug_layers') {
+      // Handle debug layers tool call
+      const toolCallText = `\n\n🔍 **レイヤーデバッグ情報取得中...**\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'debug_database') {
+      // Handle debug database tool call
+      const toolCallText = `\n\n🔧 **データベースデバッグ中:** ${(args?.action as string) || 'デバッグ実行中'}\n`;
       newContent += toolCallText;
     }
     
@@ -125,6 +155,72 @@ export function useAIChat(db?: AsyncDuckDB | null) {
             resultText += `\n💡 **提案:**\n${suggestions.map((s: string) => `• ${s}`).join('\n')}\n`;
           }
         }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'update_map_style') {
+      // Handle map style update results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **スタイル更新エラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n✅ **スタイル更新完了:** ${result.message}\n`;
+      } else {
+        resultText = `\n⚠️ **スタイル更新:** 結果が不明です\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'list_map_layers') {
+      // Handle list layers results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **レイヤー取得エラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n✅ **利用可能なレイヤー:** ${result.message}\n`;
+        if (result.layers && Array.isArray(result.layers)) {
+          resultText += `\`\`\`\n${result.layers.join('\n')}\n\`\`\`\n`;
+        }
+      } else {
+        resultText = `\n⚠️ **レイヤー情報:** 結果が不明です\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'debug_layers') {
+      // Handle debug layers results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **デバッグエラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n🔍 **デバッグ情報:** ${result.message}\n`;
+        if (result.debug) {
+          resultText += `\`\`\`json\n${JSON.stringify(result.debug, null, 2)}\n\`\`\`\n`;
+        }
+      } else {
+        resultText = `\n⚠️ **デバッグ情報:** 結果が不明です\n`;
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'debug_database') {
+      // Handle debug database results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **デバッグエラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n🔧 **デバッグ結果:** ${result.message || 'デバッグ完了'}\n`;
+        if (result.showTables || result.tests || result.data) {
+          resultText += `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`\n`;
+        }
+      } else {
+        resultText = `\n⚠️ **デバッグ情報:** 結果が不明です\n`;
+      }
       
       newContent += resultText;
     }
@@ -134,7 +230,6 @@ export function useAIChat(db?: AsyncDuckDB | null) {
         updated[updated.length - 1] = { role: 'assistant', content: newContent };
         return updated;
       });
-    }
     return newContent;
   }, []);
 
@@ -152,6 +247,10 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     setIsLoading(true);
     setError(null);
 
+    // Create abort controller for this request
+    const controller = new AbortController();
+    setAbortController(controller);
+
     try {
       const anthropicClient = createAnthropic({
         apiKey: apiKey,
@@ -168,14 +267,20 @@ export function useAIChat(db?: AsyncDuckDB | null) {
         messages: allMessages,
         tools: { 
           ...(db && { 
-            duckdb_query: createDuckDBTool(db),
-            vega_lite_chart: createVegaLiteTool(db)
+            duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
+            vega_lite_chart: createVegaLiteTool(db, dbStateManager || undefined),
+          }),
+          ...(mapStyleManager && {
+            update_map_style: createMapStyleTool(mapStyleManager),
+            list_map_layers: createListLayersTool(mapStyleManager),
+            debug_layers: createDebugLayersTool(mapStyleManager)
           }),
           completion: completionTool
         },
         maxSteps: 50,
         maxTokens: 4000,
         maxRetries: 30,
+        abortSignal: controller.signal,
       });
 
       let fullContent = '';
@@ -211,7 +316,21 @@ export function useAIChat(db?: AsyncDuckDB | null) {
       }
 
     } catch (err) {
-      console.error('Chat error:', err);
+      // Handle abort error specifically
+      if (err instanceof Error && err.name === 'AbortError') {
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: updated[updated.length - 1].content + '\n\n⏹️ **処理が停止されました**'
+            };
+          }
+          return updated;
+        });
+        return;
+      }
+      
       const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
       setError(err instanceof Error ? err : new Error(errorMsg));
 
@@ -234,8 +353,9 @@ export function useAIChat(db?: AsyncDuckDB | null) {
       });
     } finally {
       setIsLoading(false);
+      setAbortController(null);
     }
-  }, [input, apiKey, isLoading, messages, db, handleTextDelta, handleToolCall, handleToolResult]);
+  }, [input, apiKey, isLoading, messages, db, dbStateManager, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {
@@ -257,6 +377,7 @@ export function useAIChat(db?: AsyncDuckDB | null) {
     input,
     handleInputChange,
     handleSubmit,
+    handleStop,
     isLoading,
     error,
     isApiKeyConfigured,
