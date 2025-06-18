@@ -2,7 +2,7 @@ import { AsyncDuckDB, AsyncPreparedStatement } from '@duckdb/duckdb-wasm';
 import { Feature, GeoJsonProperties, Geometry } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTileEnvelope, getZxyFromUrl } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
@@ -108,14 +108,14 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         setSelectedZoom(newZoom);
     };
 
-    // Define popup and handlers outside so they can be reused
-    const popup = new maplibregl.Popup({
+    // Define popup inside the component
+    const popup = useRef(new maplibregl.Popup({
         closeButton: true,
         closeOnClick: true,
         offset: 25,
-    });
+    }));
 
-    const handleFeatureClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+    const handleFeatureClick = useCallback((e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         if (!e.features?.[0]) return;
 
         const feature = e.features[0];
@@ -179,11 +179,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         `;
 
         // ポップアップを表示
-        popup.setLngLat(coordinates).setHTML(content).addTo(mapRef.current!);
-    };
+        popup.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current!);
+    }, [selectedColumns]);
 
     // Function to update map layers dynamically
-    const updateMapLayers = (map: maplibregl.Map) => {
+    const updateMapLayers = useCallback((map: maplibregl.Map) => {
         console.log('Map: Updating layers - selectedTable:', selectedTable, 'geojsonUrl:', geojsonUrl);
         
         // Always ensure StyleManager has the current map reference before any operations
@@ -454,7 +454,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 };
             }, 100);
         }
-    };
+    }, [selectedTable, geojsonUrl, handleFeatureClick]);
 
     useEffect(() => {
         // If map already exists, just update layers
@@ -731,7 +731,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         };
 
         initMap();
-    }, [db, selectedTable, selectedColumns, selectedZoom, geojsonUrl]);
+    }, [db, selectedTable, selectedColumns, selectedZoom, geojsonUrl, onMapReady, updateMapLayers]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
