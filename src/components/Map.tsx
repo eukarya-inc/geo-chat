@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTileEnvelope, getZxyFromUrl } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
+import MapStyleEditor from './MapStyleEditor';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{
@@ -22,6 +23,8 @@ interface MapProps {
     selectedColumns: string[];
     geojsonUrl?: string;
     onMapReady?: (styleManager: MapStyleManager) => void;
+    onStyleChange?: (styleChanger: (style: maplibregl.StyleSpecification) => void) => void;
+    mapStyleManager?: MapStyleManager;
 }
 
 interface QueryParams {
@@ -84,9 +87,11 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     `;
 };
 
-const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady }) => {
+const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady, onStyleChange, mapStyleManager }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [showExportControls, setShowExportControls] = useState<boolean>(false);
+    const [showStyleEditor, setShowStyleEditor] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
     const connectionRef = useRef<DuckDBConnection | null>(null);
@@ -94,12 +99,64 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
     const initializedRef = useRef<boolean>(false);
     const selectedTableRef = useRef<string | null>(selectedTable);
     const selectedColumnsRef = useRef<string[]>(selectedColumns);
+    const isApplyingCustomStyleRef = useRef<boolean>(false);
+    const hasCustomStyleRef = useRef<boolean>(false);
+    const customStyleRef = useRef<maplibregl.StyleSpecification | null>(null);
 
     // Keep refs updated
     useEffect(() => {
         selectedTableRef.current = selectedTable;
         selectedColumnsRef.current = selectedColumns;
     }, [selectedTable, selectedColumns]);
+
+    // Export functions
+    const exportMapAsPNG = useCallback(async () => {
+        if (!mapRef.current) return;
+        
+        try {
+            // Wait for the map to be idle (all tiles loaded)
+            await new Promise<void>((resolve) => {
+                if (mapRef.current!.loaded()) {
+                    mapRef.current!.once('idle', () => resolve());
+                    mapRef.current!.triggerRepaint();
+                } else {
+                    mapRef.current!.once('load', () => {
+                        mapRef.current!.once('idle', () => resolve());
+                        mapRef.current!.triggerRepaint();
+                    });
+                }
+            });
+
+            // Get the canvas and create image
+            const canvas = mapRef.current.getCanvas();
+            const dataURL = canvas.toDataURL('image/png', 1.0);
+            
+            // Check if we got a valid image (not just black)
+            if (dataURL === 'data:,' || dataURL.length < 100) {
+                throw new Error('Canvas appears to be empty');
+            }
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.download = `map-export-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+            link.href = dataURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Export failed. This might be due to browser security restrictions with WebGL canvas export.');
+        }
+    }, []);
+
+    const exportMapAsSVG = useCallback(() => {
+        if (!mapRef.current) return;
+        
+        // Note: MapLibre doesn't have built-in SVG export
+        // This is a simplified approach - for full SVG export, you'd need a more complex solution
+        alert('SVG export is not currently supported for maps. Please use PNG export instead.');
+    }, []);
 
 
     // Define popup inside the component
@@ -178,6 +235,8 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
     // Function to update map layers dynamically
     const updateMapLayers = useCallback((map: maplibregl.Map) => {
+        console.log('Map: updateMapLayers called');
+        console.log('Map: Current style before update:', map.getStyle().name || 'custom');
         console.log('Map: Updating layers - selectedTable:', selectedTable, 'geojsonUrl:', geojsonUrl);
         
         // Always ensure StyleManager has the current map reference before any operations
@@ -448,14 +507,234 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 };
             }, 100);
         }
+        
+        console.log('Map: updateMapLayers completed');
+        console.log('Map: Current style after update:', map.getStyle().name || 'custom');
     }, [selectedTable, geojsonUrl, handleFeatureClick]);
 
+    // Function to register DuckDB protocol (extracted for reuse)
+    const registerDuckDBProtocol = useCallback(() => {
+        console.log('Map: Registering DuckDB protocol');
+        // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
+        // If it already exists, it will be overwritten which is fine for our use case
+        try {
+            maplibregl.addProtocol('duckdb-vector', async params => {
+                console.log('Protocol handler called with URL:', params.url);
+
+                const zxy = getZxyFromUrl(params.url);
+                if (!zxy) throw new Error('invalid tile url: ' + params.url);
+                const cacheKey = `${zxy.z}/${zxy.x}/${zxy.y}`;
+
+                const addProtocolTime = new Date();
+                console.log(`計測 ${cacheKey} 1 ${addProtocolTime.toISOString()} start addProtocol`);
+
+                // キャッシュをチェック
+                if (tileCache.current.has(cacheKey)) {
+                    console.log(`計測 ${cacheKey} 2 using cached tile`);
+                    const cachedData = tileCache.current.get(cacheKey);
+                    // Create a fresh copy to avoid ArrayBuffer detachment
+                    const freshCopy = cachedData ? new Uint8Array(cachedData.buffer.slice(0)) : new Uint8Array();
+                    return { data: freshCopy };
+                }
+
+                console.log(`Processing tile: z: ${zxy.z}, x: ${zxy.x}, y: ${zxy.y}`);
+
+                try {
+                    if (!connectionRef.current) {
+                        throw new Error('Database connection is not available');
+                    }
+
+                    const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
+
+                    console.log(`Tile bounds: minLng=${minLng}, maxLng=${maxLng}, minLat=${minLat}, maxLat=${maxLat}`);
+
+                    const currentTable = selectedTableRef.current;
+                    const currentColumns = selectedColumnsRef.current;
+
+                    if (!currentTable) {
+                        console.log('No table selected');
+                        return { data: new Uint8Array() };
+                    }
+
+                    // 選択されたカラムを取得するSQLクエリを構築
+                    const query = generateVectorTileQuery({
+                        zxy,
+                        selectedTable: currentTable,
+                        selectedColumns: currentColumns,
+                    });
+                    console.log('query: ' + query);
+                    const queryStartTime = new Date();
+                    console.log('Executing query:', query);
+                    console.log(`計測 ${cacheKey} 2 ${queryStartTime.toISOString()} start duckdb query`);
+                    const stmt = await connectionRef.current.prepare(query);
+                    const result = await stmt.query(minLng, minLat, maxLng, maxLat);
+                    const queryEndTime = new Date();
+                    const queryElapsedMs = queryEndTime.getTime() - queryStartTime.getTime();
+                    console.log(`Query returned ${result.numRows} rows`);
+                    console.log(`計測 ${cacheKey} 3 ${queryEndTime.toISOString()} end duckdb query, elapsed: ${queryElapsedMs}ms ${result.numRows} rows`);
+
+                    if (result.numRows === 0) {
+                        console.log(`計測 ${cacheKey} 3 No data found for this tile`);
+                        console.log('cache io set key:', cacheKey);
+                        tileCache.current.set(cacheKey, new Uint8Array());
+                        return { data: new Uint8Array() };
+                    }
+
+                    const rows = result.toArray() as Array<{ geojson: string } & Record<string, string | number | null>>;
+
+                    const featureStartTime = new Date();
+                    console.log(`計測 ${cacheKey} 4 ${featureStartTime.toISOString()} start feature`);
+                    const features = rows
+                        .map(row => {
+                            try {
+                                if (!row.geojson) {
+                                    console.warn('Empty geojson for row:', row);
+                                    return null;
+                                }
+                                const geometry = JSON.parse(row.geojson) as Geometry;
+
+                                // 選択されたカラムの値をプロパティとして追加
+                                const properties: Record<string, string | number | null> = {};
+                                currentColumns.forEach(column => {
+                                    if (column in row) {
+                                        properties[column] = row[column];
+                                    }
+                                });
+
+                                return {
+                                    type: 'Feature' as const,
+                                    geometry: geometry,
+                                    properties: properties,
+                                } as Feature<Geometry, GeoJsonProperties>;
+                            } catch (error) {
+                                console.error('Error parsing GeoJSON:', error);
+                                return null;
+                            }
+                        })
+                        .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
+                    const featureEndTime = new Date();
+                    const featureElapsedMs = featureEndTime.getTime() - featureStartTime.getTime();
+                    console.log(`計測 ${cacheKey} 5 ${featureEndTime.toISOString()} end feature, elapsed: ${featureElapsedMs}ms`);
+
+                    if (features.length === 0) {
+                        console.log(`計測 ${cacheKey} 6 No valid features found`);
+                        console.log('cache io set key:', cacheKey);
+                        tileCache.current.set(cacheKey, new Uint8Array());
+                        return { data: new Uint8Array() };
+                    }
+
+                    const vectorStartTime = new Date();
+                    console.log(`計測 ${cacheKey} 6 ${vectorStartTime.toISOString()} start vector`);
+                    const vectorTile = geojsonToVectorTile(features, zxy.z, zxy.x, zxy.y);
+                    const vectorEndTime = new Date();
+                    const vectorElapsedMs = vectorEndTime.getTime() - vectorStartTime.getTime();
+                    console.log(`計測 ${cacheKey} 7 ${vectorEndTime.toISOString()} end  vector, elapsed: ${vectorElapsedMs}ms`);
+                    console.log('Vector tile generated, size:', vectorTile.length);
+
+                    // Create a safe copy to avoid ArrayBuffer detachment issues
+                    const safeVectorTile = new Uint8Array(vectorTile.buffer.slice(0));
+                    
+                    // Cache a separate copy
+                    console.log('cache io set key:', cacheKey);
+                    const cacheData = new Uint8Array(safeVectorTile.buffer.slice(0));
+                    tileCache.current.set(cacheKey, cacheData);
+
+                    // Return yet another separate copy to avoid detachment
+                    const returnData = new Uint8Array(safeVectorTile.buffer.slice(0));
+                    const endTime = new Date();
+                    const totalElapsedMs = endTime.getTime() - addProtocolTime.getTime();
+                    console.log(`計測 ${cacheKey} 8 ${endTime.toISOString()} end addProtocol, total elapsed: ${totalElapsedMs}ms`);
+                    return { data: returnData };
+                } catch (error) {
+                    console.error('Error processing tile:', error);
+                    return { data: new Uint8Array() };
+                }
+            });
+        } catch (error) {
+            console.error('Failed to register DuckDB protocol:', error);
+        }
+    }, []);
+
+    // Function to handle style changes
+    const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
+        if (!mapRef.current || !initializedRef.current) {
+            customStyleRef.current = newStyle;
+            hasCustomStyleRef.current = true;
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            isApplyingCustomStyleRef.current = true;
+            
+            // Check if this is the default style (has osm source and osm-layer)
+            const isDefaultStyle = newStyle.sources?.osm && 
+                                 newStyle.layers?.some(layer => layer.id === 'osm-layer');
+            
+            if (isDefaultStyle) {
+                console.log('Map: Clearing custom style, reverting to default');
+                customStyleRef.current = null;
+                hasCustomStyleRef.current = false;
+            } else {
+                console.log('Map: Storing custom style');
+                customStyleRef.current = newStyle;
+                hasCustomStyleRef.current = true;
+            }
+            
+            // Apply the new style without diff to ensure proper layer reloading
+            mapRef.current.setStyle(newStyle);
+            
+            // Wait for style to load, then re-add data layers
+            const handleStyleLoad = () => {
+                console.log('Map: Style updated, re-adding data layers');
+                setIsLoading(false);
+                isApplyingCustomStyleRef.current = false;
+                
+                // Update style manager reference
+                if (styleManagerRef.current && mapRef.current) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (styleManagerRef.current as any).map = mapRef.current;
+                }
+                
+                // Re-add data layers after style loads
+                updateMapLayers(mapRef.current!);
+                
+                // Remove this event listener
+                mapRef.current?.off('styledata', handleStyleLoad);
+            };
+            
+            mapRef.current.on('styledata', handleStyleLoad);
+            
+        } catch (error) {
+            console.error('Failed to apply new style:', error);
+            setIsLoading(false);
+            isApplyingCustomStyleRef.current = false;
+            setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }, [updateMapLayers]);
+
+    // Expose style change handler
     useEffect(() => {
+        if (onStyleChange && initializedRef.current) {
+            onStyleChange(handleStyleChange);
+        }
+    }, [onStyleChange, handleStyleChange]);
+
+    useEffect(() => {
+        console.log('Map: Main useEffect triggered, reasons:', {
+            db: !!db,
+            selectedTable,
+            selectedColumns,
+            geojsonUrl,
+            initialized: initializedRef.current,
+            mapExists: !!mapRef.current,
+            hasCustomStyle: hasCustomStyleRef.current,
+            isApplyingCustomStyle: isApplyingCustomStyleRef.current
+        });
+        
         // If map already exists, just update layers
         if (initializedRef.current && mapRef.current) {
             console.log('Map: Map already exists, updating layers only');
-            console.log('Map: selectedTable changed to:', selectedTable);
-            console.log('Map: selectedColumns changed to:', selectedColumns);
             updateMapLayers(mapRef.current);
             
             // Update StyleManager and force map to render
@@ -473,6 +752,12 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     console.log('Map: Style manager data layers after update (delayed):', styleManagerRef.current?.getDataLayerInfo());
                 }, 1000);
             }
+            return;
+        }
+
+        // Don't initialize if we're currently applying a custom style
+        if (isApplyingCustomStyleRef.current) {
+            console.log('Map: Skipping initialization, custom style is being applied');
             return;
         }
 
@@ -500,176 +785,46 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 }
 
                 // Add vector protocol handler
-                maplibregl.addProtocol('duckdb-vector', async params => {
-                    console.log('Protocol handler called with URL:', params.url);
-
-                    const zxy = getZxyFromUrl(params.url);
-                    if (!zxy) throw new Error('invalid tile url: ' + params.url);
-                    const cacheKey = `${zxy.z}/${zxy.x}/${zxy.y}`;
-
-                    const addProtocolTime = new Date();
-                    console.log(`計測 ${cacheKey} 1 ${addProtocolTime.toISOString()} start addProtocol`);
-
-                    // キャッシュをチェック
-                    // console.log('Cache get key:', cacheKey);
-                    if (tileCache.current.has(cacheKey)) {
-                        console.log(`計測 ${cacheKey} 2 using cached tile`);
-                        const cachedData = tileCache.current.get(cacheKey);
-                        // Create a fresh copy to avoid ArrayBuffer detachment
-                        const freshCopy = cachedData ? new Uint8Array(cachedData.buffer.slice(0)) : new Uint8Array();
-                        return { data: freshCopy };
-                    }
-
-                    console.log(`Processing tile: z: ${zxy.z}, x: ${zxy.x}, y: ${zxy.y}`);
-
-                    try {
-                        if (!connectionRef.current) {
-                            throw new Error('Database connection is not available');
-                        }
-
-                        const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
-
-                        console.log(`Tile bounds: minLng=${minLng}, maxLng=${maxLng}, minLat=${minLat}, maxLat=${maxLat}`);
-
-                        const currentTable = selectedTableRef.current;
-                        const currentColumns = selectedColumnsRef.current;
-
-                        if (!currentTable) {
-                            console.log('No table selected');
-                            return { data: new Uint8Array() };
-                        }
-
-                        // 選択されたカラムを取得するSQLクエリを構築
-                        const query = generateVectorTileQuery({
-                            zxy,
-                            selectedTable: currentTable,
-                            selectedColumns: currentColumns,
-                        });
-                        console.log('query: ' + query);
-                        const queryStartTime = new Date();
-                        console.log('Executing query:', query);
-                        console.log(`計測 ${cacheKey} 2 ${queryStartTime.toISOString()} start duckdb query`);
-                        // const conn = await db.connect();
-                        const stmt = await connectionRef.current.prepare(query);
-                        const result = await stmt.query(minLng, minLat, maxLng, maxLat);
-                        const queryEndTime = new Date();
-                        const queryElapsedMs = queryEndTime.getTime() - queryStartTime.getTime();
-                        console.log(`Query returned ${result.numRows} rows`);
-                        console.log(`計測 ${cacheKey} 3 ${queryEndTime.toISOString()} end duckdb query, elapsed: ${queryElapsedMs}ms ${result.numRows} rows`);
-
-                        if (result.numRows === 0) {
-                            console.log(`計測 ${cacheKey} 3 No data found for this tile`);
-                            console.log('cache io set key:', cacheKey);
-                            tileCache.current.set(cacheKey, new Uint8Array());
-                            return { data: new Uint8Array() };
-                        }
-
-                        const rows = result.toArray() as Array<{ geojson: string } & Record<string, string | number | null>>;
-                        // console.log('Raw data:', rows);
-
-                        const featureStartTime = new Date();
-                        console.log(`計測 ${cacheKey} 4 ${featureStartTime.toISOString()} start feature`);
-                        const features = rows
-                            .map(row => {
-                                try {
-                                    if (!row.geojson) {
-                                        console.warn('Empty geojson for row:', row);
-                                        return null;
-                                    }
-                                    const geometry = JSON.parse(row.geojson) as Geometry;
-                                    // console.log(`Parsed geometry ${index}:`, geometry);
-
-                                    // 選択されたカラムの値をプロパティとして追加
-                                    const properties: Record<string, string | number | null> = {};
-                                    currentColumns.forEach(column => {
-                                        if (column in row) {
-                                            properties[column] = row[column];
-                                        }
-                                    });
-
-                                    return {
-                                        type: 'Feature' as const,
-                                        geometry: geometry,
-                                        properties: properties,
-                                    } as Feature<Geometry, GeoJsonProperties>;
-                                } catch (error) {
-                                    console.error('Error parsing GeoJSON:', error);
-                                    return null;
-                                }
-                            })
-                            .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
-                        const featureEndTime = new Date();
-                        const featureElapsedMs = featureEndTime.getTime() - featureStartTime.getTime();
-                        console.log(`計測 ${cacheKey} 5 ${featureEndTime.toISOString()} end feature, elapsed: ${featureElapsedMs}ms`);
-
-                        // console.log('Processed features:', features);
-
-                        if (features.length === 0) {
-                            console.log(`計測 ${cacheKey} 6 No valid features found`);
-                            console.log('cache io set key:', cacheKey);
-                            tileCache.current.set(cacheKey, new Uint8Array());
-                            return { data: new Uint8Array() };
-                        }
-
-                        // console.log('Generating vector tile...');
-                        const vectorStartTime = new Date();
-                        console.log(`計測 ${cacheKey} 6 ${vectorStartTime.toISOString()} start vector`);
-                        const vectorTile = geojsonToVectorTile(features, zxy.z, zxy.x, zxy.y);
-                        const vectorEndTime = new Date();
-                        const vectorElapsedMs = vectorEndTime.getTime() - vectorStartTime.getTime();
-                        console.log(`計測 ${cacheKey} 7 ${vectorEndTime.toISOString()} end  vector, elapsed: ${vectorElapsedMs}ms`);
-                        console.log('Vector tile generated, size:', vectorTile.length);
-
-                        // Create a safe copy to avoid ArrayBuffer detachment issues
-                        const safeVectorTile = new Uint8Array(vectorTile.buffer.slice(0));
-                        
-                        // Cache a separate copy
-                        console.log('cache io set key:', cacheKey);
-                        const cacheData = new Uint8Array(safeVectorTile.buffer.slice(0));
-                        tileCache.current.set(cacheKey, cacheData);
-
-                        // Return yet another separate copy to avoid detachment
-                        const returnData = new Uint8Array(safeVectorTile.buffer.slice(0));
-                        const endTime = new Date();
-                        const totalElapsedMs = endTime.getTime() - addProtocolTime.getTime();
-                        console.log(`計測 ${cacheKey} 8 ${endTime.toISOString()} end addProtocol, total elapsed: ${totalElapsedMs}ms`);
-                        return { data: returnData };
-                    } catch (error) {
-                        // console.log('cache io set key:', cacheKey);
-                        // tileCache.current.set(cacheKey, new Uint8Array());
-                        console.error('Error processing tile:', error);
-                        return { data: new Uint8Array() };
-                    }
-                });
+                registerDuckDBProtocol();
 
                 // マップの初期化
+                const defaultStyle = {
+                    version: 8,
+                    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+                    sources: {
+                        osm: {
+                            type: 'raster',
+                            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                            maxzoom: 19,
+                            tileSize: 256,
+                            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                        },
+                    },
+                    layers: [
+                        {
+                            id: 'osm-layer',
+                            source: 'osm',
+                            type: 'raster',
+                        },
+                    ],
+                } as maplibregl.StyleSpecification;
+                
+                const styleToUse = customStyleRef.current || defaultStyle;
+                console.log('Map: Creating map with style:', customStyleRef.current ? 'custom' : 'default');
+                
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
                     zoom: 5, // 初期ズームレベル
                     center: [139.7482, 35.6591], // 東京付近の座標
-                    style: {
-                        version: 8,
-                        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
-                        sources: {
-                            osm: {
-                                type: 'raster',
-                                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                                maxzoom: 19,
-                                tileSize: 256,
-                                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                            },
-                        },
-                        layers: [
-                            {
-                                id: 'osm-layer',
-                                source: 'osm',
-                                type: 'raster',
-                            },
-                        ],
-                    },
+                    style: styleToUse,
+                    antialias: true,
+                    // Try to enable preserveDrawingBuffer for export
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    ...(window.location.hostname === 'localhost' && { preserveDrawingBuffer: true } as any)
                 });
 
                 mapRef.current = mapInstance; // マップインスタンスを保存
+
 
                 // マップの読み込み完了時の処理
                 mapInstance.on('load', () => {
@@ -725,7 +880,15 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         };
 
         initMap();
-    }, [db, selectedTable, selectedColumns, geojsonUrl, onMapReady, updateMapLayers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [db, selectedTable, selectedColumns, geojsonUrl, updateMapLayers, registerDuckDBProtocol]);
+    
+    // Separate effect for onMapReady to avoid triggering re-initialization
+    useEffect(() => {
+        if (onMapReady && styleManagerRef.current && initializedRef.current) {
+            onMapReady(styleManagerRef.current);
+        }
+    }, [onMapReady]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
@@ -736,6 +899,106 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     height: '100%',
                 }}
             ></div>
+            
+            {/* Map Controls */}
+            <div style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                display: 'flex',
+                gap: '8px',
+                zIndex: 1000
+            }}>
+                <button
+                    onClick={() => setShowExportControls(!showExportControls)}
+                    style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    {showExportControls ? '✕ Hide Export' : '📤 Export'}
+                </button>
+                <button
+                    onClick={() => setShowStyleEditor(!showStyleEditor)}
+                    style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    {showStyleEditor ? '✕ Hide Style Editor' : '🎨 Style Editor'}
+                </button>
+            </div>
+
+            {/* Export Controls */}
+            {showExportControls && (
+                <div style={{
+                    position: 'absolute',
+                    top: '50px',
+                    left: '10px',
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    zIndex: 1000,
+                    minWidth: '200px'
+                }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 'bold' }}>
+                        Export Map
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <button
+                            onClick={exportMapAsPNG}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: '#17a2b8',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '13px'
+                            }}
+                        >
+                            📄 Export as PNG
+                        </button>
+                        <button
+                            onClick={exportMapAsSVG}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: '#6c757d',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '13px'
+                            }}
+                        >
+                            📄 Export as SVG
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Style Editor */}
+            {showStyleEditor && (
+                <MapStyleEditor 
+                    styleManager={mapStyleManager || styleManagerRef.current} 
+                    onStyleChange={handleStyleChange}
+                    onClose={() => setShowStyleEditor(false)}
+                />
+            )}
             {isLoading && (
                 <div
                     style={{
