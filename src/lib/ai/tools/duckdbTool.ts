@@ -1,8 +1,9 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
 
-export function createDuckDBTool(db: AsyncDuckDB) {
+export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager) {
   return tool({
     description,
     parameters: z.object({
@@ -10,24 +11,17 @@ export function createDuckDBTool(db: AsyncDuckDB) {
     }),
     execute: async ({ sql }) => {
       try {
-        console.log('Executing SQL:', sql);
+        // Check if this is a DDL operation
+        const upperSql = sql.trim().toUpperCase();
+        const isTableOperation = upperSql.includes('CREATE TABLE') || 
+                                upperSql.includes('CREATE OR REPLACE TABLE') ||
+                                upperSql.includes('DROP TABLE');
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        console.log('DuckDBTool: Database instance ID:', (db as any).__instanceId || 'no-id');
         const conn = await db.connect();
         try {
           const result = await conn.query(sql);
-          
-          // If this looks like a DDL statement (CREATE, DROP, ALTER), commit and checkpoint to ensure visibility
-          const upperSql = sql.trim().toUpperCase();
-          const containsDDL = upperSql.includes('CREATE ') || upperSql.includes('DROP ') || upperSql.includes('ALTER ');
-          if (containsDDL) {
-            try {
-              await conn.query('COMMIT;');
-              await conn.query('CHECKPOINT;');
-              console.log('Committed and checkpointed DDL statement for cross-connection visibility');
-            } catch (commitError) {
-              console.warn('Failed to commit/checkpoint DDL statement:', commitError);
-              // Continue anyway, as the statement might still have succeeded
-            }
-          }
           
           const data = result.toArray().map(row => {
             const obj = Object.fromEntries(row);
@@ -39,7 +33,14 @@ export function createDuckDBTool(db: AsyncDuckDB) {
               ])
             );
           });
-          console.log('Query result:', data);
+        
+          // Simple table refresh for DDL operations
+          if (isTableOperation && dbStateManager) {
+            console.log('DuckDBTool: Table operation detected, triggering refresh');
+            setTimeout(() => {
+              dbStateManager.notifyTableChange();
+            }, 100);
+          }
           
           // Add metadata for large datasets
           const metadata: {
@@ -80,19 +81,12 @@ export function createDuckDBTool(db: AsyncDuckDB) {
           }
           
           return metadata;
-        } catch (error) {
-          console.error('Error executing SQL:', error);
-          return {
-            error: error instanceof Error ? error.message : 'Unknown error occurred',
-            sql: sql
-          };
         } finally {
           await conn.close();
         }
       } catch (error) {
-        console.error('Failed to connect to DuckDB:', error);
         return {
-          error: error instanceof Error ? error.message : 'Failed to connect to DuckDB',
+          error: error instanceof Error ? error.message : 'Unknown error occurred',
           sql: sql
         };
       }

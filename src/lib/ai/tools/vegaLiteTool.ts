@@ -1,11 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-
-interface DescribeResultRow {
-  column_name: string;
-  column_type: string;
-}
+import { DBStateManager } from '../../duckdb/dbStateManager';
 
 interface VegaLiteEncoding {
   x?: {
@@ -56,7 +52,8 @@ interface VegaLiteSpec {
   encoding?: VegaLiteEncoding;
 }
 
-export function createVegaLiteTool(db: AsyncDuckDB) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function createVegaLiteTool(db: AsyncDuckDB, _p0?: DBStateManager | undefined) {
   return tool({
     description,
     parameters: z.object({
@@ -90,49 +87,71 @@ export function createVegaLiteTool(db: AsyncDuckDB) {
           tableName, plotType, xField, yField, colorField, sizeField, 
           aggregateFunction, title, width, height, limit 
         });
-        
+
+        // Force database sync before validation
+        console.log(`VegaLite: Starting validation for table ${tableName}`);
         const conn = await db.connect();
         
         try {
-          // Check if table exists with retry logic for newly created tables
-          let tableFound = false;
+          // Force checkpoint to ensure all changes are visible
+          try {
+            await conn.query('CHECKPOINT;');
+            console.log('VegaLite: Checkpoint completed');
+          } catch (checkpointError) {
+            console.log('VegaLite: Checkpoint failed (non-critical):', checkpointError);
+          }
           
-          for (let attempt = 0; attempt < 4; attempt++) {
+          // Simple table validation with retries
+          let tableExists = false;
+          for (let attempt = 0; attempt < 5; attempt++) {
             try {
-              await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
-              tableFound = true;
-              break;
-            } catch {
+              // Also try SHOW TABLES first to see what's available
               if (attempt === 0) {
-                console.log(`Table ${tableName} not immediately visible, retrying...`);
-              } else {
-                console.log(`Table ${tableName} still not found, attempt ${attempt + 1}/4...`);
+                const tablesResult = await conn.query('SHOW TABLES;');
+                const availableTables: string[] = [];
+                for (let i = 0; i < tablesResult.numRows; i++) {
+                  availableTables.push(tablesResult.getChildAt(0)?.get(i) as string);
+                }
+                console.log(`VegaLite: Available tables on attempt ${attempt + 1}:`, availableTables);
               }
-              // Progressive delay: 0ms, 100ms, 300ms, 500ms
-              const delay = attempt * 150 + (attempt > 0 ? 100 : 0);
-              if (attempt < 3) {
-                await new Promise(resolve => setTimeout(resolve, delay));
+              
+              await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
+              tableExists = true;
+              console.log(`VegaLite: Table ${tableName} found on attempt ${attempt + 1}`);
+              break;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            } catch (error) {
+              console.log(`VegaLite: Table ${tableName} not found on attempt ${attempt + 1}, retrying...`);
+              if (attempt < 4) {
+                // Wait longer between retries and force another checkpoint
+                await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+                try {
+                  await conn.query('CHECKPOINT;');
+                } catch { /* empty */ }
               }
             }
           }
           
-          if (!tableFound) {
-            // Get list of available tables for better error message
-            let availableTables: string[] = [];
+          if (!tableExists) {
+            // Get available tables for error message
             try {
-              const tablesResult = await conn.query('SHOW TABLES');
-              availableTables = tablesResult.toArray().map(row => row[Object.keys(row)[0]]);
+              const tablesResult = await conn.query('SHOW TABLES;');
+              const availableTables: string[] = [];
+              for (let i = 0; i < tablesResult.numRows; i++) {
+                availableTables.push(tablesResult.getChildAt(0)?.get(i) as string);
+              }
+              
+              const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}.` : '';
+              throw new Error(`Table '${tableName}' does not exist.${tableList} Please ensure the table was created successfully.`);
             } catch {
-              // Ignore error getting table list
+              throw new Error(`Table '${tableName}' does not exist. Please ensure the table was created successfully.`);
             }
-            
-            const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}` : '';
-            throw new Error(`Table '${tableName}' does not exist after multiple attempts.${tableList} Please ensure the table was created successfully.`);
           }
           
-          // Get table schema to validate fields
+          // Get table schema directly
           const schemaResult = await conn.query(`DESCRIBE ${tableName}`);
-          const columns = schemaResult.toArray().map((row: DescribeResultRow) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const columns = schemaResult.toArray().map((row: any) => ({
             name: row.column_name,
             type: row.column_type
           }));
