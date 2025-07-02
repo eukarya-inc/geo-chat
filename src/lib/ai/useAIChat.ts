@@ -8,6 +8,7 @@ import { createVegaLiteTool } from './tools/vegaLiteTool';
 import { createMapStyleTool } from './tools/mapStyleTool';
 import { createListLayersTool } from './tools/listLayersTool';
 import { createDebugLayersTool } from './tools/debugLayersTool';
+import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
 import type { DBStateManager } from '../duckdb/dbStateManager';
@@ -76,6 +77,16 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     } else if (part.toolName === 'debug_database') {
       // Handle debug database tool call
       const toolCallText = `\n\n🔧 **データベースデバッグ中:** ${(args?.action as string) || 'デバッグ実行中'}\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'analyze_data') {
+      // Handle data analysis tool call
+      const action = args?.action as string;
+      const tableName = args?.table_name as string;
+      const actionText = action === 'describe_table' ? 'テーブル構造分析中' :
+                         action === 'analyze_column' ? 'カラム分析中' :
+                         action === 'get_sample_data' ? 'サンプルデータ取得中' :
+                         'データ分析中';
+      const toolCallText = `\n\n📊 **${actionText}:** ${tableName || 'テーブル'}を分析中...\n`;
       newContent += toolCallText;
     }
     
@@ -223,6 +234,53 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'analyze_data') {
+      // Handle data analysis results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **データ分析エラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}\n`;
+        
+        if (result.columns && Array.isArray(result.columns)) {
+          // Table description results
+          resultText += `\n📋 **カラム情報:**\n`;
+          (result.columns as Array<{ name: string; type: string; nullable: boolean }>).forEach((col) => {
+            resultText += `• ${col.name}: ${col.type}${col.nullable ? ' (nullable)' : ''}\n`;
+          });
+          resultText += `\n📊 **行数:** ${result.total_rows}行\n`;
+        } else if (result.analysis) {
+          // Column analysis results
+          const analysis = result.analysis as any;
+          resultText += `\n🔍 **カラム分析結果:**\n`;
+          if (analysis.min_value !== undefined) {
+            // Numeric column
+            resultText += `• 最小値: ${analysis.min_value}\n`;
+            resultText += `• 最大値: ${analysis.max_value}\n`;
+            resultText += `• 平均値: ${Math.round((analysis.avg_value || 0) * 100) / 100}\n`;
+            resultText += `• ユニーク値数: ${analysis.unique_values}\n`;
+          } else if (analysis.unique_values && Array.isArray(analysis.unique_values)) {
+            // Categorical column
+            resultText += `• トップ値:\n`;
+            analysis.unique_values.slice(0, 5).forEach((item: { value: string; count: number }) => {
+              resultText += `  - ${item.value}: ${item.count}件\n`;
+            });
+          }
+        } else if (result.sample_data && Array.isArray(result.sample_data)) {
+          // Sample data results
+          const sampleCount = result.sample_data.length;
+          resultText += `\n📝 **サンプルデータ:** ${sampleCount}行を表示\n`;
+          if (sampleCount > 0) {
+            const sample = result.sample_data[0] as Record<string, unknown>;
+            const columns = Object.keys(sample);
+            resultText += `\n**利用可能な列:** ${columns.join(', ')}\n`;
+          }
+        }
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -269,6 +327,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           ...(db && { 
             duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
             vega_lite_chart: createVegaLiteTool(db, dbStateManager || undefined),
+            analyze_data: createDataAnalysisTool(db),
           }),
           ...(mapStyleManager && {
             update_map_style: createMapStyleTool(mapStyleManager),
