@@ -3,6 +3,7 @@ import dataReducer from './slices/dataSlice';
 import mapReducer from './slices/mapSlice';
 import uiReducer from './slices/uiSlice';
 import duckdbReducer from './slices/duckdbSlice';
+import { loggerMiddleware } from './middleware/logger';
 
 export const store = configureStore({
   reducer: {
@@ -29,7 +30,7 @@ export const store = configureStore({
           'map.styleManager',
         ],
       },
-    }),
+    }).concat(loggerMiddleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
