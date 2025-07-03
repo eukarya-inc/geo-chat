@@ -7,7 +7,7 @@ import {
   setIsLoadingApiKey 
 } from './store/slices/uiSlice';
 import { retrieveEncryptedApiKey } from './utils/encryption';
-import App from './App';
+import AppRedux from './AppRedux';
 
 /**
  * Redux wrapper around the existing App component
@@ -51,9 +51,8 @@ function AppWithRedux() {
     initializeApiKey();
   }, [dispatch]);
 
-  // For now, we'll pass Redux state as props to the existing App component
-  // In PR2, we'll migrate the App component itself to use Redux directly
-  return <App />;
+  // Now using the Redux-aware App component
+  return <AppRedux />;
 }
 
 export default AppWithRedux;
