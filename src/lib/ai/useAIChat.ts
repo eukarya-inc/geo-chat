@@ -271,7 +271,12 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           resultText += `\n📊 **行数:** ${result.total_rows}行\n`;
         } else if (result.analysis) {
           // Column analysis results
-          const analysis = result.analysis as any;
+          const analysis = result.analysis as {
+            min_value?: number;
+            max_value?: number;
+            avg_value?: number;
+            unique_values?: number | Array<{ value: string; count: number }>;
+          };
           resultText += `\n🔍 **カラム分析結果:**\n`;
           if (analysis.min_value !== undefined) {
             // Numeric column
