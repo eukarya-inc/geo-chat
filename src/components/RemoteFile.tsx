@@ -50,10 +50,13 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
 
             const isParquet = url.toLowerCase().endsWith('.parquet');
             const isGeoJSON = url.toLowerCase().endsWith('.geojson') || url.toLowerCase().endsWith('.json') || url.includes('geojson');
+            const isCSV = url.toLowerCase().endsWith('.csv');
             
             let query;
             if (isParquet) {
                 query = `CREATE TABLE ${tableName} AS SELECT * FROM '${url}'`;
+            } else if (isCSV) {
+                query = `CREATE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${url}')`;
             } else if (isGeoJSON) {
                 // For GeoJSON, fetch the data client-side first to avoid DuckDB URL issues
                 console.log('RemoteFile: Fetching GeoJSON data from:', url);
@@ -187,7 +190,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
                             type="url"
                             value={url}
                             onChange={handleUrlChange}
-                            placeholder="Enter file URL (.parquet, .geojson, .shp)"
+                            placeholder="Enter file URL (.parquet, .csv, .geojson, .shp)"
                             style={{ flex: 1, padding: '0.5em' }}
                         />
                         <button onClick={createTableFromUrl} disabled={!db || !url.trim() || isCreatingTable}>

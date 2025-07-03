@@ -2,6 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { MapStyleManager, MapStyleUpdate } from '../../../utils/mapStyleManager';
 
+
 export function createMapStyleTool(styleManager: MapStyleManager) {
   return tool({
     description: `Update MapLibre GL map styles including colors, opacity, visibility, and conditional styling using MapLibre GL expressions.
