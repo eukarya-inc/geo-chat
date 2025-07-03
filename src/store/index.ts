@@ -3,6 +3,7 @@ import dataReducer from './slices/dataSlice';
 import mapReducer from './slices/mapSlice';
 import uiReducer from './slices/uiSlice';
 import duckdbReducer from './slices/duckdbSlice';
+import arrowReducer from './slices/arrowSlice';
 import { loggerMiddleware } from './middleware/logger';
 
 export const store = configureStore({
@@ -11,6 +12,7 @@ export const store = configureStore({
     map: mapReducer,
     ui: uiReducer,
     duckdb: duckdbReducer,
+    arrow: arrowReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -20,14 +22,17 @@ export const store = configureStore({
           'duckdb/setConnection',
           'data/setArrowTable',
           'map/setStyleManager',
+          'arrow/querySuccess',
+          'arrow/setTableStats',
         ],
         // Ignore these field paths in all actions
-        ignoredActionPaths: ['payload.db', 'payload.styleManager'],
+        ignoredActionPaths: ['payload.db', 'payload.styleManager', 'payload.dbManager', 'payload.result.data'],
         // Ignore these paths in the state
         ignoredPaths: [
           'duckdb.connection',
           'data.arrowTables',
           'map.styleManager',
+          'arrow.queryResults',
         ],
       },
     }).concat(loggerMiddleware),
