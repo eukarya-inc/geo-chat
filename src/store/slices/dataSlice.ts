@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { loadTables, createTableFromUrl } from '../thunks/dataThunks';
 
 interface TableColumn {
   name: string;
@@ -61,6 +62,41 @@ const dataSlice = createSlice({
     },
     reset: () => initialState,
   },
+  extraReducers: (builder) => {
+    // Handle loadTables async thunk
+    builder
+      .addCase(loadTables.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loadTables.fulfilled, (state, action) => {
+        state.tables = action.payload;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(loadTables.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to load tables';
+      });
+    
+    // Handle createTableFromUrl async thunk
+    builder
+      .addCase(createTableFromUrl.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(createTableFromUrl.fulfilled, (state, action) => {
+        // The table will be loaded by a subsequent loadTables call
+        state.isLoading = false;
+        state.error = null;
+        // Auto-select the newly created table
+        state.selectedTable = action.payload;
+      })
+      .addCase(createTableFromUrl.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to create table';
+      });
+  },
 });
 
 export const {
@@ -75,3 +111,6 @@ export const {
 } = dataSlice.actions;
 
 export default dataSlice.reducer;
+
+// Re-export thunks for convenience
+export { loadTables, createTableFromUrl } from '../thunks/dataThunks';
