@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import './App.css';
 import AIChat from './components/AIChat';
 import MapComponent from './components/Map';
-import RemoteFile from './components/RemoteFile';
+import { FileProcessor } from './components/FileProcessor';
 import TableList from './components/TableList';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
 import { useAppDispatch, useAppSelector } from './store/hooks';
@@ -145,7 +145,7 @@ function AppRedux() {
                     flexShrink: 0,
                     backgroundColor: 'white'
                 }}>
-                    {db && <RemoteFile db={db} onTableCreated={(tableName) => {
+                    {db && <FileProcessor db={db} onTableCreated={(tableName) => {
                         console.log('AppRedux: Table created, auto-selecting:', tableName);
                         dispatch(setSelectedTable(tableName));
                         // Also trigger TableList refresh via dbStateManager

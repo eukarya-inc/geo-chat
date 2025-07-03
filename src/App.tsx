@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import './App.css';
 import AIChat from './components/AIChat';
 import MapComponent from './components/Map';
-import RemoteFile from './components/RemoteFile';
+import { FileProcessor } from './components/FileProcessor';
 import TableList from './components/TableList';
 import { useDuckDB } from './lib/duckdb/useDuckDB';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
@@ -187,7 +187,7 @@ function App() {
                     flexShrink: 0,
                     backgroundColor: 'white'
                 }}>
-                    {db && <RemoteFile db={db} onTableCreated={(tableName) => {
+                    {db && <FileProcessor db={db} onTableCreated={(tableName) => {
                         console.log('App: Table created, auto-selecting:', tableName);
                         setSelectedTable(tableName);
                         // Also trigger TableList refresh via dbStateManager
