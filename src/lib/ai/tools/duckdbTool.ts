@@ -85,8 +85,22 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           await conn.close();
         }
       } catch (error) {
+        let errorMessage = 'Unknown error occurred';
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'object' && error !== null) {
+          // Handle WebAssembly exceptions and other objects
+          errorMessage = error.toString();
+          if (errorMessage === '[object WebAssembly.Exception]') {
+            errorMessage = 'WebAssembly execution error - this usually indicates invalid SQL syntax, missing tables, or inaccessible external resources';
+          }
+        } else {
+          errorMessage = String(error);
+        }
+        
         return {
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
+          error: errorMessage,
           sql: sql
         };
       }
@@ -95,15 +109,30 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
 }
 
 const description = `
-This tool allows you to execute SQL queries on a DuckDB database. You can use it to run any valid SQL command, such as SELECT, INSERT, UPDATE, DELETE, and more. The results will be returned in a structured format.
-Make sure your SQL queries are valid and do not contain any harmful commands. The tool will return the results of your query or an error message if something goes wrong.
+This tool allows you to execute SQL queries on a DuckDB database. Use it for data analysis, filtering, aggregation, and visualization of existing data.
+
+IMPORTANT GUIDELINES:
+- ALWAYS use existing tables in the database - check with SHOW TABLES first
+- AVOID creating new tables unless absolutely necessary
+- For analysis, use SELECT queries with GROUP BY, aggregation functions, and filtering
+- External URLs may not be accessible - work with existing data instead
+
+COMMON PATTERNS:
+- Analyze existing data: SELECT column, COUNT(*) FROM existing_table GROUP BY column
+- Extract from JSON: SELECT properties->>'field_name' as field FROM table
+- Filter by date: SELECT * FROM table WHERE properties->>'date_field' LIKE '2022%'
+- Aggregate by region: SELECT properties->>'prefecture' as prefecture, COUNT(*) FROM table GROUP BY prefecture
 
 # Example usage
 
 \`\`\`sql
-SELECT * FROM my_table WHERE id = 1;
+-- Analyze existing data instead of creating new tables
+SELECT properties->>'都道府県名' as prefecture, COUNT(*) as accident_count 
+FROM uc16_01_uav_accident 
+WHERE properties->>'都道府県名' IS NOT NULL 
+GROUP BY properties->>'都道府県名' 
+ORDER BY accident_count DESC;
 \`\`\`
-You can also use it to create tables, insert data, and perform complex queries.
 
 # How to load geo data
 
