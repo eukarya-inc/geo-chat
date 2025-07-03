@@ -30,7 +30,7 @@ export const loadTables = createAsyncThunk<
         ORDER BY table_name
       `);
       
-      const tableNames = result.toArray().map((row: any) => row.table_name);
+      const tableNames = result.toArray().map((row: { table_name: string }) => row.table_name);
       
       // Get column information for each table
       const tables: TableInfo[] = await Promise.all(
@@ -43,7 +43,7 @@ export const loadTables = createAsyncThunk<
             ORDER BY ordinal_position
           `);
           
-          const columns = columnsResult.toArray().map((col: any) => ({
+          const columns = columnsResult.toArray().map((col: { column_name: string; data_type: string }) => ({
             name: col.column_name,
             type: col.data_type,
           }));
