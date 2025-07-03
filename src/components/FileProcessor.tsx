@@ -85,169 +85,178 @@ export function FileProcessor({ db: propDb, onTableCreated }: FileProcessorProps
   }, [dispatch]);
 
   const jobList = Object.values(jobs).sort((a, b) => b.startTime - a.startTime);
+  const activeJobs = jobList.filter(job => job.status === 'processing');
+  const recentJobs = jobList.filter(job => job.status !== 'processing').slice(0, 3);
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h3>File Processor</h3>
-      
-      {/* Drop Zone */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        style={{
-          border: `2px dashed ${dragActive ? '#007bff' : '#ccc'}`,
-          borderRadius: '8px',
-          padding: '40px',
-          textAlign: 'center',
-          marginBottom: '20px',
-          backgroundColor: dragActive ? '#f0f8ff' : '#f9f9f9',
-          transition: 'all 0.3s ease'
-        }}
-      >
-        <p>Drag and drop files here or click to browse</p>
-        <p style={{ fontSize: '12px', color: '#666' }}>
-          Supported formats: {supportedExtensions}
-        </p>
-        <input
-          type="file"
-          multiple
-          accept={supportedExtensions}
-          onChange={handleFileInput}
-          style={{ display: 'none' }}
-          id="file-input"
-        />
-        <label
-          htmlFor="file-input"
+    <div style={{ fontSize: '13px' }}>
+      {/* Compact single-line input section */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '8px', 
+        alignItems: 'center',
+        marginBottom: '10px'
+      }}>
+        {/* Compact file drop/select button */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           style={{
-            padding: '8px 16px',
-            backgroundColor: '#007bff',
-            color: 'white',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            display: 'inline-block',
-            marginTop: '10px'
+            position: 'relative',
+            display: 'inline-block'
           }}
         >
-          Choose Files
-        </label>
-      </div>
+          <input
+            type="file"
+            multiple
+            accept={supportedExtensions}
+            onChange={handleFileInput}
+            style={{ display: 'none' }}
+            id="file-input"
+          />
+          <label
+            htmlFor="file-input"
+            style={{
+              display: 'inline-block',
+              padding: '6px 12px',
+              backgroundColor: dragActive ? '#0056b3' : '#007bff',
+              color: 'white',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            📁 {dragActive ? 'Drop here' : 'Choose files'}
+          </label>
+        </div>
 
-      {/* URL Input */}
-      <form onSubmit={handleURLSubmit} style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        {/* URL Input - inline and compact */}
+        <form onSubmit={handleURLSubmit} style={{ 
+          display: 'flex', 
+          gap: '5px',
+          flex: 1
+        }}>
           <input
             type="url"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="Enter file URL..."
+            placeholder="Or paste URL..."
             style={{
               flex: 1,
-              padding: '8px',
+              padding: '6px 10px',
               border: '1px solid #ddd',
-              borderRadius: '4px'
+              borderRadius: '4px',
+              fontSize: '13px'
             }}
           />
           <button
             type="submit"
             disabled={!db || !urlInput}
             style={{
-              padding: '8px 16px',
-              backgroundColor: '#007bff',
+              padding: '6px 12px',
+              backgroundColor: '#28a745',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '13px',
+              opacity: !db || !urlInput ? 0.6 : 1
             }}
           >
-            Process URL
+            Load
           </button>
-        </div>
-      </form>
-
-      {/* Processing Jobs */}
-      <div>
-        <h4>Processing Jobs</h4>
-        {jobList.length === 0 ? (
-          <p style={{ color: '#666' }}>No processing jobs yet</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {jobList.map(job => (
-              <div
-                key={job.id}
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  padding: '15px',
-                  backgroundColor: '#f9f9f9'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong>{job.fileName}</strong>
-                    <span style={{ marginLeft: '10px', color: '#666' }}>
-                      ({job.processor})
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveJob(job.id)}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '12px',
-                      backgroundColor: '#dc3545',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '3px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-                
-                <div style={{ marginTop: '10px' }}>
-                  {job.status === 'processing' && (
-                    <div>
-                      <div style={{
-                        width: '100%',
-                        backgroundColor: '#e0e0e0',
-                        borderRadius: '4px',
-                        overflow: 'hidden'
-                      }}>
-                        <div
-                          style={{
-                            width: `${job.progress}%`,
-                            height: '20px',
-                            backgroundColor: '#007bff',
-                            transition: 'width 0.3s ease'
-                          }}
-                        />
-                      </div>
-                      <span style={{ fontSize: '12px', color: '#666' }}>
-                        {job.progress}% complete
-                      </span>
-                    </div>
-                  )}
-                  
-                  {job.status === 'completed' && job.result && (
-                    <div style={{ color: '#28a745' }}>
-                      ✓ Completed in {job.result.processingTime.toFixed(0)}ms
-                      <br />
-                      Table: {job.result.tableName} ({job.result.rowCount} rows, {job.result.columns.length} columns)
-                    </div>
-                  )}
-                  
-                  {job.status === 'failed' && (
-                    <div style={{ color: '#dc3545' }}>
-                      ✗ Failed: {job.error}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        </form>
       </div>
+
+      {/* Active Jobs - only show if processing */}
+      {activeJobs.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          {activeJobs.map(job => (
+            <div key={job.id} style={{ marginBottom: '4px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px'
+              }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  🔄 {job.fileName}
+                </span>
+                <div style={{
+                  width: '80px',
+                  height: '4px',
+                  backgroundColor: '#e0e0e0',
+                  borderRadius: '2px',
+                  overflow: 'hidden'
+                }}>
+                  <div
+                    style={{
+                      width: `${job.progress}%`,
+                      height: '100%',
+                      backgroundColor: '#007bff',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '11px', color: '#666', minWidth: '35px' }}>
+                  {job.progress}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Recent completed/failed jobs - very compact */}
+      {recentJobs.length > 0 && (
+        <div style={{ fontSize: '12px', color: '#666' }}>
+          {recentJobs.map(job => (
+            <div 
+              key={job.id} 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '2px'
+              }}
+            >
+              <span style={{ minWidth: '14px' }}>
+                {job.status === 'completed' ? '✓' : '✗'}
+              </span>
+              <span style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: job.status === 'completed' ? '#28a745' : '#dc3545'
+              }}>
+                {job.fileName}
+                {job.status === 'completed' && job.result && (
+                  <span style={{ color: '#666', marginLeft: '5px' }}>
+                    ({job.result.rowCount} rows)
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={() => handleRemoveJob(job.id)}
+                style={{
+                  padding: '0 4px',
+                  fontSize: '11px',
+                  backgroundColor: 'transparent',
+                  color: '#999',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
