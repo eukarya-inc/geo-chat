@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import './App.css';
 import AIChat from './components/AIChat';
 import MapComponent from './components/Map';
 import { FileProcessor } from './components/FileProcessor';
 import TableList from './components/TableList';
-import { LayerPanel } from './components/LayerPanel';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { setSelectedTable, setSelectedColumns } from './store/slices/dataSlice';
@@ -20,8 +19,6 @@ function AppRedux() {
     const { selectedTable, selectedColumns } = useAppSelector(state => state.data);
     const { styleManager: mapStyleManager } = useAppSelector(state => state.map);
     const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
-    const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-    const [showLayers, setShowLayers] = useState(true);
     
     // Sync DuckDB tables with datasets
     useDatasetSync();
@@ -171,15 +168,6 @@ function AppRedux() {
                             selectedColumns={selectedColumns}
                             onColumnSelect={handleColumnSelect}
                         />
-                    )}
-                    
-                    {/* Layer Panel */}
-                    {showLayers && (
-                        <div style={{ marginTop: '15px' }}>
-                            <LayerPanel 
-                                onLayerSelect={setSelectedLayerId}
-                            />
-                        </div>
                     )}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>

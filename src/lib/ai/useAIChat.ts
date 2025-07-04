@@ -10,6 +10,7 @@ import { createListLayersTool } from './tools/listLayersTool';
 import { createDebugLayersTool } from './tools/debugLayersTool';
 import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import { createGeocodingTools } from './tools/geocodingTool';
+import { layerTool } from './tools/layerTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
 import type { DBStateManager } from '../duckdb/dbStateManager';
@@ -105,6 +106,17 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     } else if (part.toolName === 'add_geocoded_columns_to_table') {
       // Handle adding geocoded columns
       const toolCallText = `\n\n🏗️ **テーブル拡張中:** ${(args?.tableName as string) || 'テーブル'}にジオコーディング列を追加中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'layer_management') {
+      // Handle layer management
+      const action = args?.action as string;
+      const actionText = action === 'add' ? 'レイヤー追加中' :
+                         action === 'remove' ? 'レイヤー削除中' :
+                         action === 'update' ? 'レイヤー更新中' :
+                         action === 'list' ? 'レイヤー一覧取得中' :
+                         action === 'set_visual_channel' ? 'ビジュアルチャンネル設定中' :
+                         'レイヤー操作中';
+      const toolCallText = `\n\n🗺️ **${actionText}...**\n`;
       newContent += toolCallText;
     }
     
@@ -361,6 +373,55 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'layer_management') {
+      // Handle layer management results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **レイヤー操作エラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}\n`;
+        
+        if (result.layer) {
+          // Show layer details
+          const layer = result.layer as any;
+          resultText += `\n📊 **レイヤー詳細:**\n`;
+          resultText += `• ID: ${layer.id}\n`;
+          resultText += `• タイプ: ${layer.type}\n`;
+          resultText += `• ラベル: ${layer.config.label}\n`;
+          resultText += `• 表示: ${layer.config.isVisible ? '表示中' : '非表示'}\n`;
+        } else if (result.layers && Array.isArray(result.layers)) {
+          // Show layer list
+          resultText += `\n📋 **レイヤー一覧:** ${result.count}個のレイヤー\n`;
+          (result.layers as any[]).forEach((layer, idx) => {
+            resultText += `\n${idx + 1}. **${layer.label}** (${layer.type})\n`;
+            resultText += `   • ID: ${layer.id}\n`;
+            resultText += `   • データセット: ${layer.datasetLabel}\n`;
+            resultText += `   • 表示: ${layer.isVisible ? '表示中' : '非表示'}\n`;
+            if (layer.visualChannels && layer.visualChannels.length > 0) {
+              resultText += `   • ビジュアルチャンネル: ${layer.visualChannels.join(', ')}\n`;
+            }
+          });
+          
+          if (result.datasets && Array.isArray(result.datasets)) {
+            resultText += `\n\n📊 **利用可能なデータセット:**\n`;
+            (result.datasets as any[]).forEach(ds => {
+              resultText += `• ${ds.label} (ID: ${ds.id})\n`;
+              resultText += `  フィールド: ${ds.fields.map((f: any) => `${f.name} (${f.type})`).join(', ')}\n`;
+            });
+          }
+        } else if (result.visualChannel) {
+          // Show visual channel details
+          const vc = result.visualChannel as any;
+          resultText += `\n🎨 **ビジュアルチャンネル設定:**\n`;
+          resultText += `• プロパティ: ${vc.property}\n`;
+          resultText += `• スケール: ${vc.scale}\n`;
+          resultText += `• ドメイン: ${JSON.stringify(vc.domain)}\n`;
+        }
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -415,6 +476,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
             list_map_layers: createListLayersTool(mapStyleManager),
             debug_layers: createDebugLayersTool(mapStyleManager)
           }),
+          layer_management: layerTool,
           completion: completionTool
         },
         maxSteps: 50,

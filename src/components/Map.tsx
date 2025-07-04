@@ -7,6 +7,7 @@ import { getTileEnvelope, getZxyFromUrl } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
 import MapStyleEditor from './MapStyleEditor';
+import { LayerRenderer } from './LayerRenderer';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{
@@ -900,6 +901,9 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     height: '100%',
                 }}
             ></div>
+            
+            {/* Layer Renderer */}
+            <LayerRenderer map={mapRef.current} db={db} />
             
             {/* Map Controls */}
             <div style={{

@@ -311,3 +311,5 @@ export default class PointLayer extends Layer {
     return stops;
   }
 }
+
+export { PointLayer };
