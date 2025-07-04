@@ -446,11 +446,18 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       } else if (result?.success) {
         resultText = `\n✅ **${result.message}\n`;
         
-        if (result.analysis) {
+        if (result.analysis && typeof result.analysis === 'object') {
+          const analysis = result.analysis as any;
           resultText += `\n📊 **データ分析結果:**\n`;
-          resultText += `• データ品質: ${result.analysis.dataQuality}\n`;
-          resultText += `• 発見されたインサイト: ${result.analysis.insights}件\n`;
-          resultText += `• 検出されたパターン: ${result.analysis.patterns}件\n`;
+          if (analysis.dataQuality) {
+            resultText += `• データ品質: ${analysis.dataQuality}\n`;
+          }
+          if (analysis.insights !== undefined) {
+            resultText += `• 発見されたインサイト: ${analysis.insights}件\n`;
+          }
+          if (analysis.patterns !== undefined) {
+            resultText += `• 検出されたパターン: ${analysis.patterns}件\n`;
+          }
         }
       }
       

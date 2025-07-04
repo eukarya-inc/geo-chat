@@ -24,21 +24,21 @@ export const layerTool = tool({
     config: z.object({
       label: z.string().optional().describe('Display name for the layer'),
       isVisible: z.boolean().optional().describe('Whether the layer is visible'),
-      color: z.tuple([z.number(), z.number(), z.number()]).optional().describe('RGB color array [r, g, b] where each value is 0-255'),
+      color: z.array(z.number()).length(3).optional().describe('RGB color array [r, g, b] where each value is 0-255'),
       opacity: z.number().min(0).max(1).optional().describe('Layer opacity (0-1)'),
       radius: z.number().optional().describe('Point radius in pixels'),
       thickness: z.number().optional().describe('Line thickness in pixels'),
       filled: z.boolean().optional().describe('Whether to fill polygons/points'),
       outline: z.boolean().optional().describe('Whether to show outline'),
-      strokeColor: z.tuple([z.number(), z.number(), z.number()]).optional().describe('RGB stroke color [r, g, b]')
-    }).optional(),
+      strokeColor: z.array(z.number()).length(3).optional().describe('RGB stroke color [r, g, b]')
+    }).optional().describe('Layer configuration options'),
     visualChannel: z.object({
       channel: z.enum(['color', 'size', 'radius', 'height', 'strokeColor']).describe('The visual channel to configure'),
       field: z.string().describe('The data field to map to this visual channel'),
       scale: z.enum(['linear', 'quantile', 'ordinal', 'sqrt', 'log']).optional().describe('Scale type for the mapping'),
       colorRange: z.string().optional().describe('Name of color range (e.g., "YlOrRd", "RdBu", "Set2")'),
-      sizeRange: z.tuple([z.number(), z.number()]).optional().describe('Size range [min, max] for size/radius channels')
-    }).optional()
+      sizeRange: z.array(z.number()).length(2).optional().describe('Size range [min, max] for size/radius channels')
+    }).optional().describe('Visual channel configuration')
   }),
   execute: async ({ action, layerId, layerType, dataId, config, visualChannel }) => {
     const state = store.getState();
@@ -58,7 +58,11 @@ export const layerTool = tool({
         store.dispatch(addLayer({
           type: layerType as LayerType,
           dataId: dataId,
-          config: config
+          config: config ? {
+            ...config,
+            color: config.color as [number, number, number] | undefined,
+            strokeColor: config.strokeColor as [number, number, number] | undefined
+          } : undefined
         }));
         
         const newState = store.getState().layers;

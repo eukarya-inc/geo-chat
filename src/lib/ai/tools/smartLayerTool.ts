@@ -52,7 +52,7 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
     const { analyzedFields, suggestions } = analysis;
     
     // Determine layer type
-    let finalLayerType = layerType;
+    let finalLayerType: string = layerType;
     if (layerType === 'auto') {
       if (suggestions.length > 0) {
         finalLayerType = suggestions[0].layerType;
