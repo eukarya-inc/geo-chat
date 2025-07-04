@@ -11,6 +11,7 @@ import { createDebugLayersTool } from './tools/debugLayersTool';
 import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import { createGeocodingTools } from './tools/geocodingTool';
 import { layerTool } from './tools/layerTool';
+import { smartLayerTool } from './tools/smartLayerTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
 import type { DBStateManager } from '../duckdb/dbStateManager';
@@ -117,6 +118,10 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
                          action === 'set_visual_channel' ? 'ビジュアルチャンネル設定中' :
                          'レイヤー操作中';
       const toolCallText = `\n\n🗺️ **${actionText}...**\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'smart_layer') {
+      // Handle smart layer creation
+      const toolCallText = `\n\n🤖 **インテリジェントレイヤー作成中:** ${(args?.datasetId as string) || 'データセット'}を分析中...\n`;
       newContent += toolCallText;
     }
     
@@ -422,6 +427,25 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'smart_layer') {
+      // Handle smart layer results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **スマートレイヤーエラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}\n`;
+        
+        if (result.analysis) {
+          resultText += `\n📊 **データ分析結果:**\n`;
+          resultText += `• データ品質: ${result.analysis.dataQuality}\n`;
+          resultText += `• 発見されたインサイト: ${result.analysis.insights}件\n`;
+          resultText += `• 検出されたパターン: ${result.analysis.patterns}件\n`;
+        }
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -477,6 +501,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
             debug_layers: createDebugLayersTool(mapStyleManager)
           }),
           layer_management: layerTool,
+          smart_layer: smartLayerTool,
           completion: completionTool
         },
         maxSteps: 50,
