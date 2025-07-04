@@ -48,8 +48,19 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
     }
     
     // Check for visualization table
-    const { tableName: bestTable, isVizTable } = await getBestTableForViz(db as AsyncDuckDB, datasetId);
-    const vizColumns = await getVizColumns(db as AsyncDuckDB, datasetId);
+    let isVizTable = false;
+    let bestTable = datasetId;
+    let vizColumns: any = { coordinateColumns: {}, propertyColumns: [], allColumns: [] };
+    
+    try {
+      const vizInfo = await getBestTableForViz(db as AsyncDuckDB, datasetId);
+      bestTable = vizInfo.tableName;
+      isVizTable = vizInfo.isVizTable;
+      vizColumns = await getVizColumns(db as AsyncDuckDB, datasetId);
+    } catch (error) {
+      // If viz table check fails, continue with original table
+      console.warn('Could not check for viz table:', error);
+    }
     
     // Use viz table if available
     const actualDatasetId = bestTable;
@@ -309,11 +320,8 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
       // For now, we'll return the suggestions
     }
     
-    // Declare isVizTable for this path
-    const isVizTable = false;
-    
     // Generate response with insights
-    let message = `Created ${finalLayerType} layer for "${dataset.label}"`;
+    let message = `Created ${finalLayerType} layer for "${dataset.label}"${isVizTable ? ' (using visualization-optimized table)' : ''}`;
     
     if (analysis.insights.length > 0) {
       message += `\n\n📊 **Data Insights:**\n`;
