@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { DataAnalyzer } from '../../../utils/dataAnalyzer';
 import { store } from '../../../store';
+import { getBestTableForViz } from './vizAwareTool';
 
 export function createDataAnalysisTool(db: AsyncDuckDB) {
   return tool({
@@ -39,11 +40,14 @@ Actions:
         try {
           switch (action) {
             case 'describe_table': {
+              // Check for visualization table
+              const { tableName: bestTable, isVizTable } = await getBestTableForViz(db, table_name);
+              
               // Get table schema
               const schemaResult = await conn.query(`
                 SELECT column_name, data_type, is_nullable
                 FROM information_schema.columns 
-                WHERE table_name = '${table_name}'
+                WHERE table_name = '${bestTable}'
                 ORDER BY ordinal_position
               `);
               
@@ -58,14 +62,17 @@ Actions:
               
               return {
                 success: true,
-                table_name,
+                table_name: bestTable,
+                original_table: table_name !== bestTable ? table_name : undefined,
+                is_viz_table: isVizTable,
                 total_rows: totalRows,
                 columns: columns.map(col => ({
                   name: col.column_name,
                   type: col.data_type,
                   nullable: col.is_nullable === 'YES'
                 })),
-                message: `Table "${table_name}" has ${columns.length} columns and ${totalRows} rows`
+                message: `Table "${bestTable}" has ${columns.length} columns and ${totalRows} rows${isVizTable ? ' (using visualization-optimized table)' : ''}`,
+                tip: isVizTable ? 'This is a visualization table with flattened properties - you can query columns directly without JSON extraction' : undefined
               };
             }
 
@@ -142,8 +149,11 @@ Actions:
             }
 
             case 'get_sample_data': {
+              // Use visualization table if available
+              const { tableName: bestTable, isVizTable } = await getBestTableForViz(db, table_name);
+              
               const sampleResult = await conn.query(`
-                SELECT * FROM "${table_name}" 
+                SELECT * FROM "${bestTable}" 
                 LIMIT ${limit}
               `);
               

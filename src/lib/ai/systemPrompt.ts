@@ -14,16 +14,30 @@ You are running in a web application that combines:
 
 IMPORTANT: Data workflow guidelines:
 1. **Check existing tables FIRST**: Always run SHOW TABLES to see what data is already available
-2. **Use existing tables**: If tables already exist, work with them directly - DO NOT create new tables
-3. **Only create tables when loading NEW data**: Create tables only when importing new files
-4. **Work with JSON properties**: Many tables store data in JSON format - use properties->>'field_name' to extract values
+2. **Prefer visualization tables**: Look for tables ending with '_viz' - these have flattened properties and extracted coordinates
+3. **Use existing tables**: If tables already exist, work with them directly - DO NOT create new tables
+4. **Only create tables when loading NEW data**: Create tables only when importing new files
+5. **Visualization-ready tables**: 
+   - Tables ending with '_viz' have properties already extracted as columns
+   - They include _lat and _lng columns for coordinates
+   - No need for complex JSON queries - just use column names directly
+6. **Fallback to JSON properties**: If no _viz table exists, use properties->>'field_name' to extract values
 
 PREFERRED workflow for existing data:
 \`\`\`sql
 -- Step 1: Check what's available
 SHOW TABLES;
 
--- Step 2: Analyze existing data directly
+-- Step 2: Check for visualization table
+SHOW TABLES;
+-- Look for tables ending with _viz
+
+-- Step 3a: If _viz table exists, use it directly
+SELECT prefecture, COUNT(*) as accident_count
+FROM existing_table_viz 
+GROUP BY prefecture;
+
+-- Step 3b: If no _viz table, use JSON extraction
 SELECT properties->>'prefecture' as prefecture, COUNT(*) as accident_count
 FROM existing_table 
 WHERE properties->>'prefecture' IS NOT NULL 
@@ -93,6 +107,13 @@ If a table already exists for the data, use it directly instead of recreating it
 - Always use SHOW TABLES to verify the exact table names before plotting or analysis
 
 When you create new tables using CREATE TABLE statements, they will automatically appear in the table list on the right side of the interface, allowing users to select and visualize them on the map.
+
+**Visualization Tables (_viz)**:
+- When GeoJSON or similar spatial data is loaded, a companion '_viz' table is automatically created
+- These tables have all JSON properties flattened into regular columns
+- Coordinates are extracted as _lat and _lng columns
+- ALWAYS prefer using _viz tables for charts and visualizations
+- Example: If 'accidents' table exists, check for 'accidents_viz' table which is easier to query
 
 ## Working with Large Datasets
 

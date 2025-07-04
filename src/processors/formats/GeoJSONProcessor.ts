@@ -99,6 +99,30 @@ export class GeoJSONProcessor extends BaseDataProcessor {
         { name: 'geom', type: 'GEOMETRY' }
       ];
       
+      // Create visualization-ready view
+      let vizTableName: string | undefined;
+      try {
+        console.log('Creating visualization-ready view...');
+        vizTableName = await transformGeoJSONTable(db, tableName);
+        console.log('Created visualization view:', vizTableName);
+        
+        // Add viz table info to columns
+        const vizColumnsResult = await conn.query(`
+          SELECT column_name, data_type
+          FROM information_schema.columns
+          WHERE table_name = '${vizTableName}'
+          ORDER BY ordinal_position
+        `);
+        const vizColumns = vizColumnsResult.toArray().map(col => ({
+          name: col.column_name,
+          type: col.data_type
+        }));
+        console.log('Visualization columns:', vizColumns.length);
+      } catch (vizError) {
+        console.error('Warning: Could not create visualization view:', vizError);
+        // Continue anyway - the original table is still usable
+      }
+      
       const processingTime = performance.now() - startTime;
       
       return {
@@ -108,7 +132,11 @@ export class GeoJSONProcessor extends BaseDataProcessor {
         processingTime,
         warnings: totalFeatures > 10000 
           ? ['Large dataset detected. Consider using spatial filters for better performance.']
-          : undefined
+          : undefined,
+        metadata: {
+          vizTableName,
+          message: vizTableName ? `Visualization view created: ${vizTableName}` : undefined
+        }
       };
     } finally {
       await conn.close();
