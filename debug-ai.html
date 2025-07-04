@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Debug Test</title>
+</head>
+<body>
+    <h1>AI System Debug</h1>
+    <div id="status"></div>
+    
+    <script type="module">
+        // Check if environment variables are accessible
+        const statusDiv = document.getElementById('status');
+        
+        // This won't work directly in browser, but shows the issue
+        statusDiv.innerHTML = `
+            <h2>Environment Check:</h2>
+            <p>VITE_ANTHROPIC_API_KEY: ${import.meta.env.VITE_ANTHROPIC_API_KEY || 'NOT SET'}</p>
+            <p>DEV mode: ${import.meta.env.DEV}</p>
+            <p>BASE_URL: ${import.meta.env.BASE_URL}</p>
+        `;
+        
+        // Check localStorage for encrypted key
+        const encryptedKey = localStorage.getItem('encryptedApiKey');
+        statusDiv.innerHTML += `
+            <h2>LocalStorage Check:</h2>
+            <p>Encrypted API Key exists: ${!!encryptedKey}</p>
+        `;
+    </script>
+</body>
+</html>

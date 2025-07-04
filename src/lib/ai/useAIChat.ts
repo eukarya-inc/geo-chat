@@ -18,6 +18,15 @@ import type { DBStateManager } from '../duckdb/dbStateManager';
 
 export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
+  
+  // Debug logging
+  console.log('useAIChat initialized:', {
+    hasCustomApiKey: !!customApiKey,
+    hasEnvApiKey: !!import.meta.env.VITE_ANTHROPIC_API_KEY,
+    apiKeyLength: apiKey?.length || 0,
+    apiKeyStart: apiKey?.substring(0, 10) + '...'
+  });
+  
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -459,7 +468,21 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!input.trim() || !apiKey || isLoading) return;
+    if (!input.trim() || !apiKey || isLoading) {
+      console.log('Submit validation failed:', { 
+        hasInput: !!input.trim(), 
+        hasApiKey: !!apiKey, 
+        isLoading 
+      });
+      if (!apiKey) {
+        setError(new Error('API key is not configured'));
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '❌ **エラー:** APIキーが設定されていません。画面上部でAnthropicのAPIキーを設定してください。'
+        }]);
+      }
+      return;
+    }
 
     const userMessage: CoreMessage = { role: 'user', content: input.trim() };
     // const currentInput = input.trim();
@@ -475,6 +498,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     setAbortController(controller);
 
     try {
+      console.log('Creating Anthropic client with API key:', apiKey?.substring(0, 10) + '...');
+      
       const anthropicClient = createAnthropic({
         apiKey: apiKey,
         headers: {
@@ -484,6 +509,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
 
       const allMessages = [...messages, userMessage];
 
+      console.log('Starting streamText with', allMessages.length, 'messages');
+      
       const result = streamText({
         model: anthropicClient('claude-3-5-sonnet-20241022'),
         system: generateSystemPrompt(),
@@ -535,14 +562,42 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
 
       // Ensure final content is set
       if (!fullContent) {
+        console.error('No content received from AI');
         setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'エラーが発生しました' };
+          updated[updated.length - 1] = { role: 'assistant', content: 'AIからの応答がありませんでした。もう一度お試しください。' };
           return updated;
         });
       }
 
     } catch (err) {
+      // Log the error for debugging
+      console.error('AI Chat Error:', err);
+      
+      // Check for specific error types
+      let detailedError = 'エラーが発生しました';
+      if (err instanceof Error) {
+        console.error('Error details:', {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
+        
+        if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+          detailedError = 'APIキーが無効です。正しいAnthropicのAPIキーを設定してください。';
+        } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+          detailedError = 'APIキーに権限がありません。Anthropicコンソールで権限を確認してください。';
+        } else if (err.message.includes('429') || err.message.includes('rate limit')) {
+          detailedError = 'レート制限に達しました。しばらくしてから再試行してください。';
+        } else if (err.message.includes('Network') || err.message.includes('fetch')) {
+          detailedError = 'ネットワークエラーが発生しました。インターネット接続を確認してください。';
+        } else if (err.message.includes('CORS')) {
+          detailedError = 'CORS エラー: ブラウザのセキュリティ設定により、APIへのアクセスが制限されています。';
+        } else {
+          detailedError = `エラー: ${err.message}`;
+        }
+      }
+      
       // Handle abort error specifically
       if (err instanceof Error && err.name === 'AbortError') {
         setMessages(prev => {
@@ -558,7 +613,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         return;
       }
       
-      const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
+      const errorMsg = detailedError;
       setError(err instanceof Error ? err : new Error(errorMsg));
 
       // Update the current assistant message with error info instead of adding new message
@@ -568,12 +623,12 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           const currentContent = updated[updated.length - 1].content;
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: currentContent + `\n\n❌ **エラーが発生しました:** ${errorMsg}`
+            content: currentContent + `\n\n❌ **${errorMsg}**`
           };
         } else {
           updated.push({
             role: 'assistant',
-            content: `❌ **エラーが発生しました:** ${errorMsg}`
+            content: `❌ **${errorMsg}**`
           });
         }
         return updated;
