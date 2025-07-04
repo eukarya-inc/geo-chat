@@ -5,6 +5,7 @@ import uiReducer from './slices/uiSlice';
 import duckdbReducer from './slices/duckdbSlice';
 import arrowReducer from './slices/arrowSlice';
 import processorReducer from './slices/processorSlice';
+import layerReducer from './slices/layerSlice';
 import { loggerMiddleware } from './middleware/logger';
 
 export const store = configureStore({
@@ -15,6 +16,7 @@ export const store = configureStore({
     duckdb: duckdbReducer,
     arrow: arrowReducer,
     processor: processorReducer,
+    layers: layerReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -27,6 +29,9 @@ export const store = configureStore({
           'arrow/querySuccess',
           'arrow/setTableStats',
           'processor/completeProcessing',
+          'layers/addDataset',
+          'layers/addLayer',
+          'layers/updateLayerVisualChannel',
         ],
         // Ignore these field paths in all actions
         ignoredActionPaths: ['payload.db', 'payload.styleManager', 'payload.dbManager', 'payload.result.data'],
