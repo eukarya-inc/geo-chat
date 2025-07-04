@@ -11,14 +11,18 @@ import { setStyleManager } from './store/slices/mapSlice';
 import { setApiKey, setShowApiKeyInput } from './store/slices/uiSlice';
 import { storeEncryptedApiKey } from './utils/encryption';
 import { useDatasetSync } from './hooks/useDatasetSync';
+import { getDBStateManager } from './lib/duckdb/dbStateManagerSingleton';
 
 function AppRedux() {
     // Get state from Redux instead of local state
     const dispatch = useAppDispatch();
-    const { connection: db, dbStateManager } = useAppSelector(state => state.duckdb);
+    const { connection: db } = useAppSelector(state => state.duckdb);
     const { selectedTable, selectedColumns } = useAppSelector(state => state.data);
     const { styleManager: mapStyleManager } = useAppSelector(state => state.map);
     const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
+    
+    // Get dbStateManager from singleton
+    const dbStateManager = getDBStateManager();
     
     // Sync DuckDB tables with datasets
     useDatasetSync();
@@ -130,7 +134,7 @@ function AppRedux() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && db && <AIChat db={db} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
             </div>
             
             {/* Right Half - DuckDB and Map */}

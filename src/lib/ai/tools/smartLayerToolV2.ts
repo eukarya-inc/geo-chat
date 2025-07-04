@@ -4,8 +4,6 @@ import { store } from '../../../store';
 import { addLayer } from '../../../store/slices/layerSlice';
 import { DataAnalyzer } from '../../../utils/dataAnalyzer';
 import { getSuggestedVisualChannels } from '../../../utils/dataUtils';
-import { COLOR_RANGES } from '../../../utils/colorScales';
-import { getBestTableForViz, getVizColumns } from './vizAwareTool';
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 
 export const smartLayerTool = tool({
@@ -42,128 +40,71 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
   execute: async ({ datasetId, layerType = 'auto', visualPreset = 'default', customConfig }) => {
     const state = store.getState();
     const { connection: db } = state.duckdb;
+    const { datasets } = state.layers;
     
     if (!db) {
       return { error: 'Database connection not available' };
     }
     
-    // Check for visualization table
-    let isVizTable = false;
-    let bestTable = datasetId;
-    let vizColumns: any = { coordinateColumns: {}, propertyColumns: [], allColumns: [] };
-    
-    try {
-      const vizInfo = await getBestTableForViz(db as AsyncDuckDB, datasetId);
-      bestTable = vizInfo.tableName;
-      isVizTable = vizInfo.isVizTable;
-      vizColumns = await getVizColumns(db as AsyncDuckDB, datasetId);
-    } catch (error) {
-      // If viz table check fails, continue with original table
-      console.warn('Could not check for viz table:', error);
-    }
-    
-    // Use viz table if available
-    const actualDatasetId = bestTable;
-    const dataset = state.layers.datasets.find(d => d.id === datasetId || d.id === actualDatasetId);
+    // First check if dataset exists in Redux
+    let dataset = datasets.find(d => d.id === datasetId);
     
     if (!dataset) {
-      // If dataset doesn't exist in Redux, create it from the viz table
-      const conn = await (db as AsyncDuckDB).connect();
+      // Check if it's a _viz table in DuckDB that hasn't been synced yet
+      const conn = await db.connect();
       try {
-        const result = await conn.query(`SELECT * FROM ${actualDatasetId} LIMIT 1000`);
-        const data = result.toArray();
+        // Check if the table exists in DuckDB
+        const tableExists = await conn.query(`
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = '${datasetId}'
+          LIMIT 1
+        `);
         
-        if (data.length === 0) {
-          return { error: `No data found in table ${actualDatasetId}` };
-        }
-        
-        // Create a temporary dataset for analysis
-        const tempDataset = {
-          id: actualDatasetId,
-          label: actualDatasetId,
-          color: [255, 0, 0] as [number, number, number],
-          allData: data,
-          fields: vizColumns.allColumns.map(col => ({
-            name: col.name,
-            type: col.type.toLowerCase().includes('int') ? 'integer' as const :
-                  col.type.toLowerCase().includes('real') || col.type.toLowerCase().includes('double') ? 'real' as const :
-                  col.type.toLowerCase().includes('bool') ? 'boolean' as const :
-                  col.type.toLowerCase().includes('date') || col.type.toLowerCase().includes('time') ? 'timestamp' as const :
-                  col.type.toLowerCase().includes('geometry') ? 'geometry' as const :
-                  'string' as const,
-            format: col.type
-          }))
-        };
-        
-        // Use temp dataset for analysis
-        const analysis = DataAnalyzer.analyzeDataset(tempDataset);
-        const { analyzedFields, suggestions } = analysis;
-        
-        // Determine layer type for viz table
-        let finalLayerType: string = layerType;
-        if (layerType === 'auto') {
-          if (vizColumns.coordinateColumns.lat && vizColumns.coordinateColumns.lng) {
-            finalLayerType = 'point';
-          } else if (vizColumns.coordinateColumns.geom) {
-            finalLayerType = 'geojson';
-          } else if (suggestions.length > 0) {
-            finalLayerType = suggestions[0].layerType;
-          } else {
-            return { error: 'No geospatial data found in dataset. Cannot create map layer.' };
-          }
+        if (tableExists.numRows > 0) {
+          // Table exists in DuckDB - create a temporary dataset for it
+          const schemaResult = await conn.query(`DESCRIBE ${datasetId}`);
+          const schema = schemaResult.toArray();
+          
+          // Get sample data
+          const dataResult = await conn.query(`SELECT * FROM ${datasetId} LIMIT 1000`);
+          const data = dataResult.toArray();
+          
+          // Create temporary dataset
+          dataset = {
+            id: datasetId,
+            label: datasetId,
+            color: [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)] as [number, number, number],
+            allData: data,
+            fields: schema.map(col => ({
+              name: col.column_name,
+              type: col.column_type.toLowerCase().includes('int') ? 'integer' as const :
+                    col.column_type.toLowerCase().includes('real') || col.column_type.toLowerCase().includes('double') ? 'real' as const :
+                    col.column_type.toLowerCase().includes('bool') ? 'boolean' as const :
+                    col.column_type.toLowerCase().includes('date') || col.column_type.toLowerCase().includes('time') ? 'timestamp' as const :
+                    col.column_type.toLowerCase().includes('geometry') ? 'geometry' as const :
+                    'string' as const,
+              format: col.column_type
+            }))
+          };
+          
+          // Add it to Redux for future use
+          const { addDataset } = await import('../../../store/slices/layerSlice');
+          store.dispatch(addDataset(dataset));
         } else {
-          finalLayerType = layerType;
-        }
-        
-        // Configure columns for viz table
-        const layerConfig: any = {
-          label: customConfig?.label || `${actualDatasetId} ${finalLayerType}`,
-          isVisible: true,
-          dataId: actualDatasetId
-        };
-        
-        if (vizColumns.coordinateColumns.lat && vizColumns.coordinateColumns.lng) {
-          layerConfig.columns = {
-            lat: vizColumns.coordinateColumns.lat,
-            lng: vizColumns.coordinateColumns.lng
-          };
-        } else if (vizColumns.coordinateColumns.geom) {
-          layerConfig.columns = {
-            geojson: vizColumns.coordinateColumns.geom
+          // Table doesn't exist at all
+          const availableTables = await getAvailableTables(db);
+          const vizTables = availableTables.filter(t => t.endsWith('_viz'));
+          
+          return {
+            error: `Table "${datasetId}" not found`,
+            suggestion: vizTables.length > 0 
+              ? `Available _viz tables: ${vizTables.join(', ')}. Use one of these for visualization.`
+              : 'Please load your data file using the file processor first.',
+            availableTables
           };
         }
-        
+      } finally {
         await conn.close();
-        
-        // Create the layer with viz table configuration
-        store.dispatch(addLayer({
-          type: finalLayerType as any,
-          dataId: actualDatasetId,
-          config: layerConfig
-        }));
-        
-        const newState = store.getState().layers;
-        const newLayer = newState.layers[newState.layers.length - 1];
-        
-        return {
-          success: true,
-          message: `Created ${finalLayerType} layer for "${actualDatasetId}" using visualization-optimized table`,
-          layerId: newLayer.id,
-          layer: newLayer,
-          analysis: {
-            dataQuality: analysis.summary.dataQuality,
-            insights: analysis.insights.length,
-            patterns: analysis.patterns.length
-          },
-          vizInfo: {
-            isVizTable: true,
-            coordinateColumns: vizColumns.coordinateColumns,
-            propertyColumns: vizColumns.propertyColumns
-          }
-        };
-      } catch (error) {
-        await conn.close();
-        throw error;
       }
     }
     
@@ -181,7 +122,15 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
       } else if (analyzedFields.geospatial.geometry?.length) {
         finalLayerType = 'geojson';
       } else {
-        return { error: 'No geospatial data found in dataset. Cannot create map layer.' };
+        return { 
+          error: 'No geospatial data found in dataset',
+          suggestion: 'This dataset does not contain coordinate fields (lat/lng) or geometry columns. Please ensure your data has location information.',
+          analyzedFields: {
+            numeric: analyzedFields.numeric.map(f => f.name),
+            categorical: analyzedFields.categorical.map(f => f.name),
+            temporal: analyzedFields.temporal.map(f => f.name)
+          }
+        };
       }
     }
     
@@ -198,7 +147,11 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
       case 'heatmap':
       case 'cluster': {
         if (analyzedFields.geospatial.fieldPairs.length === 0) {
-          return { error: 'No coordinate fields found for point-based layer' };
+          return { 
+            error: 'No coordinate fields found for point-based layer',
+            suggestion: 'Point layers require latitude and longitude fields. Common names: lat/lng, latitude/longitude, y/x',
+            availableFields: dataset.fields.map(f => f.name)
+          };
         }
         const coords = analyzedFields.geospatial.fieldPairs[0];
         layerConfig.columns = {
@@ -233,7 +186,11 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
       case 'polygon':
       case 'line': {
         if (!analyzedFields.geospatial.geometry?.length) {
-          return { error: 'No geometry field found for geometry layer' };
+          return { 
+            error: 'No geometry field found for geometry layer',
+            suggestion: 'This layer type requires a geometry column. For point data, use a point layer instead.',
+            availableFields: dataset.fields.map(f => ({ name: f.name, type: f.type }))
+          };
         }
         layerConfig.columns = {
           geojson: analyzedFields.geospatial.geometry[0].name
@@ -314,14 +271,8 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
     const newState = store.getState().layers;
     const newLayer = newState.layers[newState.layers.length - 1];
     
-    // Apply visual channels after layer creation
-    if (Object.keys(visualChannels).length > 0) {
-      // This would be done through updateLayerVisualChannel actions
-      // For now, we'll return the suggestions
-    }
-    
     // Generate response with insights
-    let message = `Created ${finalLayerType} layer for "${dataset.label}"${isVizTable ? ' (using visualization-optimized table)' : ''}`;
+    let message = `Created ${finalLayerType} layer for "${dataset.label}"`;
     
     if (analysis.insights.length > 0) {
       message += `\n\n📊 **Data Insights:**\n`;
@@ -332,8 +283,13 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
     
     if (Object.keys(visualChannels).length > 0) {
       message += `\n\n🎨 **Suggested Visual Mappings:**\n`;
+      message += `To apply these, use the map_expression tool:\n`;
       Object.entries(visualChannels).forEach(([channel, config]) => {
-        message += `• ${channel}: ${config.field} (${config.scale} scale)\n`;
+        if (channel === 'color') {
+          message += `• Color by ${config.field}: map_expression with styleRequest="color by ${config.field}"\n`;
+        } else if (channel === 'radius') {
+          message += `• Size by ${config.field}: map_expression with styleRequest="size by ${config.field}"\n`;
+        }
       });
     }
     
@@ -354,7 +310,27 @@ Use this for quick, intelligent layer creation with minimal configuration.`,
         insights: analysis.insights.length,
         patterns: analysis.patterns.length
       },
-      visualChannels
+      visualChannels,
+      nextSteps: [
+        'Use map_expression to apply conditional styling',
+        'Adjust layer visibility in the layer panel',
+        'Create additional layers for different perspectives'
+      ]
     };
   }
 });
+
+// Helper function to get available tables
+async function getAvailableTables(db: AsyncDuckDB): Promise<string[]> {
+  const conn = await db.connect();
+  try {
+    const result = await conn.query('SHOW TABLES');
+    const tables: string[] = [];
+    for (let i = 0; i < result.numRows; i++) {
+      tables.push(result.getChildAt(0)?.get(i) as string);
+    }
+    return tables;
+  } finally {
+    await conn.close();
+  }
+}

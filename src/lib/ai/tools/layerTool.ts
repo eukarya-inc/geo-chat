@@ -55,14 +55,17 @@ export const layerTool = tool({
           return { error: `Dataset "${dataId}" not found. Available datasets: ${datasets.map(d => d.id).join(', ')}` };
         }
         
+        // Remove strokeColor from config and move it to visConfig if needed
+        const { strokeColor, ...restConfig } = config || {};
+        const layerConfig = restConfig ? {
+          ...restConfig,
+          color: restConfig.color as [number, number, number] | undefined
+        } : undefined;
+        
         store.dispatch(addLayer({
           type: layerType as LayerType,
           dataId: dataId,
-          config: config ? {
-            ...config,
-            color: config.color as [number, number, number] | undefined,
-            strokeColor: config.strokeColor as [number, number, number] | undefined
-          } : undefined
+          config: layerConfig
         }));
         
         const newState = store.getState().layers;

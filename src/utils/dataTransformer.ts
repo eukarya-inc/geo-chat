@@ -166,8 +166,17 @@ export async function transformGeoJSONTable(
     
     // Add flattened property columns
     allKeys.forEach(key => {
-      const safeName = key.replace(/[^a-zA-Z0-9_]/g, '_');
-      columnDefs.push(`properties->>'${key}' as ${safeName}`);
+      // Make SQL-safe column names
+      let safeName = key.replace(/[^a-zA-Z0-9_]/g, '_');
+      // If name starts with a number, prefix with underscore
+      if (/^\d/.test(safeName)) {
+        safeName = '_' + safeName;
+      }
+      // If name is empty or reserved, use a generic name
+      if (!safeName || safeName.length === 0) {
+        safeName = '_col_' + Array.from(allKeys).indexOf(key);
+      }
+      columnDefs.push(`properties->>'${key}' as "${safeName}"`);
     });
     
     // Create the visualization-ready table
@@ -344,7 +353,7 @@ export async function getVizData(
     const fields: VizField[] = schemaResult.toArray().map(col => ({
       name: col.column_name,
       type: mapDuckDBTypeToVizType(col.data_type),
-      displayName: col.column_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      displayName: col.column_name.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
     }));
     
     // Get data

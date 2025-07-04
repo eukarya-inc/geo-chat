@@ -1,9 +1,10 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
+import { getDBStateManager } from '../../../lib/duckdb/dbStateManagerSingleton';
 
-export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager) {
+export function createDuckDBTool(db: AsyncDuckDB) {
+  const dbStateManager = getDBStateManager();
   return tool({
     description,
     parameters: z.object({

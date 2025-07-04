@@ -11,12 +11,12 @@ import { createDebugLayersTool } from './tools/debugLayersTool';
 import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import { createGeocodingTools } from './tools/geocodingTool';
 import { layerTool } from './tools/layerTool';
-import { smartLayerTool } from './tools/smartLayerTool';
+import { smartLayerTool } from './tools/smartLayerToolV2';
+import { mapExpressionTool } from './tools/mapExpressionToolV2';
+// Removed broken tools - will rebuild from scratch
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
-import type { DBStateManager } from '../duckdb/dbStateManager';
-
-export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
+export function useAIChat(db?: AsyncDuckDB | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   
   // Debug logging
@@ -131,6 +131,26 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     } else if (part.toolName === 'smart_layer') {
       // Handle smart layer creation
       const toolCallText = `\n\n🤖 **インテリジェントレイヤー作成中:** ${(args?.datasetId as string) || 'データセット'}を分析中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'map_expression') {
+      // Handle map expression generation
+      const toolCallText = `\n\n🎨 **マップスタイル表現生成中:** ${(args?.styleRequest as string) || 'スタイルリクエスト'}を処理中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'smart_chart') {
+      // Handle smart chart generation
+      const toolCallText = `\n\n📊 **インテリジェントチャート作成中:** ${(args?.tableName as string) || 'テーブル'}を分析中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'create_viz_table') {
+      // Handle viz table creation
+      const toolCallText = `\n\n🔄 **可視化テーブル作成中:** ${(args?.tableName as string) || 'テーブル'}を変換中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'map_style_expression') {
+      // Handle map style expression
+      const toolCallText = `\n\n🎨 **マップスタイル適用中:** ${(args?.styleRequest as string) || 'スタイル'}を適用中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'inspect_data') {
+      // Handle data inspection
+      const toolCallText = `\n\n🔍 **データ構造検査中:** ${(args?.tableName as string) || 'テーブル'}の実際のフィールド名を確認中...\n`;
       newContent += toolCallText;
     }
     
@@ -462,6 +482,184 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'map_expression') {
+      // Handle map expression results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **スタイル表現エラー:** ${result.error}\n`;
+        
+        if (result.suggestions && Array.isArray(result.suggestions)) {
+          resultText += `\n💡 **提案:**\n`;
+          result.suggestions.forEach((suggestion: string) => {
+            resultText += `• ${suggestion}\n`;
+          });
+        }
+        
+        if (result.availableProperties && Array.isArray(result.availableProperties)) {
+          resultText += `\n📋 **利用可能なプロパティ:**\n`;
+          result.availableProperties.forEach((prop: any) => {
+            resultText += `• ${prop.name} (${prop.type})`;
+            if (prop.sampleValues) {
+              resultText += ` - 例: ${prop.sampleValues.slice(0, 3).join(', ')}`;
+            }
+            if (prop.range) {
+              resultText += ` - 範囲: ${prop.range[0]} ~ ${prop.range[1]}`;
+            }
+            resultText += '\n';
+          });
+        }
+        
+        if (result.askUser) {
+          resultText += `\n❓ **${result.askUser}**\n`;
+        }
+      } else if (result?.success) {
+        resultText = `\n✅ **スタイル表現適用完了:**\n`;
+        resultText += `• ${result.explanation}\n`;
+        resultText += `• 対象レイヤー: ${result.affectedLayer}\n`;
+        
+        if (result.expression) {
+          resultText += `\n📝 **生成された表現:**\n\`\`\`json\n${JSON.stringify(result.expression, null, 2)}\n\`\`\`\n`;
+        }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'smart_chart') {
+      // Handle smart chart results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **チャート作成エラー:** ${result.error}\n`;
+        if (result.availableFields && Array.isArray(result.availableFields)) {
+          resultText += `\n📋 **利用可能なフィールド:** ${result.availableFields.join(', ')}\n`;
+        }
+        if (result.suggestion) {
+          resultText += `\n💡 **提案:** ${result.suggestion}\n`;
+        }
+      } else if (result?.success && result.vegaSpec) {
+        // Add the chart using the special format that MessageRenderer looks for
+        const vegaSpecJson = JSON.stringify(result.vegaSpec, null, 2);
+        resultText = `\n📊 **${result.message}**\n\n<!--VEGA_SPEC_START-->\n${vegaSpecJson}\n<!--VEGA_SPEC_END-->\n`;
+        if (result.dataType === 'GeoJSON') {
+          resultText += `\n📌 **注:** このチャートはGeoJSONのプロパティから自動的に抽出されたデータを使用しています。\n`;
+        }
+        if (result.sql) {
+          resultText += `\n🔍 **使用されたSQL:**\n\`\`\`sql\n${result.sql}\n\`\`\`\n`;
+        }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'create_viz_table') {
+      // Handle viz table creation results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **テーブル作成エラー:** ${result.error}\n`;
+        if (result.suggestion) {
+          resultText += `\n💡 **提案:** ${result.suggestion}\n`;
+        }
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}**\n`;
+        if (result.tableInfo && typeof result.tableInfo === 'object') {
+          const info = result.tableInfo as any;
+          resultText += `\n📊 **テーブル情報:**\n`;
+          resultText += `• 行数: ${info.rowCount}\n`;
+          if (info.prefectureCount) {
+            resultText += `• 都道府県数: ${info.prefectureCount}\n`;
+          }
+          if (info.columns && Array.isArray(info.columns) && info.columns.length > 0) {
+            resultText += `• カラム: ${info.columns.slice(0, 10).join(', ')}${info.columns.length > 10 ? '...' : ''}\n`;
+          }
+        }
+        if (result.nextSteps && Array.isArray(result.nextSteps) && result.nextSteps.length > 0) {
+          resultText += `\n📝 **次のステップ:**\n`;
+          (result.nextSteps as string[]).forEach((step: string) => {
+            resultText += `• ${step}\n`;
+          });
+        }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'map_style_expression') {
+      // Handle map style expression results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **スタイル適用エラー:** ${result.error}\n`;
+        if (result.suggestion) {
+          resultText += `\n💡 **提案:** ${result.suggestion}\n`;
+        }
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}**\n`;
+        
+        if (result.maplibreSpec) {
+          resultText += `\n🎨 **適用されたMapLibreスタイル:**\n\`\`\`json\n${JSON.stringify(result.maplibreSpec, null, 2)}\n\`\`\`\n`;
+        }
+        
+        if (result.property) {
+          resultText += `\n📝 **変更されたプロパティ:** ${result.property}\n`;
+        }
+      }
+      
+      newContent += resultText;
+    } else if (part.toolName === 'inspect_data') {
+      // Handle data inspection results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **データ検査エラー:** ${result.error}\n`;
+        if (result.suggestion) {
+          resultText += `\n💡 **提案:** ${result.suggestion}\n`;
+        }
+      } else if (result?.success) {
+        resultText = `\n✅ **${result.message}**\n`;
+        
+        if (result.suggestedFields) {
+          const fields = result.suggestedFields as any;
+          if (fields.prefectureFields && fields.prefectureFields.length > 0) {
+            resultText += `\n🏛️ **都道府県フィールド:** ${fields.prefectureFields.join(', ')}\n`;
+          }
+          if (fields.dateFields && fields.dateFields.length > 0) {
+            resultText += `\n📅 **日付フィールド:** ${fields.dateFields.join(', ')}\n`;
+          }
+          if (fields.coordinateFields && fields.coordinateFields.length > 0) {
+            resultText += `\n🗺️ **座標フィールド:** ${fields.coordinateFields.join(', ')}\n`;
+          }
+        }
+        
+        if (result.queryExamples) {
+          const examples = result.queryExamples as any;
+          resultText += `\n📝 **クエリ例:**\n`;
+          if (examples.prefecture) {
+            resultText += `• 都道府県: \`${examples.prefecture}\`\n`;
+          }
+          if (examples.date) {
+            resultText += `• 日付: \`${examples.date}\`\n`;
+          }
+        }
+        
+        if (result.allFields && Array.isArray(result.allFields)) {
+          resultText += `\n📋 **全フィールド (${result.allFields.length}個):**\n`;
+          result.allFields.slice(0, 10).forEach((field: string) => {
+            const examples = (result.fieldExamples as any)?.[field] as any[];
+            resultText += `• ${field}`;
+            if (examples && examples.length > 0) {
+              resultText += ` (例: ${examples.slice(0, 2).join(', ')})`;
+            }
+            resultText += '\n';
+          });
+          if (result.allFields.length > 10) {
+            resultText += `... および他 ${result.allFields.length - 10} フィールド\n`;
+          }
+        }
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -524,8 +722,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         messages: allMessages,
         tools: { 
           ...(db && { 
-            duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
-            vega_lite_chart: createVegaLiteTool(db, dbStateManager || undefined),
+            duckdb_query: createDuckDBTool(db),
+            vega_lite_chart: createVegaLiteTool(db),
             analyze_data: createDataAnalysisTool(db),
             ...createGeocodingTools(db),
           }),
@@ -534,8 +732,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
             list_map_layers: createListLayersTool(mapStyleManager),
             debug_layers: createDebugLayersTool(mapStyleManager)
           }),
-          layer_management: layerTool,
-          smart_layer: smartLayerTool,
+          map_expression: mapExpressionTool,
           completion: completionTool
         },
         maxSteps: 50,
@@ -644,7 +841,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [input, apiKey, isLoading, messages, db, dbStateManager, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
+  }, [input, apiKey, isLoading, messages, db, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {

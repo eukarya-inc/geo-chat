@@ -4,16 +4,13 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import VegaLiteChart from './VegaLiteChart';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
-
 interface MessageRendererProps {
     content: string;
     className?: string;
     db?: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
 }
 
-const MessageRenderer: React.FC<MessageRendererProps> = ({ content, className, db, dbStateManager }) => {
+const MessageRenderer: React.FC<MessageRendererProps> = ({ content, className, db }) => {
     // Check if content contains Vega-Lite specifications
     const vegaSpecRegex = /<!--VEGA_SPEC_START-->\n(.*?)\n<!--VEGA_SPEC_END-->/gs;
     const vegaMatches = Array.from(content.matchAll(vegaSpecRegex));
@@ -60,7 +57,6 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, className, d
                     <VegaLiteChart 
                         spec={vegaSpec} 
                         db={db}
-                        dbStateManager={dbStateManager}
                     />
                 </div>
             );

@@ -3,16 +3,13 @@ import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/ai/useAIChat';
 import MessageRenderer from './MessageRenderer';
 import type { MapStyleManager } from '../utils/mapStyleManager';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
-
 interface AIChatProps {
     db: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
     mapStyleManager?: MapStyleManager;
     apiKey?: string;
 }
 
-export default function AIChat({ db, dbStateManager, mapStyleManager, apiKey }: AIChatProps) {
+export default function AIChat({ db, mapStyleManager, apiKey }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const {
         messages,
@@ -25,7 +22,7 @@ export default function AIChat({ db, dbStateManager, mapStyleManager, apiKey }: 
         isApiKeyConfigured,
         suggestedPrompts,
         handleSuggestedPromptClick,
-    } = useAIChat(db, dbStateManager, mapStyleManager, apiKey);
+    } = useAIChat(db, mapStyleManager, apiKey);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -193,7 +190,6 @@ export default function AIChat({ db, dbStateManager, mapStyleManager, apiKey }: 
                                             content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                             className="markdown-content"
                                             db={db}
-                                            dbStateManager={dbStateManager}
                                         />
                                     )}
                                     {isStreamingMessage && (

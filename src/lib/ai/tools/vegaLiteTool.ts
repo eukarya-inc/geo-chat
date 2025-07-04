@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import { DBStateManager } from '../../duckdb/dbStateManager';
+import { getDBStateManager } from '../../duckdb/dbStateManagerSingleton';
 
 interface VegaLiteEncoding {
   x?: {
@@ -52,8 +52,8 @@ interface VegaLiteSpec {
   encoding?: VegaLiteEncoding;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function createVegaLiteTool(db: AsyncDuckDB, _p0?: DBStateManager | undefined) {
+export function createVegaLiteTool(db: AsyncDuckDB) {
+  const dbStateManager = getDBStateManager();
   return tool({
     description,
     parameters: z.object({

@@ -1,17 +1,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../../lib/duckdb/dbStateManager';
 
 interface DuckDBState {
   connection: AsyncDuckDB | null;
-  dbStateManager: DBStateManager | null;
   isInitialized: boolean;
   error: string | null;
 }
 
 const initialState: DuckDBState = {
   connection: null,
-  dbStateManager: null,
   isInitialized: false,
   error: null,
 };
@@ -20,9 +17,8 @@ const duckdbSlice = createSlice({
   name: 'duckdb',
   initialState,
   reducers: {
-    setConnection: (state, action: PayloadAction<{ db: AsyncDuckDB; dbStateManager: DBStateManager }>) => {
-      state.connection = action.payload.db;
-      state.dbStateManager = action.payload.dbStateManager;
+    setConnection: (state, action: PayloadAction<AsyncDuckDB>) => {
+      state.connection = action.payload;
       state.isInitialized = true;
       state.error = null;
     },

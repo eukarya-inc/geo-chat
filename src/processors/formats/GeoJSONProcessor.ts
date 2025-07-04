@@ -1,6 +1,7 @@
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { BaseDataProcessor, ProcessorOptions, ProcessorResult } from '../base/DataProcessor';
 import { Table, tableFromArrays } from 'apache-arrow';
+import { transformGeoJSONTable } from '../../utils/dataTransformer';
 
 interface GeoJSONFeature {
   type: 'Feature';
@@ -125,18 +126,21 @@ export class GeoJSONProcessor extends BaseDataProcessor {
       
       const processingTime = performance.now() - startTime;
       
+      // Add viz table info to warnings
+      const warningMessages: string[] = [];
+      if (totalFeatures > 10000) {
+        warningMessages.push('Large dataset detected. Consider using spatial filters for better performance.');
+      }
+      if (vizTableName) {
+        warningMessages.push(`Visualization view created: ${vizTableName} - use this for easier querying and charting.`);
+      }
+      
       return {
         tableName,
         rowCount: totalFeatures,
         columns,
         processingTime,
-        warnings: totalFeatures > 10000 
-          ? ['Large dataset detected. Consider using spatial filters for better performance.']
-          : undefined,
-        metadata: {
-          vizTableName,
-          message: vizTableName ? `Visualization view created: ${vizTableName}` : undefined
-        }
+        warnings: warningMessages.length > 0 ? warningMessages : undefined
       };
     } finally {
       await conn.close();

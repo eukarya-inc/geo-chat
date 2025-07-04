@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { VegaLite } from 'react-vega';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import { getDBStateManager } from '../lib/duckdb/dbStateManagerSingleton';
 
 interface VegaLiteSpec {
   $schema?: string;
@@ -46,7 +46,6 @@ interface VegaLiteSpec {
 interface VegaLiteChartProps {
   spec: VegaLiteSpec;
   db?: AsyncDuckDB;
-  dbStateManager?: DBStateManager;
 }
 
 interface ColumnInfo {
@@ -54,7 +53,8 @@ interface ColumnInfo {
   type: string;
 }
 
-const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStateManager }) => {
+const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, db }) => {
+  const dbStateManager = getDBStateManager();
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
