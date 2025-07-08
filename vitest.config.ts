@@ -13,6 +13,11 @@ export default defineConfig({
         classNameStrategy: 'non-scoped'
       }
     },
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'tmp/**',
+    ],
     coverage: {
       reporter: ['text', 'json', 'html', 'json-summary'],
       exclude: [

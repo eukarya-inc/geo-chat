@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { useDuckDB } from '../useDuckDB';
-import duckdbReducer from '../../store/slices/duckdbSlice';
-import * as duckdb from '@duckdb/duckdb-wasm';
+import duckdbReducer, { initializeDuckDB } from '../../store/slices/duckdbSlice';
 
 // Mock DuckDB module
 vi.mock('@duckdb/duckdb-wasm', () => ({
@@ -70,15 +70,16 @@ describe('useDuckDB', () => {
     const mockConnection = { query: mockQuery, close: vi.fn() };
     
     // Set up initialized state
-    store.dispatch({
-      type: 'duckdb/initializeDuckDB/fulfilled',
-      payload: {
+    store.dispatch(initializeDuckDB.fulfilled(
+      {
         db: {
           connect: vi.fn().mockResolvedValue(mockConnection),
-        },
-        connection: mockConnection,
+        } as any,
+        connection: mockConnection as any,
       },
-    });
+      '',
+      undefined
+    ));
 
     const { result } = renderHook(() => useDuckDB(), { wrapper });
 
@@ -97,15 +98,16 @@ describe('useDuckDB', () => {
     const mockQuery = vi.fn().mockRejectedValue(mockError);
     const mockConnection = { query: mockQuery, close: vi.fn() };
     
-    store.dispatch({
-      type: 'duckdb/initializeDuckDB/fulfilled',
-      payload: {
+    store.dispatch(initializeDuckDB.fulfilled(
+      {
         db: {
           connect: vi.fn().mockResolvedValue(mockConnection),
-        },
-        connection: mockConnection,
+        } as any,
+        connection: mockConnection as any,
       },
-    });
+      '',
+      undefined
+    ));
 
     const { result } = renderHook(() => useDuckDB(), { wrapper });
 
@@ -125,13 +127,14 @@ describe('useDuckDB', () => {
       connect: vi.fn().mockResolvedValue({ query: vi.fn(), close: vi.fn() }),
     };
     
-    store.dispatch({
-      type: 'duckdb/initializeDuckDB/fulfilled',
-      payload: {
-        db: mockDB,
-        connection: { query: vi.fn(), close: vi.fn() },
+    store.dispatch(initializeDuckDB.fulfilled(
+      {
+        db: mockDB as any,
+        connection: { query: vi.fn(), close: vi.fn() } as any,
       },
-    });
+      '',
+      undefined
+    ));
 
     const { result } = renderHook(() => useDuckDB(), { wrapper });
 

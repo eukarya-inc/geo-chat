@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { useDuckDB } from '../hooks/useDuckDB';
 import { addDataset } from '../store/slices/dataSlice';
+import { 
+  analyzeGeoJSONProperties, 
+  createGeoJSONTableSQL, 
+  createGeoJSONInsertValues 
+} from '../utils/dataProcessing';
 import './DataPanel.css';
 
 interface DataPanelProps {
@@ -47,20 +52,21 @@ function DataPanel({ onClose }: DataPanelProps) {
         // Load spatial extension
         await executeQuery('INSTALL spatial; LOAD spatial;');
         
-        // Create table with properties and geometry
-        await executeQuery(`CREATE TABLE ${tableName} (properties JSON, geom GEOMETRY);`);
+        // Analyze properties to determine fields
+        const fields = analyzeGeoJSONProperties(geojsonData.features);
+        
+        // Create table with flattened properties like Kepler.gl
+        const createTableSQL = createGeoJSONTableSQL(tableName, fields);
+        await executeQuery(createTableSQL);
         
         // Insert features in batches
         const batchSize = 50;
         for (let i = 0; i < geojsonData.features.length; i += batchSize) {
           const batch = geojsonData.features.slice(i, i + batchSize);
-          const values = batch.map((feature: any) => {
-            const props = JSON.stringify(feature.properties || {}).replace(/'/g, "''");
-            const geom = JSON.stringify(feature.geometry).replace(/'/g, "''");
-            return `('${props}'::JSON, ST_GeomFromGeoJSON('${geom}'))`;
-          }).join(',');
+          const values = createGeoJSONInsertValues(batch, fields);
           
-          await executeQuery(`INSERT INTO ${tableName} (properties, geom) VALUES ${values};`);
+          const columnNames = ['_geojson', ...fields.map((f: { name: string }) => `"${f.name}"`), 'geom'].join(', ');
+          await executeQuery(`INSERT INTO ${tableName} (${columnNames}) VALUES ${values};`);
           
           // Log progress for large files
           if (geojsonData.features.length > 100 && i % 100 === 0) {
@@ -154,20 +160,21 @@ function DataPanel({ onClose }: DataPanelProps) {
         // Load spatial extension
         await executeQuery('INSTALL spatial; LOAD spatial;');
         
-        // Create table with properties and geometry
-        await executeQuery(`CREATE TABLE ${tableName} (properties JSON, geom GEOMETRY);`);
+        // Analyze properties to determine fields
+        const fields = analyzeGeoJSONProperties(geojsonData.features);
+        
+        // Create table with flattened properties like Kepler.gl
+        const createTableSQL = createGeoJSONTableSQL(tableName, fields);
+        await executeQuery(createTableSQL);
         
         // Insert features in batches
         const batchSize = 50;
         for (let i = 0; i < geojsonData.features.length; i += batchSize) {
           const batch = geojsonData.features.slice(i, i + batchSize);
-          const values = batch.map((feature: any) => {
-            const props = JSON.stringify(feature.properties || {}).replace(/'/g, "''");
-            const geom = JSON.stringify(feature.geometry).replace(/'/g, "''");
-            return `('${props}'::JSON, ST_GeomFromGeoJSON('${geom}'))`;
-          }).join(',');
+          const values = createGeoJSONInsertValues(batch, fields);
           
-          await executeQuery(`INSERT INTO ${tableName} (properties, geom) VALUES ${values};`);
+          const columnNames = ['_geojson', ...fields.map((f: { name: string }) => `"${f.name}"`), 'geom'].join(', ');
+          await executeQuery(`INSERT INTO ${tableName} (${columnNames}) VALUES ${values};`);
         }
       } else {
         // For CSV and Parquet, fetch and register as file

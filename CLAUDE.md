@@ -544,15 +544,19 @@ When implementing data loading features, always test with:
 3. **DuckDB File Handling**:
    - Always call `db.open()` before using the database
    - For CSV/Parquet: Use `registerFileHandle()` to register with DuckDB
-   - For GeoJSON: Parse file content and insert features in batches:
+   - For GeoJSON: Parse file content and create table with flattened properties:
      ```sql
-     CREATE TABLE tablename (properties JSON, geom GEOMETRY);
+     -- Analyze features to determine property fields
+     -- Create table with _geojson, individual properties, and geometry
+     CREATE TABLE tablename (_geojson JSON, "name" VARCHAR, "population" DOUBLE, geom GEOMETRY);
+     -- Insert with all fields populated
      INSERT INTO tablename VALUES 
-       ('{"name":"Tokyo"}'::JSON, ST_GeomFromGeoJSON('{"type":"Point",...}'));
+       ('{"type":"Feature",...}'::JSON, 'Tokyo', 37000000, ST_GeomFromGeoJSON('{"type":"Point",...}'));
      ```
    - For remote files: Ensure httpfs extension is loaded
    - Never use ST_Read with file handles for GeoJSON - it causes GDAL errors
    - Always validate GeoJSON is a FeatureCollection before processing
+   - Preserve all GeoJSON properties as individual columns for full Kepler.gl-style compatibility
 
 4. **Error Handling**:
    - Always wrap file operations in try-catch
