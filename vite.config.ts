@@ -1,37 +1,28 @@
-/// <reference types="vitest" />
-import react from "@vitejs/plugin-react-swc";
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
-// https://vite.dev/config/
 export default defineConfig({
-    base: '/duckdb-wasm-prototype/',
-    plugins: [react()],
-    optimizeDeps: {
-        exclude: ["@duckdb/duckdb-wasm"],
+  base: '/duckdb-wasm-prototype/',
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
     },
-    server: {
-        headers: {
-            "Cross-Origin-Opener-Policy": "same-origin",
-            "Cross-Origin-Embedder-Policy": "require-corp",
-        },
+  },
+  optimizeDeps: {
+    exclude: ['@duckdb/duckdb-wasm'],
+  },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
-    build: {
-        rollupOptions: {
-            output: {
-                // Ensure proper headers for WASM files
-                assetFileNames: (assetInfo) => {
-                    if (assetInfo.name && assetInfo.name.endsWith('.wasm')) {
-                        return 'assets/[name]-[hash][extname]';
-                    }
-                    return 'assets/[name]-[hash][extname]';
-                }
-            }
-        }
+    fs: {
+      allow: ['..'],
     },
-    //@ts-expect-error vitest config is not typed
-    test: {
-        globals: true,
-        environment: 'jsdom',
-        setupFiles: [],
-    },
+  },
+  build: {
+    target: 'esnext',
+  },
 });

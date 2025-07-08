@@ -1,79 +1,61 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { MapStyleManager } from '../../utils/mapStyleManager';
 
-interface MapLayer {
+export interface MapLayer {
   id: string;
-  type: 'point' | 'line' | 'polygon' | 'heatmap' | 'grid';
-  sourceTable: string;
+  type: 'points' | 'polygons' | 'lines' | 'heatmap' | 'choropleth';
+  sourceId: string;
   visible: boolean;
-  style: Record<string, unknown>;
+  style: Record<string, any>;
 }
 
 interface MapState {
-  styleManager: MapStyleManager | null;
   layers: MapLayer[];
-  activeLayerId: string | null;
-  mapReady: boolean;
-  bounds: [number, number, number, number] | null;
+  viewport: {
+    longitude: number;
+    latitude: number;
+    zoom: number;
+    bearing: number;
+    pitch: number;
+  };
+  selectedFeatureId: string | null;
 }
 
 const initialState: MapState = {
-  styleManager: null,
   layers: [],
-  activeLayerId: null,
-  mapReady: false,
-  bounds: null,
+  viewport: {
+    longitude: 0,
+    latitude: 0,
+    zoom: 2,
+    bearing: 0,
+    pitch: 0,
+  },
+  selectedFeatureId: null,
 };
 
 const mapSlice = createSlice({
   name: 'map',
   initialState,
   reducers: {
-    setStyleManager: (state, action: PayloadAction<MapStyleManager>) => {
-      state.styleManager = action.payload;
-      state.mapReady = true;
-    },
     addLayer: (state, action: PayloadAction<MapLayer>) => {
       state.layers.push(action.payload);
-      state.activeLayerId = action.payload.id;
-    },
-    updateLayer: (state, action: PayloadAction<{ id: string; updates: Partial<MapLayer> }>) => {
-      const layer = state.layers.find(l => l.id === action.payload.id);
-      if (layer) {
-        Object.assign(layer, action.payload.updates);
-      }
     },
     removeLayer: (state, action: PayloadAction<string>) => {
-      state.layers = state.layers.filter(l => l.id !== action.payload);
-      if (state.activeLayerId === action.payload) {
-        state.activeLayerId = state.layers.length > 0 ? state.layers[0].id : null;
+      state.layers = state.layers.filter(layer => layer.id !== action.payload);
+    },
+    updateLayer: (state, action: PayloadAction<{ id: string; updates: Partial<MapLayer> }>) => {
+      const index = state.layers.findIndex(l => l.id === action.payload.id);
+      if (index !== -1) {
+        state.layers[index] = { ...state.layers[index], ...action.payload.updates };
       }
     },
-    setActiveLayer: (state, action: PayloadAction<string | null>) => {
-      state.activeLayerId = action.payload;
+    setViewport: (state, action: PayloadAction<Partial<MapState['viewport']>>) => {
+      state.viewport = { ...state.viewport, ...action.payload };
     },
-    toggleLayerVisibility: (state, action: PayloadAction<string>) => {
-      const layer = state.layers.find(l => l.id === action.payload);
-      if (layer) {
-        layer.visible = !layer.visible;
-      }
+    setSelectedFeature: (state, action: PayloadAction<string | null>) => {
+      state.selectedFeatureId = action.payload;
     },
-    setBounds: (state, action: PayloadAction<[number, number, number, number]>) => {
-      state.bounds = action.payload;
-    },
-    reset: () => initialState,
   },
 });
 
-export const {
-  setStyleManager,
-  addLayer,
-  updateLayer,
-  removeLayer,
-  setActiveLayer,
-  toggleLayerVisibility,
-  setBounds,
-  reset,
-} = mapSlice.actions;
-
+export const { addLayer, removeLayer, updateLayer, setViewport, setSelectedFeature } = mapSlice.actions;
 export default mapSlice.reducer;
