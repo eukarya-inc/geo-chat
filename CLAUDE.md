@@ -49,7 +49,7 @@ await executeSQL({
 
 ## Technology Stack (Based on Design Decisions)
 
-- **State Management**: Lighter Redux approach (not full Kepler-style)
+- **State Management**: Lighter Redux approach
 - **Component Architecture**: Factory pattern for extensibility
 - **Data Pipeline**: Parquet-first with support for other formats
 - **AI Integration**: Tool-based using Vercel AI SDK
@@ -556,7 +556,7 @@ When implementing data loading features, always test with:
    - For remote files: Ensure httpfs extension is loaded
    - Never use ST_Read with file handles for GeoJSON - it causes GDAL errors
    - Always validate GeoJSON is a FeatureCollection before processing
-   - Preserve all GeoJSON properties as individual columns for full Kepler.gl-style compatibility
+   - Preserve all GeoJSON properties as individual columns for full compatibility
 
 4. **Error Handling**:
    - Always wrap file operations in try-catch

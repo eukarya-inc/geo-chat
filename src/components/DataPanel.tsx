@@ -55,7 +55,7 @@ function DataPanel({ onClose }: DataPanelProps) {
         // Analyze properties to determine fields
         const fields = analyzeGeoJSONProperties(geojsonData.features);
         
-        // Create table with flattened properties like Kepler.gl
+        // Create table with flattened properties
         const createTableSQL = createGeoJSONTableSQL(tableName, fields);
         await executeQuery(createTableSQL);
         
@@ -163,7 +163,7 @@ function DataPanel({ onClose }: DataPanelProps) {
         // Analyze properties to determine fields
         const fields = analyzeGeoJSONProperties(geojsonData.features);
         
-        // Create table with flattened properties like Kepler.gl
+        // Create table with flattened properties
         const createTableSQL = createGeoJSONTableSQL(tableName, fields);
         await executeQuery(createTableSQL);
         
