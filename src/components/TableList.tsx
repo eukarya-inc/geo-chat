@@ -1,6 +1,7 @@
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import { Table } from './Table';
 
 interface TableListProps {
     db: AsyncDuckDB;
@@ -25,9 +26,8 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
     const [show, setShow] = useState(true);
     const [tables, setTables] = useState<TableInfo[]>([]);
     const [tableColumns, setTableColumns] = useState<Record<string, ColumnInfo[]>>({});
-    const [queryResult, setQueryResult] = useState<Array<Record<string, string | number | boolean | object | null>> | null>(null);
-    const [queryError, setQueryError] = useState<string | null>(null);
     const [showDataView, setShowDataView] = useState<string | null>(null);
+    const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
     const mountedRef = useRef(false);
 
     const fetchTableColumns = useCallback(async (tableName: string) => {
@@ -151,16 +151,11 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
         if (!db) return;
 
         try {
-            setQueryError(null);
             const conn = await db.connect();
-            const result = await conn.query(`SELECT * FROM ${tableName} LIMIT 100;`);
-            const data = result.toArray();
-            setQueryResult(data);
+            setConnection(conn);
             setShowDataView(tableName);
-            await conn.close();
         } catch (err) {
-            console.error('Error executing query:', err);
-            setQueryError(err instanceof Error ? err.message : 'Unknown error');
+            console.error('Error opening table view:', err);
         }
     };
 
@@ -393,8 +388,21 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
             )}
 
             {/* Data View Panel */}
-            {showDataView && queryResult && (
-                <div style={{
+            {showDataView && connection && (
+                <>
+                    {/* Backdrop */}
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        zIndex: 9999,
+                    }} />
+                    
+                    {/* Modal */}
+                    <div style={{
                     position: 'fixed',
                     top: '10%',
                     left: '10%',
@@ -404,10 +412,11 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                     border: '2px solid #007bff',
                     borderRadius: '8px',
                     padding: '20px',
-                    zIndex: 1000,
+                    zIndex: 10000,
                     overflow: 'hidden',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'column',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -418,13 +427,15 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                         borderBottom: '1px solid #eee'
                     }}>
                         <h4 style={{ margin: 0, color: '#333' }}>
-                            {showDataView} - データプレビュー (最大100行)
+                            {showDataView} - データビュー
                         </h4>
                         <button
-                            onClick={() => {
+                            onClick={async () => {
                                 setShowDataView(null);
-                                setQueryResult(null);
-                                setQueryError(null);
+                                if (connection) {
+                                    await connection.close();
+                                    setConnection(null);
+                                }
                             }}
                             style={{
                                 backgroundColor: '#dc3545',
@@ -440,70 +451,17 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                         </button>
                     </div>
 
-                    {queryError ? (
-                        <div style={{
-                            color: '#dc3545',
-                            backgroundColor: '#f8d7da',
-                            border: '1px solid #f5c6cb',
-                            borderRadius: '4px',
-                            padding: '12px',
-                            marginBottom: '15px'
-                        }}>
-                            エラー: {queryError}
-                        </div>
-                    ) : (
-                        <div style={{
-                            flex: 1,
-                            overflow: 'auto',
-                            border: '1px solid #ddd',
-                            borderRadius: '4px'
-                        }}>
-                            <table style={{
-                                width: '100%',
-                                borderCollapse: 'collapse',
-                                fontSize: '12px'
-                            }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#f8f9fa' }}>
-                                        {queryResult.length > 0 && Object.keys(queryResult[0]).map((key) => (
-                                            <th key={key} style={{
-                                                border: '1px solid #ddd',
-                                                padding: '8px',
-                                                textAlign: 'left',
-                                                fontWeight: 'bold',
-                                                position: 'sticky',
-                                                top: 0,
-                                                backgroundColor: '#f8f9fa'
-                                            }}>
-                                                {key}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {queryResult.map((row, index) => (
-                                        <tr key={index} style={{
-                                            backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9'
-                                        }}>
-                                            {Object.entries(row).map(([key, value]) => (
-                                                <td key={key} style={{
-                                                    border: '1px solid #ddd',
-                                                    padding: '6px',
-                                                    maxWidth: '200px',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    {value === null ? '(null)' : String(value)}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                    <div style={{
+                        flex: 1,
+                        overflow: 'hidden'
+                    }}>
+                        <Table 
+                            connection={connection} 
+                            tableName={showDataView} 
+                        />
+                    </div>
                 </div>
+                </>
             )}
         </div>
     );
