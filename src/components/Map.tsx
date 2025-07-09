@@ -64,13 +64,30 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     const simplify = calculateSimplifyTolerance(zxy.z);
 
     console.log(`z: ${zxy.z}, simplify level: ${simplify}`);
+    console.log(`Selected columns: ${selectedColumns}`);
+
+    // Check if 'properties' column is selected to handle JSON extraction
+    const hasPropertiesColumn = selectedColumns.includes('properties');
+    
+    // Build column selection with JSON extraction for properties column
+    let columnSelection = '';
+    if (hasPropertiesColumn) {
+        // Extract all other columns normally
+        const otherColumns = selectedColumns.filter(col => col !== 'properties');
+        const otherColumnsList = otherColumns.length > 0 ? otherColumns.join(', ') + ', ' : '';
+        
+        // Add properties column with all its JSON fields extracted
+        columnSelection = otherColumnsList + 'properties';
+    } else {
+        columnSelection = columns;
+    }
 
     return `
         WITH filtered AS (
             -- 空間フィルタリングを先に実行
             SELECT 
                 geom,
-                ${columns}
+                ${columnSelection}
             FROM ${selectedTable}
             WHERE ST_Intersects(
                 geom,
@@ -82,7 +99,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
             ST_AsGeoJSON(
                 ST_Simplify(geom, ${simplify})
             ) AS geojson,
-            ${columns}
+            ${columnSelection}
         FROM filtered
     `;
 };
@@ -247,7 +264,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         }
 
         // Remove existing data layers
-        const existingLayers = ['duckdb-polygons', 'duckdb-polygon-outlines', 'duckdb-lines', 'duckdb-points', 'geojson-polygons', 'geojson-lines', 'geojson-points'];
+        const existingLayers = ['duckdb-polygons', 'duckdb-polygon-outlines', 'duckdb-lines', 'duckdb-points', 'duckdb-points-labels', 'geojson-polygons', 'geojson-lines', 'geojson-points'];
         existingLayers.forEach(layerId => {
             if (map.getLayer(layerId)) {
                 map.removeLayer(layerId);
@@ -325,18 +342,52 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 maxzoom: 24,
             });
 
-            // Add point layer with distinct color and larger size
+            // Add point layer with default styling
             map.addLayer({
                 id: 'duckdb-points',
                 source: 'duckdb-vector',
                 'source-layer': 'v',
                 type: 'circle',
                 paint: {
-                    'circle-radius': 8,
+                    'circle-radius': 6,
                     'circle-color': '#0066ff',
-                    'circle-stroke-width': 2,
+                    'circle-stroke-width': 1,
                     'circle-stroke-color': '#ffffff',
-                    'circle-opacity': 0.9,
+                    'circle-opacity': 0.8,
+                },
+                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
+                minzoom: 0,
+                maxzoom: 24,
+            });
+
+            // Add debug event to check properties in rendered features
+            map.on('click', 'duckdb-points', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const feature = e.features[0];
+                    console.log('=== Clicked Point Feature Debug ===');
+                    console.log('Feature:', feature);
+                    console.log('Properties:', feature.properties);
+                    console.log('All property keys:', Object.keys(feature.properties || {}));
+                    console.log('都道府県名 value:', feature.properties?.['都道府県名']);
+                }
+            });
+
+
+            // Add a symbol layer to show prefecture names
+            map.addLayer({
+                id: 'duckdb-points-labels',
+                source: 'duckdb-vector',
+                'source-layer': 'v',
+                type: 'symbol',
+                layout: {
+                    'text-field': ['get', '都道府県名'],
+                    'text-size': 12,
+                    'text-offset': [0, 2],
+                },
+                paint: {
+                    'text-color': '#000000',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 2,
                 },
                 filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
                 minzoom: 0,
@@ -362,6 +413,24 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 mapInstance: map
             };
             console.log('Map: Debug info stored in window.debugMapLayers');
+            
+            // Add debug function to check features at a specific location
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any).debugFeatureAt = (lng: number, lat: number) => {
+                const point = map.project([lng, lat]);
+                const features = map.queryRenderedFeatures(point, {
+                    layers: ['duckdb-points', 'duckdb-points-test']
+                });
+                console.log('=== Features at location ===');
+                console.log(`Location: ${lng}, ${lat}`);
+                console.log(`Features found: ${features.length}`);
+                features.forEach((f, i) => {
+                    console.log(`Feature ${i}:`, f);
+                    console.log(`Properties:`, f.properties);
+                    console.log(`Geometry type:`, f.geometry.type);
+                });
+                return features;
+            };
             
             // Add manual debug functions
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -557,6 +626,8 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                         return { data: new Uint8Array() };
                     }
 
+                    console.log('Current selected columns:', currentColumns);
+
                     // 選択されたカラムを取得するSQLクエリを構築
                     const query = generateVectorTileQuery({
                         zxy,
@@ -586,7 +657,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     const featureStartTime = new Date();
                     console.log(`計測 ${cacheKey} 4 ${featureStartTime.toISOString()} start feature`);
                     const features = rows
-                        .map(row => {
+                        .map((row, index) => {
                             try {
                                 if (!row.geojson) {
                                     console.warn('Empty geojson for row:', row);
@@ -597,10 +668,31 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                 // 選択されたカラムの値をプロパティとして追加
                                 const properties: Record<string, string | number | null> = {};
                                 currentColumns.forEach(column => {
-                                    if (column in row) {
+                                    if (column === 'properties' && row[column]) {
+                                        // If the column is 'properties' and contains JSON data,
+                                        // parse it and merge its contents into the feature properties
+                                        try {
+                                            const jsonProps = typeof row[column] === 'string' 
+                                                ? JSON.parse(row[column] as string) 
+                                                : row[column];
+                                            if (typeof jsonProps === 'object' && jsonProps !== null) {
+                                                Object.assign(properties, jsonProps);
+                                            }
+                                        } catch (e) {
+                                            console.warn('Failed to parse properties JSON:', e);
+                                            properties[column] = row[column];
+                                        }
+                                    } else if (column in row) {
                                         properties[column] = row[column];
                                     }
                                 });
+
+                                // Debug: Log the first few features to check properties
+                                if (index < 3) {
+                                    console.log(`Feature ${index} properties:`, properties);
+                                    console.log(`Feature ${index} geometry type:`, geometry.type);
+                                    console.log(`Feature ${index} row data:`, row);
+                                }
 
                                 return {
                                     type: 'Feature' as const,
@@ -656,6 +748,70 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         }
     }, []);
 
+    // Function to fix property references in style expressions
+    const fixPropertyReferences = (expr: unknown): unknown => {
+        if (!Array.isArray(expr)) return expr;
+        
+        // Fix nested property access pattern: ["get", "propName", ["get", "properties", ["get", "row"]]]
+        // Should be: ["get", "propName"]
+        if (expr[0] === 'get' && expr.length === 3 && Array.isArray(expr[2])) {
+            const nestedExpr = expr[2];
+            if (Array.isArray(nestedExpr) && nestedExpr[0] === 'get' && nestedExpr[1] === 'properties') {
+                // This is the pattern we need to fix
+                return ['get', expr[1]];
+            }
+        }
+        
+        // Fix another incorrect pattern: ["get", "properties", ["get", "propName"]]
+        // Should be: ["get", "propName"]
+        if (expr[0] === 'get' && expr[1] === 'properties' && expr.length === 3 && Array.isArray(expr[2])) {
+            const nestedExpr = expr[2];
+            if (Array.isArray(nestedExpr) && nestedExpr[0] === 'get' && typeof nestedExpr[1] === 'string') {
+                // Return just the nested get expression
+                return nestedExpr;
+            }
+        }
+        
+        // Recursively fix nested expressions
+        return expr.map(item => fixPropertyReferences(item));
+    };
+
+    // Function to fix property references in a style
+    const fixStylePropertyReferences = (style: maplibregl.StyleSpecification): maplibregl.StyleSpecification => {
+        const fixedStyle = JSON.parse(JSON.stringify(style)); // Deep clone
+        
+        // Fix property references in all layers
+        if (fixedStyle.layers) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fixedStyle.layers = fixedStyle.layers.map((layer: any) => {
+                const fixedLayer = { ...layer };
+                
+                // Fix paint properties
+                if (fixedLayer.paint) {
+                    Object.keys(fixedLayer.paint).forEach(key => {
+                        fixedLayer.paint[key] = fixPropertyReferences(fixedLayer.paint[key]);
+                    });
+                }
+                
+                // Fix layout properties
+                if (fixedLayer.layout) {
+                    Object.keys(fixedLayer.layout).forEach(key => {
+                        fixedLayer.layout[key] = fixPropertyReferences(fixedLayer.layout[key]);
+                    });
+                }
+                
+                // Fix filter
+                if (fixedLayer.filter) {
+                    fixedLayer.filter = fixPropertyReferences(fixedLayer.filter);
+                }
+                
+                return fixedLayer;
+            });
+        }
+        
+        return fixedStyle;
+    };
+
     // Function to handle style changes
     const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
         if (!mapRef.current || !initializedRef.current) {
@@ -672,18 +828,21 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             const isDefaultStyle = newStyle.sources?.osm && 
                                  newStyle.layers?.some(layer => layer.id === 'osm-layer');
             
+            // Fix property references in the style
+            const fixedStyle = fixStylePropertyReferences(newStyle);
+            
             if (isDefaultStyle) {
                 console.log('Map: Clearing custom style, reverting to default');
                 customStyleRef.current = null;
                 hasCustomStyleRef.current = false;
             } else {
                 console.log('Map: Storing custom style');
-                customStyleRef.current = newStyle;
+                customStyleRef.current = fixedStyle;
                 hasCustomStyleRef.current = true;
             }
             
-            // Apply the new style without diff to ensure proper layer reloading
-            mapRef.current.setStyle(newStyle);
+            // Apply the fixed style without diff to ensure proper layer reloading
+            mapRef.current.setStyle(fixedStyle);
             
             // Wait for style to load, then re-add data layers
             const handleStyleLoad = () => {
@@ -712,7 +871,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             isApplyingCustomStyleRef.current = false;
             setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }, [updateMapLayers]);
+    }, [fixStylePropertyReferences, updateMapLayers]);
 
     // Expose style change handler
     useEffect(() => {
@@ -810,8 +969,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     ],
                 } as maplibregl.StyleSpecification;
                 
-                const styleToUse = customStyleRef.current || defaultStyle;
-                console.log('Map: Creating map with style:', customStyleRef.current ? 'custom' : 'default');
+                // Fix property references in custom styles before using
+                const styleToUse = customStyleRef.current 
+                    ? fixStylePropertyReferences(customStyleRef.current)
+                    : defaultStyle;
+                console.log('Map: Creating map with style:', customStyleRef.current ? 'custom (fixed)' : 'default');
                 
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
