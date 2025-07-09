@@ -71,21 +71,21 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
   - [x] Schema understanding (via describeData)
   - [x] Error handling and suggestions
 
-### Phase 4: Map Visualization (MapLibre)
-- [ ] Setup MapLibre GL
-  - [ ] Initialize map component
-  - [ ] Configure base map styles
-  - [ ] Setup map controls
-- [ ] Create layer system
-  - [ ] Point layer
-  - [ ] Polygon layer
-  - [ ] Line layer
+### Phase 4: Map Visualization (MapLibre) ✅
+- [x] Setup MapLibre GL
+  - [x] Initialize map component
+  - [x] Configure base map styles
+  - [x] Setup map controls
+- [x] Create layer system
+  - [x] Point layer
+  - [x] Polygon layer
+  - [x] Line layer
   - [ ] Heatmap layer
-  - [ ] Choropleth layer
-- [ ] Implement data-driven styling
-  - [ ] Color scales
-  - [ ] Size scales
-  - [ ] Categorical styling
+  - [ ] Choropleth layer (using polygon layer for now)
+- [x] Implement data-driven styling
+  - [x] Color scales
+  - [x] Size scales
+  - [ ] Categorical styling (partial)
 - [ ] Add interaction features
   - [ ] Tooltips
   - [ ] Click handlers
@@ -177,9 +177,33 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
 - AI provides meaningful insights about the data
 - Export functionality works reliably
 
-## Recent Updates (2025-07-08)
+## Recent Updates (2025-07-09)
 
 ### Completed Features
+1. **Map Visualization Implementation (Phase 4)**:
+   - Integrated MapLibre GL JS with react-map-gl wrapper
+   - Created modular layer system inspired by Kepler.gl
+   - Implemented BaseLayer class with PointLayer, PolygonLayer, and LineLayer
+   - Added LayerFactory for dynamic layer creation
+   - Set up Redux integration for map state management
+   - Created data loader utility to fetch data from DuckDB
+   - Added visual channel system for data-driven styling
+   - Implemented automatic layer creation when datasets are loaded (Kepler-inspired)
+   - Added auto-zoom to layer bounds on first layer creation
+   - Enhanced findDefaultLayers utility with smart layer type detection
+
+2. **AI Tools Enhancement**:
+   - Fixed slow describeData tool by optimizing queries
+   - Implemented dataset context injection in system prompt (Kepler pattern)
+   - Created createMap tool for generating map visualizations from queries
+   - Enhanced message formatting with ReactMarkdown support
+   - Added ToolResultDisplay component for better result presentation
+
+3. **Documentation Reconciliation**:
+   - Updated TODO_DETAILED.md to match TODO.md phase structure
+   - Fixed phase numbering and naming inconsistencies
+
+### Previous Updates (2025-07-08)
 1. **Project Migration**: Switched from npm to yarn for package management
 2. **Data Management UI**: 
    - Combined file upload and URL loading into a single unified interface
@@ -198,13 +222,14 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
    - Configured AI SDK mock provider for testing
 
 ### Current Focus
-- Implementing AI tools and functions for data analysis
-- Building the map visualization layer system
-- Creating the SQL-to-visualization pipeline
+- Beginning Phase 5: Chart Integration with ECharts
+- Adding map interaction features (tooltips, click handlers) later
+- Improving data-driven styling with categorical scales
 
 ## Next Steps
-1. Implement AI tools for SQL query generation
-2. Complete MapLibre GL integration with basic layers
-3. Add chart generation capabilities
-4. Create example workflows and documentation
+1. Add map interaction features (tooltips, click handlers, feature selection)
+2. Implement ECharts integration for statistical visualizations
+3. Create heatmap and choropleth layer types
+4. Add categorical styling support for data-driven maps
+5. Create example workflows and documentation
 

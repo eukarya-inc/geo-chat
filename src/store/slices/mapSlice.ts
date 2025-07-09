@@ -2,7 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface MapLayer {
   id: string;
-  type: 'points' | 'polygons' | 'lines' | 'heatmap' | 'choropleth';
+  type: 'point' | 'polygon' | 'line' | 'heatmap' | 'choropleth';
   sourceId: string;
   visible: boolean;
   style: Record<string, any>;
@@ -18,6 +18,8 @@ interface MapState {
     pitch: number;
   };
   selectedFeatureId: string | null;
+  mapStyle: string;
+  isMapLoaded: boolean;
 }
 
 const initialState: MapState = {
@@ -30,6 +32,8 @@ const initialState: MapState = {
     pitch: 0,
   },
   selectedFeatureId: null,
+  mapStyle: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  isMapLoaded: false,
 };
 
 const mapSlice = createSlice({
@@ -51,11 +55,29 @@ const mapSlice = createSlice({
     setViewport: (state, action: PayloadAction<Partial<MapState['viewport']>>) => {
       state.viewport = { ...state.viewport, ...action.payload };
     },
+    updateViewport: (state, action: PayloadAction<Partial<MapState['viewport']>>) => {
+      state.viewport = { ...state.viewport, ...action.payload };
+    },
     setSelectedFeature: (state, action: PayloadAction<string | null>) => {
       state.selectedFeatureId = action.payload;
+    },
+    setMapStyle: (state, action: PayloadAction<string>) => {
+      state.mapStyle = action.payload;
+    },
+    setMapLoaded: (state, action: PayloadAction<boolean>) => {
+      state.isMapLoaded = action.payload;
     },
   },
 });
 
-export const { addLayer, removeLayer, updateLayer, setViewport, setSelectedFeature } = mapSlice.actions;
+export const { 
+  addLayer, 
+  removeLayer, 
+  updateLayer, 
+  setViewport, 
+  updateViewport,
+  setSelectedFeature,
+  setMapStyle,
+  setMapLoaded
+} = mapSlice.actions;
 export default mapSlice.reducer;

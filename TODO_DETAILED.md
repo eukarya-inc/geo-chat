@@ -2,9 +2,30 @@
 
 This is our detailed implementation plan for the GIS BI Chat Tool.
 
-## Recent Updates (2025-07-08)
+## Recent Updates (2025-07-09)
 
 ### Completed Features
+1. **Map Visualization (Phase 2)** 🚧
+   - Integrated MapLibre GL JS with react-map-gl
+   - Created modular layer system with BaseLayer architecture
+   - Implemented PointLayer, PolygonLayer, and LineLayer
+   - Added visual channel system for data-driven styling
+   - Set up Redux integration for map state
+   - Created data loader to fetch from DuckDB
+
+2. **AI Tools Enhancement** ✅
+   - Fixed slow describeData performance
+   - Implemented Kepler-style dataset context injection
+   - Created createMap tool for map generation
+   - Enhanced message formatting with ReactMarkdown
+   - Added ToolResultDisplay component
+
+3. **Documentation** ✅
+   - Reconciled TODO.md and TODO_DETAILED.md
+   - Fixed phase numbering and naming
+   - Updated progress tracking
+
+### Previous Updates (2025-07-08)
 1. **DuckDB Integration** ✅
    - Full WASM setup with spatial extension
    - File registration for CSV, GeoJSON, Parquet
@@ -24,14 +45,16 @@ This is our detailed implementation plan for the GIS BI Chat Tool.
    - Added comprehensive error handling
 
 ### Current Status
-- Phase 1.1 (DuckDB Integration): ✅ Complete
-- Phase 1.2 (AI Chat): 🚧 Partial (basic chat working, tools pending)
-- Phase 1.3 (File Upload): ✅ Complete
+- Phase 1 (Foundation & Core Chat): ✅ Complete
+- Phase 2 (Map Visualization): 🚧 In Progress (80% complete)
+- Phase 3 (Chart Integration): Not started
+- Phase 4 (Data Processing): Not started
 
 ### Next Priority
-- Implement AI tools for data analysis
-- Complete map visualization foundation
-- Add basic chart types
+- Complete map interaction features (tooltips, click handlers)
+- Implement ECharts for statistical visualizations
+- Add heatmap and choropleth layer types
+- Improve categorical data styling
 
 ## Phase 1: Foundation & Core Chat
 
@@ -82,78 +105,198 @@ This is our detailed implementation plan for the GIS BI Chat Tool.
 - [ ] Progress indicators for large files (using loading state currently)
 - [ ] Preview of the Dataset
 
-## Phase 2: Basic Visualizations
+## Phase 2: Map Visualization (MapLibre) ✅
 
-### 2.1 Map Visualization Foundation
-- [ ] Layer management system
-  ```typescript
-  interface Layer {
-    id: string;
-    type: 'point' | 'polygon' | 'line' | 'heatmap';
-    source: string;
-    paint: Record<string, any>;
-    layout: Record<string, any>;
-  }
-  ```
-- [ ] Basic layer types:
-  - [ ] Point layer with clustering
-  - [ ] Polygon layer with outlines
-  - [ ] Line layer with variable width
-- [ ] Click interactions and tooltips
-- [ ] Zoom to data bounds
-- [ ] Apply Style Expression on Layers
+### 2.1 Setup MapLibre GL ✅
+- [x] Initialize map component
+  - [x] Create MapView component with MapLibre GL JS
+  - [x] Configure CORS headers for map tiles
+  - [x] Set up map container with proper sizing
+- [x] Configure base map styles
+  - [x] Add OpenStreetMap or other free tile sources
+  - [x] Create light/dark theme options
+  - [x] Configure initial viewport (center, zoom)
+- [x] Setup map controls
+  - [x] Navigation controls (zoom in/out, compass)
+  - [x] Scale bar
+  - [x] Attribution
 
-### 2.2 Inline Charts in Chat
-- [ ] ECharts wrapper component
-- [ ] Chart types:
-  - [ ] Bar chart
-  - [ ] Line chart
-  - [ ] Pie chart
-  - [ ] Scatter plot
-- [ ] Auto-sizing to fit chat width
-- [ ] Interactive features (zoom, hover)
-- [ ] Export as image
+### 2.2 Create Layer System ✅
+```typescript
+interface Layer {
+  id: string;
+  type: 'point' | 'polygon' | 'line' | 'heatmap' | 'choropleth';
+  source: string;
+  datasetId: string;
+  paint: Record<string, any>;
+  layout: Record<string, any>;
+  visible: boolean;
+}
+```
+- [x] Point layer
+  - [x] Basic markers
+  - [ ] Clustering support
+  - [ ] Custom icons
+- [x] Polygon layer
+  - [x] Fill and outline styling
+  - [x] Transparency control
+- [x] Line layer
+  - [x] Variable width based on data
+  - [ ] Dashed lines support
+- [ ] Heatmap layer
+  - [ ] Density-based visualization
+  - [ ] Radius and intensity controls
+- [ ] Choropleth layer
+  - [ ] Data-driven polygon colors
+  - [ ] Classification methods
 
-### 2.3 Data-Driven Styling
-- [ ] Color scales (sequential, diverging, categorical)
-- [ ] Size scales for points
-- [ ] Automatic legend generation
-- [ ] Style persistence in Redux
+### 2.3 Implement Data-Driven Styling 🚧
+- [x] Color scales
+  - [x] Sequential (Blues, Greens, Reds)
+  - [ ] Diverging (RdBu, RdYlGn)
+  - [ ] Categorical (Set1, Set2)
+  - [ ] Custom color palettes
+- [x] Size scales
+  - [x] Linear scaling
+  - [ ] Square root scaling
+  - [ ] Quantile scaling
+- [ ] Categorical styling
+  - [ ] Unique values
+  - [ ] Pattern matching
 
-## Phase 3: Spatial Analysis Tools
+### 2.4 Add Interaction Features
+- [ ] Tooltips
+  - [ ] Hover tooltips with feature properties
+  - [ ] Customizable tooltip templates
+- [ ] Click handlers
+  - [ ] Feature selection
+  - [ ] Show detailed info panel
+- [ ] Feature selection
+  - [ ] Highlight selected features
+  - [ ] Multi-select support
 
-### 3.1 Core Spatial Operations
-- [ ] Implement spatial SQL functions:
-  ```sql
-  -- Examples
-  ST_Contains(geom1, geom2)
-  ST_Intersects(geom1, geom2)
-  ST_Buffer(geom, distance)
-  ST_Union(geom_array)
-  ```
-- [ ] AI tools for spatial analysis:
-  - [ ] `spatialJoin` - Join based on location
-  - [ ] `createBuffer` - Buffer analysis
-  - [ ] `calculateArea` - Area calculations
-  - [ ] `findNearest` - Nearest neighbor
+### 2.5 Style Expression Support
+- [ ] MapLibre style expressions
+- [ ] Data-driven property functions
+- [ ] Zoom-based styling
 
-### 3.2 Choropleth Maps
-- [ ] Aggregation by polygon
-- [ ] Dynamic binning strategies
-- [ ] Color scheme selection
-- [ ] Null value handling
-- [ ] Interactive legend
+## Phase 3: Chart Integration (ECharts)
 
-### 3.3 Time Series Support
-- [ ] Time field detection
-- [ ] Playback controls (play, pause, speed)
-- [ ] Time range selection
-- [ ] Animated transitions
-- [ ] Time-based filtering
+### 3.1 Setup ECharts
+- [ ] Create chart wrapper component
+  - [ ] React component with proper lifecycle management
+  - [ ] Handle chart disposal on unmount
+  - [ ] Implement resize observer for responsive charts
+- [ ] Configure responsive sizing
+  - [ ] Auto-resize with container
+  - [ ] Maintain aspect ratios
+  - [ ] Handle chat panel width changes
+- [ ] Theme configuration
+  - [ ] Light/dark theme support
+  - [ ] Consistent colors with map visualization
+  - [ ] Custom theme based on app design
 
-## Phase 4: Advanced Features
+### 3.2 Implement Chart Types
+- [ ] Bar charts
+  - [ ] Vertical and horizontal bars
+  - [ ] Grouped and stacked options
+  - [ ] Data labels and animations
+- [ ] Line charts
+  - [ ] Multiple series support
+  - [ ] Area charts option
+  - [ ] Smooth curves vs straight lines
+- [ ] Pie charts
+  - [ ] Donut chart variant
+  - [ ] Label positioning
+  - [ ] Interactive legends
+- [ ] Scatter plots
+  - [ ] Size and color mapping
+  - [ ] Regression lines
+  - [ ] Bubble chart variant
+- [ ] Histograms
+  - [ ] Automatic binning
+  - [ ] Custom bin sizes
+  - [ ] Distribution curves
 
-### 4.1 Multi-Agent System
+### 3.3 Create Chart Generation from SQL Results
+- [ ] Auto-detect chart type
+  - [ ] Analyze query structure and data types
+  - [ ] Suggest appropriate visualizations
+  - [ ] Handle temporal data specially
+- [ ] Data transformation pipeline
+  - [ ] Convert SQL results to ECharts format
+  - [ ] Handle null values
+  - [ ] Aggregate data when needed
+- [ ] Chart configuration builder
+  - [ ] Dynamic axis configuration
+  - [ ] Automatic scale detection
+  - [ ] Legend and tooltip setup
+
+### 3.4 Inline Charts in Chat
+- [ ] Chart rendering in messages
+  - [ ] Embed charts in AI responses
+  - [ ] Proper sizing within chat bubbles
+  - [ ] Loading states
+- [ ] Interactive features
+  - [ ] Zoom and pan
+  - [ ] Data point hover
+  - [ ] Click interactions
+- [ ] Export functionality
+  - [ ] Download as PNG/SVG
+  - [ ] Copy chart data
+  - [ ] Share chart config
+
+## Phase 4: Data Processing and Analysis
+
+### 4.1 Spatial Analysis Functions
+- [ ] Spatial joins
+  - [ ] Point in polygon
+  - [ ] Polygon intersections
+  - [ ] Nearest neighbor joins
+- [ ] Buffer operations
+  - [ ] Fixed distance buffers
+  - [ ] Variable buffers
+  - [ ] Multi-ring buffers
+- [ ] Distance calculations
+  - [ ] Point-to-point distances
+  - [ ] Point-to-line distances
+  - [ ] Geodesic calculations
+- [ ] Aggregations by geometry
+  - [ ] Count points in polygons
+  - [ ] Sum/average by area
+  - [ ] Spatial grouping
+
+### 4.2 Time Series Analysis
+- [ ] Temporal filtering
+  - [ ] Date range selection
+  - [ ] Time-based queries
+  - [ ] Relative time filters
+- [ ] Time-based animations
+  - [ ] Animated map layers
+  - [ ] Playback controls
+  - [ ] Speed adjustment
+- [ ] Trend analysis
+  - [ ] Moving averages
+  - [ ] Seasonal decomposition
+  - [ ] Growth rates
+
+### 4.3 Statistical Operations
+- [ ] Descriptive statistics
+  - [ ] Mean, median, mode
+  - [ ] Standard deviation
+  - [ ] Percentiles and quartiles
+- [ ] Correlations
+  - [ ] Pearson correlation
+  - [ ] Spatial autocorrelation
+  - [ ] Cross-correlations
+- [ ] Clustering
+  - [ ] K-means clustering
+  - [ ] DBSCAN for spatial data
+  - [ ] Hierarchical clustering
+
+## Phase 5: Advanced Features
+
+### 5.1 Multi-Agent System
 - [ ] Implement specialized agents:
   ```typescript
   interface Agents {
@@ -304,3 +447,23 @@ abstract class BaseTool implements AITool {
 5. **Learning Curve**: Interactive tutorials
 
 This detailed plan incorporates the best practices from the analyzed tools while maintaining focus on our unique conversational interface approach.
+
+## Recent Updates (2025-07-09)
+
+### Phase 2 (Map Visualization) Completion
+1. **Auto-layer Creation (Kepler-inspired)**
+   - Automatically creates appropriate layers when datasets are loaded
+   - Smart layer type detection based on geometry and dataset characteristics
+   - Supports lat/lng field pair detection for CSV files
+   - Auto-zoom to layer bounds on first layer creation
+
+2. **Enhanced Layer System**
+   - BaseLayer abstract class with consistent interface
+   - PointLayer, PolygonLayer, LineLayer implementations
+   - LayerFactory for dynamic layer creation
+   - Visual channels system for data-driven styling
+
+3. **Map-Redux Integration**
+   - Viewport state management
+   - Layer configuration in Redux
+   - Automatic data loading from DuckDB

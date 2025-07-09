@@ -32,11 +32,19 @@ export function useAIChatWithTools(model?: any, apiKey?: string) {
         executeQuery,
         getTableNames: async () => {
           try {
-            const result = await executeQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'");
-            return result.map(row => row.table_name);
+            // Try SHOW TABLES first (more reliable for DuckDB)
+            const result = await executeQuery("SHOW TABLES");
+            return result.map(row => row.name);
           } catch (error) {
-            console.error('Failed to get table names:', error);
-            return [];
+            console.error('Failed to get table names with SHOW TABLES:', error);
+            // Fallback to information_schema
+            try {
+              const result = await executeQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'");
+              return result.map(row => row.table_name);
+            } catch (fallbackError) {
+              console.error('Failed to get table names from information_schema:', fallbackError);
+              return [];
+            }
           }
         },
         getTableSchema: async (tableName: string) => {

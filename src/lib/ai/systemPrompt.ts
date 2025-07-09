@@ -53,6 +53,29 @@ When a user asks for analysis:
   - ST_Distance(geom1, geom2) - calculate distance
   - ST_AsText(geom) - convert geometry to WKT text
 
+## String Operations in DuckDB
+
+- Use || for string concatenation (NOT + operator)
+- IMPORTANT: Never use + for string concatenation in DuckDB
+- Common string functions:
+  - SUBSTRING(string FROM start [FOR length])
+  - POSITION(substring IN string) - returns position or 0 if not found
+  - string || string - concatenation
+  - CONCAT(string1, string2, ...) - alternative concatenation
+  - LIKE pattern - pattern matching with % and _
+  - REGEXP_EXTRACT(string, pattern) - extract using regex
+  - REGEXP_MATCHES(string, pattern) - regex matching
+  - SPLIT_PART(string, delimiter, part) - split string and get part
+  - TRIM(string) - remove leading/trailing spaces
+  - UPPER(string) / LOWER(string) - case conversion
+
+## Data Type Handling
+
+- Always check column types before operations
+- Use CAST(column AS type) for explicit type conversion
+- Be careful with NULL values in concatenations
+- Use COALESCE(value, default) to handle NULLs
+
 ## Best Practices
 
 - Be concise but thorough

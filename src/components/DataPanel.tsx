@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { useDuckDB } from '../hooks/useDuckDB';
 import { addDataset } from '../store/slices/dataSlice';
+import { addLayer } from '../store/slices/mapSlice';
 import { 
   analyzeGeoJSONProperties, 
   createGeoJSONTableSQL, 
   createGeoJSONInsertValues 
 } from '../utils/dataProcessing';
+import { findDefaultLayers } from '../features/map/utils/findDefaultLayers';
 import './DataPanel.css';
 
 interface DataPanelProps {
@@ -16,6 +18,7 @@ interface DataPanelProps {
 function DataPanel({ onClose }: DataPanelProps) {
   const dispatch = useAppDispatch();
   const datasets = useAppSelector(state => state.data.datasets);
+  const mapLayers = useAppSelector(state => state.map.layers);
   const { isInitialized: duckdbReady, executeQuery, registerFileHandle } = useDuckDB();
   const [urlInput, setUrlInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +60,10 @@ function DataPanel({ onClose }: DataPanelProps) {
         
         // Create table with flattened properties
         const createTableSQL = createGeoJSONTableSQL(tableName, fields);
+        console.log('Creating GeoJSON table:', tableName);
+        console.log('SQL:', createTableSQL);
         await executeQuery(createTableSQL);
+        console.log('Table created successfully');
         
         // Insert features in batches
         const batchSize = 50;
@@ -66,13 +72,21 @@ function DataPanel({ onClose }: DataPanelProps) {
           const values = createGeoJSONInsertValues(batch, fields);
           
           const columnNames = ['_geojson', ...fields.map((f: { name: string }) => `"${f.name}"`), 'geom'].join(', ');
-          await executeQuery(`INSERT INTO ${tableName} (${columnNames}) VALUES ${values};`);
+          const insertSQL = `INSERT INTO ${tableName} (${columnNames}) VALUES ${values};`;
+          
+          // Log first insert for debugging
+          if (i === 0) {
+            console.log('First insert SQL:', insertSQL.substring(0, 500) + '...');
+          }
+          
+          await executeQuery(insertSQL);
           
           // Log progress for large files
           if (geojsonData.features.length > 100 && i % 100 === 0) {
             console.log(`Inserted ${i + batch.length}/${geojsonData.features.length} features`);
           }
         }
+        console.log(`Finished inserting ${geojsonData.features.length} features into ${tableName}`);
         
         // Don't run the query below since we already created the table
         query = null;
@@ -99,18 +113,29 @@ function DataPanel({ onClose }: DataPanelProps) {
       const countResult = await executeQuery(`SELECT COUNT(*) as count FROM ${tableName};`);
       const rowCount = Number(countResult[0].count);
 
-      dispatch(addDataset({
+      // Create dataset
+      const newDataset = {
         id: crypto.randomUUID(),
         name: tableName,
-        type: fileExtension || 'unknown',
+        type: (fileExtension || 'unknown') as 'geojson' | 'parquet' | 'csv' | 'json' | 'unknown',
         columns: columns.map((col: any) => ({
           name: col.column_name,
           type: col.column_type,
           isGeometry: col.column_name === 'geom' || col.column_type === 'GEOMETRY'
         })),
         rowCount,
-        source: 'file'
-      }));
+        source: 'file' as const
+      };
+      
+      dispatch(addDataset(newDataset));
+      
+      // Auto-create layers for this dataset
+      const defaultLayers = findDefaultLayers(newDataset, mapLayers);
+      
+      // Add each default layer
+      defaultLayers.forEach(layer => {
+        dispatch(addLayer(layer));
+      });
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
@@ -165,7 +190,10 @@ function DataPanel({ onClose }: DataPanelProps) {
         
         // Create table with flattened properties
         const createTableSQL = createGeoJSONTableSQL(tableName, fields);
+        console.log('Creating GeoJSON table (URL):', tableName);
+        console.log('SQL:', createTableSQL);
         await executeQuery(createTableSQL);
+        console.log('Table created successfully');
         
         // Insert features in batches
         const batchSize = 50;
@@ -176,6 +204,7 @@ function DataPanel({ onClose }: DataPanelProps) {
           const columnNames = ['_geojson', ...fields.map((f: { name: string }) => `"${f.name}"`), 'geom'].join(', ');
           await executeQuery(`INSERT INTO ${tableName} (${columnNames}) VALUES ${values};`);
         }
+        console.log(`Finished inserting ${geojsonData.features.length} features into ${tableName}`);
       } else {
         // For CSV and Parquet, fetch and register as file
         const response = await fetch(urlInput);
@@ -206,18 +235,29 @@ function DataPanel({ onClose }: DataPanelProps) {
       const countResult = await executeQuery(`SELECT COUNT(*) as count FROM ${tableName};`);
       const rowCount = Number(countResult[0].count);
 
-      dispatch(addDataset({
+      // Create dataset
+      const newDataset = {
         id: crypto.randomUUID(),
         name: tableName,
-        type: fileExtension || 'unknown',
+        type: (fileExtension || 'unknown') as 'geojson' | 'parquet' | 'csv' | 'json' | 'unknown',
         columns: columns.map((col: any) => ({
           name: col.column_name,
           type: col.column_type,
           isGeometry: col.column_name === 'geom' || col.column_type === 'GEOMETRY'
         })),
         rowCount,
-        source: 'url'
-      }));
+        source: 'url' as const
+      };
+      
+      dispatch(addDataset(newDataset));
+      
+      // Auto-create layers for this dataset
+      const defaultLayers = findDefaultLayers(newDataset, mapLayers);
+      
+      // Add each default layer
+      defaultLayers.forEach(layer => {
+        dispatch(addLayer(layer));
+      });
 
       setUrlInput('');
     } catch (err) {
