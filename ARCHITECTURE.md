@@ -38,6 +38,7 @@ A modern web application that combines DuckDB-WASM's powerful analytical capabil
 App.tsx
 ├── RemoteFile.tsx        # Data loading interface
 ├── TableList.tsx         # Table & column selection
+│   └── Table.tsx        # High-performance data grid
 ├── Map.tsx              # MapLibre visualization
 ├── AIAssistant.tsx      # Claude AI integration
 └── VegaLiteChart.tsx    # Data charts
@@ -67,6 +68,13 @@ App.tsx
 - System prompt with platform-specific guidance
 - Tool definitions for SQL, charts, and map styling
 - Automatic style property correction
+
+#### 5. **Table Data Visualization** (`src/components/Table.tsx`)
+- High-performance data grid using Glide Data Grid
+- Apache Arrow integration for efficient data handling
+- Virtual scrolling for millions of rows
+- Lazy loading with window-based data fetching
+- Special handling for BigInt and BLOB types
 
 ---
 
@@ -172,6 +180,8 @@ FROM main_table GROUP BY month;
 - ✅ **Table refresh**: Updates when new data is loaded
 - ✅ **Error handling**: Clear error messages for failed operations
 - ✅ **Loading states**: Visual feedback during operations
+- ✅ **Data grid view**: High-performance table viewer in modal
+- ✅ **Scrollbar support**: Custom styled scrollbars for navigation
 
 #### 7. **Performance Optimizations**
 - ✅ **Tile caching**: Reduces redundant queries
@@ -179,6 +189,8 @@ FROM main_table GROUP BY month;
 - ✅ **Efficient JSON parsing**: Handles large property objects
 - ✅ **Worker-based DuckDB**: Non-blocking database operations
 - ✅ **Debounced updates**: Prevents excessive re-rendering
+- ✅ **Arrow-based data transfer**: Minimal data conversion overhead
+- ✅ **Virtual table scrolling**: Handles millions of rows efficiently
 
 ### 🎯 Real-World Use Cases Working Today
 
@@ -240,6 +252,20 @@ const isTemporaryTable = (name: string): boolean => {
 };
 ```
 
+### Apache Arrow Data Handling
+
+```typescript
+// Efficient data transfer without full conversion
+function convertSpecialValues(value: unknown): unknown {
+    if (typeof value === 'bigint') return value.toString();
+    if (value instanceof Uint8Array || value instanceof ArrayBuffer) return '[BLOB]';
+    return value;
+}
+
+// Window-based data loading for large datasets
+const arrowTable = await getTableDataByWindow(connection, tableName, startRow, endRow);
+```
+
 ---
 
 ## 📊 Data Flow
@@ -277,6 +303,12 @@ const isTemporaryTable = (name: string): boolean => {
 - Hides analysis tables from UI
 - Keeps them accessible for queries
 - Reduces UI clutter
+
+### 5. **High-Performance Table Viewer**
+- Glide Data Grid integration
+- Apache Arrow for data efficiency
+- Virtual scrolling for large datasets
+- Special type handling (BigInt, BLOB)
 
 ---
 
@@ -365,6 +397,7 @@ test('extracts nested JSON properties', () => {
 2. **Browser Support**: Limited to modern browsers with WASM support
 3. **Memory Constraints**: Large datasets limited by browser memory
 4. **Safari Issues**: Potential WebGL performance issues
+5. **NPM Dependencies**: Requires `--legacy-peer-deps` for React 19 compatibility
 
 ### Technical Debt
 1. **useCallback Dependencies**: Some functions need memoization
