@@ -512,6 +512,13 @@ yarn test        # Run tests
 # This ensures no TypeScript errors or build issues
 ```
 
+### My Collaboration Preferences
+- I prefer step-by-step problem analysis with todo tracking
+- Always show file locations (file:line) when referencing code
+- When debugging, explain both the problem and the solution approach
+- Include testing recommendations with all code changes
+- Once Done with changes, Always run yarn build, yarn test, update TODO.md and TODO_DETAILED.md
+
 ### Testing Data Loading
 When implementing data loading features, always test with:
 
@@ -599,13 +606,30 @@ This header is required for browser-based applications to access the Anthropic A
 - Automatic field type detection (string, number, boolean, json)
 - Added dataProcessing utilities with comprehensive tests
 
+### AI Tools Implementation
+- Created base tool framework for AI interactions
+- Implemented core tools:
+  - `describeData` - Get table schemas and metadata
+  - `executeQuery` - Run SQL queries with automatic visualization detection
+  - `createMap` - Generate map visualizations from spatial data
+- Integrated tools with Claude AI using Vercel AI SDK
+- Updated system prompt with tool usage guidelines
+- Added comprehensive tool tests
+
 ### Testing Improvements
 - Fixed all test failures
-- Added comprehensive tests for data processing
+- Added comprehensive tests for data processing and AI tools
 - Updated AI chat tests to work with mock models
 - Excluded tmp directory from test runs
+- Created integration tests for AI tools with DuckDB
 
 ### CI/CD Fixes
 - Configured Yarn 4.3.1 with proper packageManager field
 - Fixed Redux serialization issues with BigInt values
 - Ensured all builds and tests pass
+
+### AI Tools Integration Complete
+- AI tools now properly execute when users ask questions like "What data is available?"
+- Added error handling for DuckDB initialization state
+- Created comprehensive tests for tool execution flow
+- Tools integrate seamlessly with the chat interface via `useAIChatWithTools` hook

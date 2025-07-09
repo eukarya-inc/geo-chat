@@ -101,6 +101,7 @@ This is our detailed implementation plan for the GIS BI Chat Tool.
   - [ ] Line layer with variable width
 - [ ] Click interactions and tooltips
 - [ ] Zoom to data bounds
+- [ ] Apply Style Expression on Layers
 
 ### 2.2 Inline Charts in Chat
 - [ ] ECharts wrapper component

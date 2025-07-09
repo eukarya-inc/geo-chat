@@ -9,17 +9,24 @@ import duckdbReducer from '../../store/slices/duckdbSlice';
 import dataReducer from '../../store/slices/dataSlice';
 import mapReducer from '../../store/slices/mapSlice';
 
+// Mock ReactMarkdown
+vi.mock('react-markdown', () => ({
+  default: ({ children }: { children: string }) => <div className="markdown-content">{children}</div>
+}));
+
 // Create mock functions
 const mockSendMessage = vi.fn();
 const mockMessages: any[] = [];
 let mockIsLoading = false;
 
-// Mock the useAIChat hook
-vi.mock('../../features/chat/hooks/useAIChat', () => ({
-  useAIChat: () => ({
+// Mock the useAIChatWithTools hook
+vi.mock('../../features/chat/hooks/useAIChatWithTools', () => ({
+  useAIChatWithTools: () => ({
     messages: mockMessages,
     isLoading: mockIsLoading,
     sendMessage: mockSendMessage,
+    lastToolCall: null,
+    error: null,
   }),
 }));
 

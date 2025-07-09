@@ -53,7 +53,7 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
   - [x] Schema explorer (via DESCRIBE)
   - [x] Result formatter
 
-### Phase 3: AI Chat Integration (Partial) 🚧
+### Phase 3: AI Chat Integration ✅
 - [x] Setup Claude AI integration
   - [x] Configure AI SDK with Anthropic
   - [x] Create chat interface component
@@ -61,15 +61,15 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
   - [x] API key management with encryption
   - [x] Browser-based API access
   - [x] Collapsible chat panel
-- [ ] Create AI tools/functions
-  - [ ] SQL query tool
-  - [ ] Data analysis tool
-  - [ ] Visualization creation tool
-  - [ ] Map styling tool
-- [ ] Implement natural language to SQL
-  - [ ] Context-aware query generation
-  - [ ] Schema understanding
-  - [ ] Error handling and suggestions
+- [x] Create AI tools/functions
+  - [x] SQL query tool (executeQuery)
+  - [x] Data analysis tool (describeData)
+  - [x] Visualization creation tool (createMap)
+  - [ ] Map styling tool (advanced styling)
+- [x] Implement natural language to SQL
+  - [x] Context-aware query generation (via tools)
+  - [x] Schema understanding (via describeData)
+  - [x] Error handling and suggestions
 
 ### Phase 4: Map Visualization (MapLibre)
 - [ ] Setup MapLibre GL
@@ -90,6 +90,7 @@ Build an AI-powered BI tool that processes GIS data (GeoJSON, Parquet) using Duc
   - [ ] Tooltips
   - [ ] Click handlers
   - [ ] Feature selection
+- [ ] Style Expression Support
 
 ### Phase 5: Chart Integration (ECharts)
 - [ ] Setup ECharts

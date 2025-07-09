@@ -117,12 +117,19 @@ export function createMockStream(events: any[]) {
 export function createGISMockModel(options?: {
   delay?: number;
   errorRate?: number;
+  onCall?: (params: any) => void;
 }) {
-  const { delay = 0, errorRate = 0 } = options || {};
+  const { delay = 0, errorRate = 0, onCall } = options || {};
 
   return new MockLanguageModelV1({
     defaultObjectGenerationMode: 'tool',
-    doStream: async ({ prompt }) => {
+    doStream: async (params) => {
+      // Call the onCall callback if provided to capture params
+      if (onCall) {
+        onCall(params);
+      }
+      
+      const { prompt } = params;
       const messages = prompt;
       const lastMessageContent = messages[messages.length - 1].content;
       const lastMessage = typeof lastMessageContent === 'string' 

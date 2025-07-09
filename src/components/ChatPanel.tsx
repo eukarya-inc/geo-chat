@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAIChat } from '../features/chat/hooks/useAIChat';
+import ReactMarkdown from 'react-markdown';
+import { useAIChatWithTools } from '../features/chat/hooks/useAIChatWithTools';
 import { ApiKeyConfig } from './ApiKeyConfig';
+import { ToolResultDisplay } from './ToolResultDisplay';
 import { retrieveEncryptedApiKey } from '../utils/encryption';
 import './ChatPanel.css';
 
@@ -9,7 +11,7 @@ function ChatPanel() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { messages, isLoading, sendMessage } = useAIChat(undefined, apiKey || undefined);
+  const { messages, isLoading, sendMessage } = useAIChatWithTools(undefined, apiKey || undefined);
 
   useEffect(() => {
     checkApiKey();
@@ -87,7 +89,18 @@ function ChatPanel() {
             ) : (
               messages.map(message => (
                 <div key={message.id} className={`chat-message ${message.role}`}>
-                  <div className="message-content">{message.content}</div>
+                  <div className="message-content">
+                    {message.role === 'assistant' ? (
+                      <>
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                        {message.toolCalls && message.toolCalls.map((toolCall, idx) => (
+                          <ToolResultDisplay key={idx} toolCall={toolCall} />
+                        ))}
+                      </>
+                    ) : (
+                      message.content
+                    )}
+                  </div>
                 </div>
               ))
             )}

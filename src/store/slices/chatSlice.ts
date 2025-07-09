@@ -10,6 +10,11 @@ export interface Message {
     visualization?: any;
     error?: string;
   };
+  toolCalls?: Array<{
+    name: string;
+    args: any;
+    result: any;
+  }>;
 }
 
 interface ChatState {
