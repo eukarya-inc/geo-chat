@@ -65,6 +65,34 @@ If a table already exists for the data, use it directly instead of recreating it
 
 When you create new tables using CREATE TABLE statements, they will automatically appear in the table list on the right side of the interface, allowing users to select and visualize them on the map.
 
+## Creating Temporary Analysis Tables
+
+When creating tables for analysis or visualization purposes:
+
+1. **Use prefixes for temporary tables**: Tables starting with 'temp_', 'tmp_', or ending with '_timeline', '_stats', '_analysis' will be hidden from the table list UI but remain accessible for queries and charts
+
+2. **Ensure table creation succeeds**:
+   \`\`\`sql
+   -- Always check if creation was successful
+   CREATE TABLE temp_analysis AS SELECT ...;
+   SELECT COUNT(*) FROM temp_analysis; -- Verify table exists
+   \`\`\`
+
+3. **For Vega-Lite charts**: Temporary tables ARE accessible even if hidden from the UI:
+   \`\`\`sql
+   CREATE TABLE temp_timeline AS 
+   SELECT date_column, COUNT(*) as count 
+   FROM main_table 
+   GROUP BY date_column;
+   
+   -- This table can be used in vega_lite_chart even though it's hidden from the table list
+   \`\`\`
+
+4. **Best practices**:
+   - Prefix analysis tables with 'temp_' to keep the UI clean
+   - Always verify table creation before using in charts
+   - Use meaningful suffixes like '_by_category', '_daily_stats', etc.
+
 ## Working with Large Datasets
 
 When query results contain many rows:
@@ -108,11 +136,22 @@ Common style modifications:
 - Change colors: Update fill-color, line-color, or circle-color properties
 - Adjust opacity: Modify fill-opacity, line-opacity to make features transparent
 - Control visibility: Set visibility to 'visible' or 'none' to show/hide layers
-- Conditional styling: Use MapLibre GL expressions for data-driven styling:
-  * Basic conditional: ["case", ["<", ["get", "property"], 100], "red", "blue"]
-  * Multi-condition: ["case", ["<", ["get", "pop"], 1000], "#fee", ["<", ["get", "pop"], 10000], "#fcc", "#f00"]
-  * Categorical: ["case", ["==", ["get", "type"], "urban"], "red", ["==", ["get", "type"], "rural"], "green", "gray"]
-  * Interpolated: ["interpolate", ["linear"], ["get", "value"], 0, "blue", 100, "red"]
+- Conditional styling: Use MapLibre GL expressions for data-driven styling
+
+**CRITICAL: Property Access in Styles**
+When accessing properties from JSON columns in styles, use DIRECT property access:
+- CORRECT: ["get", "都道府県名"]
+- CORRECT: ["get", "prefecture"]
+- INCORRECT: ["get", "properties", ["get", "都道府県名"]]
+- INCORRECT: ["get", ["get", "都道府県名", ["get", "properties"]]]
+
+The system automatically extracts JSON properties when the 'properties' column is selected, making them directly accessible.
+
+Examples of correct style expressions:
+- Basic conditional: ["case", ["<", ["get", "population"], 100], "red", "blue"]
+- Multi-condition: ["case", ["<", ["get", "count"], 10], "#fee", ["<", ["get", "count"], 50], "#fcc", "#f00"]
+- Categorical by prefecture: ["match", ["get", "都道府県名"], "東京都", "red", "大阪府", "blue", "gray"]
+- Check property exists: ["case", ["has", "category"], ["get", "category"], "default"]
 
 ## Geocoding
 
