@@ -70,7 +70,27 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
             console.log('TableList: Fetching tables');
             const conn = await db.connect();
             const result = await conn.query('SHOW TABLES;');
-            const tableNames = result.toArray().map(row => row.name);
+            const allTableNames = result.toArray().map(row => row.name);
+            
+            // Filter out temporary analysis tables
+            const isTemporaryTable = (name: string): boolean => {
+                const lowerName = name.toLowerCase();
+                return (
+                    lowerName.startsWith('temp_') ||
+                    lowerName.startsWith('tmp_') ||
+                    lowerName.endsWith('_temp') ||
+                    lowerName.endsWith('_tmp') ||
+                    lowerName.endsWith('_timeline') ||
+                    lowerName.endsWith('_stats') ||
+                    lowerName.endsWith('_analysis') ||
+                    lowerName.includes('_accidents') || // e.g., prefecture_accidents
+                    lowerName === 'incident_dates' ||
+                    lowerName === 'incident_timeline'
+                );
+            };
+            
+            const tableNames = allTableNames.filter(name => !isTemporaryTable(name));
+            console.log(`TableList: Filtered ${allTableNames.length} tables to ${tableNames.length} (hidden ${allTableNames.length - tableNames.length} temporary tables)`);
 
             const tablesWithInfo: TableInfo[] = [];
             for (const tableName of tableNames) {
