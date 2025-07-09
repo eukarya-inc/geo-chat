@@ -44,11 +44,21 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                 ...prev,
                 [tableName]: columns,
             }));
+            
+            // Auto-select "properties" column if it exists and no columns are selected yet
+            const hasPropertiesColumn = columns.some(col => col.name === 'properties');
+            const currentlySelectedColumns = selectedColumns[tableName] || [];
+            
+            if (hasPropertiesColumn && currentlySelectedColumns.length === 0) {
+                console.log(`Auto-selecting "properties" column for table: ${tableName}`);
+                onColumnSelect(tableName, ['properties']);
+            }
+            
             await conn.close();
         } catch (err) {
             console.error('Error fetching table columns:', err);
         }
-    }, [db]);
+    }, [db, selectedColumns, onColumnSelect]);
 
     const fetchTables = useCallback(async () => {
         if (!db) {
