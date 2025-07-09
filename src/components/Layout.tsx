@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ChatPanel from './ChatPanel';
-import { MapView } from './map';
+import { MapView } from './map/MapView';
 import DataPanel from './DataPanel';
 import { DuckDBStatus } from './DuckDBStatus';
 import './Layout.css';

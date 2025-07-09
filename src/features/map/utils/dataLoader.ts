@@ -62,15 +62,31 @@ export async function loadDataForLayer(datasetId: string): Promise<DataLoaderRes
     // Find geometry column
     const geometryColumn = dataset.columns.find(col => col.isGeometry)?.name;
     
-    // Parse geometry if it's in WKT or GeoJSON text format
+    // Convert DuckDB proxy objects to plain objects and parse geometry
     const processedData = data.map((row: any) => {
-      const processedRow = { ...row };
+      const processedRow: any = {};
       
-      if (geometryColumn && row[geometryColumn]) {
+      // Convert proxy objects and handle BigInt
+      for (const key in row) {
+        const value = row[key];
+        if (typeof value === 'bigint') {
+          processedRow[key] = value.toString();
+        } else if (value && typeof value === 'object' && value.constructor.name === 'Proxy') {
+          // Handle DuckDB proxy objects
+          processedRow[key] = JSON.parse(JSON.stringify(value, (_, v) => 
+            typeof v === 'bigint' ? v.toString() : v
+          ));
+        } else {
+          processedRow[key] = value;
+        }
+      }
+      
+      // Parse geometry if it's in WKT or GeoJSON text format
+      if (geometryColumn && processedRow[geometryColumn]) {
         try {
           // Try to parse as JSON (GeoJSON)
-          if (typeof row[geometryColumn] === 'string') {
-            processedRow[geometryColumn] = JSON.parse(row[geometryColumn]);
+          if (typeof processedRow[geometryColumn] === 'string') {
+            processedRow[geometryColumn] = JSON.parse(processedRow[geometryColumn]);
           }
         } catch (e) {
           // If not JSON, might be WKT or already parsed

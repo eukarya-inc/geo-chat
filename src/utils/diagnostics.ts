@@ -10,8 +10,8 @@ export async function runDuckDBDiagnostics(executeQuery: (sql: string) => Promis
     try {
       const spatialTest = await executeQuery("SELECT ST_AsText(ST_Point(0, 0)) as test_point");
       diagnostics.spatialExtension = { loaded: true, test: spatialTest };
-    } catch (e) {
-      diagnostics.spatialExtension = { loaded: false, error: (e as Error).message };
+    } catch (_e) {
+      diagnostics.spatialExtension = { loaded: false, error: (_e as Error).message };
     }
     
     // 2. List all tables
@@ -23,8 +23,8 @@ export async function runDuckDBDiagnostics(executeQuery: (sql: string) => Promis
         ORDER BY table_name
       `);
       diagnostics.allTables = tables;
-    } catch (e) {
-      diagnostics.allTables = { error: (e as Error).message };
+    } catch (_e) {
+      diagnostics.allTables = { error: (_e as Error).message };
     }
     
     // 3. Check information_schema tables
@@ -36,8 +36,8 @@ export async function runDuckDBDiagnostics(executeQuery: (sql: string) => Promis
         ORDER BY table_name
       `);
       diagnostics.informationSchemaTables = infoTables;
-    } catch (e) {
-      diagnostics.informationSchemaTables = { error: (e as Error).message };
+    } catch (_e) {
+      diagnostics.informationSchemaTables = { error: (_e as Error).message };
     }
     
     // 4. Try different table name patterns for UAV data
@@ -52,7 +52,7 @@ export async function runDuckDBDiagnostics(executeQuery: (sql: string) => Promis
       try {
         const exists = await executeQuery(`SELECT * FROM ${tableName} LIMIT 1`);
         diagnostics[`table_${tableName}`] = { exists: true, sample: exists };
-      } catch (e) {
+      } catch (_e) {
         diagnostics[`table_${tableName}`] = { exists: false };
       }
     }
@@ -65,8 +65,8 @@ export async function runDuckDBDiagnostics(executeQuery: (sql: string) => Promis
         WHERE type = 'table' AND LOWER(table_name) LIKE '%uav%'
       `);
       diagnostics.uavTables = uavTables;
-    } catch (e) {
-      diagnostics.uavTables = { error: (e as Error).message };
+    } catch (_e) {
+      diagnostics.uavTables = { error: (_e as Error).message };
     }
     
   } catch (error) {

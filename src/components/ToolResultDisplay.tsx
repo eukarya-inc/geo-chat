@@ -125,7 +125,9 @@ export function ToolResultDisplay({ toolCall }: ToolResultDisplayProps) {
           fontSize: '0.85em',
           marginTop: '4px'
         }}>
-          {JSON.stringify(result, null, 2)}
+          {JSON.stringify(result, (_, value) => 
+            typeof value === 'bigint' ? value.toString() : value
+          , 2)}
         </pre>
       </details>
     </div>

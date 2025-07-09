@@ -122,7 +122,7 @@ export class CreateMapTool extends BaseTool {
       store.dispatch(addLayer(layerConfig));
 
       // Calculate bounds for zooming
-      let bounds = null;
+      const bounds = null;
       if (geomColumn && data[0][geomColumn.name]) {
         // TODO: Calculate bounds from geometry
       }

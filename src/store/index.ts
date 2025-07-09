@@ -15,9 +15,16 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         // Ignore these action types
-        ignoredActions: ['duckdb/initializeDuckDB/fulfilled'],
+        ignoredActions: [
+          'duckdb/initializeDuckDB/fulfilled',
+          'chat/addMessage',
+        ],
         // Ignore these paths in the state
-        ignoredPaths: ['duckdb.instance', 'duckdb.connection'],
+        ignoredPaths: [
+          'duckdb.instance', 
+          'duckdb.connection',
+          'chat.messages',
+        ],
       },
     }),
 });

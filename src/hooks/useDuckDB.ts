@@ -12,7 +12,27 @@ export function useDuckDB() {
     
     try {
       const result = await connection.query(sql);
-      return result.toArray();
+      const array = result.toArray();
+      
+      // Convert DuckDB proxy objects to plain objects and handle BigInt
+      return array.map((row: any) => {
+        const plainRow: any = {};
+        for (const key in row) {
+          const value = row[key];
+          // Convert BigInt to string for JSON serialization
+          if (typeof value === 'bigint') {
+            plainRow[key] = value.toString();
+          } else if (value && typeof value === 'object' && value.constructor.name === 'Proxy') {
+            // Handle DuckDB proxy objects by converting to plain object
+            plainRow[key] = JSON.parse(JSON.stringify(value, (_, v) => 
+              typeof v === 'bigint' ? v.toString() : v
+            ));
+          } else {
+            plainRow[key] = value;
+          }
+        }
+        return plainRow;
+      });
     } catch (error) {
       console.error('Query error:', error);
       throw error;
