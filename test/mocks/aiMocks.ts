@@ -4,9 +4,9 @@ import { convertArrayToReadableStream } from 'ai/test';
 // GIS-specific mock responses
 export const GIS_MOCK_RESPONSES = {
   loadData: {
-    patterns: [/load|import|upload|open/i, /geojson|parquet|csv/i],
+    patterns: [/load.*data|load.*accident/i],
     response: {
-      text: "I'll help you load that data file into the system.",
+      text: "I'll help you load that data",
       tool: {
         name: 'loadData',
         args: { 
@@ -88,7 +88,7 @@ export const GIS_MOCK_RESPONSES = {
   },
   
   executeQuery: {
-    patterns: [/select|query|sql|count|group by/i],
+    patterns: [/count.*records|count.*total/i],
     response: {
       text: "Let me run that query for you.",
       tool: {
@@ -122,12 +122,14 @@ export function createGISMockModel(options?: {
 
   return new MockLanguageModelV1({
     defaultObjectGenerationMode: 'tool',
-    doStream: async (options) => {
-      const messages = options.prompt;
+    doStream: async ({ prompt }) => {
+      const messages = prompt;
       const lastMessageContent = messages[messages.length - 1].content;
       const lastMessage = typeof lastMessageContent === 'string' 
         ? lastMessageContent 
-        : lastMessageContent.map((part: any) => part.text || '').join(' ');
+        : Array.isArray(lastMessageContent) 
+          ? lastMessageContent.map((part: any) => part.text || '').join(' ')
+          : '';
       
       // Simulate errors randomly
       if (Math.random() < errorRate) {

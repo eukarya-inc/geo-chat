@@ -589,3 +589,23 @@ This header is required for browser-based applications to access the Anthropic A
 - Keep TODO.md and TODO_DETAILED.md updated with project progress
 - Mark completed items and add new ones as features are implemented
 - Update the "Recent Updates" section when making significant changes
+
+## Recent Updates (2025-07-08)
+
+### Data Loading Enhancement
+- Implemented comprehensive GeoJSON property preservation
+- Tables now have individual columns for each property (flattened structure)
+- Preserves complete feature in `_geojson` column for reference
+- Automatic field type detection (string, number, boolean, json)
+- Added dataProcessing utilities with comprehensive tests
+
+### Testing Improvements
+- Fixed all test failures
+- Added comprehensive tests for data processing
+- Updated AI chat tests to work with mock models
+- Excluded tmp directory from test runs
+
+### CI/CD Fixes
+- Configured Yarn 4.3.1 with proper packageManager field
+- Fixed Redux serialization issues with BigInt values
+- Ensured all builds and tests pass

@@ -32,13 +32,15 @@ export function useAIChat(model?: any, apiKey?: string) {
       }));
 
       // For testing, use provided model or create real one
-      const anthropic = createAnthropic({
-        apiKey: apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY,
-        headers: {
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-      });
-      const aiModel = model || anthropic('claude-3-5-sonnet-20241022');
+      const aiModel = model || (() => {
+        const anthropic = createAnthropic({
+          apiKey: apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY,
+          headers: {
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+        });
+        return anthropic('claude-3-5-sonnet-20241022');
+      })();
 
       // Convert our messages to CoreMessage format
       const coreMessages: CoreMessage[] = messages.map(m => ({

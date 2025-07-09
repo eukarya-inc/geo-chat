@@ -66,7 +66,9 @@ describe('useDuckDB', () => {
   });
 
   it('should execute queries when DuckDB is initialized', async () => {
-    const mockQuery = vi.fn().mockResolvedValue([{ count: 42 }]);
+    const mockQuery = vi.fn().mockResolvedValue({
+      toArray: () => [{ count: 42 }]
+    });
     const mockConnection = { query: mockQuery, close: vi.fn() };
     
     // Set up initialized state
@@ -145,6 +147,7 @@ describe('useDuckDB', () => {
     const file = new File(['test'], 'test.csv', { type: 'text/csv' });
     await result.current.registerFileHandle('test.csv', file);
 
-    expect(mockRegisterFileHandle).toHaveBeenCalledWith('test.csv', file);
+    expect(mockRegisterFileHandle).toHaveBeenCalledWith('test.csv', file, 2, true);
   });
 });
+
