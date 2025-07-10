@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
 import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../utils/duckdbTableUtils";
 import { Table as ArrowTable } from "apache-arrow";
+import { throttle } from "../utils/throttle";
 import "@glideapps/glide-data-grid/dist/index.css";
 
 // CSS to ensure scrollbars are visible
@@ -47,6 +48,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
   const [totalRows, setTotalRows] = useState(0);
   const [arrowCache] = useState(new Map<string, ArrowTable>());
   const [loading, setLoading] = useState(true);
+  const loadingWindowsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -84,18 +86,32 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
       const windowEnd = windowStart + windowSize;
       
       const cacheKey = `window-${windowStart}-${windowEnd}`;
-      if (arrowCache.has(cacheKey)) {
+      
+      // Check if already cached or currently loading
+      if (arrowCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
         return;
       }
+      
+      // Mark as loading
+      loadingWindowsRef.current.add(cacheKey);
       
       try {
         const arrowTable = await getTableDataByWindow(connection, tableName, windowStart, windowEnd);
         arrowCache.set(cacheKey, arrowTable);
       } catch (error) {
         console.error("Error loading data window:", error);
+      } finally {
+        // Remove from loading set
+        loadingWindowsRef.current.delete(cacheKey);
       }
     },
     [connection, tableName, arrowCache]
+  );
+
+  // Create a throttled version of loadDataWindow
+  const throttledLoadDataWindow = useMemo(
+    () => throttle(loadDataWindow, 200),
+    [loadDataWindow]
   );
 
   const getCellContent = useCallback(
@@ -110,11 +126,12 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
       
       const arrowTable = arrowCache.get(cacheKey);
       if (!arrowTable) {
-        loadDataWindow(row);
+        // Try to load data but don't block - show empty cell instead
+        throttledLoadDataWindow(row);
         return {
           kind: GridCellKind.Text,
-          data: "Loading...",
-          displayData: "Loading...",
+          data: "",
+          displayData: "",
           allowOverlay: false,
         };
       }
@@ -132,7 +149,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
         allowOverlay: true,
       };
     },
-    [arrowCache, loadDataWindow]
+    [arrowCache, throttledLoadDataWindow]
   );
 
   const onVisibleRegionChanged = useCallback(
@@ -143,10 +160,18 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
       height: number;
     }) => {
       const startRow = range.y;
+      const endRow = Math.min(range.y + range.height + 20, totalRows);
       
+      // Load current window immediately
       loadDataWindow(startRow);
+      
+      // Pre-load adjacent windows with throttling
+      const windowSize = 100;
+      for (let row = startRow; row < endRow; row += windowSize) {
+        throttledLoadDataWindow(row);
+      }
     },
-    [loadDataWindow]
+    [loadDataWindow, throttledLoadDataWindow, totalRows]
   );
 
   if (loading) {
