@@ -1,6 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
 export function createDataAnalysisTool(db: AsyncDuckDB) {
   return tool({
@@ -41,14 +42,18 @@ Capabilities:
                 ORDER BY ordinal_position
               `);
               
-              const columns = schemaResult.toArray();
+              const columns = convertBigIntToString(schemaResult.toArray()) as Array<{
+                column_name: string;
+                data_type: string;
+                is_nullable: string;
+              }>;
               
               // Get row count
               const countResult = await conn.query(`SELECT COUNT(*) as total_rows FROM "${table_name}"`);
-              const countArray = countResult.toArray();
-              const totalRows = typeof countArray[0].total_rows === 'bigint' 
-                ? countArray[0].total_rows.toString() 
-                : countArray[0].total_rows;
+              const countArray = convertBigIntToString(countResult.toArray()) as Array<{
+                total_rows: string | number;
+              }>;
+              const totalRows = countArray[0].total_rows;
               
               return {
                 success: true,
@@ -75,7 +80,10 @@ Capabilities:
                 WHERE table_name = '${table_name}' AND column_name = '${column_name}'
               `);
               
-              const columnType = typeResult.toArray()[0]?.data_type;
+              const columnTypeResult = convertBigIntToString(typeResult.toArray()) as Array<{
+                data_type: string;
+              }>;
+              const columnType = columnTypeResult[0]?.data_type;
               if (!columnType) {
                 return { success: false, error: `Column "${column_name}" not found in table "${table_name}"` };
               }
@@ -98,15 +106,8 @@ Capabilities:
                   FROM "${table_name}"
                 `);
                 
-                const stats = statsResult.toArray()[0];
-                // Convert BigInt values to strings for JSON serialization
-                const convertedStats = Object.fromEntries(
-                  Object.entries(stats).map(([key, value]) => [
-                    key,
-                    typeof value === 'bigint' ? value.toString() : value
-                  ])
-                );
-                analysis = { ...analysis, ...convertedStats };
+                const stats = (convertBigIntToString(statsResult.toArray()) as Array<Record<string, unknown>>)[0];
+                analysis = { ...analysis, ...stats };
               } else {
                 // For text/categorical columns, get unique values
                 const uniqueResult = await conn.query(`
@@ -120,9 +121,12 @@ Capabilities:
                   LIMIT 20
                 `);
                 
-                const uniqueValues = uniqueResult.toArray().map(row => ({
+                const uniqueValues = (convertBigIntToString(uniqueResult.toArray()) as Array<{
+                  value: unknown;
+                  count: string | number;
+                }>).map(row => ({
                   value: row.value,
-                  count: typeof row.count === 'bigint' ? row.count.toString() : row.count
+                  count: row.count
                 }));
                 analysis.unique_values = uniqueValues;
                 analysis.total_unique = uniqueValues.length;
@@ -141,7 +145,7 @@ Capabilities:
                 LIMIT ${limit}
               `);
               
-              const sampleData = sampleResult.toArray();
+              const sampleData = convertBigIntToString(sampleResult.toArray()) as Array<Record<string, unknown>>;
               
               return {
                 success: true,

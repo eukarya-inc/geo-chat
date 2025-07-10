@@ -2,6 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
+import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
 export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager) {
   return tool({
@@ -13,7 +14,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
       try {
         // Check if this is a DDL operation
         const upperSql = sql.trim().toUpperCase();
-        const isTableOperation = upperSql.includes('CREATE TABLE') || 
+        const isTableOperation = upperSql.includes('CREATE TABLE') ||
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
@@ -22,18 +23,10 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
         const conn = await db.connect();
         try {
           const result = await conn.query(sql);
-          
-          const data = result.toArray().map(row => {
-            const obj = Object.fromEntries(row);
-            // Convert BigInt values to strings for JSON serialization
-            return Object.fromEntries(
-              Object.entries(obj).map(([key, value]) => [
-                key,
-                typeof value === 'bigint' ? value.toString() : value
-              ])
-            );
-          });
-        
+
+          // Convert BigInt values immediately after getting the result
+          const data = convertBigIntToString(result.toArray());
+
           // Simple table refresh for DDL operations
           if (isTableOperation && dbStateManager) {
             console.log('DuckDBTool: Table operation detected, triggering refresh');
@@ -41,7 +34,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
               dbStateManager.notifyTableChange();
             }, 100);
           }
-          
+
           // Add metadata for large datasets
           const metadata: {
             success: boolean;
@@ -57,13 +50,13 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             rowCount: data.length,
             sql: sql
           };
-          
+
           // Add column info for better understanding
           if (data.length > 0) {
             metadata.columns = Object.keys(data[0]);
             metadata.columnCount = metadata.columns.length;
           }
-          
+
           // Add suggestions for large datasets
           if (data.length > 100) {
             metadata.suggestions = [
@@ -79,14 +72,14 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
               '集計関数でデータの概要を把握できます'
             ];
           }
-          
+
           return metadata;
         } finally {
           await conn.close();
         }
       } catch (error) {
         let errorMessage = 'Unknown error occurred';
-        
+
         if (error instanceof Error) {
           errorMessage = error.message;
         } else if (typeof error === 'object' && error !== null) {
@@ -98,7 +91,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
         } else {
           errorMessage = String(error);
         }
-        
+
         return {
           error: errorMessage,
           sql: sql
@@ -127,10 +120,10 @@ COMMON PATTERNS:
 
 \`\`\`sql
 -- Analyze existing data instead of creating new tables
-SELECT properties->>'都道府県名' as prefecture, COUNT(*) as accident_count 
-FROM uc16_01_uav_accident 
-WHERE properties->>'都道府県名' IS NOT NULL 
-GROUP BY properties->>'都道府県名' 
+SELECT properties->>'都道府県名' as prefecture, COUNT(*) as accident_count
+FROM uc16_01_uav_accident
+WHERE properties->>'都道府県名' IS NOT NULL
+GROUP BY properties->>'都道府県名'
 ORDER BY accident_count DESC;
 \`\`\`
 
