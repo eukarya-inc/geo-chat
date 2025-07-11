@@ -25,7 +25,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           const result = await conn.query(sql);
 
           // Convert BigInt values immediately after getting the result
-          const data = convertBigIntToString(result.toArray());
+          const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
           if (isTableOperation && dbStateManager) {
