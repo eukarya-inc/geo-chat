@@ -1,12 +1,14 @@
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useState } from 'react';
+import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
 interface RemoteFileSimpleProps {
     db: AsyncDuckDB;
+    dbStateManager?: DBStateManager;
     onTableCreated?: (tableName: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, onTableCreated }) => {
+const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager, onTableCreated }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -60,8 +62,14 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, onTableCreated 
                 from = `st_read('${targetUrl}')`;
             }
 
-            await conn.query(`CREATE TABLE ${tableName} AS SELECT * FROM ${from}`);
+            const createTableSQL = `CREATE TABLE ${tableName} AS SELECT * FROM ${from}`;
+            await conn.query(createTableSQL);
             await conn.query('CHECKPOINT;');
+
+            // Record the CREATE TABLE SQL in history
+            if (dbStateManager) {
+                dbStateManager.getSQLHistory().recordCreateTable(tableName, createTableSQL, 'remote-file');
+            }
 
             console.log('Table created and checkpoint executed:', tableName);
 

@@ -49,6 +49,11 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
               const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/i);
               if (tableNameMatch) {
                 createdTableName = tableNameMatch[2];
+                
+                // Record the CREATE TABLE SQL in history
+                if (dbStateManager) {
+                  dbStateManager.getSQLHistory().recordCreateTable(createdTableName, sql, 'ai-chat');
+                }
               }
             }
             
