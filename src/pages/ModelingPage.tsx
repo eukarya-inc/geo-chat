@@ -1,39 +1,20 @@
 import { useState, useEffect } from 'react';
-import AIChat from '../components/AIChat';
-import MapComponent from '../components/Map';
-import RemoteFile from '../components/RemoteFile';
-import TableList from '../components/TableList';
+import AIChat from '../components/AIChatModeling';
+import { Table } from '../components/Table';
+import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import RemoteFileSimple from '../components/RemoteFileSimple';
+import TableSelector from '../components/TableSelector';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
-import { terminateGlobalDB } from '../lib/duckdb/globalDB';
-import type { MapStyleManager } from '../utils/mapStyleManager';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
-    const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({});
-    const [mapStyleManager, setMapStyleManager] = useState<MapStyleManager | null>(null);
+    const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
     const [apiKey, setApiKey] = useState<string>('');
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
-
-    const handleColumnSelect = (tableName: string, columns: string[]) => {
-        console.log('ModelingPage: Column selection changed for table:', tableName, 'columns:', columns);
-        setSelectedColumns(prev => ({
-            ...prev,
-            [tableName]: columns,
-        }));
-    };
-
-    const handleMapReady = (styleManager: MapStyleManager) => {
-        console.log('ModelingPage: Map ready, style manager initialized');
-        setMapStyleManager(styleManager);
-    };
-
-    const handleTableSelect = (tableName: string) => {
-        const actualTable = tableName === '' ? null : tableName;
-        setSelectedTable(actualTable);
-    };
+    const [tableRefreshKey, setTableRefreshKey] = useState(0);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -63,22 +44,46 @@ function ModelingPage() {
         initializeApiKey();
     }, []);
 
-    // Log state changes for debugging
+    // Set up connection
     useEffect(() => {
-        console.log('ModelingPage: selectedTable changed to:', selectedTable);
-    }, [selectedTable]);
+        let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
 
-    useEffect(() => {
-        console.log('ModelingPage: selectedColumns changed to:', selectedColumns);
-    }, [selectedColumns]);
-
-    // Cleanup global DB on component unmount
-    useEffect(() => {
-        return () => {
-            terminateGlobalDB();
+        const createConnection = async () => {
+            if (db) {
+                try {
+                    const conn = await db.connect();
+                    currentConnection = conn;
+                    setConnection(conn);
+                } catch (err) {
+                    console.error('Error creating connection:', err);
+                }
+            } else {
+                setConnection(null);
+            }
         };
-    }, []);
 
+        createConnection();
+
+        return () => {
+            if (currentConnection) {
+                currentConnection.close().catch(console.error);
+            }
+        };
+    }, [db]);
+
+    // Subscribe to table changes from dbStateManager
+    useEffect(() => {
+        if (!dbStateManager) return;
+
+        const unsubscribe = dbStateManager.onTableChange(() => {
+            console.log('ModelingPage: Table change detected, refreshing TableSelector');
+            setTableRefreshKey(prev => prev + 1);
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [dbStateManager]);
 
     return (
         <div className="flex h-full w-full overflow-hidden">
@@ -112,8 +117,8 @@ function ModelingPage() {
                                 }}
                                 disabled={!apiKey.trim()}
                                 className={`px-4 py-2 text-white border-none rounded text-sm ${
-                                    apiKey.trim() 
-                                        ? 'bg-blue-500 cursor-pointer hover:bg-blue-600' 
+                                    apiKey.trim()
+                                        ? 'bg-blue-500 cursor-pointer hover:bg-blue-600'
                                         : 'bg-gray-400 cursor-not-allowed'
                                 }`}
                             >
@@ -134,46 +139,40 @@ function ModelingPage() {
                     <AIChat
                         db={db}
                         dbStateManager={dbStateManager || undefined}
-                        mapStyleManager={mapStyleManager || undefined}
                         apiKey={apiKey}
                     />
                 )}
             </div>
 
-            {/* Right Half - DuckDB and Map */}
+            {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
                 <div className="flex flex-col gap-4 p-2.5 flex-shrink-0 bg-white">
-                    {db && <RemoteFile db={db} onTableCreated={(tableName) => {
-                        console.log('ModelingPage: Table created, auto-selecting:', tableName);
+                    {db && <RemoteFileSimple db={db} onTableCreated={(tableName) => {
                         setSelectedTable(tableName);
-                        // Also trigger TableList refresh via dbStateManager
                         if (dbStateManager) {
-                            console.log('ModelingPage: Triggering TableList refresh via dbStateManager');
                             dbStateManager.notifyTableChange();
                         }
                     }} />}
-                    {db && (
-                        <TableList
-                            key="modeling-table-list"
-                            db={db}
-                            dbStateManager={dbStateManager || undefined}
+                    {connection && (
+                        <TableSelector
+                            connection={connection}
+                            refreshTrigger={tableRefreshKey}
                             selectedTable={selectedTable}
-                            onTableSelect={handleTableSelect}
-                            selectedColumns={selectedColumns}
-                            onColumnSelect={handleColumnSelect}
+                            onTableSelect={setSelectedTable}
                         />
                     )}
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    {db && (
-                        <MapComponent
-                            key="modeling-map"
-                            db={db}
-                            selectedTable={selectedTable}
-                            selectedColumns={selectedColumns[selectedTable || ''] || []}
-                            onMapReady={handleMapReady}
-                            mapStyleManager={mapStyleManager || undefined}
+                    {db && selectedTable && connection && (
+                        <Table
+                            connection={connection}
+                            tableName={selectedTable}
                         />
+                    )}
+                    {db && !selectedTable && (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                            テーブルを選択してください
+                        </div>
                     )}
                 </div>
             </div>
