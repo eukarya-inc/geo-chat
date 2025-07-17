@@ -29,10 +29,19 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           if (isTableOperation) {
             await conn.query('CHECKPOINT;');
             
+            // Extract table name from CREATE TABLE statements
+            let createdTableName: string | undefined;
+            if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
+              const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/i);
+              if (tableNameMatch) {
+                createdTableName = tableNameMatch[2];
+              }
+            }
+            
             if (dbStateManager) {
               // Increased timeout to ensure table is fully committed
               setTimeout(() => {
-                dbStateManager.notifyTableChange();
+                dbStateManager.notifyTableChange(createdTableName);
               }, 500);
             }
           }

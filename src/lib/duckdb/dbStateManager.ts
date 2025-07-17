@@ -2,8 +2,8 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 
 export interface DBStateManager {
   forceConsistency(): Promise<void>;
-  notifyTableChange(): void;
-  onTableChange(callback: () => void): () => void;
+  notifyTableChange(tableName?: string): void;
+  onTableChange(callback: (tableName?: string) => void): () => void;
   executeWithRefresh<T>(operation: () => Promise<T>, tableName?: string): Promise<T>;
   validateTable(tableName: string, maxRetries?: number): Promise<boolean>;
   getTables(): Promise<string[]>;
@@ -14,7 +14,7 @@ export interface DBStateManager {
 
 class DatabaseStateManager implements DBStateManager {
   private db: AsyncDuckDB;
-  private tableChangeCallbacks: Set<() => void> = new Set();
+  private tableChangeCallbacks: Set<(tableName?: string) => void> = new Set();
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
 
   constructor(db: AsyncDuckDB) {
@@ -47,19 +47,19 @@ class DatabaseStateManager implements DBStateManager {
     }
   }
 
-  notifyTableChange(): void {
+  notifyTableChange(tableName?: string): void {
     // DISABLED DEBOUNCING - Execute immediately to test if debouncing was causing issues
     console.log('DBStateManager: Notifying table change IMMEDIATELY to', this.tableChangeCallbacks.size, 'listeners');
     this.tableChangeCallbacks.forEach(callback => {
       try {
-        callback();
+        callback(tableName);
       } catch (error) {
         console.error('Table change callback error:', error);
       }
     });
   }
 
-  onTableChange(callback: () => void): () => void {
+  onTableChange(callback: (tableName?: string) => void): () => void {
     this.tableChangeCallbacks.add(callback);
     return () => {
       this.tableChangeCallbacks.delete(callback);
@@ -93,7 +93,7 @@ class DatabaseStateManager implements DBStateManager {
       
       // Notify table change with longer delay to ensure propagation
       setTimeout(() => {
-        this.notifyTableChange();
+        this.notifyTableChange(tableName);
       }, 500);
       
       return result;
