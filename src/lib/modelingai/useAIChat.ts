@@ -75,12 +75,12 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           const lastRows = data.slice(-2);
           const sampleData = [...firstRows, { "...": `${rowCount - 5} more rows` }, ...lastRows];
           const dataStr = JSON.stringify(sampleData, null, 2);
-          resultText = `\n✅ **結果:** (${rowCount}行 - 抜粋表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📊 **データサマリー:** 全${rowCount}行のうち最初の3行と最後の2行を表示。完全なデータを確認するには、LIMITクエリまたは集計クエリをお試しください。\n`;
+          resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 抜粋表示)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📊 **データサマリー:** 全${rowCount}行のうち最初の3行と最後の2行を表示。完全なデータを確認するには、LIMITクエリまたは集計クエリをお試しください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
         } else if (rowCount > 20) {
           // For medium datasets, show first 10 and indicate there are more
           const firstRows = data.slice(0, 10);
           const dataStr = JSON.stringify(firstRows, null, 2);
-          resultText = `\n✅ **結果:** (${rowCount}行 - 最初の10行を表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📋 残り${rowCount - 10}行があります。すべてを確認するには、データの絞り込みまたは集計をお試しください。\n`;
+          resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 最初の10行を表示)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📋 残り${rowCount - 10}行があります。すべてを確認するには、データの絞り込みまたは集計をお試しください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
         } else {
           // For small datasets, show all data but with size limit
           const dataStr = JSON.stringify(data, null, 2);
@@ -88,9 +88,9 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           if (dataStr.length > 8000) {
             // Even small datasets can have very wide rows - truncate but show more than before
             const truncated = dataStr.substring(0, 8000) + '...';
-            resultText = `\n✅ **結果:** (${rowCount}行 - 表示が切り詰められています)\n\`\`\`json\n${truncated}\n\`\`\`\n\n⚠️ データが長すぎるため一部が省略されました。特定の列のみを選択するか、データを集計してみてください。\n`;
+            resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 表示が切り詰められています)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${truncated}\n\`\`\`\n\n⚠️ データが長すぎるため一部が省略されました。特定の列のみを選択するか、データを集計してみてください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
           } else {
-            resultText = `\n✅ **結果:** (${rowCount}行)\n\`\`\`json\n${dataStr}\n\`\`\`\n`;
+            resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
           }
         }
 
@@ -146,7 +146,17 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         },
       });
 
-      const allMessages = [...messages, userMessage];
+      // Remove HTML comment markers before sending to AI
+      const cleanMessages = (msgs: CoreMessage[]): CoreMessage[] => {
+        return msgs.map(msg => ({
+          ...msg,
+          content: typeof msg.content === 'string' 
+            ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
+            : msg.content
+        }));
+      };
+      
+      const allMessages = cleanMessages([...messages, userMessage]);
 
       const result = streamText({
         model: anthropicClient('claude-3-5-sonnet-20241022'),
