@@ -1,6 +1,7 @@
 import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useState } from 'react';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import { formatSQL } from '../utils/sqlFormatter';
 
 interface RemoteFileSimpleProps {
     db: AsyncDuckDB;
@@ -68,7 +69,8 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
 
             // Record the CREATE TABLE SQL in history
             if (dbStateManager) {
-                dbStateManager.getSQLHistory().recordCreateTable(tableName, createTableSQL, 'remote-file');
+                const formattedSQL = formatSQL(createTableSQL);
+                dbStateManager.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
             }
 
             console.log('Table created and checkpoint executed:', tableName);

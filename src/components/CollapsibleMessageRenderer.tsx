@@ -134,7 +134,7 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
                 const stableKey = `sql-${matchIndex}-${title.substring(0, 20)}`;
                 parts.push(
                     <CollapsibleSection key={stableKey} title={title} defaultOpen={defaultOpen}>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto break-all">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 rehypePlugins={[rehypeHighlight]}

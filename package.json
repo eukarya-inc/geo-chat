@@ -35,6 +35,7 @@
     "react-vega": "^7.6.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "sql-formatter": "^15.6.6",
     "tailwindcss": "^4.1.11",
     "vega": "^6.1.2",
     "vega-lite": "^6.1.0",

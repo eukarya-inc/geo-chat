@@ -1,6 +1,7 @@
 export interface SQLHistoryEntry {
   tableName: string;
   sql: string;
+  explanation?: string;
   timestamp: number;
   source: 'remote-file' | 'ai-chat' | 'manual' | 'unknown';
 }
@@ -12,19 +13,32 @@ export class SQLHistoryManager {
   /**
    * Record a CREATE TABLE SQL statement
    */
-  recordCreateTable(tableName: string, sql: string, source: SQLHistoryEntry['source'] = 'unknown'): void {
+  recordCreateTable(tableName: string, sql: string, source: SQLHistoryEntry['source'] = 'unknown', explanation?: string): void {
     // Normalize table name to lowercase for consistent lookup
     const normalizedName = tableName.toLowerCase();
     
     const entry: SQLHistoryEntry = {
       tableName: normalizedName,
       sql: sql.trim(),
+      explanation,
       timestamp: Date.now(),
       source
     };
     
     this.history.set(normalizedName, entry);
     this.notifyListeners();
+  }
+
+  /**
+   * Update explanation for existing table
+   */
+  updateExplanation(tableName: string, explanation: string): void {
+    const normalizedName = tableName.toLowerCase();
+    const existing = this.history.get(normalizedName);
+    if (existing) {
+      existing.explanation = explanation;
+      this.notifyListeners();
+    }
   }
 
   /**
