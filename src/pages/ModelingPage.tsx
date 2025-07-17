@@ -5,6 +5,7 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import RemoteFileSimple from '../components/RemoteFileSimple';
 import TableSelector from '../components/TableSelector';
 import TableSQLDisplay from '../components/TableSQLDisplay';
+import { ResizableDivider } from '../components/ResizableDivider';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
 
@@ -17,6 +18,7 @@ function ModelingPage() {
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
     const [tableRefreshKey, setTableRefreshKey] = useState(0);
     const [showTableSelector, setShowTableSelector] = useState(true);
+    const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -186,11 +188,21 @@ function ModelingPage() {
                                     tableName={selectedTable}
                                 />
                             </div>
-                            <div className="flex-shrink-0 p-2.5 bg-white border-t border-gray-200">
-                                <TableSQLDisplay
-                                    tableName={selectedTable}
-                                    dbStateManager={dbStateManager}
-                                />
+                            <ResizableDivider
+                                onResize={setSqlAreaHeight}
+                                minHeight={100}
+                                maxHeight={500}
+                            />
+                            <div 
+                                className="flex-shrink-0 bg-white border-t border-gray-200 overflow-hidden"
+                                style={{ height: `${sqlAreaHeight}px` }}
+                            >
+                                <div className="h-full p-2.5 overflow-auto">
+                                    <TableSQLDisplay
+                                        tableName={selectedTable}
+                                        dbStateManager={dbStateManager}
+                                    />
+                                </div>
                             </div>
                         </>
                     )}
