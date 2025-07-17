@@ -141,31 +141,19 @@ button:focus-visible {
   margin-bottom: 0;
 }
 
-/* Fix general word wrapping for long content */
-.whitespace-pre-wrap {
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-
 /* Force break for any long continuous text */
 .whitespace-pre-wrap,
 .prose,
 .prose p,
+.prose a,
 .prose pre,
-.prose code {
+.prose pre span,
+.prose code,
+.prose code span,
+.whitespace-pre-wrap code,
+.whitespace-pre-wrap code span,
+.whitespace-pre-wrap a {
   word-break: break-word;
   overflow-wrap: anywhere;
-  max-width: 100%;
-}
-
-/* Specific fix for inline code and links */
-.prose code,
-.prose a,
-.whitespace-pre-wrap code,
-.whitespace-pre-wrap a {
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  display: inline-block;
-  max-width: 100%;
+  white-space: pre-wrap;
 }
