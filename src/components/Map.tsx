@@ -749,7 +749,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
     }, []);
 
     // Function to fix property references in style expressions
-    const fixPropertyReferences = (expr: unknown): unknown => {
+    const fixPropertyReferences = useCallback((expr: unknown): unknown => {
         if (!Array.isArray(expr)) return expr;
         
         // Fix nested property access pattern: ["get", "propName", ["get", "properties", ["get", "row"]]]
@@ -774,10 +774,10 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         
         // Recursively fix nested expressions
         return expr.map(item => fixPropertyReferences(item));
-    };
+    }, []);
 
     // Function to fix property references in a style
-    const fixStylePropertyReferences = (style: maplibregl.StyleSpecification): maplibregl.StyleSpecification => {
+    const fixStylePropertyReferences = useCallback((style: maplibregl.StyleSpecification): maplibregl.StyleSpecification => {
         const fixedStyle = JSON.parse(JSON.stringify(style)); // Deep clone
         
         // Fix property references in all layers
@@ -810,7 +810,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         }
         
         return fixedStyle;
-    };
+    }, [fixPropertyReferences]);
 
     // Function to handle style changes
     const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
