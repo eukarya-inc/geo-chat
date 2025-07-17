@@ -133,16 +133,13 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     return newContent;
   }, []);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Core message sending logic
+  const sendMessage = useCallback(async (message: string) => {
+    if (!message.trim() || !apiKey || isLoading) return;
 
-    if (!input.trim() || !apiKey || isLoading) return;
-
-    const userMessage: CoreMessage = { role: 'user', content: input.trim() };
-    // const currentInput = input.trim();
+    const userMessage: CoreMessage = { role: 'user', content: message.trim() };
 
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
     setIsLoading(true);
     setError(null);
 
@@ -266,7 +263,16 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [input, apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall, handleToolResult]);
+  }, [apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall, handleToolResult]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    
+    const messageToSend = input.trim();
+    setInput('');
+    await sendMessage(messageToSend);
+  }, [input, sendMessage]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {
@@ -281,6 +287,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     }
   }, [input, handleSubmit]);
 
+
   const isApiKeyConfigured = Boolean(apiKey);
 
   return {
@@ -293,5 +300,6 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     error,
     isApiKeyConfigured,
     handleSuggestedPromptClick,
+    sendMessage,
   };
 }

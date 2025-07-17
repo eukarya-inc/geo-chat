@@ -19,6 +19,7 @@ function ModelingPage() {
     const [tableRefreshKey, setTableRefreshKey] = useState(0);
     const [showTableSelector, setShowTableSelector] = useState(true);
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
+    const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -157,6 +158,7 @@ function ModelingPage() {
                         db={db}
                         dbStateManager={dbStateManager || undefined}
                         apiKey={apiKey}
+                        onSendMessageReady={(sendFn) => setSendMessage(() => sendFn)}
                     />
                 )}
             </div>
@@ -168,6 +170,12 @@ function ModelingPage() {
                         setSelectedTable(tableName);
                         if (dbStateManager) {
                             dbStateManager.notifyTableChange();
+                        }
+                        // Send auto message when customer table is created
+                        if (tableName === 'customer' && sendMessage) {
+                            setTimeout(() => {
+                                sendMessage('customerテーブルでどんな可視化できそうですか？');
+                            }, 500);
                         }
                     }} />}
                     {db && showTableSelector && (
