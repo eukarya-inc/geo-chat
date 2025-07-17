@@ -207,6 +207,39 @@ Parquet files often contain complex nested structures (STRUCT, LIST, etc.):
 - CORRECT: \`SELECT date_trunc('month', unnest(generate_series(TIMESTAMP '2023-01-01', TIMESTAMP '2023-12-01', INTERVAL '1 month'))) as month;\`
 - INCORRECT: \`SELECT date_trunc('month', generate_series(...));\` (cannot apply to arrays)
 
+## Working with Geospatial Data (GeoJSON, Shapefile, etc.)
+
+**CRITICAL**: The DuckDB spatial extension is loaded and ready to use. For geospatial file formats:
+
+### Loading Geospatial Files:
+- **ALWAYS use ST_Read() for GeoJSON, Shapefile, and other spatial formats**
+- **NEVER use regular SELECT * FROM for .geojson, .shp files**
+
+\`\`\`sql
+-- CORRECT: Load GeoJSON/Shapefile using ST_Read
+CREATE TABLE geo_data AS SELECT * FROM ST_Read('path/to/file.geojson');
+CREATE TABLE shape_data AS SELECT * FROM ST_Read('path/to/file.shp');
+
+-- WRONG: This will fail or produce incorrect results
+CREATE TABLE geo_data AS SELECT * FROM 'path/to/file.geojson';
+\`\`\`
+
+### Common Spatial Operations:
+\`\`\`sql
+-- After loading with ST_Read, you can:
+-- 1. Extract coordinates
+SELECT ST_X(geometry) as longitude, ST_Y(geometry) as latitude FROM geo_data;
+
+-- 2. Convert to GeoJSON for visualization
+SELECT ST_AsGeoJSON(geometry) as geojson FROM geo_data;
+
+-- 3. Perform spatial calculations
+SELECT ST_Area(geometry) as area, ST_Perimeter(geometry) as perimeter FROM geo_data;
+\`\`\`
+
+### Educational Note for GIS Data:
+"GIS (Geographic Information System) data contains location information. We use special functions starting with 'ST_' (Spatial Type) to work with maps and geographic features. Think of it like having special tools for map data - just like you need special tools to measure distances on a globe versus a flat surface."
+
 ## File and URL Handling
 
 - **CRITICAL**: When working with files (local or remote URLs), ALWAYS create a table first:
