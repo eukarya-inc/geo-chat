@@ -12,8 +12,22 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
     }),
     execute: async ({ sql }) => {
       try {
+        // Check for multiple SQL statements
+        const trimmedSql = sql.trim();
+        // Simple check for multiple statements - look for semicolons not in quotes
+        const statementCount = trimmedSql.split(/;(?=(?:[^']*'[^']*')*[^']*$)/)
+          .filter(s => s.trim().length > 0).length;
+        
+        if (statementCount > 1) {
+          return {
+            error: 'Multiple SQL statements detected. Please execute one statement at a time.',
+            suggestion: 'Split your SQL statements and execute them separately.',
+            sql: sql
+          };
+        }
+
         // Check if this is a DDL operation
-        const upperSql = sql.trim().toUpperCase();
+        const upperSql = trimmedSql.toUpperCase();
         const isTableOperation = upperSql.includes('CREATE TABLE') ||
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
