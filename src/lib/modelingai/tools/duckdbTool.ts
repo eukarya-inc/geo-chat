@@ -3,8 +3,10 @@ import { z } from 'zod';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
+import { generateSQLExplanation } from '../sqlExplanationService';
+import { formatSQL } from '../../../utils/sqlFormatter';
 
-export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager) {
+export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager, apiKey?: string) {
   return tool({
     description,
     parameters: z.object({
@@ -40,6 +42,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
+          let sqlExplanation: string | undefined;
           if (isTableOperation) {
             await conn.query('CHECKPOINT;');
             
@@ -50,9 +53,17 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
               if (tableNameMatch) {
                 createdTableName = tableNameMatch[2];
                 
-                // Record the CREATE TABLE SQL in history
+                // Format SQL for both explanation and storage
+                const formattedSQL = formatSQL(sql);
+                
+                // Generate explanation for CREATE TABLE using formatted SQL
+                if (apiKey) {
+                  sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
+                }
+                
+                // Record the CREATE TABLE SQL in history with explanation
                 if (dbStateManager) {
-                  dbStateManager.getSQLHistory().recordCreateTable(createdTableName, sql, 'ai-chat');
+                  dbStateManager.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation);
                 }
               }
             }
@@ -74,12 +85,18 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             columns?: string[];
             columnCount?: number;
             suggestions?: string[];
+            sqlExplanation?: string;
           } = {
             success: true,
             data,
             rowCount: data.length,
             sql: sql
           };
+          
+          // Add SQL explanation if available
+          if (sqlExplanation) {
+            metadata.sqlExplanation = sqlExplanation;
+          }
 
           // Add column info for better understanding
           if (data.length > 0) {
@@ -139,6 +156,12 @@ IMPORTANT GUIDELINES:
 - AVOID creating new tables unless absolutely necessary
 - For analysis, use SELECT queries with GROUP BY, aggregation functions, and filtering
 - External URLs may not be accessible - work with existing data instead
+
+**WHEN CREATING TABLES**: After executing CREATE TABLE, ALWAYS explain in natural language:
+- What data the table contains
+- What transformations were applied
+- How the table structure supports visualization
+Example: "I created a table 'productivity_ranking' that calculates productivity per employee by dividing revenue by employee count. This pre-calculated metric makes it easy to create ranking visualizations."
 
 COMMON PATTERNS:
 - Analyze existing data: SELECT column, COUNT(*) FROM existing_table GROUP BY column

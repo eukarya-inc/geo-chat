@@ -88,7 +88,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
                     return (
                         <div
                             key={index}
-                            className={`mb-2.5 p-2 rounded ${
+                            className={`mb-2.5 p-2 rounded overflow-hidden ${
                                 message.role === 'user'
                                     ? 'bg-blue-50'
                                     : 'bg-green-50'
@@ -97,9 +97,9 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
                             <strong className="text-gray-800">
                                 {message.role === 'user' ? 'あなた' : 'Claude'}:
                             </strong>
-                            <div className="mt-1 text-gray-800">
+                            <div className="mt-1 text-gray-800 break-words">
                                 {message.role === 'user' ? (
-                                    <div className="whitespace-pre-wrap">
+                                    <div className="whitespace-pre-wrap break-all">
                                         {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                     </div>
                                 ) : (

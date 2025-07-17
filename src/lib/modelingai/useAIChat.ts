@@ -6,6 +6,7 @@ import { createDuckDBTool } from './tools/duckdbTool';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../duckdb/dbStateManager';
 import { completionTool } from './tools/completionTool';
+import { formatSQLCompact } from '../../utils/sqlFormatter';
 
 export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, customApiKey?: string) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -43,7 +44,9 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
 
     if (part.toolName === 'duckdb_query') {
       // Handle DuckDB tool call
-      const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
+      const sql = (args?.sql as string) || 'クエリ実行中';
+      const formattedSQL = formatSQLCompact(sql);
+      const toolCallText = `\n\n🔧 **SQL実行中:**\n\`\`\`sql\n${formattedSQL}\n\`\`\`\n`;
       newContent += toolCallText;
     }
 
@@ -112,6 +115,11 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
             resultText += `\n💡 **提案:**\n${suggestions.map((s: string) => `• ${s}`).join('\n')}\n`;
           }
         }
+
+        // Add SQL explanation if available
+        if ('sqlExplanation' in result && result.sqlExplanation) {
+          resultText += `\n📝 **SQL解説:**\n${result.sqlExplanation}\n\n`;
+        }
       }
 
       newContent += resultText;
@@ -168,7 +176,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         messages: allMessages,
         tools: {
           ...(db && {
-            duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
+            duckdb_query: createDuckDBTool(db, dbStateManager || undefined, apiKey),
           }),
           completion: completionTool,
         },

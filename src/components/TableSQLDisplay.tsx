@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 import type { SQLHistoryEntry } from '../lib/duckdb/sqlHistoryManager';
 
@@ -64,6 +67,19 @@ export default function TableSQLDisplay({ tableName, dbStateManager }: TableSQLD
       >
         <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
       </pre>
+      
+      {sqlEntry.explanation && (
+        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+          <div className="prose prose-sm max-w-none text-blue-800 text-xs leading-relaxed [&>h1]:text-blue-800 [&>h2]:text-blue-800 [&>h3]:text-blue-800 [&>h4]:text-blue-800 [&>h5]:text-blue-800 [&>h6]:text-blue-800 [&>p]:text-blue-800 [&>li]:text-blue-800 [&>code]:text-blue-800 [&>pre]:bg-blue-50 [&>pre]:border-blue-200">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {sqlEntry.explanation}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

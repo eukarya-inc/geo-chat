@@ -77,3 +77,95 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Prose styles for markdown rendering */
+.prose {
+  color: inherit;
+  max-width: 65ch;
+}
+
+.prose.max-w-none {
+  max-width: none;
+}
+
+/* Fix long URL wrapping */
+.prose a,
+.whitespace-pre-wrap a {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* Fix markdown list rendering */
+.prose ul {
+  list-style-type: disc;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-left: 1.625em;
+}
+
+.prose ol {
+  list-style-type: decimal;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-left: 1.625em;
+}
+
+.prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose ul > li,
+.prose ol > li {
+  padding-left: 0.375em;
+}
+
+.prose ul ul,
+.prose ul ol,
+.prose ol ul,
+.prose ol ol {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.prose p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+/* Fix general word wrapping for long content */
+.whitespace-pre-wrap {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+
+/* Force break for any long continuous text */
+.whitespace-pre-wrap,
+.prose,
+.prose p,
+.prose pre,
+.prose code {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* Specific fix for inline code and links */
+.prose code,
+.prose a,
+.whitespace-pre-wrap code,
+.whitespace-pre-wrap a {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+}
