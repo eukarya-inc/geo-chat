@@ -25,9 +25,10 @@
   "include": [
     "src"
   ],
-  "references": [
+  /* Project references disabled since we don't need to compile vite.config.ts */
+  /* "references": [
     {
       "path": "./tsconfig.node.json"
     }
-  ]
+  ] */
 }
