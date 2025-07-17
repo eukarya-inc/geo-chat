@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import RemoteFileSimple from '../components/RemoteFileSimple';
 import TableSelector from '../components/TableSelector';
+import TableSQLDisplay from '../components/TableSQLDisplay';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
 
@@ -161,7 +162,7 @@ function ModelingPage() {
             {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
                 <div className="flex flex-col gap-4 p-2.5 flex-shrink-0 bg-white">
-                    {db && <RemoteFileSimple db={db} onTableCreated={(tableName) => {
+                    {db && <RemoteFileSimple db={db} dbStateManager={dbStateManager || undefined} onTableCreated={(tableName) => {
                         setSelectedTable(tableName);
                         if (dbStateManager) {
                             dbStateManager.notifyTableChange();
@@ -176,12 +177,22 @@ function ModelingPage() {
                         />
                     )}
                 </div>
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                     {db && selectedTable && connection && (
-                        <Table
-                            connection={connection}
-                            tableName={selectedTable}
-                        />
+                        <>
+                            <div className="flex-1 overflow-hidden">
+                                <Table
+                                    connection={connection}
+                                    tableName={selectedTable}
+                                />
+                            </div>
+                            <div className="flex-shrink-0 p-2.5 bg-white border-t border-gray-200">
+                                <TableSQLDisplay
+                                    tableName={selectedTable}
+                                    dbStateManager={dbStateManager}
+                                />
+                            </div>
+                        </>
                     )}
                     {db && !selectedTable && (
                         <div className="flex items-center justify-center h-full text-gray-500">

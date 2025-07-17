@@ -1,4 +1,5 @@
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import { SQLHistoryManager } from './sqlHistoryManager';
 
 export interface DBStateManager {
   forceConsistency(): Promise<void>;
@@ -10,15 +11,18 @@ export interface DBStateManager {
   getTableColumns(tableName: string): Promise<Array<{name: string; type: string}>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executeQuery(sql: string): Promise<any[]>;
+  getSQLHistory(): SQLHistoryManager;
 }
 
 class DatabaseStateManager implements DBStateManager {
   private db: AsyncDuckDB;
   private tableChangeCallbacks: Set<(tableName?: string) => void> = new Set();
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
+  private sqlHistory: SQLHistoryManager;
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
+    this.sqlHistory = new SQLHistoryManager();
   }
 
   async forceConsistency(): Promise<void> {
@@ -226,6 +230,10 @@ class DatabaseStateManager implements DBStateManager {
     } finally {
       await conn.close();
     }
+  }
+
+  getSQLHistory(): SQLHistoryManager {
+    return this.sqlHistory;
   }
 }
 
