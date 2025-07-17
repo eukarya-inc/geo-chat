@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -121,8 +121,6 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
                 // Extract title and content
                 const titleMatch = sqlContent.match(/✅ \*\*結果:\*\* \(([^)]+)\)/);
                 const title = titleMatch ? titleMatch[0] : '✅ 結果';
-                const rowCountMatch = titleMatch?.[1].match(/\d+/);
-                const rowCount = rowCountMatch ? parseInt(rowCountMatch[0]) : 0;
                 
                 // Extract content between markers
                 const contentRegex = /<!--SQL_RESULT_CONTENT_START-->\n(.*?)\n<!--SQL_RESULT_CONTENT_END-->/s;
@@ -167,7 +165,7 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
         }
         
         return parts;
-    }, [content]); // Only re-process when content changes
+    }, [content, db, dbStateManager, sqlResultMatches, vegaMatches]); // Only re-process when content changes
     
     // If no special content, render as normal markdown
     if (vegaMatches.length === 0 && sqlResultMatches.length === 0) {

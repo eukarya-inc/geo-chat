@@ -153,7 +153,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           content: typeof msg.content === 'string' 
             ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
             : msg.content
-        }));
+        }) as CoreMessage);
       };
       
       const allMessages = cleanMessages([...messages, userMessage]);

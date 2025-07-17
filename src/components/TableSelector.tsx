@@ -31,14 +31,15 @@ const TableSelector: React.FC<TableSelectorProps> = ({ db, selectedTable, onTabl
         const tableNames = tableRows.map(row => row.name as string).sort();
 
         setTables(tableNames);
-      } catch (error) {
+      } catch {
         setTables([]);
       } finally {
         setLoading(false);
         if (conn) {
           try {
             await conn.close();
-          } catch (e) {
+          } catch {
+            // Ignore error closing connection
           }
         }
       }

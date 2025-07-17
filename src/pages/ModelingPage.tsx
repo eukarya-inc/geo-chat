@@ -16,7 +16,6 @@ function ModelingPage() {
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
     const [tableRefreshKey, setTableRefreshKey] = useState(0);
     const [showTableSelector, setShowTableSelector] = useState(true);
-    const [forceRefreshTables, setForceRefreshTables] = useState(0);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -35,7 +34,7 @@ function ModelingPage() {
                 } else {
                     setShowApiKeyInput(true);
                 }
-            } catch (error) {
+            } catch {
                 setShowApiKeyInput(true);
             } finally {
                 setIsLoadingApiKey(false);
@@ -55,7 +54,8 @@ function ModelingPage() {
                     const conn = await db.connect();
                     currentConnection = conn;
                     setConnection(conn);
-                } catch (err) {
+                } catch {
+                    // Error creating connection
                 }
             } else {
                 setConnection(null);
@@ -75,18 +75,23 @@ function ModelingPage() {
     useEffect(() => {
         if (!dbStateManager) return;
 
-        const unsubscribe = dbStateManager.onTableChange(async () => {
+        const unsubscribe = dbStateManager.onTableChange(async (tableName?: string) => {
             // Force consistency across all connections
             try {
                 await dbStateManager.forceConsistency();
-            } catch (error) {
+            } catch {
+                // Error forcing consistency
             }
-            
+
             // Force TableSelector to completely remount
             setShowTableSelector(false);
             setTimeout(() => {
                 setShowTableSelector(true);
                 setTableRefreshKey(prev => prev + 1);
+                // Auto-select the newly created table
+                if (tableName) {
+                    setSelectedTable(tableName);
+                }
             }, 100);
         });
 
@@ -119,7 +124,7 @@ function ModelingPage() {
                                             // Save encrypted API key to localStorage
                                             await storeEncryptedApiKey(apiKey.trim());
                                             setShowApiKeyInput(false);
-                                        } catch (error) {
+                                        } catch {
                                             alert('APIキーの保存に失敗しました。');
                                         }
                                     }
