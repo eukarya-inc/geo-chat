@@ -12,6 +12,7 @@ interface AIChatProps {
 
 export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const {
         messages,
         input,
@@ -27,8 +28,21 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    // Check if scroll position is near bottom (within 100px)
+    const isNearBottom = () => {
+        const container = scrollContainerRef.current;
+        if (!container) return true;
+        
+        const threshold = 100;
+        const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        return scrollBottom <= threshold;
+    };
+
     useEffect(() => {
-        scrollToBottom();
+        // Only scroll to bottom if user is already near the bottom
+        if (isNearBottom()) {
+            scrollToBottom();
+        }
     }, [messages]);
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -61,7 +75,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
 
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
                 {messages.length === 0 && (
                     <p className="text-gray-500 italic">
                         Claudeとチャットを開始しましょう。データ分析について質問してみてください。
