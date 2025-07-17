@@ -27,12 +27,11 @@ class DatabaseStateManager implements DBStateManager {
       // Force immediate synchronization across all connections
       await conn.query('CHECKPOINT;');
       
-      // Force WAL checkpoint to ensure immediate visibility
+      // Use force_checkpoint which is available in DuckDB-WASM
       try {
-        await conn.query('PRAGMA wal_checkpoint(RESTART);');
+        await conn.query('PRAGMA force_checkpoint;');
       } catch {
-        // If WAL checkpoint fails, try alternative
-        await conn.query('PRAGMA checkpoint_threshold=0;');
+        // If force_checkpoint fails, just use regular CHECKPOINT
         await conn.query('CHECKPOINT;');
       }
       
