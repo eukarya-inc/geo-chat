@@ -81,46 +81,21 @@ function ModelingPage() {
 
 
     return (
-        <div style={{
-            display: 'flex',
-            height: '100%',
-            width: '100%',
-            overflow: 'hidden',
-            margin: 0,
-            padding: 0
-        }}>
+        <div className="flex h-full w-full overflow-hidden">
             {/* Left Half - AI Chat (Modeling Tools) */}
-            <div style={{
-                width: '50%',
-                height: '100%',
-                borderRight: '1px solid #ddd',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden'
-            }}>
+            <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
                 {(showApiKeyInput && !isLoadingApiKey) && (
-                    <div style={{
-                        padding: '15px',
-                        backgroundColor: '#f8f9fa',
-                        borderBottom: '1px solid #ddd',
-                        flexShrink: 0
-                    }}>
-                        <div style={{ marginBottom: '10px', fontSize: '14px', fontWeight: 'bold' }}>
+                    <div className="p-4 bg-gray-50 border-b border-gray-300 flex-shrink-0">
+                        <div className="mb-2.5 text-sm font-bold">
                             Anthropic API Key Settings
                         </div>
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <div className="flex gap-2.5 items-center">
                             <input
                                 type="password"
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
                                 placeholder="Enter your Anthropic API key..."
-                                style={{
-                                    flex: 1,
-                                    padding: '8px 12px',
-                                    border: '1px solid #ddd',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
-                                }}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
                             />
                             <button
                                 onClick={async () => {
@@ -136,30 +111,22 @@ function ModelingPage() {
                                     }
                                 }}
                                 disabled={!apiKey.trim()}
-                                style={{
-                                    padding: '8px 16px',
-                                    backgroundColor: apiKey.trim() ? '#007bff' : '#ccc',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: apiKey.trim() ? 'pointer' : 'not-allowed',
-                                    fontSize: '14px'
-                                }}
+                                className={`px-4 py-2 text-white border-none rounded text-sm ${
+                                    apiKey.trim() 
+                                        ? 'bg-blue-500 cursor-pointer hover:bg-blue-600' 
+                                        : 'bg-gray-400 cursor-not-allowed'
+                                }`}
                             >
                                 Save
                             </button>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                        <div className="text-xs text-gray-600 mt-2">
                             Your API key is encrypted and stored locally in your browser and never sent to our servers.
                         </div>
                     </div>
                 )}
                 {isLoadingApiKey && (
-                    <div style={{
-                        padding: '20px',
-                        textAlign: 'center',
-                        color: '#666'
-                    }}>
+                    <div className="p-5 text-center text-gray-600">
                         APIキーを読み込み中...
                     </div>
                 )}
@@ -174,21 +141,8 @@ function ModelingPage() {
             </div>
 
             {/* Right Half - DuckDB and Map */}
-            <div style={{
-                width: '50%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden'
-            }}>
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '15px',
-                    padding: '10px',
-                    flexShrink: 0,
-                    backgroundColor: 'white'
-                }}>
+            <div className="w-1/2 h-full flex flex-col overflow-hidden">
+                <div className="flex flex-col gap-4 p-2.5 flex-shrink-0 bg-white">
                     {db && <RemoteFile db={db} onTableCreated={(tableName) => {
                         console.log('ModelingPage: Table created, auto-selecting:', tableName);
                         setSelectedTable(tableName);
@@ -210,7 +164,7 @@ function ModelingPage() {
                         />
                     )}
                 </div>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div className="flex-1 overflow-hidden">
                     {db && (
                         <MapComponent
                             key="modeling-map"
