@@ -102,7 +102,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         if ('columns' in result && Array.isArray(result.columns) && 'columnCount' in result) {
           const columns = result.columns as string[];
           const columnCount = result.columnCount as number;
-          resultText += `\n📋 **カラム情報:** ${columnCount}列 (${columns.slice(0, 5).join(', ')}${columns.length > 5 ? ', ...' : ''})\n`;
+          resultText += `\n📋 **カラム情報:** ${columnCount}列 (${columns.slice(0, 5).join(', ')}${columns.length > 5 ? ', ...' : ''})\n\n`;
         }
 
         // Add suggestions for working with the data
