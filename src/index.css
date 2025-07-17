@@ -143,8 +143,6 @@ button:focus-visible {
 
 /* Force break for any long continuous text */
 .whitespace-pre-wrap,
-.prose,
-.prose p,
 .prose a,
 .prose pre,
 .prose pre span,
