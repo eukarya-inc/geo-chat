@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai/useAIChat';
-import MessageRenderer from './MessageRenderer';
+import CollapsibleMessageRenderer from './CollapsibleMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
 interface AIChatProps {
@@ -89,7 +89,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
                                         {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                     </div>
                                 ) : (
-                                    <MessageRenderer
+                                    <CollapsibleMessageRenderer
                                         content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                                         className="prose prose-sm max-w-none"
                                         db={db}
