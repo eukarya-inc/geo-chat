@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AppWithRedux from './AppWithRedux';
 import ModelingPage from './pages/ModelingPage';
 
@@ -27,11 +27,8 @@ function NavigationBar() {
 }
 
 function AppWithRouter() {
-    // Get base path from Vite config
-    const basename = import.meta.env.BASE_URL;
-    
     return (
-        <Router basename={basename}>
+        <Router>
             <div className="h-screen w-screen overflow-hidden flex flex-col">
                 {/* Navigation Bar */}
                 <NavigationBar />
