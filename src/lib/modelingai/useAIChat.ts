@@ -63,7 +63,11 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       let resultText = '';
 
       if (result?.error) {
-        resultText = `\n❌ **エラー:** ${result.error}\n`;
+        const errorMsg = String(result.error);
+        // Preserve line breaks in error messages by wrapping multi-line errors in code block
+        resultText = errorMsg.includes('\n')
+          ? `\n❌ **エラー:**\n\`\`\`\n${errorMsg}\n\n\`\`\`\n`
+          : `\n❌ **エラー:** ${errorMsg}\n\n`;
       } else if (result?.data) {
         const data = Array.isArray(result.data) ? result.data : [result.data];
         const rowCount = Array.isArray(result.data) ? result.data.length : 1;
@@ -150,12 +154,12 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       const cleanMessages = (msgs: CoreMessage[]): CoreMessage[] => {
         return msgs.map(msg => ({
           ...msg,
-          content: typeof msg.content === 'string' 
+          content: typeof msg.content === 'string'
             ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
             : msg.content
         }) as CoreMessage);
       };
-      
+
       const allMessages = cleanMessages([...messages, userMessage]);
 
       const result = streamText({
@@ -222,7 +226,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         return;
       }
 
-      const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
+      const errorMsg = err instanceof Error ? String(err.message) : 'エラーが発生しました';
       setError(err instanceof Error ? err : new Error(errorMsg));
 
       // Update the current assistant message with error info instead of adding new message
@@ -230,14 +234,22 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         const updated = [...prev];
         if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
           const currentContent = updated[updated.length - 1].content;
+          // Preserve line breaks in error messages by wrapping multi-line errors in code block
+          const errorContent = errorMsg.includes('\n')
+            ? `\n\n❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
+            : `\n\n❌ **エラーが発生しました:** ${errorMsg}\n\n`;
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: currentContent + `\n\n❌ **エラーが発生しました:** ${errorMsg}`
+            content: currentContent + errorContent
           };
         } else {
+          // Preserve line breaks in error messages by wrapping multi-line errors in code block
+          const errorContent = errorMsg.includes('\n')
+            ? `❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
+            : `❌ **エラーが発生しました:** ${errorMsg}\n\n`;
           updated.push({
             role: 'assistant',
-            content: `❌ **エラーが発生しました:** ${errorMsg}`
+            content: errorContent
           });
         }
         return updated;
@@ -246,7 +258,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [input, apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall]);
+  }, [input, apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall, handleToolResult]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {
