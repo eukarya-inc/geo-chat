@@ -18,8 +18,6 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log('DuckDBTool: Database instance ID:', (db as any).__instanceId || 'no-id');
         const conn = await db.connect();
         try {
           const result = await conn.query(sql);
@@ -28,11 +26,15 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
-          if (isTableOperation && dbStateManager) {
-            console.log('DuckDBTool: Table operation detected, triggering refresh');
-            setTimeout(() => {
-              dbStateManager.notifyTableChange();
-            }, 100);
+          if (isTableOperation) {
+            await conn.query('CHECKPOINT;');
+            
+            if (dbStateManager) {
+              // Increased timeout to ensure table is fully committed
+              setTimeout(() => {
+                dbStateManager.notifyTableChange();
+              }, 500);
+            }
           }
 
           // Add metadata for large datasets
