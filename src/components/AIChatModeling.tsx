@@ -33,7 +33,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         // IME変換中（isComposing）の場合は送信しない
-        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
             handleSubmit(e);
         }
@@ -117,8 +117,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
                     onChange={handleInputChange}
                     onKeyDown={handleKeyPress}
                     placeholder="Claudeに質問してください..."
-                    className="flex-1 p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                    disabled={isLoading}
+                    className="flex-1 p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
                 />
                 <button
