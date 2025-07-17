@@ -8,9 +8,10 @@ interface AIChatProps {
     db: AsyncDuckDB;
     dbStateManager?: DBStateManager;
     apiKey?: string;
+    onSendMessageReady?: (sendMessage: (message: string) => void) => void;
 }
 
-export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
+export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const {
@@ -22,6 +23,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
         isLoading,
         // error,
         isApiKeyConfigured,
+        sendMessage,
     } = useAIChat(db, dbStateManager, apiKey);
 
     const scrollToBottom = () => {
@@ -32,7 +34,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
     const isNearBottom = () => {
         const container = scrollContainerRef.current;
         if (!container) return true;
-        
+
         const threshold = 100;
         const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         return scrollBottom <= threshold;
@@ -44,6 +46,13 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
             scrollToBottom();
         }
     }, [messages]);
+
+    // Pass sendMessage function to parent component
+    useEffect(() => {
+        if (onSendMessageReady && sendMessage) {
+            onSendMessageReady(sendMessage);
+        }
+    }, [onSendMessageReady, sendMessage]);
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         // IME変換中（isComposing）の場合は送信しない
@@ -78,7 +87,7 @@ export default function AIChat({ db, dbStateManager, apiKey }: AIChatProps) {
             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
                 {messages.length === 0 && (
                     <p className="text-gray-500 italic">
-                        Claudeとチャットを開始しましょう。データ分析について質問してみてください。
+                        チャットを開始しましょう。データの可視化やモデリングについて質問してみてください。
                     </p>
                 )}
                 {messages.map((message, index) => {
