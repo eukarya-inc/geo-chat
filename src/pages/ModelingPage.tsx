@@ -1,47 +1,84 @@
-import { useEffect } from 'react';
-import './App.css';
-import AIChat from './components/AIChat';
-import MapComponent from './components/Map';
-import RemoteFile from './components/RemoteFile';
-import TableList from './components/TableList';
-import { terminateGlobalDB } from './lib/duckdb/globalDB';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { setSelectedTable, setSelectedColumns } from './store/slices/dataSlice';
-import { setStyleManager } from './store/slices/mapSlice';
-import { setApiKey, setShowApiKeyInput } from './store/slices/uiSlice';
-import { storeEncryptedApiKey } from './utils/encryption';
+import { useState, useEffect } from 'react';
+import AIChat from '../components/AIChat';
+import MapComponent from '../components/Map';
+import RemoteFile from '../components/RemoteFile';
+import TableList from '../components/TableList';
+import { useDuckDB } from '../lib/duckdb/useDuckDB';
+import { terminateGlobalDB } from '../lib/duckdb/globalDB';
+import type { MapStyleManager } from '../utils/mapStyleManager';
+import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
 
-function AppRedux() {
-    // Get state from Redux instead of local state
-    const dispatch = useAppDispatch();
-    const { connection: db, dbStateManager } = useAppSelector(state => state.duckdb);
-    const { selectedTable, selectedColumns } = useAppSelector(state => state.data);
-    const { styleManager: mapStyleManager } = useAppSelector(state => state.map);
-    const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
-
-    console.log('AppRedux: Render with database:', !!db, 'dbStateManager:', !!dbStateManager);
+function ModelingPage() {
+    const { db, dbStateManager } = useDuckDB();
+    const [selectedTable, setSelectedTable] = useState<string | null>(null);
+    const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({});
+    const [mapStyleManager, setMapStyleManager] = useState<MapStyleManager | null>(null);
+    const [apiKey, setApiKey] = useState<string>('');
+    const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
+    const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
 
     const handleColumnSelect = (tableName: string, columns: string[]) => {
-        console.log('AppRedux: Column selection changed for table:', tableName, 'columns:', columns);
-        dispatch(setSelectedColumns({ table: tableName, columns }));
+        console.log('ModelingPage: Column selection changed for table:', tableName, 'columns:', columns);
+        setSelectedColumns(prev => ({
+            ...prev,
+            [tableName]: columns,
+        }));
     };
 
-    const handleMapReady = (styleManager: import('./utils/mapStyleManager').MapStyleManager) => {
-        console.log('AppRedux: Map ready, style manager initialized');
-        dispatch(setStyleManager(styleManager));
+    const handleMapReady = (styleManager: MapStyleManager) => {
+        console.log('ModelingPage: Map ready, style manager initialized');
+        setMapStyleManager(styleManager);
     };
 
     const handleTableSelect = (tableName: string) => {
         const actualTable = tableName === '' ? null : tableName;
-        dispatch(setSelectedTable(actualTable));
+        setSelectedTable(actualTable);
     };
 
-    // Cleanup global DB on app unmount
+    // Initialize API key from encrypted storage or environment variable
+    useEffect(() => {
+        const initializeApiKey = async () => {
+            setIsLoadingApiKey(true);
+            try {
+                const storedKey = await retrieveEncryptedApiKey();
+                const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+                if (storedKey) {
+                    setApiKey(storedKey);
+                    setShowApiKeyInput(false);
+                } else if (envKey) {
+                    setApiKey(envKey);
+                    setShowApiKeyInput(false);
+                } else {
+                    setShowApiKeyInput(true);
+                }
+            } catch (error) {
+                console.error('Failed to load API key:', error);
+                setShowApiKeyInput(true);
+            } finally {
+                setIsLoadingApiKey(false);
+            }
+        };
+
+        initializeApiKey();
+    }, []);
+
+    // Log state changes for debugging
+    useEffect(() => {
+        console.log('ModelingPage: selectedTable changed to:', selectedTable);
+    }, [selectedTable]);
+
+    useEffect(() => {
+        console.log('ModelingPage: selectedColumns changed to:', selectedColumns);
+    }, [selectedColumns]);
+
+    // Cleanup global DB on component unmount
     useEffect(() => {
         return () => {
             terminateGlobalDB();
         };
     }, []);
+
 
     return (
         <div style={{
@@ -52,7 +89,7 @@ function AppRedux() {
             margin: 0,
             padding: 0
         }}>
-            {/* Left Half - AI Chat */}
+            {/* Left Half - AI Chat (Modeling Tools) */}
             <div style={{
                 width: '50%',
                 height: '100%',
@@ -75,7 +112,7 @@ function AppRedux() {
                             <input
                                 type="password"
                                 value={apiKey}
-                                onChange={(e) => dispatch(setApiKey(e.target.value))}
+                                onChange={(e) => setApiKey(e.target.value)}
                                 placeholder="Enter your Anthropic API key..."
                                 style={{
                                     flex: 1,
@@ -91,7 +128,7 @@ function AppRedux() {
                                         try {
                                             // Save encrypted API key to localStorage
                                             await storeEncryptedApiKey(apiKey.trim());
-                                            dispatch(setShowApiKeyInput(false));
+                                            setShowApiKeyInput(false);
                                         } catch (error) {
                                             console.error('Failed to save API key:', error);
                                             alert('APIキーの保存に失敗しました。');
@@ -126,7 +163,14 @@ function AppRedux() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && db && (
+                    <AIChat
+                        db={db}
+                        dbStateManager={dbStateManager || undefined}
+                        mapStyleManager={mapStyleManager || undefined}
+                        apiKey={apiKey}
+                    />
+                )}
             </div>
 
             {/* Right Half - DuckDB and Map */}
@@ -146,17 +190,17 @@ function AppRedux() {
                     backgroundColor: 'white'
                 }}>
                     {db && <RemoteFile db={db} onTableCreated={(tableName) => {
-                        console.log('AppRedux: Table created, auto-selecting:', tableName);
-                        dispatch(setSelectedTable(tableName));
+                        console.log('ModelingPage: Table created, auto-selecting:', tableName);
+                        setSelectedTable(tableName);
                         // Also trigger TableList refresh via dbStateManager
                         if (dbStateManager) {
-                            console.log('AppRedux: Triggering TableList refresh via dbStateManager');
+                            console.log('ModelingPage: Triggering TableList refresh via dbStateManager');
                             dbStateManager.notifyTableChange();
                         }
                     }} />}
                     {db && (
                         <TableList
-                            key="main-table-list"
+                            key="modeling-table-list"
                             db={db}
                             dbStateManager={dbStateManager || undefined}
                             selectedTable={selectedTable}
@@ -169,7 +213,7 @@ function AppRedux() {
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     {db && (
                         <MapComponent
-                            key="main-map"
+                            key="modeling-map"
                             db={db}
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
@@ -183,4 +227,4 @@ function AppRedux() {
     );
 }
 
-export default AppRedux;
+export default ModelingPage;

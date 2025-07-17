@@ -88,8 +88,8 @@ function App() {
     return (
         <div style={{ 
             display: 'flex', 
-            height: '100vh', 
-            width: '100vw',
+            height: '100%', 
+            width: '100%',
             overflow: 'hidden',
             margin: 0,
             padding: 0
@@ -97,7 +97,7 @@ function App() {
             {/* Left Half - AI Chat */}
             <div style={{ 
                 width: '50%', 
-                height: '100vh',
+                height: '100%',
                 borderRight: '1px solid #ddd',
                 display: 'flex',
                 flexDirection: 'column',
@@ -174,7 +174,7 @@ function App() {
             {/* Right Half - DuckDB and Map */}
             <div style={{ 
                 width: '50%', 
-                height: '100vh',
+                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden'
