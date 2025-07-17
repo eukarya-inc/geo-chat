@@ -14,6 +14,8 @@ interface AIChatProps {
 export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const lastScrollTimeRef = useRef<number>(0);
+    const userHasScrolledRef = useRef<boolean>(false);
     const {
         messages,
         input,
@@ -40,12 +42,43 @@ export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady 
         return scrollBottom <= threshold;
     };
 
+    // Track user scroll events
+    const handleScroll = () => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        
+        // If user is not at bottom, they have manually scrolled
+        userHasScrolledRef.current = !isNearBottom();
+    };
+
+    // Auto-scroll effect
     useEffect(() => {
-        // Only scroll to bottom if user is already near the bottom
-        if (isNearBottom()) {
-            scrollToBottom();
+        // Skip if user has manually scrolled up
+        if (userHasScrolledRef.current) {
+            return;
+        }
+
+        // For first few messages or when near bottom, auto-scroll
+        if (messages.length <= 2 || isNearBottom()) {
+            const now = Date.now();
+            const timeSinceLastScroll = now - lastScrollTimeRef.current;
+            
+            // Throttle scrolling to once per second to allow manual scrolling
+            if (timeSinceLastScroll >= 1000 || messages.length <= 2) {
+                lastScrollTimeRef.current = now;
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 100);
+            }
         }
     }, [messages]);
+
+    // Reset user scroll flag when loading ends and user is at bottom
+    useEffect(() => {
+        if (!isLoading && isNearBottom()) {
+            userHasScrolledRef.current = false;
+        }
+    }, [isLoading]);
 
     // Pass sendMessage function to parent component
     useEffect(() => {
@@ -84,7 +117,7 @@ export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady 
 
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
+            <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
                 {messages.length === 0 && (
                     <p className="text-gray-500 italic">
                         チャットを開始しましょう。データの可視化やモデリングについて質問してみてください。
