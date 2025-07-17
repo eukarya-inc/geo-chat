@@ -15,6 +15,8 @@ function ModelingPage() {
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
     const [tableRefreshKey, setTableRefreshKey] = useState(0);
+    const [showTableSelector, setShowTableSelector] = useState(true);
+    const [forceRefreshTables, setForceRefreshTables] = useState(0);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -34,7 +36,6 @@ function ModelingPage() {
                     setShowApiKeyInput(true);
                 }
             } catch (error) {
-                console.error('Failed to load API key:', error);
                 setShowApiKeyInput(true);
             } finally {
                 setIsLoadingApiKey(false);
@@ -55,7 +56,6 @@ function ModelingPage() {
                     currentConnection = conn;
                     setConnection(conn);
                 } catch (err) {
-                    console.error('Error creating connection:', err);
                 }
             } else {
                 setConnection(null);
@@ -66,7 +66,7 @@ function ModelingPage() {
 
         return () => {
             if (currentConnection) {
-                currentConnection.close().catch(console.error);
+                currentConnection.close().catch(() => {});
             }
         };
     }, [db]);
@@ -75,9 +75,19 @@ function ModelingPage() {
     useEffect(() => {
         if (!dbStateManager) return;
 
-        const unsubscribe = dbStateManager.onTableChange(() => {
-            console.log('ModelingPage: Table change detected, refreshing TableSelector');
-            setTableRefreshKey(prev => prev + 1);
+        const unsubscribe = dbStateManager.onTableChange(async () => {
+            // Force consistency across all connections
+            try {
+                await dbStateManager.forceConsistency();
+            } catch (error) {
+            }
+            
+            // Force TableSelector to completely remount
+            setShowTableSelector(false);
+            setTimeout(() => {
+                setShowTableSelector(true);
+                setTableRefreshKey(prev => prev + 1);
+            }, 100);
         });
 
         return () => {
@@ -110,7 +120,6 @@ function ModelingPage() {
                                             await storeEncryptedApiKey(apiKey.trim());
                                             setShowApiKeyInput(false);
                                         } catch (error) {
-                                            console.error('Failed to save API key:', error);
                                             alert('APIキーの保存に失敗しました。');
                                         }
                                     }
@@ -153,9 +162,9 @@ function ModelingPage() {
                             dbStateManager.notifyTableChange();
                         }
                     }} />}
-                    {connection && (
+                    {db && showTableSelector && (
                         <TableSelector
-                            connection={connection}
+                            db={db}
                             refreshTrigger={tableRefreshKey}
                             selectedTable={selectedTable}
                             onTableSelect={setSelectedTable}
