@@ -147,6 +147,12 @@ When accessing properties from JSON columns in styles, use DIRECT property acces
 
 The system automatically extracts JSON properties when the 'properties' column is selected, making them directly accessible.
 
+**IMPORTANT: Analyze Layer Properties Before Styling**
+Before creating conditional styles or accessing specific properties:
+1. Use the analyze_layer_properties tool FIRST to see what properties are actually available in the rendered features
+2. This shows the properties after any transformations (like LIST<STRUCT> flattening), not the original table schema
+3. Use the exact property names shown in the analysis when creating style expressions
+
 Examples of correct style expressions:
 - Basic conditional: ["case", ["<", ["get", "population"], 100], "red", "blue"]
 - Multi-condition: ["case", ["<", ["get", "count"], 10], "#fee", ["<", ["get", "count"], 50], "#fcc", "#f00"]

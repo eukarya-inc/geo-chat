@@ -1,4 +1,5 @@
 import maplibregl from 'maplibre-gl';
+import { validateAndFixStyleExpression, logStyleExpressionIssues } from './styleExpressionValidator';
 
 export interface MapStyleUpdate {
     type: 'layer-paint' | 'layer-layout' | 'layer-filter' | 'add-layer' | 'remove-layer' | 'add-source' | 'remove-source';
@@ -15,6 +16,10 @@ export class MapStyleManager {
 
     constructor(map: maplibregl.Map) {
         this.map = map;
+    }
+
+    getMapInstance(): maplibregl.Map {
+        return this.map;
     }
 
     applyStyleUpdate(update: MapStyleUpdate): boolean {
@@ -34,7 +39,13 @@ export class MapStyleManager {
                         }
                         
                         Object.entries(update.properties).forEach(([key, value]) => {
-                            this.map.setPaintProperty(update.layerId!, key, value);
+                            // Validate and fix style expressions before applying
+                            let finalValue = value;
+                            if (Array.isArray(value)) {
+                                logStyleExpressionIssues(value, `${update.layerId}.paint.${key}`);
+                                finalValue = validateAndFixStyleExpression(value);
+                            }
+                            this.map.setPaintProperty(update.layerId!, key, finalValue);
                         });
                     }
                     break;
@@ -48,7 +59,13 @@ export class MapStyleManager {
                             throw new Error(`Cannot style non-existing layer "${update.layerId}".`);
                         }
                         Object.entries(update.properties).forEach(([key, value]) => {
-                            this.map.setLayoutProperty(update.layerId!, key, value);
+                            // Validate and fix style expressions before applying
+                            let finalValue = value;
+                            if (Array.isArray(value)) {
+                                logStyleExpressionIssues(value, `${update.layerId}.layout.${key}`);
+                                finalValue = validateAndFixStyleExpression(value);
+                            }
+                            this.map.setLayoutProperty(update.layerId!, key, finalValue);
                         });
                     }
                     break;
