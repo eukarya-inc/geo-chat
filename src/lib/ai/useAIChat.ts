@@ -10,6 +10,7 @@ import { createListLayersTool } from './tools/listLayersTool';
 import { createDebugLayersTool } from './tools/debugLayersTool';
 import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import { createGeocodingTools } from './tools/geocodingTool';
+import { createAnalyzeLayerPropertiesTool } from './tools/analyzeLayerProperties';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
 import type { DBStateManager } from '../duckdb/dbStateManager';
@@ -105,6 +106,10 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     } else if (part.toolName === 'add_geocoded_columns_to_table') {
       // Handle adding geocoded columns
       const toolCallText = `\n\n🏗️ **テーブル拡張中:** ${(args?.tableName as string) || 'テーブル'}にジオコーディング列を追加中...\n`;
+      newContent += toolCallText;
+    } else if (part.toolName === 'analyze_layer_properties') {
+      // Handle layer properties analysis
+      const toolCallText = `\n\n🔍 **レイヤープロパティ分析中:** ${(args?.layer_id as string) || 'レイヤー'}の実際のプロパティを分析中...\n`;
       newContent += toolCallText;
     }
     
@@ -361,6 +366,56 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       }
       
       newContent += resultText;
+    } else if (part.toolName === 'analyze_layer_properties') {
+      // Handle layer properties analysis results
+      const result = part.result;
+      let resultText = '';
+      
+      if (result?.error) {
+        resultText = `\n❌ **レイヤー分析エラー:** ${result.error}\n`;
+      } else if (result?.success) {
+        const layerId = result.layer_id as string;
+        const layerType = result.layer_type as string;
+        const geometryType = result.geometry_type as string;
+        const totalFeatures = result.total_features as number;
+        const sampleSize = result.sample_size as number;
+        const properties = result.properties as Array<{
+          property: string;
+          types: string;
+          examples: unknown[];
+          nullCount: number;
+          nonNullCount: number;
+        }>;
+        
+        resultText = `\n✅ **レイヤープロパティ分析完了**\n\n`;
+        resultText += `📍 **レイヤー情報:**\n`;
+        resultText += `• レイヤーID: ${layerId}\n`;
+        resultText += `• レイヤータイプ: ${layerType}\n`;
+        resultText += `• ジオメトリタイプ: ${geometryType}\n`;
+        resultText += `• 総フィーチャー数: ${totalFeatures}\n`;
+        resultText += `• 分析サンプル数: ${sampleSize}\n\n`;
+        
+        resultText += `📋 **利用可能なプロパティ:**\n`;
+        if (properties && properties.length > 0) {
+          properties.forEach(prop => {
+            resultText += `\n**${prop.property}**\n`;
+            resultText += `• タイプ: ${prop.types}\n`;
+            if (prop.examples.length > 0) {
+              resultText += `• 例: ${prop.examples.slice(0, 3).map(ex => JSON.stringify(ex)).join(', ')}\n`;
+            }
+            resultText += `• null値: ${prop.nullCount}/${sampleSize}\n`;
+          });
+        } else {
+          resultText += `• プロパティが見つかりませんでした\n`;
+        }
+        
+        if (result.style_examples) {
+          resultText += `\n💡 **スタイル式の例:**\n`;
+          resultText += `\`\`\`json\n${JSON.stringify(result.style_examples, null, 2)}\n\`\`\`\n`;
+        }
+      }
+      
+      newContent += resultText;
     }
     
     setMessages(prev => {
@@ -413,7 +468,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
           ...(mapStyleManager && {
             update_map_style: createMapStyleTool(mapStyleManager),
             list_map_layers: createListLayersTool(mapStyleManager),
-            debug_layers: createDebugLayersTool(mapStyleManager)
+            debug_layers: createDebugLayersTool(mapStyleManager),
+            analyze_layer_properties: createAnalyzeLayerPropertiesTool(() => mapStyleManager.getMapInstance())
           }),
           completion: completionTool
         },

@@ -45,13 +45,21 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                 [tableName]: columns,
             }));
             
-            // Auto-select "properties" column if it exists and no columns are selected yet
-            const hasPropertiesColumn = columns.some(col => col.name === 'properties');
+            // Auto-select all columns except geometry when none are selected
             const currentlySelectedColumns = selectedColumns[tableName] || [];
             
-            if (hasPropertiesColumn && currentlySelectedColumns.length === 0) {
-                console.log(`Auto-selecting "properties" column for table: ${tableName}`);
-                onColumnSelect(tableName, ['properties']);
+            if (currentlySelectedColumns.length === 0) {
+                // Select all columns except geometry columns
+                const allColumns = columns
+                    .filter(col => 
+                        col.name.toLowerCase() !== 'geom' && 
+                        col.name.toLowerCase() !== 'geometry' &&
+                        !col.type.toLowerCase().includes('geometry')
+                    )
+                    .map(col => col.name);
+                
+                console.log(`Auto-selecting all columns for table ${tableName}:`, allColumns);
+                onColumnSelect(tableName, allColumns);
             }
             
             await conn.close();
@@ -335,12 +343,50 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
                         {tableColumns[table.name] && (
                             <div>
                                 <div style={{ 
-                                    fontSize: '12px', 
-                                    fontWeight: 'bold', 
-                                    marginBottom: '8px',
-                                    color: '#555'
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '8px'
                                 }}>
-                                    表示するカラム:
+                                    <div style={{ 
+                                        fontSize: '12px', 
+                                        fontWeight: 'bold', 
+                                        color: '#555'
+                                    }}>
+                                        表示するカラム:
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const columns = tableColumns[table.name] || [];
+                                            const currentSelection = selectedColumns[table.name] || [];
+                                            
+                                            if (currentSelection.length === columns.filter(c => c.name.toLowerCase() !== 'geom' && c.name.toLowerCase() !== 'geometry').length) {
+                                                // All are selected, so deselect all
+                                                onColumnSelect(table.name, []);
+                                            } else {
+                                                // Select all non-geometry columns
+                                                const allColumnNames = columns
+                                                    .filter(col => 
+                                                        col.name.toLowerCase() !== 'geom' && 
+                                                        col.name.toLowerCase() !== 'geometry' &&
+                                                        !col.type.toLowerCase().includes('geometry')
+                                                    )
+                                                    .map(col => col.name);
+                                                onColumnSelect(table.name, allColumnNames);
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '4px 8px',
+                                            fontSize: '11px',
+                                            backgroundColor: '#007bff',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '3px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {(selectedColumns[table.name] || []).length === (tableColumns[table.name] || []).filter((c: ColumnInfo) => c.name.toLowerCase() !== 'geom' && c.name.toLowerCase() !== 'geometry').length ? 'すべて解除' : 'すべて選択'}
+                                    </button>
                                 </div>
                                 <div style={{ 
                                     display: 'grid', 

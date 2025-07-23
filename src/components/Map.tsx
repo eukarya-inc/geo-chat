@@ -60,26 +60,21 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
 
 const generateVectorTileQuery = (params: QueryParams): string => {
     const { zxy, selectedTable, selectedColumns } = params;
-    const columns = selectedColumns.length > 0 ? selectedColumns.join(', ') : '1 as dummy';
     const simplify = calculateSimplifyTolerance(zxy.z);
 
     console.log(`z: ${zxy.z}, simplify level: ${simplify}`);
     console.log(`Selected columns: ${selectedColumns}`);
 
-    // Check if 'properties' column is selected to handle JSON extraction
-    const hasPropertiesColumn = selectedColumns.includes('properties');
-    
-    // Build column selection with JSON extraction for properties column
-    let columnSelection = '';
-    if (hasPropertiesColumn) {
-        // Extract all other columns normally
-        const otherColumns = selectedColumns.filter(col => col !== 'properties');
-        const otherColumnsList = otherColumns.length > 0 ? otherColumns.join(', ') + ', ' : '';
-        
-        // Add properties column with all its JSON fields extracted
-        columnSelection = otherColumnsList + 'properties';
+    // Build column selection - always convert to JSON for consistent handling
+    let finalColumnSelection = '';
+    if (selectedColumns.length > 0) {
+        finalColumnSelection = selectedColumns.map(col => {
+            // Convert all columns to JSON to handle any data type uniformly
+            // This ensures LIST<STRUCT>, STRUCT, and other complex types are properly serialized
+            return `to_json(${col})::VARCHAR as ${col}`;
+        }).join(', ');
     } else {
-        columnSelection = columns;
+        finalColumnSelection = '1 as dummy';
     }
 
     return `
@@ -87,11 +82,10 @@ const generateVectorTileQuery = (params: QueryParams): string => {
             -- 空間フィルタリングを先に実行
             SELECT 
                 geom,
-                ${columnSelection}
+                ${selectedColumns.join(', ')}
             FROM ${selectedTable}
             WHERE ST_Intersects(
                 geom,
-                -- bbox,
                 ST_MakeEnvelope(?, ?, ?, ?)
             )
         )
@@ -99,7 +93,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
             ST_AsGeoJSON(
                 ST_Simplify(geom, ${simplify})
             ) AS geojson,
-            ${columnSelection}
+            ${finalColumnSelection}
         FROM filtered
     `;
 };
@@ -368,31 +362,25 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     console.log('Feature:', feature);
                     console.log('Properties:', feature.properties);
                     console.log('All property keys:', Object.keys(feature.properties || {}));
-                    console.log('都道府県名 value:', feature.properties?.['都道府県名']);
+                    
+                    // Log all flattened properties from LIST<STRUCT>
+                    const props = feature.properties || {};
+                    Object.keys(props).forEach(key => {
+                        if (key.includes('_') || key.includes('千円') || key.includes('実績')) {
+                            console.log(`Property "${key}":`, props[key]);
+                        }
+                    });
+                    
+                    // Help message for styling
+                    console.log('\n=== Available properties for styling ===');
+                    console.log('You can use these properties in style expressions:');
+                    Object.keys(props).forEach(key => {
+                        console.log(`- ["get", "${key}"]`);
+                    });
                 }
             });
 
 
-            // Add a symbol layer to show prefecture names
-            map.addLayer({
-                id: 'duckdb-points-labels',
-                source: 'duckdb-vector',
-                'source-layer': 'v',
-                type: 'symbol',
-                layout: {
-                    'text-field': ['get', '都道府県名'],
-                    'text-size': 12,
-                    'text-offset': [0, 2],
-                },
-                paint: {
-                    'text-color': '#000000',
-                    'text-halo-color': '#ffffff',
-                    'text-halo-width': 2,
-                },
-                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
-                minzoom: 0,
-                maxzoom: 24,
-            });
 
             // Update global debug info
             const currentLayers = map.getStyle().layers?.map(l => l.id) || [];
@@ -627,6 +615,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     }
 
                     console.log('Current selected columns:', currentColumns);
+                    
+                    // Check if any columns are selected
+                    if (currentColumns.length === 0) {
+                        console.warn('No columns selected! Properties will be empty.');
+                    }
 
                     // 選択されたカラムを取得するSQLクエリを構築
                     const query = generateVectorTileQuery({
@@ -666,24 +659,63 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                 const geometry = JSON.parse(row.geojson) as Geometry;
 
                                 // 選択されたカラムの値をプロパティとして追加
-                                const properties: Record<string, string | number | null> = {};
-                                currentColumns.forEach(column => {
-                                    if (column === 'properties' && row[column]) {
-                                        // If the column is 'properties' and contains JSON data,
-                                        // parse it and merge its contents into the feature properties
-                                        try {
-                                            const jsonProps = typeof row[column] === 'string' 
-                                                ? JSON.parse(row[column] as string) 
-                                                : row[column];
-                                            if (typeof jsonProps === 'object' && jsonProps !== null) {
-                                                Object.assign(properties, jsonProps);
+                                const properties: Record<string, unknown> = {};
+                                
+                                // Add all row properties with intelligent flattening
+                                Object.keys(row).forEach(key => {
+                                    if (key !== 'geojson') {
+                                        const value = row[key];
+                                        
+                                        // Handle JSON strings
+                                        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+                                            try {
+                                                const parsed = JSON.parse(value);
+                                                
+                                                // If it's the 'properties' column, merge its contents
+                                                if (key === 'properties' && typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                                                    Object.assign(properties, parsed);
+                                                } 
+                                                // If it's an array with at least one element (LIST<STRUCT>)
+                                                else if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+                                                    // Store the full array
+                                                    properties[key] = parsed;
+                                                    
+                                                    // Flatten properties, preferring first non-null values
+                                                    const allKeys = new Set<string>();
+                                                    parsed.forEach((elem: unknown) => {
+                                                        if (typeof elem === 'object' && elem !== null) {
+                                                            Object.keys(elem as Record<string, unknown>).forEach(k => allKeys.add(k));
+                                                        }
+                                                    });
+                                                    
+                                                    // For each unique key, find the first non-null value
+                                                    allKeys.forEach(subKey => {
+                                                        if (!(subKey in properties)) {
+                                                            // Find first non-null value for this key
+                                                            for (const elem of parsed) {
+                                                                const elemObj = elem as Record<string, unknown>;
+                                                                if (elemObj && elemObj[subKey] !== null && elemObj[subKey] !== undefined) {
+                                                                    properties[subKey] = elemObj[subKey];
+                                                                    break;
+                                                                }
+                                                            }
+                                                            // If all values are null, use the first element's value (null)
+                                                            if (!(subKey in properties) && parsed[0]) {
+                                                                properties[subKey] = (parsed[0] as Record<string, unknown>)[subKey];
+                                                            }
+                                                        }
+                                                    });
+                                                } else {
+                                                    // For other columns, store the parsed value
+                                                    properties[key] = parsed;
+                                                }
+                                            } catch {
+                                                // If parsing fails, store as is
+                                                properties[key] = value;
                                             }
-                                        } catch (e) {
-                                            console.warn('Failed to parse properties JSON:', e);
-                                            properties[column] = row[column];
+                                        } else if (value !== null && value !== undefined) {
+                                            properties[key] = value;
                                         }
-                                    } else if (column in row) {
-                                        properties[column] = row[column];
                                     }
                                 });
 
@@ -692,6 +724,12 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                     console.log(`Feature ${index} properties:`, properties);
                                     console.log(`Feature ${index} geometry type:`, geometry.type);
                                     console.log(`Feature ${index} row data:`, row);
+                                    // Log specific property access for debugging
+                                    if ('営業収入_千円' in properties) {
+                                        console.log(`Feature ${index} 営業収入_千円:`, properties['営業収入_千円']);
+                                    }
+                                    // Check which columns were selected
+                                    console.log(`Selected columns for this tile:`, currentColumns);
                                 }
 
                                 return {
@@ -959,12 +997,75 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                             tileSize: 256,
                             attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                         },
+                        'duckdb-vector': {
+                            type: 'vector',
+                            tiles: ['duckdb-vector://{z}/{x}/{y}.pbf'],
+                            minzoom: 0,
+                            maxzoom: 24,
+                        },
                     },
                     layers: [
                         {
                             id: 'osm-layer',
                             source: 'osm',
                             type: 'raster',
+                        },
+                        {
+                            id: 'duckdb-polygons',
+                            type: 'fill',
+                            source: 'duckdb-vector',
+                            'source-layer': 'v',
+                            minzoom: 0,
+                            maxzoom: 24,
+                            filter: ['==', '$type', 'Polygon'],
+                            paint: {
+                                'fill-color': '#ff6600',
+                                'fill-opacity': 0.3,
+                            },
+                        },
+                        {
+                            id: 'duckdb-polygon-outlines',
+                            type: 'line',
+                            source: 'duckdb-vector',
+                            'source-layer': 'v',
+                            minzoom: 0,
+                            maxzoom: 24,
+                            filter: ['==', '$type', 'Polygon'],
+                            paint: {
+                                'line-color': '#ff6600',
+                                'line-width': 1,
+                                'line-opacity': 0.8,
+                            },
+                        },
+                        {
+                            id: 'duckdb-lines',
+                            type: 'line',
+                            source: 'duckdb-vector',
+                            'source-layer': 'v',
+                            minzoom: 0,
+                            maxzoom: 24,
+                            filter: ['==', '$type', 'LineString'],
+                            paint: {
+                                'line-color': '#00aa00',
+                                'line-width': 3,
+                                'line-opacity': 0.9,
+                            },
+                        },
+                        {
+                            id: 'duckdb-points',
+                            type: 'circle',
+                            source: 'duckdb-vector',
+                            'source-layer': 'v',
+                            minzoom: 0,
+                            maxzoom: 24,
+                            filter: ['==', '$type', 'Point'],
+                            paint: {
+                                'circle-radius': 6,
+                                'circle-color': '#0066ff',
+                                'circle-stroke-width': 1,
+                                'circle-stroke-color': '#ffffff',
+                                'circle-opacity': 0.8,
+                            },
                         },
                     ],
                 } as maplibregl.StyleSpecification;
