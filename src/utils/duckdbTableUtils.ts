@@ -15,7 +15,7 @@ export interface TableDataResult {
 /**
  * Convert special values (BigInt, BLOB) to display-friendly formats
  */
-function convertSpecialValues(value: unknown): unknown {
+function convertSpecialValues(value: unknown, columnType?: string): unknown {
   // Convert BigInt to string to avoid type issues
   if (typeof value === 'bigint') {
     return value.toString();
@@ -25,6 +25,86 @@ function convertSpecialValues(value: unknown): unknown {
   if (value instanceof Uint8Array || 
       value instanceof ArrayBuffer || 
       (value && typeof value === 'object' && 'byteLength' in value)) {
+    // Check if this is a geometry column based on column type
+    if (columnType && (
+      columnType.toUpperCase().includes('GEOMETRY') ||
+      columnType.toUpperCase().includes('POINT') ||
+      columnType.toUpperCase().includes('LINESTRING') ||
+      columnType.toUpperCase().includes('POLYGON') ||
+      columnType.toUpperCase().includes('MULTIPOINT') ||
+      columnType.toUpperCase().includes('MULTILINESTRING') ||
+      columnType.toUpperCase().includes('MULTIPOLYGON') ||
+      columnType.toUpperCase().includes('GEOMETRYCOLLECTION')
+    )) {
+      // Try to extract geometry type from WKB if possible
+      if (value instanceof Uint8Array && value.length > 5) {
+        try {
+          // WKB format: byte order (1 byte) + type (4 bytes)
+          const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+          const byteOrder = value[0]; // 0 = big endian, 1 = little endian
+          const typeCode = byteOrder === 1 
+            ? view.getUint32(1, true)  // little endian
+            : view.getUint32(1, false); // big endian
+          
+          // Geometry type codes
+          const geomTypes: Record<number, string> = {
+            1: 'POINT',
+            2: 'LINESTRING',
+            3: 'POLYGON',
+            4: 'MULTIPOINT',
+            5: 'MULTILINESTRING',
+            6: 'MULTIPOLYGON',
+            7: 'GEOMETRYCOLLECTION'
+          };
+          
+          const baseType = typeCode & 0xFF; // Get base type without dimension flags
+          const typeName = geomTypes[baseType] || 'GEOMETRY';
+          
+          // For POINT geometry, try to extract coordinates
+          if (baseType === 1 && value.length >= 21) {
+            const x = byteOrder === 1
+              ? view.getFloat64(5, true)
+              : view.getFloat64(5, false);
+            const y = byteOrder === 1
+              ? view.getFloat64(13, true)
+              : view.getFloat64(13, false);
+            
+            // Format coordinates with reasonable precision
+            return `POINT(${x.toFixed(6)} ${y.toFixed(6)})`;
+          }
+          
+          return `[${typeName}]`;
+        } catch {
+          // If parsing fails, fall back to column type
+        }
+      }
+      
+      // For geometry types, show a more descriptive label based on column type
+      const geomType = columnType.toUpperCase().replace('MULTI', 'MULTI ');
+      return `[${geomType}]`;
+    }
+    
+    // For other BLOB data, try to show size information
+    let byteLength = 0;
+    if (value instanceof Uint8Array) {
+      byteLength = value.byteLength;
+    } else if (value instanceof ArrayBuffer) {
+      byteLength = value.byteLength;
+    } else if (value && typeof value === 'object' && 'byteLength' in value) {
+      byteLength = (value as { byteLength: number }).byteLength;
+    }
+    
+    if (byteLength > 0) {
+      // Format byte size in a human-readable way
+      if (byteLength < 1024) {
+        return `[BLOB: ${byteLength} bytes]`;
+      } else if (byteLength < 1024 * 1024) {
+        return `[BLOB: ${(byteLength / 1024).toFixed(1)} KB]`;
+      } else {
+        return `[BLOB: ${(byteLength / (1024 * 1024)).toFixed(1)} MB]`;
+      }
+    }
+    
     return '[BLOB]';
   }
   
@@ -48,7 +128,7 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
   
   const columnData: Record<string, unknown[]> = {};
   for (const col of columns) {
-    columnData[col.name] = data.map(row => convertSpecialValues(row[col.name]));
+    columnData[col.name] = data.map(row => convertSpecialValues(row[col.name], col.type));
   }
   
   return tableFromArrays(columnData);
@@ -144,7 +224,8 @@ export async function getTableDataByWindow(
 export function getValueFromArrowTable(
   arrowTable: ArrowTable,
   rowIndex: number,
-  columnIndex: number
+  columnIndex: number,
+  columnType?: string
 ): unknown {
   if (rowIndex >= arrowTable.numRows || columnIndex >= arrowTable.numCols) {
     return null;
@@ -156,5 +237,5 @@ export function getValueFromArrowTable(
   }
   
   const value = column.get(rowIndex);
-  return convertSpecialValues(value);
+  return convertSpecialValues(value, columnType);
 }

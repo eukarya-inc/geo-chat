@@ -56,7 +56,94 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
             if (isParquet) {
                 query = `CREATE TABLE ${tableName} AS SELECT * FROM '${url}'`;
             } else if (isCSV) {
+                // First create the table from CSV
                 query = `CREATE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${url}')`;
+                
+                // After creation, check for lat/lng columns and add geometry if found
+                const checkGeometryQuery = `
+                    WITH column_info AS (
+                        SELECT column_name, column_type 
+                        FROM (DESCRIBE ${tableName})
+                    ),
+                    lat_columns AS (
+                        SELECT column_name FROM column_info 
+                        WHERE LOWER(column_name) LIKE '%lat%' 
+                           OR column_name LIKE '%緯度%'
+                           OR LOWER(column_name) = 'y'
+                           OR column_name = '緯度_y'
+                    ),
+                    lng_columns AS (
+                        SELECT column_name FROM column_info 
+                        WHERE LOWER(column_name) LIKE '%lon%' 
+                           OR LOWER(column_name) LIKE '%lng%'
+                           OR column_name LIKE '%経度%'
+                           OR LOWER(column_name) = 'x'
+                           OR column_name = '経度_y'
+                    )
+                    SELECT 
+                        (SELECT column_name FROM lat_columns LIMIT 1) as lat_col,
+                        (SELECT column_name FROM lng_columns LIMIT 1) as lng_col
+                `;
+                
+                try {
+                    await conn.query(query);
+                    console.log('RemoteFile: CSV table created, checking for coordinate columns');
+                    
+                    
+                    const coordCheck = await conn.query(checkGeometryQuery);
+                    const coords = coordCheck.toArray()[0] as { lat_col: string | null; lng_col: string | null };
+                    console.log('RemoteFile: Coordinate check result:', coords);
+                    
+                    if (coords && coords.lat_col && coords.lng_col) {
+                        console.log(`RemoteFile: Found coordinate columns: lat=${coords.lat_col}, lng=${coords.lng_col}`);
+                        
+                        // Create a new table with geometry column
+                        const geomTableName = `${tableName}_with_geom`;
+                        const createGeomQuery = `
+                            CREATE OR REPLACE TABLE ${geomTableName} AS 
+                            SELECT *, 
+                                   ST_Point(CAST("${coords.lng_col}" AS DOUBLE), CAST("${coords.lat_col}" AS DOUBLE)) as geom
+                            FROM ${tableName}
+                            WHERE "${coords.lng_col}" IS NOT NULL 
+                              AND "${coords.lat_col}" IS NOT NULL
+                              AND TRY_CAST("${coords.lng_col}" AS DOUBLE) IS NOT NULL
+                              AND TRY_CAST("${coords.lat_col}" AS DOUBLE) IS NOT NULL
+                        `;
+                        
+                        
+                        await conn.query(createGeomQuery);
+                        
+                        // Drop the original table and rename the new one
+                        await conn.query(`DROP TABLE ${tableName}`);
+                        await conn.query(`ALTER TABLE ${geomTableName} RENAME TO ${tableName}`);
+                        
+                        console.log(`RemoteFile: Successfully added geometry column to ${tableName}`);
+                        
+                        // Create spatial index on the geometry column
+                        try {
+                            console.log('RemoteFile: Creating spatial index on geometry column');
+                            await conn.query(`CREATE INDEX ${tableName}_geom_idx ON ${tableName} USING RTREE (geom)`);
+                            console.log('RemoteFile: Spatial index created successfully');
+                        } catch (indexError) {
+                            console.warn('RemoteFile: Could not create spatial index:', indexError);
+                        }
+                        
+                        // Count rows to verify
+                        const countResult = await conn.query(`SELECT COUNT(*) as total, COUNT(geom) as with_geom FROM ${tableName}`);
+                        const counts = countResult.toArray()[0] as { total: number; with_geom: number };
+                        console.log(`RemoteFile: Table has ${counts.total} rows, ${counts.with_geom} with valid geometry`);
+                        
+                    } else {
+                        console.log('RemoteFile: No coordinate columns detected in CSV');
+                    }
+                    
+                    // Skip the main query since we already handled everything
+                    query = null;
+                } catch (csvError) {
+                    console.error('RemoteFile: Error processing CSV with coordinates:', csvError);
+                    // Fall back to simple CSV loading if coordinate detection fails
+                    query = `CREATE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${url}')`;
+                }
             } else if (isGeoJSON) {
                 // For GeoJSON, fetch the data client-side first to avoid DuckDB URL issues
                 console.log('RemoteFile: Fetching GeoJSON data from:', url);
@@ -119,7 +206,29 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
             if (query) {
                 await conn.query(query);
             }
-            await conn.query(`CREATE INDEX ${tableName}_idx ON ${tableName} USING RTREE (geom);`);
+            
+            // Only create spatial index if the table has a geometry column
+            try {
+                // Check if table has a geom column
+                const columnsResult = await conn.query(`DESCRIBE ${tableName}`);
+                const columns = columnsResult.toArray();
+                const hasGeomColumn = columns.some(col => 
+                    col.column_name?.toLowerCase() === 'geom' || 
+                    col.column_name?.toLowerCase() === 'geometry' ||
+                    col.column_type?.toLowerCase().includes('geometry')
+                );
+                
+                if (hasGeomColumn) {
+                    console.log('RemoteFile: Creating spatial index for geometry column');
+                    await conn.query(`CREATE INDEX ${tableName}_idx ON ${tableName} USING RTREE (geom);`);
+                } else {
+                    console.log('RemoteFile: No geometry column found, skipping spatial index');
+                }
+            } catch (indexError) {
+                console.warn('RemoteFile: Could not create spatial index:', indexError);
+                // Continue without spatial index - not critical for non-spatial data
+            }
+            
             await conn.query('CHECKPOINT;');
 
             console.log('Table created and checkpoint executed:', tableName);

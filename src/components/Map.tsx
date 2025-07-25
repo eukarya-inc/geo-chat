@@ -62,8 +62,6 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     const { zxy, selectedTable, selectedColumns } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
 
-    console.log(`z: ${zxy.z}, simplify level: ${simplify}`);
-    console.log(`Selected columns: ${selectedColumns}`);
 
     // Build column selection - always convert to JSON for consistent handling
     let finalColumnSelection = '';
@@ -71,18 +69,23 @@ const generateVectorTileQuery = (params: QueryParams): string => {
         finalColumnSelection = selectedColumns.map(col => {
             // Convert all columns to JSON to handle any data type uniformly
             // This ensures LIST<STRUCT>, STRUCT, and other complex types are properly serialized
-            return `to_json(${col})::VARCHAR as ${col}`;
+            // Quote column names to handle special characters
+            return `to_json("${col}")::VARCHAR as "${col}"`;
         }).join(', ');
     } else {
         finalColumnSelection = '1 as dummy';
     }
 
+    // Build the column list for the WITH clause - quote column names
+    const withColumns = selectedColumns.length > 0 
+        ? `geom, ${selectedColumns.map(col => `"${col}"`).join(', ')}`
+        : 'geom';
+
     return `
         WITH filtered AS (
             -- 空間フィルタリングを先に実行
             SELECT 
-                geom,
-                ${selectedColumns.join(', ')}
+                ${withColumns}
             FROM ${selectedTable}
             WHERE ST_Intersects(
                 geom,
@@ -119,6 +122,21 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         selectedTableRef.current = selectedTable;
         selectedColumnsRef.current = selectedColumns;
         
+        // Clear tile cache when table or columns change to force refresh
+        if (selectedTable) {
+            tileCache.current.clear();
+            
+            // Force map to re-render tiles if map is initialized
+            if (mapRef.current && initializedRef.current) {
+                mapRef.current.triggerRepaint();
+                
+                // Also try to reload the source to force tile refresh
+                const source = mapRef.current.getSource('duckdb-vector');
+                if (source && 'reload' in source && typeof source.reload === 'function') {
+                    source.reload();
+                }
+            }
+        }
     }, [selectedTable, selectedColumns]);
 
     // Export functions
@@ -156,8 +174,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             link.click();
             document.body.removeChild(link);
             
-        } catch (error) {
-            console.error('Export failed:', error);
+        } catch {
             alert('Export failed. This might be due to browser security restrictions with WebGL canvas export.');
         }
     }, []);
@@ -245,11 +262,39 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         popup.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current!);
     }, [selectedColumns]);
 
+    // Function to zoom map to data bounds
+    const fitMapToData = useCallback(async (tableName: string) => {
+        if (!mapRef.current || !connectionRef.current) return;
+        
+        try {
+            // Query the bounds of the data
+            const result = await connectionRef.current.query(`
+                SELECT 
+                    MIN(ST_X(geom)) as min_lng,
+                    MAX(ST_X(geom)) as max_lng,
+                    MIN(ST_Y(geom)) as min_lat,
+                    MAX(ST_Y(geom)) as max_lat
+                FROM ${tableName}
+                WHERE geom IS NOT NULL
+            `);
+            
+            const bounds = result.toArray()[0] as unknown as { min_lng: number; max_lng: number; min_lat: number; max_lat: number; };
+            if (bounds && bounds.min_lng !== null) {
+                mapRef.current.fitBounds([
+                    [bounds.min_lng, bounds.min_lat],
+                    [bounds.max_lng, bounds.max_lat]
+                ], {
+                    padding: 50,
+                    duration: 1000
+                });
+            }
+        } catch {
+            // Ignore errors when fitting to bounds
+        }
+    }, []);
+
     // Function to update map layers dynamically
     const updateMapLayers = useCallback((map: maplibregl.Map) => {
-        console.log('Map: updateMapLayers called');
-        console.log('Map: Current style before update:', map.getStyle().name || 'custom');
-        console.log('Map: Updating layers - selectedTable:', selectedTable, 'geojsonUrl:', geojsonUrl);
         
         // Always ensure StyleManager has the current map reference before any operations
         if (styleManagerRef.current) {
@@ -284,9 +329,8 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     minzoom: 0,
                     maxzoom: 24,
                 });
-            } catch (error) {
-                console.error('Map: Error adding DuckDB vector source:', error);
-                return;
+            } catch {
+                // Source already exists, continue
             }
 
             // Add polygon fill layer
@@ -336,126 +380,40 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 maxzoom: 24,
             });
 
-            // Add point layer with default styling
-            map.addLayer({
-                id: 'duckdb-points',
-                source: 'duckdb-vector',
-                'source-layer': 'v',
-                type: 'circle',
-                paint: {
-                    'circle-radius': 6,
-                    'circle-color': '#0066ff',
-                    'circle-stroke-width': 1,
-                    'circle-stroke-color': '#ffffff',
-                    'circle-opacity': 0.8,
-                },
-                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
-                minzoom: 0,
-                maxzoom: 24,
-            });
+            // Add point layer with default styling if it doesn't exist
+            if (!map.getLayer('duckdb-points')) {
+                map.addLayer({
+                    id: 'duckdb-points',
+                    source: 'duckdb-vector',
+                    'source-layer': 'v',
+                    type: 'circle',
+                    paint: {
+                        'circle-radius': 6,
+                        'circle-color': '#0066ff',
+                        'circle-stroke-width': 1,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-opacity': 0.8,
+                    },
+                    filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
+                    minzoom: 0,
+                    maxzoom: 24,
+                });
+            }
 
             // Add debug event to check properties in rendered features
             map.on('click', 'duckdb-points', (e) => {
                 if (e.features && e.features.length > 0) {
-                    const feature = e.features[0];
-                    console.log('=== Clicked Point Feature Debug ===');
-                    console.log('Feature:', feature);
-                    console.log('Properties:', feature.properties);
-                    console.log('All property keys:', Object.keys(feature.properties || {}));
-                    
-                    // Log all flattened properties from LIST<STRUCT>
-                    const props = feature.properties || {};
-                    Object.keys(props).forEach(key => {
-                        if (key.includes('_') || key.includes('千円') || key.includes('実績')) {
-                            console.log(`Property "${key}":`, props[key]);
-                        }
-                    });
-                    
-                    // Help message for styling
-                    console.log('\n=== Available properties for styling ===');
-                    console.log('You can use these properties in style expressions:');
-                    Object.keys(props).forEach(key => {
-                        console.log(`- ["get", "${key}"]`);
-                    });
+                    // Click event handler - can be extended for popups
                 }
             });
 
 
 
-            // Update global debug info
-            const currentLayers = map.getStyle().layers?.map(l => l.id) || [];
-            const duckdbLayers = currentLayers.filter(id => id.startsWith('duckdb-'));
-            
             // Update StyleManager with current map instance to fix stale reference
             if (styleManagerRef.current) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (styleManagerRef.current as any).map = map;
             }
-            
-            // Store layer info globally for debugging
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).debugMapLayers = {
-                allLayers: currentLayers,
-                duckdbLayers: duckdbLayers,
-                styleManager: styleManagerRef.current,
-                mapInstance: map
-            };
-            console.log('Map: Debug info stored in window.debugMapLayers');
-            
-            // Add debug function to check features at a specific location
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).debugFeatureAt = (lng: number, lat: number) => {
-                const point = map.project([lng, lat]);
-                const features = map.queryRenderedFeatures(point, {
-                    layers: ['duckdb-points', 'duckdb-points-test']
-                });
-                console.log('=== Features at location ===');
-                console.log(`Location: ${lng}, ${lat}`);
-                console.log(`Features found: ${features.length}`);
-                features.forEach((f, i) => {
-                    console.log(`Feature ${i}:`, f);
-                    console.log(`Properties:`, f.properties);
-                    console.log(`Geometry type:`, f.geometry.type);
-                });
-                return features;
-            };
-            
-            // Add manual debug functions
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).testLayerDetection = () => {
-                console.log('=== Manual Layer Detection Test ===');
-                console.log('Map instance:', map);
-                console.log('Map loaded:', map.loaded());
-                console.log('Style loaded:', map.isStyleLoaded());
-                console.log('Current selectedTable:', selectedTable);
-                
-                const style = map.getStyle();
-                console.log('Style:', style);
-                console.log('Style layers:', style?.layers);
-                
-                if (style?.layers) {
-                    console.log('All layer IDs:', style.layers.map(l => l.id));
-                    console.log('DuckDB layers:', style.layers.filter(l => l.id.startsWith('duckdb-')).map(l => l.id));
-                }
-                
-                console.log('StyleManager instance:', styleManagerRef.current);
-                if (styleManagerRef.current) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    console.log('StyleManager map:', (styleManagerRef.current as any).map);
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    console.log('StyleManager === Map:', (styleManagerRef.current as any).map === map);
-                    console.log('StyleManager getLayerIds():', styleManagerRef.current.getLayerIds());
-                    console.log('StyleManager getDataLayerInfo():', styleManagerRef.current.getDataLayerInfo());
-                }
-                
-                return {
-                    selectedTable: selectedTable,
-                    mapLayers: style?.layers?.map(l => l.id) || [],
-                    styleManagerLayers: styleManagerRef.current?.getLayerIds() || [],
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    mapsAreSame: (styleManagerRef.current as any).map === map
-                };
-            };
 
             // Add event handlers for DuckDB layers
             map.on('click', 'duckdb-points', handleFeatureClick);
@@ -479,7 +437,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
         // Add GeoJSON layers if URL is provided
         if (geojsonUrl) {
-            console.log('Map: Adding GeoJSON source and layers');
             map.addSource('geojson-source', {
                 type: 'geojson',
                 data: geojsonUrl,
@@ -541,7 +498,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         
         // Final StyleManager synchronization after all layer operations
         if (styleManagerRef.current) {
-            console.log('Map: Final StyleManager sync - updating map reference');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (styleManagerRef.current as any).map = map;
             
@@ -550,52 +506,42 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             
             // Log final state for debugging
             setTimeout(() => {
-                const finalLayers = styleManagerRef.current?.getLayerIds() || [];
-                const finalDataLayers = styleManagerRef.current?.getDataLayerInfo() || { duckdb: [], geojson: [] };
-                console.log('Map: Final layer state - all layers:', finalLayers);
-                console.log('Map: Final layer state - data layers:', finalDataLayers);
+                styleManagerRef.current?.getLayerIds();
+                styleManagerRef.current?.getDataLayerInfo();
                 
-                // Update global debug info
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (window as any).debugMapLayers = {
-                    allLayers: finalLayers,
-                    duckdbLayers: finalDataLayers.duckdb,
-                    styleManager: styleManagerRef.current,
-                    mapInstance: map
-                };
             }, 100);
         }
         
-        console.log('Map: updateMapLayers completed');
-        console.log('Map: Current style after update:', map.getStyle().name || 'custom');
-    }, [selectedTable, geojsonUrl, handleFeatureClick]);
+        
+        // Zoom to data bounds when a new table is selected
+        if (selectedTable && connectionRef.current) {
+            setTimeout(() => {
+                fitMapToData(selectedTable);
+                
+            }, 500); // Wait a bit for tiles to load
+        }
+    }, [selectedTable, geojsonUrl, handleFeatureClick, fitMapToData]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
-        console.log('Map: Registering DuckDB protocol');
         // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
         // If it already exists, it will be overwritten which is fine for our use case
         try {
             maplibregl.addProtocol('duckdb-vector', async params => {
-                console.log('Protocol handler called with URL:', params.url);
 
                 const zxy = getZxyFromUrl(params.url);
                 if (!zxy) throw new Error('invalid tile url: ' + params.url);
                 const cacheKey = `${zxy.z}/${zxy.x}/${zxy.y}`;
 
-                const addProtocolTime = new Date();
-                console.log(`計測 ${cacheKey} 1 ${addProtocolTime.toISOString()} start addProtocol`);
 
                 // キャッシュをチェック
                 if (tileCache.current.has(cacheKey)) {
-                    console.log(`計測 ${cacheKey} 2 using cached tile`);
                     const cachedData = tileCache.current.get(cacheKey);
                     // Create a fresh copy to avoid ArrayBuffer detachment
                     const freshCopy = cachedData ? new Uint8Array(cachedData.buffer.slice(0)) : new Uint8Array();
                     return { data: freshCopy };
                 }
 
-                console.log(`Processing tile: z: ${zxy.z}, x: ${zxy.x}, y: ${zxy.y}`);
 
                 try {
                     if (!connectionRef.current) {
@@ -604,22 +550,14 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
                     const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
 
-                    console.log(`Tile bounds: minLng=${minLng}, maxLng=${maxLng}, minLat=${minLat}, maxLat=${maxLat}`);
 
                     const currentTable = selectedTableRef.current;
                     const currentColumns = selectedColumnsRef.current;
 
                     if (!currentTable) {
-                        console.log('No table selected');
                         return { data: new Uint8Array() };
                     }
 
-                    console.log('Current selected columns:', currentColumns);
-                    
-                    // Check if any columns are selected
-                    if (currentColumns.length === 0) {
-                        console.warn('No columns selected! Properties will be empty.');
-                    }
 
                     // 選択されたカラムを取得するSQLクエリを構築
                     const query = generateVectorTileQuery({
@@ -627,33 +565,28 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                         selectedTable: currentTable,
                         selectedColumns: currentColumns,
                     });
-                    console.log('query: ' + query);
-                    const queryStartTime = new Date();
-                    console.log('Executing query:', query);
-                    console.log(`計測 ${cacheKey} 2 ${queryStartTime.toISOString()} start duckdb query`);
-                    const stmt = await connectionRef.current.prepare(query);
-                    const result = await stmt.query(minLng, minLat, maxLng, maxLat);
-                    const queryEndTime = new Date();
-                    const queryElapsedMs = queryEndTime.getTime() - queryStartTime.getTime();
-                    console.log(`Query returned ${result.numRows} rows`);
-                    console.log(`計測 ${cacheKey} 3 ${queryEndTime.toISOString()} end duckdb query, elapsed: ${queryElapsedMs}ms ${result.numRows} rows`);
+                    
+                    let stmt;
+                    let result;
+                    try {
+                        stmt = await connectionRef.current.prepare(query);
+                        result = await stmt.query(minLng, minLat, maxLng, maxLat);
+                    } catch {
+                        return { data: new Uint8Array() };
+                    }
+                    
 
                     if (result.numRows === 0) {
-                        console.log(`計測 ${cacheKey} 3 No data found for this tile`);
-                        console.log('cache io set key:', cacheKey);
                         tileCache.current.set(cacheKey, new Uint8Array());
                         return { data: new Uint8Array() };
                     }
 
                     const rows = result.toArray() as Array<{ geojson: string } & Record<string, string | number | null>>;
 
-                    const featureStartTime = new Date();
-                    console.log(`計測 ${cacheKey} 4 ${featureStartTime.toISOString()} start feature`);
                     const features = rows
-                        .map((row, index) => {
+                        .map((row) => {
                             try {
                                 if (!row.geojson) {
-                                    console.warn('Empty geojson for row:', row);
                                     return null;
                                 }
                                 const geometry = JSON.parse(row.geojson) as Geometry;
@@ -719,70 +652,41 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                     }
                                 });
 
-                                // Debug: Log the first few features to check properties
-                                if (index < 3) {
-                                    console.log(`Feature ${index} properties:`, properties);
-                                    console.log(`Feature ${index} geometry type:`, geometry.type);
-                                    console.log(`Feature ${index} row data:`, row);
-                                    // Log specific property access for debugging
-                                    if ('営業収入_千円' in properties) {
-                                        console.log(`Feature ${index} 営業収入_千円:`, properties['営業収入_千円']);
-                                    }
-                                    // Check which columns were selected
-                                    console.log(`Selected columns for this tile:`, currentColumns);
-                                }
 
                                 return {
                                     type: 'Feature' as const,
                                     geometry: geometry,
                                     properties: properties,
                                 } as Feature<Geometry, GeoJsonProperties>;
-                            } catch (error) {
-                                console.error('Error parsing GeoJSON:', error);
+                            } catch {
                                 return null;
                             }
                         })
                         .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
-                    const featureEndTime = new Date();
-                    const featureElapsedMs = featureEndTime.getTime() - featureStartTime.getTime();
-                    console.log(`計測 ${cacheKey} 5 ${featureEndTime.toISOString()} end feature, elapsed: ${featureElapsedMs}ms`);
 
                     if (features.length === 0) {
-                        console.log(`計測 ${cacheKey} 6 No valid features found`);
-                        console.log('cache io set key:', cacheKey);
                         tileCache.current.set(cacheKey, new Uint8Array());
                         return { data: new Uint8Array() };
                     }
 
-                    const vectorStartTime = new Date();
-                    console.log(`計測 ${cacheKey} 6 ${vectorStartTime.toISOString()} start vector`);
                     const vectorTile = geojsonToVectorTile(features, zxy.z, zxy.x, zxy.y);
-                    const vectorEndTime = new Date();
-                    const vectorElapsedMs = vectorEndTime.getTime() - vectorStartTime.getTime();
-                    console.log(`計測 ${cacheKey} 7 ${vectorEndTime.toISOString()} end  vector, elapsed: ${vectorElapsedMs}ms`);
-                    console.log('Vector tile generated, size:', vectorTile.length);
 
                     // Create a safe copy to avoid ArrayBuffer detachment issues
                     const safeVectorTile = new Uint8Array(vectorTile.buffer.slice(0));
                     
                     // Cache a separate copy
-                    console.log('cache io set key:', cacheKey);
                     const cacheData = new Uint8Array(safeVectorTile.buffer.slice(0));
                     tileCache.current.set(cacheKey, cacheData);
 
                     // Return yet another separate copy to avoid detachment
                     const returnData = new Uint8Array(safeVectorTile.buffer.slice(0));
-                    const endTime = new Date();
-                    const totalElapsedMs = endTime.getTime() - addProtocolTime.getTime();
-                    console.log(`計測 ${cacheKey} 8 ${endTime.toISOString()} end addProtocol, total elapsed: ${totalElapsedMs}ms`);
                     return { data: returnData };
-                } catch (error) {
-                    console.error('Error processing tile:', error);
+                } catch {
                     return { data: new Uint8Array() };
                 }
             });
-        } catch (error) {
-            console.error('Failed to register DuckDB protocol:', error);
+        } catch {
+            // Failed to register protocol
         }
     }, []);
 
@@ -870,11 +774,9 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             const fixedStyle = fixStylePropertyReferences(newStyle);
             
             if (isDefaultStyle) {
-                console.log('Map: Clearing custom style, reverting to default');
                 customStyleRef.current = null;
                 hasCustomStyleRef.current = false;
             } else {
-                console.log('Map: Storing custom style');
                 customStyleRef.current = fixedStyle;
                 hasCustomStyleRef.current = true;
             }
@@ -884,7 +786,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             
             // Wait for style to load, then re-add data layers
             const handleStyleLoad = () => {
-                console.log('Map: Style updated, re-adding data layers');
                 setIsLoading(false);
                 isApplyingCustomStyleRef.current = false;
                 
@@ -904,7 +805,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             mapRef.current.on('styledata', handleStyleLoad);
             
         } catch (error) {
-            console.error('Failed to apply new style:', error);
             setIsLoading(false);
             isApplyingCustomStyleRef.current = false;
             setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
@@ -919,20 +819,9 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
     }, [onStyleChange, handleStyleChange]);
 
     useEffect(() => {
-        console.log('Map: Main useEffect triggered, reasons:', {
-            db: !!db,
-            selectedTable,
-            selectedColumns,
-            geojsonUrl,
-            initialized: initializedRef.current,
-            mapExists: !!mapRef.current,
-            hasCustomStyle: hasCustomStyleRef.current,
-            isApplyingCustomStyle: isApplyingCustomStyleRef.current
-        });
         
         // If map already exists, just update layers
         if (initializedRef.current && mapRef.current) {
-            console.log('Map: Map already exists, updating layers only');
             updateMapLayers(mapRef.current);
             
             // Update StyleManager and force map to render
@@ -940,14 +829,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 // Ensure StyleManager has the current map reference
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (styleManagerRef.current as any).map = mapRef.current;
-                console.log('Map: Updated StyleManager map reference');
                 
                 mapRef.current.triggerRepaint();
                 
                 // Check layer detection after a delay to allow tiles to load
                 setTimeout(() => {
-                    console.log('Map: Style manager layer detection after update (delayed):', styleManagerRef.current?.getLayerIds());
-                    console.log('Map: Style manager data layers after update (delayed):', styleManagerRef.current?.getDataLayerInfo());
                 }, 1000);
             }
             return;
@@ -955,19 +841,14 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
         // Don't initialize if we're currently applying a custom style
         if (isApplyingCustomStyleRef.current) {
-            console.log('Map: Skipping initialization, custom style is being applied');
             return;
         }
 
-        const startTime = new Date();
-        console.log(`計測 0 ${startTime.toISOString()} start マップ初期化`);
-        console.log('マップ初期化開始');
 
         // DuckDBの初期化状態を確認
         if (db) {
             setMapError(null);
         } else {
-            console.error('DuckDB is not initialized');
             return;
         }
 
@@ -977,7 +858,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 // 接続を保持
                 connectionRef.current = await db.connect();
                 if (!connectionRef.current) {
-                    console.error('Failed to connect to DuckDB');
                     setMapError('DuckDBへの接続に失敗しました');
                     return;
                 }
@@ -1074,7 +954,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 const styleToUse = customStyleRef.current 
                     ? fixStylePropertyReferences(customStyleRef.current)
                     : defaultStyle;
-                console.log('Map: Creating map with style:', customStyleRef.current ? 'custom (fixed)' : 'default');
                 
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
@@ -1092,19 +971,12 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
                 // マップの読み込み完了時の処理
                 mapInstance.on('load', () => {
-                    const endTime = new Date();
-                    const totalElapsedMs = endTime.getTime() - startTime.getTime();
-                    console.log(`計測 9 ${endTime.toISOString()} end マップ初期化, total elapsed: ${totalElapsedMs}ms`);
-                    console.log('マップ読み込み完了');
                     setIsLoading(false);
 
                     // Initialize style manager and notify parent
                     if (!styleManagerRef.current) {
-                        console.log('Map: Initializing MapStyleManager');
-                        console.log('Map: MapLibre instance loaded:', mapInstance.loaded());
                         
                         styleManagerRef.current = new MapStyleManager(mapInstance);
-                        console.log('Map: MapStyleManager created, notifying parent');
                         onMapReady?.(styleManagerRef.current);
                     }
 
@@ -1112,7 +984,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     initializedRef.current = true;
                     updateMapLayers(mapInstance);
 
-                    console.log('Map: Available layers after init:', mapInstance.getStyle().layers?.map(l => l.id));
                     
                     // Force map to render and potentially load tiles, then check layer detection after a delay
                     if (styleManagerRef.current) {
@@ -1120,8 +991,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                         
                         // Check layer detection after a delay to allow tiles to load
                         setTimeout(() => {
-                            console.log('Map: Style manager layer detection after init (delayed):', styleManagerRef.current?.getLayerIds());
-                            console.log('Map: Style manager data layers after init (delayed):', styleManagerRef.current?.getDataLayerInfo());
                         }, 1000);
                     }
                 });
@@ -1137,7 +1006,6 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     styleManagerRef.current = null;
                 };
             } catch (error) {
-                console.error('Error initializing map:', error);
                 setMapError(`マップ初期化エラー: ${error instanceof Error ? error.message : String(error)}`);
                 setIsLoading(false);
             }
