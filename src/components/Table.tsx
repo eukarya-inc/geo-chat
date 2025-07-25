@@ -45,6 +45,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
     };
   }, []);
   const [columns, setColumns] = useState<GridColumn[]>([]);
+  const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
   const [totalRows, setTotalRows] = useState(0);
   const [arrowCache] = useState(new Map<string, ArrowTable>());
   const [loading, setLoading] = useState(true);
@@ -64,7 +65,14 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
           width: 150,
         }));
         
+        // Store column types for later use
+        const types: Record<string, string> = {};
+        initialData.columns.forEach((col) => {
+          types[col.name] = col.type;
+        });
+        
         setColumns(gridColumns);
+        setColumnTypes(types);
         setTotalRows(initialData.totalRows);
         
         // Store initial Arrow table in cache
@@ -138,7 +146,9 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
       
       // Convert only the specific cell value from Arrow
       const rowInWindow = row - windowStart;
-      const value = getValueFromArrowTable(arrowTable, rowInWindow, col);
+      const columnName = columns[col]?.id;
+      const columnType = columnName ? columnTypes[columnName] : undefined;
+      const value = getValueFromArrowTable(arrowTable, rowInWindow, col, columnType);
       // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
       const displayValue = value === null ? "NULL" : String(value);
       
@@ -149,7 +159,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
         allowOverlay: true,
       };
     },
-    [arrowCache, throttledLoadDataWindow]
+    [arrowCache, throttledLoadDataWindow, columns, columnTypes]
   );
 
   const onVisibleRegionChanged = useCallback(

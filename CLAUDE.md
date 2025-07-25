@@ -56,6 +56,15 @@ When generating styles for map visualization:
    SELECT COUNT(*) FROM temp_analysis; -- Verify success
    ```
 
+### Map Rendering Requirements
+
+**CRITICAL: Vector tiles require at least one column to be selected**
+- When no columns are selected, the vector tile query generates invalid SQL
+- This causes points/lines/polygons to not appear on the map even though geometry exists
+- The map will still zoom to the correct bounds (proving geometry is valid) but features won't render
+- Always ensure at least one column is selected in the table list UI for map visualization to work
+- This is particularly important for CSV files loaded with automatic coordinate detection
+
 ## Architecture Overview
 
 This is a React application that demonstrates DuckDB-WASM integration with geospatial data visualization on MapLibre GL maps.
