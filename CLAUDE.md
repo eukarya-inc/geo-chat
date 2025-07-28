@@ -33,7 +33,7 @@ If the build or tests fail, fix the issues before considering the task complete.
 
 When generating styles for map visualization:
 
-1. **ALWAYS use direct property access** for JSON properties:
+1. **ALWAYS use direct property access** for all properties:
    - ✅ CORRECT: `["get", "都道府県名"]`
    - ✅ CORRECT: `["get", "prefecture"]`
    - ❌ WRONG: `["get", "properties", ["get", "都道府県名"]]`
@@ -41,7 +41,7 @@ When generating styles for map visualization:
 
 2. **The system automatically extracts JSON properties** when the 'properties' column is selected in the table list
 
-3. **Property reference fixing** is implemented as a safety net, but styles should be generated correctly from the start
+3. **Column values ARE automatically converted to JSON** in the SQL query using `to_json()` to handle complex data types uniformly. The property extraction code handles unwrapping JSON-encoded strings.
 
 ### Temporary Tables Management
 
