@@ -79,7 +79,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     // Build the column list for the WITH clause - quote column names
     const withColumns = selectedColumns.length > 0 
         ? `geom, ${selectedColumns.map(col => `"${col}"`).join(', ')}`
-        : 'geom';
+        : 'geom, 1 as dummy';
 
     return `
         WITH filtered AS (
@@ -571,7 +571,10 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                     try {
                         stmt = await connectionRef.current.prepare(query);
                         result = await stmt.query(minLng, minLat, maxLng, maxLat);
-                    } catch {
+                    } catch (error) {
+                        console.error('Vector tile query error:', error);
+                        console.error('Query:', query);
+                        console.error('Parameters:', { minLng, minLat, maxLng, maxLat });
                         return { data: new Uint8Array() };
                     }
                     
@@ -583,6 +586,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
                     const rows = result.toArray() as Array<{ geojson: string } & Record<string, string | number | null>>;
 
+                    console.log(`Processing ${rows.length} rows for tile ${cacheKey}`);
+                    if (rows.length > 0 && zxy.z > 10) {  // Only log for higher zoom levels
+                        console.log('First row:', rows[0]);
+                        console.log('Selected columns:', currentColumns);
+                    }
                     const features = rows
                         .map((row) => {
                             try {
@@ -646,6 +654,13 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                                 // If parsing fails, store as is
                                                 properties[key] = value;
                                             }
+                                        } else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+                                            // Handle JSON-encoded strings (remove the quotes)
+                                            try {
+                                                properties[key] = JSON.parse(value);
+                                            } catch {
+                                                properties[key] = value;
+                                            }
                                         } else if (value !== null && value !== undefined) {
                                             properties[key] = value;
                                         }
@@ -658,12 +673,15 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                                     geometry: geometry,
                                     properties: properties,
                                 } as Feature<Geometry, GeoJsonProperties>;
-                            } catch {
+                            } catch (error) {
+                                console.error('Failed to parse geometry:', error, 'Row:', row);
                                 return null;
                             }
                         })
                         .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
 
+                    console.log(`Created ${features.length} features for tile ${cacheKey}`);
+                    
                     if (features.length === 0) {
                         tileCache.current.set(cacheKey, new Uint8Array());
                         return { data: new Uint8Array() };

@@ -8,13 +8,6 @@ export function geojsonToVectorTile(
     x: number,
     y: number
 ): Uint8Array {
-    // Debug: Check first few features
-    if (features.length > 0) {
-        console.log(`Vector tile generation for z=${z}, x=${x}, y=${y}`);
-        console.log('First feature properties:', features[0].properties);
-        console.log('Total features:', features.length);
-    }
-
     // geojson-vtでGeoJSONをベクトルタイルに変換
     const tileIndex = geojsonvt({
         type: 'FeatureCollection',
@@ -31,17 +24,7 @@ export function geojsonToVectorTile(
     // 指定されたタイルを取得
     const tile = tileIndex.getTile(z, x, y);
     if (!tile) {
-        console.log('No tile found for coordinates:', { z, x, y });
         return new Uint8Array();
-    }
-
-    // Debug: Check tile features
-    if (tile.features && tile.features.length > 0) {
-        console.log('Tile features count:', tile.features.length);
-        console.log('First tile feature:', tile.features[0]);
-        if (tile.features[0].tags) {
-            console.log('First tile feature tags:', tile.features[0].tags);
-        }
     }
 
     // vt-pbfでベクトルタイルをバイナリに変換
