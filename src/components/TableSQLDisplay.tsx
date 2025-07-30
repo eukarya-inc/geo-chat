@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 import type { SQLHistoryEntry } from '../lib/duckdb/sqlHistoryManager';
+import { SQLFlowVisualization } from './SQLFlowVisualization';
 
 interface TableSQLDisplayProps {
   tableName: string | null;
@@ -12,6 +13,7 @@ interface TableSQLDisplayProps {
 
 export default function TableSQLDisplay({ tableName, dbStateManager }: TableSQLDisplayProps) {
   const [sqlEntry, setSqlEntry] = useState<SQLHistoryEntry | undefined>(undefined);
+  const [showVisualization, setShowVisualization] = useState(false);
 
   useEffect(() => {
     if (!tableName || !dbStateManager) {
@@ -55,18 +57,32 @@ export default function TableSQLDisplay({ tableName, dbStateManager }: TableSQLD
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-gray-600">作成元:</span>
-        <span className="font-medium text-gray-800">{sourceLabel}</span>
-        <span className="text-gray-500">({timestamp})</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">作成元:</span>
+          <span className="font-medium text-gray-800">{sourceLabel}</span>
+          <span className="text-gray-500">({timestamp})</span>
+        </div>
+        <button
+          onClick={() => setShowVisualization(!showVisualization)}
+          className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          {showVisualization ? 'SQLを表示' : '可視化'}
+        </button>
       </div>
       
-      <pre 
-        className="bg-white border border-gray-300 rounded p-2 overflow-y-auto whitespace-pre-wrap break-words text-left"
-        style={{ maxHeight: 'calc(1.2em * 5)' }}
-      >
-        <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
-      </pre>
+      {!showVisualization ? (
+        <pre 
+          className="bg-white border border-gray-300 rounded p-2 overflow-y-auto whitespace-pre-wrap break-words text-left"
+          style={{ maxHeight: 'calc(1.2em * 5)' }}
+        >
+          <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
+        </pre>
+      ) : (
+        <div className="bg-white border border-gray-300 rounded" style={{ height: '300px', overflow: 'hidden' }}>
+          <SQLFlowVisualization sql={sqlEntry.sql} />
+        </div>
+      )}
       
       {sqlEntry.explanation && (
         <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
