@@ -103,7 +103,16 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     `;
 };
 
-const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady, onStyleChange, mapStyleManager, geometryColumnName = 'geom' }) => {
+const MapComponent: React.FC<MapProps> = ({ 
+    db, 
+    selectedTable, 
+    selectedColumns, 
+    geojsonUrl, 
+    onMapReady, 
+    onStyleChange, 
+    mapStyleManager, 
+    geometryColumnName = 'geom'
+}) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [showExportControls, setShowExportControls] = useState<boolean>(false);
@@ -124,7 +133,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         selectedTableRef.current = selectedTable;
         selectedColumnsRef.current = selectedColumns;
         
-        // Clear tile cache when table or columns change to force refresh
+        // Clear tile cache when table, columns, or geometry column change to force refresh
         if (selectedTable) {
             tileCache.current.clear();
             
@@ -139,7 +148,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                 }
             }
         }
-    }, [selectedTable, selectedColumns]);
+    }, [selectedTable, selectedColumns, geometryColumnName]);
 
     // Export functions
     const exportMapAsPNG = useCallback(async () => {
@@ -304,6 +313,13 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
             console.error('Error fitting map to data bounds:', error);
         }
     }, []);
+
+    // Re-fit bounds when geometry column changes
+    useEffect(() => {
+        if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && initializedRef.current) {
+            fitMapToData(selectedTable, geometryColumnName);
+        }
+    }, [geometryColumnName, selectedTable, fitMapToData]);
 
     // Function to update map layers dynamically
     const updateMapLayers = useCallback((map: maplibregl.Map) => {
@@ -851,8 +867,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
     useEffect(() => {
         
-        // If map already exists, just update layers
+        // If map already exists, just update layers and re-register protocol
         if (initializedRef.current && mapRef.current) {
+            // Re-register DuckDB protocol to pick up new geometryColumnName
+            registerDuckDBProtocol();
+            
             updateMapLayers(mapRef.current);
             
             // Update StyleManager and force map to render
@@ -1044,7 +1063,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
 
         initMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db, selectedTable, selectedColumns, geojsonUrl, updateMapLayers, registerDuckDBProtocol]);
+    }, [db, selectedTable, selectedColumns, geojsonUrl, updateMapLayers, registerDuckDBProtocol, geometryColumnName]);
     
     // Separate effect for onMapReady to avoid triggering re-initialization
     useEffect(() => {

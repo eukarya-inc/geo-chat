@@ -26,10 +26,10 @@ function ModelingPage() {
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
-    const [hasGeomColumn, setHasGeomColumn] = useState<boolean>(false);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [availableColumns, setAvailableColumns] = useState<string[]>([]);
-    const [geometryColumnName, setGeometryColumnName] = useState<string>('geom');
+    const [availableGeometryColumns, setAvailableGeometryColumns] = useState<string[]>([]);
+    const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geom');
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -118,18 +118,18 @@ function ModelingPage() {
     useEffect(() => {
         const checkGeomColumn = async () => {
             if (!selectedTable || !connection) {
-                setHasGeomColumn(false);
                 setAvailableColumns([]);
+                setAvailableGeometryColumns([]);
                 return;
             }
 
             const result = await checkTableGeometry(connection, selectedTable);
             
             setAvailableColumns(result.allColumns);
-            setHasGeomColumn(result.hasGeometry);
+            setAvailableGeometryColumns(result.geometryColumns);
             
-            if (result.hasGeometry && result.geometryColumnName) {
-                setGeometryColumnName(result.geometryColumnName);
+            if (result.geometryColumns.length > 0) {
+                setSelectedGeometryColumn(result.geometryColumns[0]);
                 setMapSelectedColumns(result.nonGeometryColumns);
             }
         };
@@ -280,17 +280,35 @@ function ModelingPage() {
                                                 />
                                             )
                                         },
-                                        ...(hasGeomColumn ? [{
+                                        ...(availableGeometryColumns.length > 0 ? [{
                                             id: 'map',
                                             title: '地図',
                                             content: (
-                                                <div className="h-full">
-                                                    <Map
-                                                        db={db}
-                                                        selectedTable={selectedTable}
-                                                        selectedColumns={mapSelectedColumns}
-                                                        geometryColumnName={geometryColumnName}
-                                                    />
+                                                <div className="h-full flex flex-col">
+                                                    {availableGeometryColumns.length > 1 && (
+                                                        <div className="p-2 border-b border-gray-200 bg-gray-50">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-medium">Geometryカラム:</span>
+                                                                <select
+                                                                    value={selectedGeometryColumn}
+                                                                    onChange={(e) => setSelectedGeometryColumn(e.target.value)}
+                                                                    className="text-sm px-2 py-1 border border-gray-300 rounded"
+                                                                >
+                                                                    {availableGeometryColumns.map(col => (
+                                                                        <option key={col} value={col}>{col}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1">
+                                                        <Map
+                                                            db={db}
+                                                            selectedTable={selectedTable}
+                                                            selectedColumns={mapSelectedColumns}
+                                                            geometryColumnName={selectedGeometryColumn}
+                                                        />
+                                                    </div>
                                                 </div>
                                             )
                                         }] : [])
