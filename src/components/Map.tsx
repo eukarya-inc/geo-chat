@@ -25,6 +25,7 @@ interface MapProps {
     onMapReady?: (styleManager: MapStyleManager) => void;
     onStyleChange?: (styleChanger: (style: maplibregl.StyleSpecification) => void) => void;
     mapStyleManager?: MapStyleManager;
+    geometryColumnName?: string;
 }
 
 interface QueryParams {
@@ -35,6 +36,7 @@ interface QueryParams {
     };
     selectedTable: string;
     selectedColumns: string[];
+    geometryColumnName: string;
 }
 
 const calculateSimplifyTolerance = (zoomLevel: number): number => {
@@ -59,9 +61,9 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
 };
 
 const generateVectorTileQuery = (params: QueryParams): string => {
-    const { zxy, selectedTable, selectedColumns } = params;
+    const { zxy, selectedTable, selectedColumns, geometryColumnName } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
-
+    const geomCol = geometryColumnName || 'geom';
 
     // Build column selection - always convert to JSON for consistent handling
     let finalColumnSelection = '';
@@ -78,8 +80,8 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 
     // Build the column list for the WITH clause - quote column names
     const withColumns = selectedColumns.length > 0 
-        ? `geom, ${selectedColumns.map(col => `"${col}"`).join(', ')}`
-        : 'geom, 1 as dummy';
+        ? `"${geomCol}" as geom, ${selectedColumns.map(col => `"${col}"`).join(', ')}`
+        : `"${geomCol}" as geom, 1 as dummy`;
 
     return `
         WITH filtered AS (
@@ -88,7 +90,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
                 ${withColumns}
             FROM ${selectedTable}
             WHERE ST_Intersects(
-                geom,
+                "${geomCol}",
                 ST_MakeEnvelope(?, ?, ?, ?)
             )
         )
@@ -101,7 +103,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     `;
 };
 
-const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady, onStyleChange, mapStyleManager }) => {
+const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, geojsonUrl, onMapReady, onStyleChange, mapStyleManager, geometryColumnName = 'geom' }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [showExportControls, setShowExportControls] = useState<boolean>(false);
@@ -263,33 +265,43 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
     }, [selectedColumns]);
 
     // Function to zoom map to data bounds
-    const fitMapToData = useCallback(async (tableName: string) => {
+    const fitMapToData = useCallback(async (tableName: string, geomColumn: string) => {
         if (!mapRef.current || !connectionRef.current) return;
         
         try {
-            // Query the bounds of the data
+            // Query the bounds using a robust method that handles mixed geometry types
             const result = await connectionRef.current.query(`
-                SELECT 
-                    MIN(ST_X(geom)) as min_lng,
-                    MAX(ST_X(geom)) as max_lng,
-                    MIN(ST_Y(geom)) as min_lat,
-                    MAX(ST_Y(geom)) as max_lat
-                FROM ${tableName}
-                WHERE geom IS NOT NULL
+                WITH bounds AS (
+                    SELECT 
+                        ST_Envelope("${geomColumn}") as envelope
+                    FROM ${tableName}
+                    WHERE "${geomColumn}" IS NOT NULL
+                ),
+                all_bounds AS (
+                    SELECT 
+                        MIN(ST_XMin(envelope)) as min_lng,
+                        MAX(ST_XMax(envelope)) as max_lng,
+                        MIN(ST_YMin(envelope)) as min_lat,
+                        MAX(ST_YMax(envelope)) as max_lat
+                    FROM bounds
+                )
+                SELECT * FROM all_bounds
             `);
             
             const bounds = result.toArray()[0] as unknown as { min_lng: number; max_lng: number; min_lat: number; max_lat: number; };
-            if (bounds && bounds.min_lng !== null) {
+            
+            if (bounds && bounds.min_lng !== null && bounds.min_lng !== undefined) {
                 mapRef.current.fitBounds([
                     [bounds.min_lng, bounds.min_lat],
                     [bounds.max_lng, bounds.max_lat]
                 ], {
                     padding: 50,
-                    duration: 1000
+                    duration: 1000,
+                    maxZoom: 16 // Prevent excessive zoom
                 });
             }
-        } catch {
-            // Ignore errors when fitting to bounds
+        } catch (error) {
+            console.error('Error fitting map to data bounds:', error);
         }
     }, []);
 
@@ -516,11 +528,11 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         // Zoom to data bounds when a new table is selected
         if (selectedTable && connectionRef.current) {
             setTimeout(() => {
-                fitMapToData(selectedTable);
+                fitMapToData(selectedTable, geometryColumnName);
                 
             }, 500); // Wait a bit for tiles to load
         }
-    }, [selectedTable, geojsonUrl, handleFeatureClick, fitMapToData]);
+    }, [selectedTable, geojsonUrl, handleFeatureClick, fitMapToData, geometryColumnName]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
@@ -564,6 +576,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
                         zxy,
                         selectedTable: currentTable,
                         selectedColumns: currentColumns,
+                        geometryColumnName,
                     });
                     
                     let stmt;
@@ -706,7 +719,7 @@ const MapComponent: React.FC<MapProps> = ({ db, selectedTable, selectedColumns, 
         } catch {
             // Failed to register protocol
         }
-    }, []);
+    }, [geometryColumnName]);
 
     // Function to fix property references in style expressions
     const fixPropertyReferences = useCallback((expr: unknown): unknown => {

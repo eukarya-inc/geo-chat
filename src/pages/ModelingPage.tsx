@@ -11,6 +11,8 @@ import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encrypti
 import { TabView } from '../components/TabView';
 import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
 import { generateDefaultCharts } from '../utils/autoChartGenerator';
+import Map from '../components/Map';
+import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
@@ -24,6 +26,10 @@ function ModelingPage() {
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
+    const [hasGeomColumn, setHasGeomColumn] = useState<boolean>(false);
+    const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
+    const [availableColumns, setAvailableColumns] = useState<string[]>([]);
+    const [geometryColumnName, setGeometryColumnName] = useState<string>('geom');
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -107,6 +113,29 @@ function ModelingPage() {
             unsubscribe();
         };
     }, [dbStateManager]);
+
+    // Check for geom column and available columns when table is selected
+    useEffect(() => {
+        const checkGeomColumn = async () => {
+            if (!selectedTable || !connection) {
+                setHasGeomColumn(false);
+                setAvailableColumns([]);
+                return;
+            }
+
+            const result = await checkTableGeometry(connection, selectedTable);
+            
+            setAvailableColumns(result.allColumns);
+            setHasGeomColumn(result.hasGeometry);
+            
+            if (result.hasGeometry && result.geometryColumnName) {
+                setGeometryColumnName(result.geometryColumnName);
+                setMapSelectedColumns(result.nonGeometryColumns);
+            }
+        };
+
+        checkGeomColumn();
+    }, [selectedTable, connection]);
 
     // Generate preview chart when table is selected
     useEffect(() => {
@@ -250,7 +279,21 @@ function ModelingPage() {
                                                     dbStateManager={dbStateManager || undefined}
                                                 />
                                             )
-                                        }
+                                        },
+                                        ...(hasGeomColumn ? [{
+                                            id: 'map',
+                                            title: '地図',
+                                            content: (
+                                                <div className="h-full">
+                                                    <Map
+                                                        db={db}
+                                                        selectedTable={selectedTable}
+                                                        selectedColumns={mapSelectedColumns}
+                                                        geometryColumnName={geometryColumnName}
+                                                    />
+                                                </div>
+                                            )
+                                        }] : [])
                                     ]}
                                     defaultActiveTab="table"
                                 />
