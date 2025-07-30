@@ -46,9 +46,27 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
 
             // URLからファイル名を抽出
             const fileName = targetUrl.split('/').pop() || 'remote_file';
-            let tableName = fileName.split('.')[0].replace(/[^a-zA-Z0-9_]/g, '_');
-            if (/^\d/.test(tableName)) {
-                tableName = `t_${tableName}`;
+            // URLエンコードされている場合はデコード
+            const decodedFileName = decodeURIComponent(fileName);
+            
+            // 拡張子を除去
+            const nameWithoutExt = decodedFileName.split('.')[0];
+            
+            // テーブル名として使える文字に変換
+            // 日本語を含む場合は短いハッシュを生成
+            let tableName;
+            // eslint-disable-next-line no-control-regex
+            if (/[^\x00-\x7F]/.test(nameWithoutExt)) {
+                // 非ASCII文字（日本語など）が含まれる場合
+                // 簡単なハッシュを生成（文字コードの合計を16進数に）
+                const hash = nameWithoutExt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString(16);
+                tableName = `table_${hash}`;
+            } else {
+                // ASCII文字のみの場合は既存の処理
+                tableName = nameWithoutExt.replace(/[^a-zA-Z0-9_]/g, '_');
+                if (/^\d/.test(tableName)) {
+                    tableName = `t_${tableName}`;
+                }
             }
 
             const isParquet = targetUrl.toLowerCase().endsWith('.parquet');
