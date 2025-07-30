@@ -8,6 +8,7 @@ export interface ColumnInfo {
 export interface GeometryCheckResult {
     hasGeometry: boolean;
     geometryColumnName: string | null;
+    geometryColumns: string[];
     allColumns: string[];
     nonGeometryColumns: string[];
 }
@@ -32,13 +33,13 @@ export async function checkTableGeometry(
         
         const allColumns = columnInfo.map(col => col.name).filter(name => name);
         
-        // Find geometry column
-        const geometryColumn = columnInfo.find(col => 
-            col.type && col.type.toUpperCase().includes('GEOMETRY')
-        );
+        // Find all geometry columns
+        const geometryColumns = columnInfo
+            .filter(col => col.type && col.type.toUpperCase().includes('GEOMETRY'))
+            .map(col => col.name);
         
-        const hasGeometry = !!geometryColumn;
-        const geometryColumnName = geometryColumn?.name || null;
+        const hasGeometry = geometryColumns.length > 0;
+        const geometryColumnName = geometryColumns[0] || null;
         
         // Get non-geometry columns
         const nonGeometryColumns = columnInfo
@@ -48,6 +49,7 @@ export async function checkTableGeometry(
         return {
             hasGeometry,
             geometryColumnName,
+            geometryColumns,
             allColumns,
             nonGeometryColumns
         };
@@ -56,6 +58,7 @@ export async function checkTableGeometry(
         return {
             hasGeometry: false,
             geometryColumnName: null,
+            geometryColumns: [],
             allColumns: [],
             nonGeometryColumns: []
         };
