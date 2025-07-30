@@ -27,7 +27,6 @@ function ModelingPage() {
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
-    const [availableColumns, setAvailableColumns] = useState<string[]>([]);
     const [availableGeometryColumns, setAvailableGeometryColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geom');
 
@@ -118,14 +117,12 @@ function ModelingPage() {
     useEffect(() => {
         const checkGeomColumn = async () => {
             if (!selectedTable || !connection) {
-                setAvailableColumns([]);
                 setAvailableGeometryColumns([]);
                 return;
             }
 
             const result = await checkTableGeometry(connection, selectedTable);
             
-            setAvailableColumns(result.allColumns);
             setAvailableGeometryColumns(result.geometryColumns);
             
             if (result.geometryColumns.length > 0) {

@@ -26,10 +26,13 @@ export async function checkTableGeometry(
         const columns = result.toArray();
         
         // Extract column information
-        const columnInfo: ColumnInfo[] = columns.map(row => ({
-            name: (row as any).name,
-            type: (row as any).type
-        }));
+        const columnInfo: ColumnInfo[] = columns.map(row => {
+            const rowData = row as Record<string, unknown>;
+            return {
+                name: String(rowData.name || ''),
+                type: String(rowData.type || '')
+            };
+        });
         
         const allColumns = columnInfo.map(col => col.name).filter(name => name);
         

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import VegaLiteChart from './VegaLiteChart';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
@@ -67,6 +67,36 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, db, dbStateManager
       clearTimeout(resizeTimeout);
     };
   }, [charts.length]);
+
+  // Create spec with measured dimensions
+  const getSpecWithDimensions = useCallback((spec: VegaLiteSpec): VegaLiteSpec => {
+    return {
+      ...spec,
+      width: dimensions.width,
+      height: dimensions.height,
+      padding: 0,  // Remove default Vega padding
+      autosize: {
+        type: 'fit',
+        contains: 'padding'
+      }
+    };
+  }, [dimensions.width, dimensions.height]);
+
+  const firstChartId = charts[0]?.id;
+  const firstChartSpec = charts[0]?.spec;
+
+  const singleChartElement = useMemo(() => {
+    if (charts.length !== 1) return null;
+    return (
+      <VegaLiteChart 
+        key={firstChartId}
+        spec={getSpecWithDimensions(firstChartSpec)} 
+        db={db} 
+        dbStateManager={dbStateManager} 
+      />
+    );
+  }, [charts.length, firstChartId, firstChartSpec, db, dbStateManager, getSpecWithDimensions]);
+
   if (charts.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
@@ -78,34 +108,13 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, db, dbStateManager
     );
   }
 
-  // Create spec with measured dimensions
-  const getSpecWithDimensions = (spec: VegaLiteSpec): VegaLiteSpec => {
-    return {
-      ...spec,
-      width: dimensions.width,
-      height: dimensions.height,
-      padding: 0,  // Remove default Vega padding
-      autosize: {
-        type: 'fit',
-        contains: 'padding'
-      }
-    };
-  };
-
   return (
     <div ref={containerRef} className="h-full overflow-y-auto overflow-x-hidden">
       {charts.length === 1 ? (
         // Single chart - display with measured size
         <div className="p-4">
           <div className="bg-white rounded-lg shadow-sm p-4">
-            {useMemo(() => (
-              <VegaLiteChart 
-                key={charts[0].id}
-                spec={getSpecWithDimensions(charts[0].spec)} 
-                db={db} 
-                dbStateManager={dbStateManager} 
-              />
-            ), [charts[0].id, charts[0].spec, dimensions.width, dimensions.height, db, dbStateManager])}
+            {singleChartElement}
           </div>
         </div>
       ) : (
