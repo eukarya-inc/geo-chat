@@ -4,7 +4,6 @@ import { createDBStateManager, type DBStateManager } from "./dbStateManager";
 import { getGlobalDB } from "./globalDB";
 
 export function useDuckDB() {
-    console.log('useDuckDB: Hook called');
     const [db, setDb] = useState<duckdb.AsyncDuckDB | null>(null);
     const [dbStateManager, setDbStateManager] = useState<DBStateManager | null>(null);
     const [error, setError] = useState<Error | null>(null);
