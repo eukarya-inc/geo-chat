@@ -8,6 +8,9 @@ import TableSQLDisplay from '../components/TableSQLDisplay';
 import { ResizableDivider } from '../components/ResizableDivider';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
+import { TabView } from '../components/TabView';
+import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
+import { generateDefaultCharts } from '../utils/autoChartGenerator';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
@@ -20,6 +23,7 @@ function ModelingPage() {
     const [showTableSelector, setShowTableSelector] = useState(true);
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
+    const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -103,6 +107,37 @@ function ModelingPage() {
             unsubscribe();
         };
     }, [dbStateManager]);
+
+    // Generate preview chart when table is selected
+    useEffect(() => {
+        const generateChart = async () => {
+            if (!selectedTable || !dbStateManager) {
+                setChartSpec(null);
+                return;
+            }
+
+            try {
+                const defaultCharts = await generateDefaultCharts(selectedTable, dbStateManager);
+
+                if (defaultCharts.length > 0) {
+                    const result = defaultCharts[0];
+                    setChartSpec({
+                        id: `preview-${selectedTable}`,
+                        spec: result.spec,
+                        timestamp: new Date(),
+                        title: result.title
+                    });
+                } else {
+                    setChartSpec(null);
+                }
+            } catch (error) {
+                console.error('Error generating preview chart:', error);
+                setChartSpec(null);
+            }
+        };
+
+        generateChart();
+    }, [selectedTable, dbStateManager]);
 
     return (
         <div className="flex h-full w-full overflow-hidden">
@@ -191,9 +226,33 @@ function ModelingPage() {
                     {db && selectedTable && connection && (
                         <>
                             <div className="flex-1 overflow-hidden">
-                                <Table
-                                    connection={connection}
-                                    tableName={selectedTable}
+                                <TabView
+                                    tabs={[
+                                        {
+                                            id: 'table',
+                                            title: 'テーブル',
+                                            content: (
+                                                <div className="h-full">
+                                                    <Table
+                                                        connection={connection}
+                                                        tableName={selectedTable}
+                                                    />
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            id: 'graph',
+                                            title: 'グラフ',
+                                            content: (
+                                                <ChartGrid
+                                                    charts={chartSpec ? [chartSpec] : []}
+                                                    db={db}
+                                                    dbStateManager={dbStateManager || undefined}
+                                                />
+                                            )
+                                        }
+                                    ]}
+                                    defaultActiveTab="table"
                                 />
                             </div>
                             <ResizableDivider
@@ -201,7 +260,7 @@ function ModelingPage() {
                                 minHeight={100}
                                 maxHeight={500}
                             />
-                            <div 
+                            <div
                                 className="flex-shrink-0 bg-white border-t border-gray-200 overflow-hidden"
                                 style={{ height: `${sqlAreaHeight}px` }}
                             >

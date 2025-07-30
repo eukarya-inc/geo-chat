@@ -3,45 +3,7 @@ import { VegaLite } from 'react-vega';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
-interface VegaLiteSpec {
-  $schema?: string;
-  data?: {
-    sql?: string;
-    values?: Record<string, unknown>[];
-  };
-  mark?: string | {
-    type?: string;
-    size?: number;
-    opacity?: number;
-    point?: boolean;
-    strokeWidth?: number;
-    innerRadius?: number;
-    extent?: string;
-    [key: string]: unknown;
-  };
-  encoding?: {
-    [key: string]: {
-      field?: string;
-      type?: string;
-      aggregate?: string;
-      bin?: boolean;
-      [key: string]: unknown;
-    };
-  };
-  title?: string | {
-    text?: string;
-    [key: string]: unknown;
-  };
-  width?: number;
-  height?: number;
-  config?: {
-    view?: { stroke?: null };
-    axis?: { grid?: boolean };
-    legend?: { orient?: string };
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
+import type { VegaLiteSpec } from '../types/vega';
 
 interface VegaLiteChartProps {
   spec: VegaLiteSpec;
@@ -72,11 +34,42 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     sizeField: extractField(initialSpec, 'size'),
     title: (typeof initialSpec.title === 'object' && initialSpec.title?.text) || 
            (typeof initialSpec.title === 'string' ? initialSpec.title : '') || '',
-    width: initialSpec.width || 400,
-    height: initialSpec.height || 300
+    width: initialSpec.width || 600,
+    height: initialSpec.height || 400
   });
 
   const [currentSpec, setCurrentSpec] = useState(initialSpec);
+
+  // Update internal state when initialSpec changes
+  useEffect(() => {
+    setCurrentSpec(initialSpec);
+    setConfig({
+      tableName: extractTableName(initialSpec),
+      plotType: extractPlotType(initialSpec),
+      xField: extractField(initialSpec, 'x'),
+      yField: extractField(initialSpec, 'y'),
+      colorField: extractField(initialSpec, 'color'),
+      sizeField: extractField(initialSpec, 'size'),
+      title: (typeof initialSpec.title === 'object' && initialSpec.title?.text) || 
+             (typeof initialSpec.title === 'string' ? initialSpec.title : '') || '',
+      width: initialSpec.width || 400,
+      height: initialSpec.height || 300
+    });
+  }, [initialSpec]);
+
+  // Update currentSpec dimensions when initialSpec dimensions change
+  useEffect(() => {
+    if (initialSpec.width !== currentSpec.width || initialSpec.height !== currentSpec.height) {
+      setCurrentSpec(prev => ({
+        ...prev,
+        width: initialSpec.width,
+        height: initialSpec.height,
+        // Also update autosize and padding if present
+        ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
+        ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {})
+      }));
+    }
+  }, [initialSpec.width, initialSpec.height, initialSpec.autosize, initialSpec.padding, currentSpec.width, currentSpec.height]);
 
   // Extract table name from SQL query
   function extractTableName(spec: VegaLiteSpec): string {
@@ -180,6 +173,9 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       title: config.title || `${config.plotType.charAt(0).toUpperCase() + config.plotType.slice(1)} Chart`,
       width: config.width,
       height: config.height,
+      // Preserve autosize and padding from initial spec if present
+      ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
+      ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {}),
       data: {
         sql: `SELECT * FROM ${config.tableName} LIMIT 1000`
       },
@@ -590,7 +586,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       )}
 
       {/* Chart */}
-      <div style={{ padding: '10px', overflow: 'visible' }}>
+      <div style={{ padding: '0', overflow: 'visible' }}>
         <VegaLite 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           spec={finalSpec as any}
