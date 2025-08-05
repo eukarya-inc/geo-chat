@@ -29,14 +29,14 @@ export async function getGlobalDB(): Promise<duckdb.AsyncDuckDB> {
         console.log('GlobalDB: Returning existing global database instance');
         return globalDB;
     }
-    
+
     if (initPromise) {
         console.log('GlobalDB: Waiting for database initialization to complete');
         const db = await initPromise;
         globalDB = db;
         return db;
     }
-    
+
     console.log('GlobalDB: Creating new global database instance');
     initPromise = initializeDB();
     globalDB = await initPromise;
@@ -46,10 +46,11 @@ export async function getGlobalDB(): Promise<duckdb.AsyncDuckDB> {
 
 async function initializeDB(): Promise<duckdb.AsyncDuckDB> {
     console.log('GlobalDB: Initializing single database instance');
-    
+
     const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
     const worker = new Worker(bundle.mainWorker!);
-    const logger = new duckdb.ConsoleLogger();
+    const logger = new duckdb.VoidLogger();
+    // const logger = new duckdb.ConsoleLogger();
     const db = new duckdb.AsyncDuckDB(logger, worker);
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
@@ -66,11 +67,11 @@ async function initializeDB(): Promise<duckdb.AsyncDuckDB> {
     try {
         await conn.query("INSTALL spatial;");
         await conn.query("LOAD spatial;");
-        
+
         // Force single-threaded consistent mode
         await conn.query("PRAGMA threads=1;");
         await conn.query("SET memory_limit='1GB';");
-        
+
         console.log("GlobalDB: Database initialized with spatial extension and single-thread mode");
     } finally {
         await conn.close();

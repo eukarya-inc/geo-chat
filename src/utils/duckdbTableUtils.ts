@@ -20,10 +20,10 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
   if (typeof value === 'bigint') {
     return value.toString();
   }
-  
+
   // Handle BLOB data (Uint8Array, ArrayBuffer, or objects with byteLength)
-  if (value instanceof Uint8Array || 
-      value instanceof ArrayBuffer || 
+  if (value instanceof Uint8Array ||
+      value instanceof ArrayBuffer ||
       (value && typeof value === 'object' && 'byteLength' in value)) {
     // Check if this is a geometry column based on column type
     if (columnType && (
@@ -42,10 +42,10 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
           // WKB format: byte order (1 byte) + type (4 bytes)
           const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
           const byteOrder = value[0]; // 0 = big endian, 1 = little endian
-          const typeCode = byteOrder === 1 
+          const typeCode = byteOrder === 1
             ? view.getUint32(1, true)  // little endian
             : view.getUint32(1, false); // big endian
-          
+
           // Geometry type codes
           const geomTypes: Record<number, string> = {
             1: 'POINT',
@@ -56,10 +56,10 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
             6: 'MULTIPOLYGON',
             7: 'GEOMETRYCOLLECTION'
           };
-          
+
           const baseType = typeCode & 0xFF; // Get base type without dimension flags
           const typeName = geomTypes[baseType] || 'GEOMETRY';
-          
+
           // For POINT geometry, try to extract coordinates
           if (baseType === 1 && value.length >= 21) {
             const x = byteOrder === 1
@@ -68,22 +68,22 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
             const y = byteOrder === 1
               ? view.getFloat64(13, true)
               : view.getFloat64(13, false);
-            
+
             // Format coordinates with reasonable precision
             return `POINT(${x.toFixed(6)} ${y.toFixed(6)})`;
           }
-          
+
           return `[${typeName}]`;
         } catch {
           // If parsing fails, fall back to column type
         }
       }
-      
+
       // For geometry types, show a more descriptive label based on column type
       const geomType = columnType.toUpperCase().replace('MULTI', 'MULTI ');
       return `[${geomType}]`;
     }
-    
+
     // For other BLOB data, try to show size information
     let byteLength = 0;
     if (value instanceof Uint8Array) {
@@ -93,7 +93,7 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
     } else if (value && typeof value === 'object' && 'byteLength' in value) {
       byteLength = (value as { byteLength: number }).byteLength;
     }
-    
+
     if (byteLength > 0) {
       // Format byte size in a human-readable way
       if (byteLength < 1024) {
@@ -104,10 +104,10 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
         return `[BLOB: ${(byteLength / (1024 * 1024)).toFixed(1)} MB]`;
       }
     }
-    
+
     return '[BLOB]';
   }
-  
+
   return value;
 }
 
@@ -125,12 +125,12 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
   if (data.length === 0) {
     return new ArrowTable();
   }
-  
+
   const columnData: Record<string, unknown[]> = {};
   for (const col of columns) {
     columnData[col.name] = data.map(row => convertSpecialValues(row[col.name], col.type));
   }
-  
+
   return tableFromArrays(columnData);
 }
 
@@ -139,12 +139,12 @@ export async function getTableSchema(
   tableName: string
 ): Promise<TableColumn[]> {
   const result = await connection.query(`
-    SELECT column_name, data_type 
-    FROM information_schema.columns 
+    SELECT column_name, data_type
+    FROM information_schema.columns
     WHERE table_name = '${tableName}'
     ORDER BY ordinal_position
   `);
-  
+
   const columns: TableColumn[] = [];
   for (const row of result.toArray()) {
     columns.push({
@@ -152,7 +152,7 @@ export async function getTableSchema(
       type: row.data_type as string,
     });
   }
-  
+
   return columns;
 }
 
@@ -160,10 +160,11 @@ export async function getTableRowCount(
   connection: AsyncDuckDBConnection,
   tableName: string
 ): Promise<number> {
-  const result = await connection.query(`SELECT COUNT(*) as count FROM "${tableName}"`);
+  // Use the table name as-is (it might already include schema prefix)
+  const result = await connection.query(`SELECT COUNT(*) as count FROM ${tableName}`);
   const row = result.toArray()[0];
   const count = row.count;
-  
+
   // Convert BigInt to number, handling potential overflow
   if (typeof count === 'bigint') {
     // For very large numbers, cap at Number.MAX_SAFE_INTEGER
@@ -172,7 +173,7 @@ export async function getTableRowCount(
     }
     return Number(count);
   }
-  
+
   return count as number;
 }
 
@@ -188,8 +189,9 @@ export async function getTableData(
   ]);
 
   const columnNames = buildColumnNamesString(columns);
+  // Use the table name as-is (it might already include schema prefix)
   const result = await connection.query(
-    `SELECT ${columnNames} FROM "${tableName}" LIMIT ${limit} OFFSET ${offset}`
+    `SELECT ${columnNames} FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
   );
 
   const data = result.toArray();
@@ -213,8 +215,9 @@ export async function getTableDataByWindow(
   const offset = startRow;
 
   const columnNames = buildColumnNamesString(columns);
+  // Use the table name as-is (it might already include schema prefix)
   const result = await connection.query(
-    `SELECT ${columnNames} FROM "${tableName}" LIMIT ${limit} OFFSET ${offset}`
+    `SELECT ${columnNames} FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
   );
 
   const data = result.toArray();
@@ -230,12 +233,12 @@ export function getValueFromArrowTable(
   if (rowIndex >= arrowTable.numRows || columnIndex >= arrowTable.numCols) {
     return null;
   }
-  
+
   const column = arrowTable.getChildAt(columnIndex);
   if (!column) {
     return null;
   }
-  
+
   const value = column.get(rowIndex);
   return convertSpecialValues(value, columnType);
 }

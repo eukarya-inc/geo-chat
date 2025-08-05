@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AIChat from '../components/AIChatModeling';
 import { Table } from '../components/Table';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
@@ -13,11 +13,15 @@ import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
 import { generateDefaultCharts } from '../utils/autoChartGenerator';
 import Map from '../components/Map';
 import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
+import { ChatList, type Chat } from '../components/ChatList';
+import { createSchemaManager, type SchemaManager } from '../lib/duckdb/schemaManager';
+import type { CoreMessage } from 'ai';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
+    const [connectionTimestamp, setConnectionTimestamp] = useState<number>(Date.now());
     const [apiKey, setApiKey] = useState<string>('');
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
@@ -25,10 +29,107 @@ function ModelingPage() {
     const [showTableSelector, setShowTableSelector] = useState(true);
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
+
+    const handleSendMessageReady = useCallback((sendFn: (message: string) => void) => {
+        setSendMessage(() => sendFn);
+    }, []);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [availableGeometryColumns, setAvailableGeometryColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geom');
+
+    // Chat management state
+    const [chats, setChats] = useState<Chat[]>([]);
+    const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+    const [schemaManager, setSchemaManager] = useState<SchemaManager | null>(null);
+
+    // Update messages for a specific chat
+    const updateChatMessages = useCallback((chatId: string, messages: CoreMessage[]) => {
+        setChats(prevChats =>
+            prevChats.map(chat =>
+                chat.id === chatId
+                    ? { ...chat, messages }
+                    : chat
+            )
+        );
+    }, []);
+
+    // Chat management functions
+    const createNewChat = async () => {
+        if (!schemaManager) {
+            console.error('SchemaManager is not initialized');
+            return;
+        }
+
+        try {
+            const newChat: Chat = {
+                id: `chat-${Date.now()}`,
+                title: `チャット ${chats.length + 1}`,
+                createdAt: new Date(),
+                messages: []
+            };
+
+            // Create schema for the new chat
+            await schemaManager.createSchema(newChat.id);
+            await schemaManager.switchToSchema(newChat.id);
+
+            setChats([...chats, newChat]);
+            setSelectedChatId(newChat.id);
+
+            // Update dbStateManager with current schema
+            if (dbStateManager) {
+                dbStateManager.setCurrentSchema(schemaManager.getCurrentSchema());
+            }
+
+            // Reset table selection since we're in a new schema
+            setSelectedTable(null);
+
+            // Notify table change to refresh table list
+            if (dbStateManager) {
+                dbStateManager.notifyTableChange();
+            }
+        } catch (error) {
+            console.error('Error creating new chat:', error);
+        }
+    };
+
+    const deleteChat = async (chatId: string) => {
+        if (!schemaManager) return;
+
+        // Delete the schema associated with the chat
+        await schemaManager.deleteSchema(chatId);
+
+        setChats(chats.filter(chat => chat.id !== chatId));
+        if (selectedChatId === chatId) {
+            const remainingChats = chats.filter(chat => chat.id !== chatId);
+            if (remainingChats.length > 0) {
+                const nextChat = remainingChats[0];
+                setSelectedChatId(nextChat.id);
+                // Switch to the next chat's schema
+                await schemaManager.switchToSchema(nextChat.id);
+                // Update dbStateManager
+                if (dbStateManager) {
+                    dbStateManager.setCurrentSchema(schemaManager.getCurrentSchema());
+                }
+            } else {
+                setSelectedChatId(null);
+                // Reset to main schema
+                await schemaManager.resetToMain();
+                // Update dbStateManager
+                if (dbStateManager) {
+                    dbStateManager.setCurrentSchema(null);
+                }
+            }
+
+            // Reset table selection
+            setSelectedTable(null);
+
+            // Notify table change
+            if (dbStateManager) {
+                dbStateManager.notifyTableChange();
+            }
+        }
+    };
 
     // Initialize API key from encrypted storage or environment variable
     useEffect(() => {
@@ -57,32 +158,125 @@ function ModelingPage() {
         initializeApiKey();
     }, []);
 
-    // Set up connection
+    // Initialize schema manager and create first chat
+    useEffect(() => {
+        if (db) {
+            const manager = createSchemaManager(db);
+            setSchemaManager(manager);
+
+            // Auto-create first chat if no chats exist
+            if (chats.length === 0) {
+                const initializeFirstChat = async () => {
+                    try {
+                        const firstChat: Chat = {
+                            id: `chat-${Date.now()}`,
+                            title: 'チャット 1',
+                            createdAt: new Date(),
+                            messages: []
+                        };
+
+                        await manager.createSchema(firstChat.id);
+                        await manager.switchToSchema(firstChat.id);
+
+                        setChats([firstChat]);
+                        setSelectedChatId(firstChat.id);
+
+                        if (dbStateManager) {
+                            dbStateManager.setCurrentSchema(manager.getCurrentSchema());
+                            setTimeout(() => {
+                                dbStateManager.notifyTableChange();
+                            }, 0);
+                        }
+                    } catch (error) {
+                        console.error('Error creating initial chat:', error);
+                    }
+                };
+
+                initializeFirstChat();
+            }
+        }
+    }, [db]); // Only depend on db to avoid re-creating chats
+
+    // Switch schema when chat is selected
+    useEffect(() => {
+        if (!schemaManager || !selectedChatId) return;
+
+        const switchSchema = async () => {
+            await schemaManager.switchToSchema(selectedChatId);
+
+            // Update dbStateManager with current schema
+            if (dbStateManager) {
+                const schemaName = schemaManager.getCurrentSchema();
+                dbStateManager.setCurrentSchema(schemaName);
+            }
+
+            // Reset table selection
+            setSelectedTable(null);
+
+            // Notify table change to refresh table list
+            if (dbStateManager) {
+                // Use a timeout to break the synchronous update cycle
+                setTimeout(() => {
+                    dbStateManager.notifyTableChange();
+                }, 0);
+            }
+        };
+
+        switchSchema();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedChatId]); // Only re-run when selectedChatId changes
+
+    // Set up connection with schema
     useEffect(() => {
         let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
+        let isCleanedUp = false;
 
         const createConnection = async () => {
-            if (db) {
+            // First close any existing connection
+            if (connection) {
+                try {
+                    await connection.close();
+                } catch (e) {
+                    console.error('Error closing previous connection:', e);
+                }
+                // Force connection reset to trigger Table re-render
+                setConnection(null);
+            }
+
+            if (db && schemaManager && selectedChatId) {
                 try {
                     const conn = await db.connect();
                     currentConnection = conn;
-                    setConnection(conn);
-                } catch {
-                    // Error creating connection
+
+                    // Set search_path for this connection
+                    const currentSchema = schemaManager.getCurrentSchema();
+                    if (currentSchema) {
+                        await conn.query(`SET search_path = '${currentSchema}'`);
+                    }
+
+                    if (!isCleanedUp) {
+                        setConnection(conn);
+                        setConnectionTimestamp(Date.now());
+                    }
+                } catch (error) {
+                    console.error('Error creating connection:', error);
+                    setConnection(null);
                 }
             } else {
                 setConnection(null);
+                setConnectionTimestamp(Date.now());
             }
         };
 
         createConnection();
 
         return () => {
+            isCleanedUp = true;
             if (currentConnection) {
                 currentConnection.close().catch(() => {});
             }
         };
-    }, [db]);
+    }, [db, schemaManager, selectedChatId]); // Re-create connection when schema changes
 
     // Subscribe to table changes from dbStateManager
     useEffect(() => {
@@ -122,9 +316,9 @@ function ModelingPage() {
             }
 
             const result = await checkTableGeometry(connection, selectedTable);
-            
+
             setAvailableGeometryColumns(result.geometryColumns);
-            
+
             if (result.geometryColumns.length > 0) {
                 setSelectedGeometryColumn(result.geometryColumns[0]);
                 setMapSelectedColumns(result.nonGeometryColumns);
@@ -165,8 +359,27 @@ function ModelingPage() {
         generateChart();
     }, [selectedTable, dbStateManager]);
 
+    // Create memoized callback for message updates
+    const handleMessagesChange = useCallback((messages: CoreMessage[]) => {
+        if (selectedChatId) {
+            updateChatMessages(selectedChatId, messages);
+        }
+    }, [selectedChatId, updateChatMessages]);
+
     return (
         <div className="flex h-full w-full overflow-hidden">
+            {/* Sidebar with Chat List */}
+            <div className="w-64 h-full border-r border-gray-300 bg-gray-50 flex-shrink-0">
+                <ChatList
+                    chats={chats}
+                    selectedChatId={selectedChatId}
+                    onSelectChat={(chatId) => setSelectedChatId(chatId)}
+                    onCreateChat={createNewChat}
+                    onDeleteChat={deleteChat}
+                    isInitialized={!!schemaManager}
+                />
+            </div>
+
             {/* Left Half - AI Chat (Modeling Tools) */}
             <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
                 {(showApiKeyInput && !isLoadingApiKey) && (
@@ -214,14 +427,29 @@ function ModelingPage() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && (
+                {!isLoadingApiKey && db && selectedChatId ? (
                     <AIChat
                         db={db}
                         dbStateManager={dbStateManager || undefined}
                         apiKey={apiKey}
-                        onSendMessageReady={(sendFn) => setSendMessage(() => sendFn)}
+                        chatId={selectedChatId}
+                        messages={chats.find(c => c.id === selectedChatId)?.messages || []}
+                        onMessagesChange={handleMessagesChange}
+                        onSendMessageReady={handleSendMessageReady}
                     />
-                )}
+                ) : !isLoadingApiKey && db ? (
+                    <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
+                        <div className="text-center">
+                            <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
+                            <button
+                                onClick={createNewChat}
+                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                            >
+                                新しいチャットを作成
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {/* Right Half - DuckDB and Table */}
@@ -241,7 +469,9 @@ function ModelingPage() {
                     }} />}
                     {db && showTableSelector && (
                         <TableSelector
+                            key={`${selectedChatId}-${tableRefreshKey}`} // Force re-render on chat change
                             db={db}
+                            dbStateManager={dbStateManager || undefined}
                             refreshTrigger={tableRefreshKey}
                             selectedTable={selectedTable}
                             onTableSelect={setSelectedTable}
@@ -260,8 +490,10 @@ function ModelingPage() {
                                             content: (
                                                 <div className="h-full">
                                                     <Table
+                                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
                                                         connection={connection}
                                                         tableName={selectedTable}
+                                                        dbStateManager={dbStateManager || undefined}
                                                     />
                                                 </div>
                                             )
@@ -301,6 +533,7 @@ function ModelingPage() {
                                                     <div className="flex-1">
                                                         <Map
                                                             db={db}
+                                                            dbStateManager={dbStateManager || undefined}
                                                             selectedTable={selectedTable}
                                                             selectedColumns={mapSelectedColumns}
                                                             geometryColumnName={selectedGeometryColumn}
