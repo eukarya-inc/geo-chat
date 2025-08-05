@@ -105,7 +105,9 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
 
             // Debug: Check what tables actually exist
             try {
-                const debugConn = await db.connect();
+                const debugConn = dbStateManager 
+                    ? await dbStateManager.connectWithSchema()
+                    : await db.connect();
                 const tablesResult = await debugConn.query('SHOW TABLES;');
                 console.log('RemoteFileSimple: Tables in database after creation:', tablesResult.toArray());
 
