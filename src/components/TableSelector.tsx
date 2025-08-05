@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import type { AsyncDuckDBConnection, AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
 interface TableSelectorProps {
   db: AsyncDuckDB | null;
+  dbStateManager?: DBStateManager;
   selectedTable: string | null;
   onTableSelect: (tableName: string | null) => void;
   refreshTrigger?: number;
 }
 
-const TableSelector: React.FC<TableSelectorProps> = ({ db, selectedTable, onTableSelect, refreshTrigger }) => {
+const TableSelector: React.FC<TableSelectorProps> = ({ db, dbStateManager, selectedTable, onTableSelect, refreshTrigger }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -24,13 +26,17 @@ const TableSelector: React.FC<TableSelectorProps> = ({ db, selectedTable, onTabl
       let conn: AsyncDuckDBConnection | null = null;
 
       try {
-        conn = await db.connect();
-
-        const result = await conn.query('SHOW TABLES');
-        const tableRows = result.toArray();
-        const tableNames = tableRows.map(row => row.name as string).sort();
-
-        setTables(tableNames);
+        // Use dbStateManager if available for schema-aware table listing
+        if (dbStateManager) {
+          const tableNames = await dbStateManager.getTables();
+          setTables(tableNames);
+        } else {
+          conn = await db.connect();
+          const result = await conn.query('SHOW TABLES');
+          const tableRows = result.toArray();
+          const tableNames = tableRows.map(row => row.name as string).sort();
+          setTables(tableNames);
+        }
       } catch {
         setTables([]);
       } finally {

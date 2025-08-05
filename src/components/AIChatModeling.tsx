@@ -3,21 +3,24 @@ import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai/useAIChat';
 import CollapsibleMessageRenderer from './CollapsibleMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { CoreMessage } from 'ai';
 
 interface AIChatProps {
     db: AsyncDuckDB;
     dbStateManager?: DBStateManager;
     apiKey?: string;
+    chatId?: string | null;
+    messages: CoreMessage[];
+    onMessagesChange: (messages: CoreMessage[]) => void;
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
 }
 
-export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady }: AIChatProps) {
+export default function AIChat({ db, dbStateManager, apiKey, chatId, messages, onMessagesChange, onSendMessageReady }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
     const userHasScrolledRef = useRef<boolean>(false);
     const {
-        messages,
         input,
         handleInputChange,
         handleSubmit,
@@ -26,7 +29,7 @@ export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady 
         // error,
         isApiKeyConfigured,
         sendMessage,
-    } = useAIChat(db, dbStateManager, apiKey);
+    } = useAIChat(db, dbStateManager, apiKey, messages, onMessagesChange);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,10 +85,10 @@ export default function AIChat({ db, dbStateManager, apiKey, onSendMessageReady 
 
     // Pass sendMessage function to parent component
     useEffect(() => {
-        if (onSendMessageReady && sendMessage) {
+        if (onSendMessageReady) {
             onSendMessageReady(sendMessage);
         }
-    }, [onSendMessageReady, sendMessage]);
+    }, [onSendMessageReady]); // Remove sendMessage from dependencies to avoid infinite loop
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         // IME変換中（isComposing）の場合は送信しない

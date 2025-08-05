@@ -36,22 +36,25 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
             return;
         }
 
-        console.log('RemoteFileSimple: Starting table creation process for URL:', targetUrl);
         setIsCreatingTable(true);
         let conn = null;
 
         try {
-            console.log('RemoteFileSimple: Database instance ID:', (db as { __instanceId?: string }).__instanceId || 'no-id');
-            conn = await db.connect();
+            // Use schema-aware connection if dbStateManager is available
+            if (dbStateManager) {
+                conn = await dbStateManager.connectWithSchema();
+            } else {
+                conn = await db.connect();
+            }
 
             // URLからファイル名を抽出
             const fileName = targetUrl.split('/').pop() || 'remote_file';
             // URLエンコードされている場合はデコード
             const decodedFileName = decodeURIComponent(fileName);
-            
+
             // 拡張子を除去
             const nameWithoutExt = decodedFileName.split('.')[0];
-            
+
             // テーブル名として使える文字に変換
             // 日本語を含む場合は短いハッシュを生成
             let tableName;
@@ -81,7 +84,11 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
                 from = `st_read('${targetUrl}')`;
             }
 
-            const createTableSQL = `CREATE TABLE ${tableName} AS SELECT * FROM ${from}`;
+            // Get the current schema and use it in table creation
+            const schemaName = dbStateManager?.getCurrentSchema() || 'main';
+            const qualifiedTableName = schemaName !== 'main' ? `${schemaName}.${tableName}` : tableName;
+
+            const createTableSQL = `CREATE TABLE ${qualifiedTableName} AS SELECT * FROM ${from}`;
             await conn.query(createTableSQL);
             await conn.query('CHECKPOINT;');
 
@@ -91,25 +98,10 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
                 dbStateManager.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
             }
 
-            console.log('Table created and checkpoint executed:', tableName);
-
-            // Verify table was created by checking if it exists
-            try {
-                console.log('RemoteFileSimple: Verifying table creation...');
-                const tableCheck = await conn.query(`SELECT COUNT(*) as count FROM ${tableName}`);
-                const rowCount = tableCheck.toArray()[0].count;
-                console.log(`RemoteFileSimple: Table ${tableName} verified with ${rowCount} rows`);
-
-                // Also check columns
-                const columnsCheck = await conn.query(`PRAGMA table_info('${tableName}')`);
-                console.log('RemoteFileSimple: Table columns:', columnsCheck.toString());
-            } catch (verifyError) {
-                console.error('RemoteFileSimple: Error verifying table:', verifyError);
-            }
+            console.log('Table created:', tableName);
 
             setError(null);
             setUrl('');
-            console.log('RemoteFileSimple: Calling onTableCreated callback with tableName:', tableName);
 
             // Debug: Check what tables actually exist
             try {

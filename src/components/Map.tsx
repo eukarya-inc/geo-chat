@@ -7,6 +7,7 @@ import { getTileEnvelope, getZxyFromUrl } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
 import MapStyleEditor from './MapStyleEditor';
+import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{
@@ -19,6 +20,7 @@ interface DuckDBConnection {
 
 interface MapProps {
     db: AsyncDuckDB;
+    dbStateManager?: DBStateManager;
     selectedTable: string | null;
     selectedColumns: string[];
     geojsonUrl?: string;
@@ -105,6 +107,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 
 const MapComponent: React.FC<MapProps> = ({ 
     db, 
+    dbStateManager,
     selectedTable, 
     selectedColumns, 
     geojsonUrl, 
@@ -906,7 +909,12 @@ const MapComponent: React.FC<MapProps> = ({
         const initMap = async () => {
             try {
                 // 接続を保持
-                connectionRef.current = await db.connect();
+                // Use schema-aware connection if dbStateManager is available
+                if (dbStateManager) {
+                    connectionRef.current = await dbStateManager.connectWithSchema();
+                } else {
+                    connectionRef.current = await db.connect();
+                }
                 if (!connectionRef.current) {
                     setMapError('DuckDBへの接続に失敗しました');
                     return;

@@ -34,9 +34,26 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        const conn = await db.connect();
+        // Use schema-aware connection if dbStateManager is available
+        const conn = dbStateManager 
+          ? await dbStateManager.connectWithSchema()
+          : await db.connect();
+        
+        // Intercept SHOW TABLES to make it schema-aware
+        let querySql = sql;
+        if (dbStateManager && (upperSql.trim() === 'SHOW TABLES' || upperSql.trim() === 'SHOW TABLES;')) {
+          const schemaName = dbStateManager.getCurrentSchema() || 'main';
+          querySql = `
+            SELECT table_name as name
+            FROM information_schema.tables 
+            WHERE table_schema = '${schemaName}'
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+          `;
+        }
+        
         try {
-          const result = await conn.query(sql);
+          const result = await conn.query(querySql);
 
           // Convert BigInt values immediately after getting the result
           const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];

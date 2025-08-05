@@ -1,4 +1,4 @@
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
 
 export interface DBStateManager {
@@ -12,6 +12,9 @@ export interface DBStateManager {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executeQuery(sql: string): Promise<any[]>;
   getSQLHistory(): SQLHistoryManager;
+  setCurrentSchema(schema: string | null): void;
+  getCurrentSchema(): string | null;
+  connectWithSchema(): Promise<AsyncDuckDBConnection>;
 }
 
 class DatabaseStateManager implements DBStateManager {
@@ -19,10 +22,27 @@ class DatabaseStateManager implements DBStateManager {
   private tableChangeCallbacks: Set<(tableName?: string) => void> = new Set();
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
   private sqlHistory: SQLHistoryManager;
+  private currentSchema: string | null = null;
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
     this.sqlHistory = new SQLHistoryManager();
+  }
+
+  setCurrentSchema(schema: string | null): void {
+    this.currentSchema = schema;
+  }
+
+  getCurrentSchema(): string | null {
+    return this.currentSchema;
+  }
+
+  async connectWithSchema(): Promise<AsyncDuckDBConnection> {
+    const conn = await this.db.connect();
+    if (this.currentSchema) {
+      await conn.query(`SET search_path = '${this.currentSchema}'`);
+    }
+    return conn;
   }
 
   async forceConsistency(): Promise<void> {
@@ -42,9 +62,9 @@ class DatabaseStateManager implements DBStateManager {
       // Brief pause to ensure all operations are flushed
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      console.log('DBStateManager: Database consistency enforced');
+      // Database consistency enforced
     } catch (error) {
-      console.log('DB consistency checkpoint failed (non-critical):', error);
+      // DB consistency checkpoint failed (non-critical)
     } finally {
       await conn.close();
     }
@@ -52,7 +72,7 @@ class DatabaseStateManager implements DBStateManager {
 
   notifyTableChange(tableName?: string): void {
     // DISABLED DEBOUNCING - Execute immediately to test if debouncing was causing issues
-    console.log('DBStateManager: Notifying table change IMMEDIATELY to', this.tableChangeCallbacks.size, 'listeners');
+    // Notifying table change to listeners
     this.tableChangeCallbacks.forEach(callback => {
       try {
         callback(tableName);
@@ -71,11 +91,11 @@ class DatabaseStateManager implements DBStateManager {
 
   async executeWithRefresh<T>(operation: () => Promise<T>, tableName?: string): Promise<T> {
     try {
-      console.log('DBStateManager: Executing DDL operation');
+      // Executing DDL operation
       const result = await operation();
       
       // Force immediate consistency across all potential connections
-      console.log('DBStateManager: DDL operation completed, forcing database sync');
+      // DDL operation completed, forcing database sync
       
       // Force multiple checkpoints to ensure data is visible across connections
       await this.forceConsistency();
@@ -84,7 +104,7 @@ class DatabaseStateManager implements DBStateManager {
       
       // Validate table if specified with more retries
       if (tableName) {
-        console.log(`DBStateManager: Validating table ${tableName} after operation`);
+        // Validating table after operation
         const isValid = await this.validateTable(tableName, 5);
         if (!isValid) {
           console.error(`DBStateManager: CRITICAL - Table ${tableName} validation failed after creation`);
@@ -107,14 +127,14 @@ class DatabaseStateManager implements DBStateManager {
   }
 
   private async refreshSchemaCache(): Promise<void> {
-    console.log('DBStateManager: Refreshing schema cache');
+    // Refreshing schema cache
     const conn = await this.db.connect();
     try {
       // Force schema refresh in DuckDB
       await conn.query('PRAGMA schema_version;');
       await conn.query('PRAGMA database_list;');
     } catch (error) {
-      console.log('DBStateManager: Schema refresh failed (non-critical):', error);
+      // Schema refresh failed (non-critical)
     } finally {
       await conn.close();
     }
@@ -128,30 +148,36 @@ class DatabaseStateManager implements DBStateManager {
           await this.forceConsistency();
         }
         
-        const conn = await this.db.connect();
+        const conn = await this.connectWithSchema();
         try {
-          // Try both SHOW TABLES and direct access
-          const tablesResult = await conn.query('SHOW TABLES;');
+          // Query tables from the current schema only
+          const schemaName = this.currentSchema || 'main';
+          const tablesResult = await conn.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = '${schemaName}'
+              AND table_type = 'BASE TABLE'
+          `);
           const tableNames: string[] = [];
           for (let i = 0; i < tablesResult.numRows; i++) {
             tableNames.push(tablesResult.getChildAt(0)?.get(i) as string);
           }
           
           if (!tableNames.includes(tableName)) {
-            console.log(`DBStateManager: Table ${tableName} not found in SHOW TABLES on attempt ${attempt + 1}. Found: ${tableNames.join(', ')}`);
+            // Table not found in SHOW TABLES, retrying...
             throw new Error(`Table ${tableName} not in SHOW TABLES`);
           }
           
           // Then try to access it
           await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
-          console.log(`DBStateManager: Table ${tableName} validated successfully on attempt ${attempt + 1}`);
+          // Table validated successfully
           return true;
         } finally {
           await conn.close();
         }
       } catch (error) {
         if (attempt < maxRetries - 1) {
-          console.log(`DBStateManager: Table ${tableName} validation failed, attempt ${attempt + 1}/${maxRetries}. Retrying in ${300 * (attempt + 1)}ms...`);
+          // Table validation failed, retrying...
           await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
         } else {
           // Get available tables for better error message
@@ -173,13 +199,26 @@ class DatabaseStateManager implements DBStateManager {
   async getTables(): Promise<string[]> {
     const conn = await this.db.connect();
     try {
-      const result = await conn.query('SHOW TABLES;');
+      // Set search_path if schema is set
+      if (this.currentSchema) {
+        await conn.query(`SET search_path = '${this.currentSchema}'`);
+      }
+      
+      // Query tables from the current schema only
+      const schemaName = this.currentSchema || 'main';
+      const result = await conn.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = '${schemaName}'
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+      `);
       const tableNames: string[] = [];
       for (let i = 0; i < result.numRows; i++) {
         tableNames.push(result.getChildAt(0)?.get(i) as string);
       }
       
-      console.log('DBStateManager: Retrieved tables:', tableNames);
+      // Retrieved tables from current schema
       return tableNames;
     } finally {
       await conn.close();
@@ -193,6 +232,11 @@ class DatabaseStateManager implements DBStateManager {
 
     const conn = await this.db.connect();
     try {
+      // Set search_path if schema is set
+      if (this.currentSchema) {
+        await conn.query(`SET search_path = '${this.currentSchema}'`);
+      }
+      
       const result = await conn.query(`DESCRIBE ${tableName}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return result.toArray().map((row: any) => ({
@@ -206,10 +250,15 @@ class DatabaseStateManager implements DBStateManager {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async executeQuery(sql: string): Promise<any[]> {
-    console.log('DBStateManager: Executing query:', sql.substring(0, 100));
+    // Executing query
     
     const conn = await this.db.connect();
     try {
+      // Set search_path if schema is set
+      if (this.currentSchema) {
+        await conn.query(`SET search_path = '${this.currentSchema}'`);
+      }
+      
       const result = await conn.query(sql);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = result.toArray().map((row: any) => {
@@ -222,7 +271,7 @@ class DatabaseStateManager implements DBStateManager {
         );
       });
       
-      console.log(`DBStateManager: Query returned ${data.length} rows`);
+      // Query execution completed
       return data;
     } catch (error) {
       console.error('DBStateManager: Query failed:', sql, error);

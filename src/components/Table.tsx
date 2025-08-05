@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
 import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
+import type { DBStateManager } from "../lib/duckdb/dbStateManager";
 import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../utils/duckdbTableUtils";
 import { Table as ArrowTable } from "apache-arrow";
 import { throttle } from "../utils/throttle";
@@ -31,9 +32,10 @@ const scrollbarStyles = `
 interface TableProps {
   connection: AsyncDuckDBConnection;
   tableName: string;
+  dbStateManager?: DBStateManager;
 }
 
-export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
+export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateManager }) => {
   // Inject scrollbar styles
   useEffect(() => {
     const styleElement = document.createElement('style');
@@ -55,37 +57,58 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
     const loadInitialData = async () => {
       try {
         setLoading(true);
+        // Clear cache and reset loading windows when connection or table changes
         arrowCache.clear();
+        loadingWindowsRef.current.clear();
         
-        const initialData = await getTableData(connection, tableName, 0, 100);
+        // Use dbStateManager connection if available to ensure proper schema context
+        let conn = connection;
+        let shouldClose = false;
         
-        const gridColumns: GridColumn[] = initialData.columns.map((col) => ({
-          id: col.name,
-          title: col.name,
-          width: 150,
-        }));
+        if (dbStateManager) {
+          conn = await dbStateManager.connectWithSchema();
+          shouldClose = true;
+        }
         
-        // Store column types for later use
-        const types: Record<string, string> = {};
-        initialData.columns.forEach((col) => {
-          types[col.name] = col.type;
-        });
+        try {
+          const initialData = await getTableData(conn, tableName, 0, 100);
         
-        setColumns(gridColumns);
-        setColumnTypes(types);
-        setTotalRows(initialData.totalRows);
-        
-        // Store initial Arrow table in cache
-        arrowCache.set('window-0-100', initialData.arrowTable);
+          const gridColumns: GridColumn[] = initialData.columns.map((col) => ({
+            id: col.name,
+            title: col.name,
+            width: 150,
+          }));
+          
+          // Store column types for later use
+          const types: Record<string, string> = {};
+          initialData.columns.forEach((col) => {
+            types[col.name] = col.type;
+          });
+          
+          setColumns(gridColumns);
+          setColumnTypes(types);
+          setTotalRows(initialData.totalRows);
+          
+          // Store initial Arrow table in cache
+          arrowCache.set('window-0-100', initialData.arrowTable);
+        } finally {
+          if (shouldClose) {
+            await conn.close();
+          }
+        }
       } catch (error) {
         console.error("Error loading table data:", error);
+        // Reset state on error
+        setColumns([]);
+        setColumnTypes({});
+        setTotalRows(0);
       } finally {
         setLoading(false);
       }
     };
 
     loadInitialData();
-  }, [connection, tableName, arrowCache]);
+  }, [connection, tableName, arrowCache, dbStateManager]);
 
   const loadDataWindow = useCallback(
     async (startRow: number) => {
@@ -104,8 +127,23 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
       loadingWindowsRef.current.add(cacheKey);
       
       try {
-        const arrowTable = await getTableDataByWindow(connection, tableName, windowStart, windowEnd);
-        arrowCache.set(cacheKey, arrowTable);
+        // Use dbStateManager connection if available to ensure proper schema context
+        let conn = connection;
+        let shouldClose = false;
+        
+        if (dbStateManager) {
+          conn = await dbStateManager.connectWithSchema();
+          shouldClose = true;
+        }
+        
+        try {
+          const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd);
+          arrowCache.set(cacheKey, arrowTable);
+        } finally {
+          if (shouldClose) {
+            await conn.close();
+          }
+        }
       } catch (error) {
         console.error("Error loading data window:", error);
       } finally {
@@ -113,7 +151,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName }) => {
         loadingWindowsRef.current.delete(cacheKey);
       }
     },
-    [connection, tableName, arrowCache]
+    [connection, tableName, arrowCache, dbStateManager]
   );
 
   // Create a throttled version of loadDataWindow

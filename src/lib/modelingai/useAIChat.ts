@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { CoreMessage, streamText } from 'ai';
 import { generateSystemPrompt } from './systemPrompt';
@@ -8,9 +8,14 @@ import type { DBStateManager } from '../duckdb/dbStateManager';
 import { completionTool } from './tools/completionTool';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 
-export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, customApiKey?: string) {
+export function useAIChat(
+  db?: AsyncDuckDB | null,
+  dbStateManager?: DBStateManager | null,
+  customApiKey?: string,
+  messages: CoreMessage[] = [],
+  onMessagesChange?: (messages: CoreMessage[]) => void
+) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
-  const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -28,17 +33,16 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
     }
   }, [abortController]);
 
-  const handleTextDelta = useCallback((textDelta: string, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+  const handleTextDelta = useCallback((textDelta: string, fullContent: string, baseMessages: CoreMessage[]) => {
     const newContent = fullContent + textDelta;
-    setMessages(prev => {
-      const updated = [...prev];
-      updated[updated.length - 1] = { role: 'assistant', content: newContent };
-      return updated;
-    });
+    // Update the last message with new content
+    const updatedMessages = [...baseMessages];
+    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
+    onMessagesChange?.(updatedMessages);
     return newContent;
-  }, []);
+  }, [onMessagesChange]);
 
-  const handleToolCall = useCallback((part: { toolName: string; args: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+  const handleToolCall = useCallback((part: { toolName: string; args: Record<string, unknown> }, fullContent: string, baseMessages: CoreMessage[]) => {
     const args = part.args;
     let newContent = fullContent;
 
@@ -50,15 +54,14 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       newContent += toolCallText;
     }
 
-    setMessages(prev => {
-      const updated = [...prev];
-      updated[updated.length - 1] = { role: 'assistant', content: newContent };
-      return updated;
-    });
+    // Update the last message with new content
+    const updatedMessages = [...baseMessages];
+    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
+    onMessagesChange?.(updatedMessages);
     return newContent;
-  }, []);
+  }, [onMessagesChange]);
 
-  const handleToolResult = useCallback((part: { toolName: string; result: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
+  const handleToolResult = useCallback((part: { toolName: string; result: Record<string, unknown> }, fullContent: string, baseMessages: CoreMessage[]) => {
     let newContent = fullContent;
     if (part.toolName === 'duckdb_query') {
       // Handle DuckDB query results
@@ -125,13 +128,12 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       newContent += resultText;
     }
 
-    setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: newContent };
-        return updated;
-      });
+    // Update the last message with new content
+    const updatedMessages = [...baseMessages];
+    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
+    onMessagesChange?.(updatedMessages);
     return newContent;
-  }, []);
+  }, [onMessagesChange]);
 
   // Core message sending logic
   const sendMessage = useCallback(async (message: string) => {
@@ -139,7 +141,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
 
     const userMessage: CoreMessage = { role: 'user', content: message.trim() };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Add user message
+    onMessagesChange?.([...messages, userMessage]);
     setIsLoading(true);
     setError(null);
 
@@ -165,7 +168,8 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         }) as CoreMessage);
       };
 
-      const allMessages = cleanMessages([...messages, userMessage]);
+      const allMessagesWithUser = [...messages, userMessage];
+      const allMessages = cleanMessages(allMessagesWithUser);
 
       const result = streamText({
         model: anthropicClient('claude-3-5-sonnet-20241022'),
@@ -187,47 +191,43 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       const assistantMessage: CoreMessage = { role: 'assistant', content: '' };
 
       // Add placeholder for streaming message
-      setMessages(prev => [...prev, assistantMessage]);
+      const currentMessagesBase = [...messages, userMessage, assistantMessage];
+      onMessagesChange?.(currentMessagesBase);
 
       // Use fullStream to handle both text and tool calls
       for await (const part of result.fullStream) {
         switch (part.type) {
           case 'text-delta':
-            fullContent = handleTextDelta(part.textDelta, fullContent, setMessages);
+            fullContent = handleTextDelta(part.textDelta, fullContent, currentMessagesBase);
             break;
 
           case 'tool-call':
-            fullContent = handleToolCall(part, fullContent, setMessages);
+            fullContent = handleToolCall(part, fullContent, currentMessagesBase);
             break;
 
           case 'tool-result':
-            fullContent = handleToolResult(part, fullContent, setMessages);
+            fullContent = handleToolResult(part, fullContent, currentMessagesBase);
             break;
         }
       }
 
       // Ensure final content is set
       if (!fullContent) {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'エラーが発生しました' };
-          return updated;
-        });
+        const updatedMessages = [...messages, userMessage, { role: 'assistant' as const, content: 'エラーが発生しました' }];
+        onMessagesChange?.(updatedMessages);
       }
 
     } catch (err) {
       // Handle abort error specifically
       if (err instanceof Error && err.name === 'AbortError') {
-        setMessages(prev => {
-          const updated = [...prev];
-          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
-            updated[updated.length - 1] = {
-              role: 'assistant',
-              content: updated[updated.length - 1].content + '\n\n⏹️ **処理が停止されました**'
-            };
-          }
-          return updated;
-        });
+        const currentMessages = [...messages, userMessage, { role: 'assistant' as const, content: '' }];
+        if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
+          currentMessages[currentMessages.length - 1] = {
+            role: 'assistant',
+            content: currentMessages[currentMessages.length - 1].content + '\n\n⏹️ **処理が停止されました**'
+          };
+        }
+        onMessagesChange?.(currentMessages);
         return;
       }
 
@@ -235,40 +235,38 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       setError(err instanceof Error ? err : new Error(errorMsg));
 
       // Update the current assistant message with error info instead of adding new message
-      setMessages(prev => {
-        const updated = [...prev];
-        if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
-          const currentContent = updated[updated.length - 1].content;
-          // Preserve line breaks in error messages by wrapping multi-line errors in code block
-          const errorContent = errorMsg.includes('\n')
-            ? `\n\n❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
-            : `\n\n❌ **エラーが発生しました:** ${errorMsg}\n\n`;
-          updated[updated.length - 1] = {
-            role: 'assistant',
-            content: currentContent + errorContent
-          };
-        } else {
-          // Preserve line breaks in error messages by wrapping multi-line errors in code block
-          const errorContent = errorMsg.includes('\n')
-            ? `❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
-            : `❌ **エラーが発生しました:** ${errorMsg}\n\n`;
-          updated.push({
-            role: 'assistant',
-            content: errorContent
-          });
-        }
-        return updated;
-      });
+      const currentMessages = [...messages, userMessage, { role: 'assistant' as const, content: '' }];
+      if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
+        const currentContent = currentMessages[currentMessages.length - 1].content;
+        // Preserve line breaks in error messages by wrapping multi-line errors in code block
+        const errorContent = errorMsg.includes('\n')
+          ? `\n\n❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
+          : `\n\n❌ **エラーが発生しました:** ${errorMsg}\n\n`;
+        currentMessages[currentMessages.length - 1] = {
+          role: 'assistant',
+          content: currentContent + errorContent
+        };
+      } else {
+        // Preserve line breaks in error messages by wrapping multi-line errors in code block
+        const errorContent = errorMsg.includes('\n')
+          ? `❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
+          : `❌ **エラーが発生しました:** ${errorMsg}\n\n`;
+        currentMessages.push({
+          role: 'assistant',
+          content: errorContent
+        });
+      }
+      onMessagesChange?.(currentMessages);
     } finally {
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall, handleToolResult]);
+  }, [apiKey, isLoading, messages, db, dbStateManager, handleTextDelta, handleToolCall, handleToolResult, onMessagesChange]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    
+
     const messageToSend = input.trim();
     setInput('');
     await sendMessage(messageToSend);
@@ -291,7 +289,6 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
   const isApiKeyConfigured = Boolean(apiKey);
 
   return {
-    messages,
     input,
     handleInputChange,
     handleSubmit,
