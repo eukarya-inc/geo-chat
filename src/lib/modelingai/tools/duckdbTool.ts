@@ -86,10 +86,14 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             }
             
             if (dbStateManager) {
-              // Small timeout to ensure table is fully committed
+              // Add more aggressive consistency checks for CREATE TABLE
+              await conn.query('CHECKPOINT;');
+              await conn.query('PRAGMA force_checkpoint;');
+              
+              // Increase timeout to ensure table is fully committed and visible
               setTimeout(() => {
                 dbStateManager.notifyTableChange(createdTableName);
-              }, 100);
+              }, 300);
             }
           }
 

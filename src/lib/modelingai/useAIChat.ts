@@ -129,10 +129,10 @@ export function useAIChat(
           const sql = String(result.sql);
           const upperSql = sql.toUpperCase();
           if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
-            // Extract table name from SQL
-            const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+            // Extract table name from SQL - handle both CREATE TABLE and CREATE TABLE AS
+            const tableNameMatch = sql.match(/CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
             if (tableNameMatch) {
-              const tableName = tableNameMatch[2];
+              const tableName = tableNameMatch[1];
               resultText += `\n<!--TABLE_CREATED:${tableName}-->\n`;
             }
           }
