@@ -152,15 +152,15 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
     return (
         <div className="w-full">
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <input
+                    type="url"
+                    value={url}
+                    onChange={handleUrlChange}
+                    placeholder="Enter file URL (.parquet, .csv, .geojson, .shp)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
+                    disabled={!db || isCreatingTable}
+                />
                 <div className="flex gap-2">
-                    <input
-                        type="url"
-                        value={url}
-                        onChange={handleUrlChange}
-                        placeholder="Enter file URL (.parquet, .csv, .geojson, .shp)"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
-                        disabled={!db || isCreatingTable}
-                    />
                     <button
                         onClick={() => createTableFromUrl()}
                         disabled={!db || !url.trim() || isCreatingTable}

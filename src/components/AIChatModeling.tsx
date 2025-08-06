@@ -1,9 +1,10 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai/useAIChat';
 import CollapsibleMessageRenderer from './CollapsibleMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 import type { CoreMessage } from 'ai';
+import { PlusIcon } from '@heroicons/react/24/outline';
 
 interface AIChatProps {
     db: AsyncDuckDB;
@@ -15,6 +16,8 @@ interface AIChatProps {
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
+    onOpenRemoteFile?: () => void;
+    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
 export default function AIChat({ 
@@ -25,12 +28,17 @@ export default function AIChat({
     onMessagesChange, 
     onSendMessageReady,
     selectedTable,
-    onTableSelect 
+    onTableSelect,
+    onOpenRemoteFile,
+    remoteFileComponent
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
     const userHasScrolledRef = useRef<boolean>(false);
+    const [showPopup, setShowPopup] = useState(false);
+    const popupRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
     const {
         input,
         handleInputChange,
@@ -100,6 +108,26 @@ export default function AIChat({
             onSendMessageReady(sendMessage);
         }
     }, [onSendMessageReady, sendMessage]); // Include sendMessage to always have latest version
+
+    // Handle click outside to close popup
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (showPopup && 
+                popupRef.current && 
+                buttonRef.current &&
+                !popupRef.current.contains(event.target as Node) &&
+                !buttonRef.current.contains(event.target as Node)) {
+                setShowPopup(false);
+            }
+        };
+
+        if (showPopup) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => {
+                document.removeEventListener('mousedown', handleClickOutside);
+            };
+        }
+    }, [showPopup]);
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         // IME変換中（isComposing）の場合は送信しない
@@ -177,29 +205,66 @@ export default function AIChat({
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSubmit} className="flex gap-2.5 flex-shrink-0">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2 flex-shrink-0">
                 <textarea
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyPress}
                     placeholder="Claudeに質問してください..."
-                    className="flex-1 p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
                 />
-                <button
-                    type="button"
-                    onClick={handleButtonClick}
-                    disabled={!isLoading && !input.trim()}
-                    className={`px-5 py-2.5 text-white font-medium rounded transition-colors duration-200 ${
-                        isLoading
-                            ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
-                            : !input.trim()
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500'
-                    } focus:outline-none focus:ring-2 focus:ring-offset-2`}
-                >
-                    {isLoading ? '停止' : '送信'}
-                </button>
+                <div className="flex justify-between">
+                    {remoteFileComponent && (
+                        <div className="relative">
+                            <button
+                                ref={buttonRef}
+                                type="button"
+                                onClick={() => setShowPopup(!showPopup)}
+                                className="p-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                title="データを読み込む"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
+                            
+                            {showPopup && (
+                                <div 
+                                    ref={popupRef}
+                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                                    style={{ width: '500px', maxHeight: '400px' }}
+                                >
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowPopup(false)}
+                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
+                                            {remoteFileComponent(() => setShowPopup(false))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        onClick={handleButtonClick}
+                        disabled={!isLoading && !input.trim()}
+                        className={`px-5 py-2 text-white font-medium rounded transition-colors duration-200 ${
+                            isLoading
+                                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
+                                : !input.trim()
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500'
+                        } focus:outline-none focus:ring-2 focus:ring-offset-2`}
+                    >
+                        {isLoading ? '停止' : '送信'}
+                    </button>
+                </div>
             </form>
         </div>
     );

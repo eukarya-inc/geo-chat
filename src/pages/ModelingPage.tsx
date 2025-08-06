@@ -489,6 +489,24 @@ function ModelingPage() {
                         onSendMessageReady={handleSendMessageReady}
                         selectedTable={selectedTable}
                         onTableSelect={setSelectedTable}
+                        remoteFileComponent={(onClose) => (
+                            <RemoteFileSimple 
+                                db={db} 
+                                dbStateManager={dbStateManager || undefined} 
+                                onTableCreated={(tableName) => {
+                                    setSelectedTable(tableName);
+                                    if (dbStateManager) {
+                                        dbStateManager.notifyTableChange();
+                                    }
+                                    onClose();
+                                }}
+                                onSendMessage={sendMessageRef.current || undefined}
+                                onExampleMessages={(tableMessage, followUpMessage) => {
+                                    handleExampleMessages(tableMessage, followUpMessage);
+                                    onClose();
+                                }}
+                            />
+                        )}
                     />
                 ) : !isLoadingApiKey && db ? (
                     <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
@@ -507,20 +525,6 @@ function ModelingPage() {
 
             {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
-                <div className="flex flex-col gap-4 p-2.5 flex-shrink-0 bg-white">
-                    {db && <RemoteFileSimple 
-                        db={db} 
-                        dbStateManager={dbStateManager || undefined} 
-                        onTableCreated={(tableName) => {
-                            setSelectedTable(tableName);
-                            if (dbStateManager) {
-                                dbStateManager.notifyTableChange();
-                            }
-                        }}
-                        onSendMessage={sendMessageRef.current || undefined}
-                        onExampleMessages={handleExampleMessages}
-                    />}
-                </div>
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {db && selectedTable && connection && (
                         <>
