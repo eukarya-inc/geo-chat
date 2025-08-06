@@ -8,7 +8,6 @@ import TableSQLDisplay from '../components/TableSQLDisplay';
 import { ResizableDivider } from '../components/ResizableDivider';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
-import { TabView } from '../components/TabView';
 import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
 import { generateDefaultCharts } from '../utils/autoChartGenerator';
 import Map from '../components/Map';
@@ -28,6 +27,7 @@ function ModelingPage() {
     const [tableRefreshKey, setTableRefreshKey] = useState(0);
     const [showTableSelector, setShowTableSelector] = useState(true);
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
+    const [tableAreaHeight, setTableAreaHeight] = useState(300);
     const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
 
     const handleSendMessageReady = useCallback((sendFn: (message: string) => void) => {
@@ -42,6 +42,9 @@ function ModelingPage() {
     const [chats, setChats] = useState<Chat[]>([]);
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
     const [schemaManager, setSchemaManager] = useState<SchemaManager | null>(null);
+    
+    // Get current chat
+    const currentChat = chats.find(chat => chat.id === selectedChatId);
 
     // Update messages for a specific chat
     const updateChatMessages = useCallback((chatId: string, messages: CoreMessage[]) => {
@@ -484,78 +487,8 @@ function ModelingPage() {
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {db && selectedTable && connection && (
                         <>
-                            <div className="flex-1 overflow-hidden">
-                                <TabView
-                                    tabs={[
-                                        {
-                                            id: 'table',
-                                            title: 'テーブル',
-                                            content: (
-                                                <div className="h-full">
-                                                    <Table
-                                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
-                                                        connection={connection}
-                                                        tableName={selectedTable}
-                                                        dbStateManager={dbStateManager || undefined}
-                                                    />
-                                                </div>
-                                            )
-                                        },
-                                        {
-                                            id: 'graph',
-                                            title: 'グラフ',
-                                            content: (
-                                                <ChartGrid
-                                                    charts={chartSpec ? [chartSpec] : []}
-                                                    db={db}
-                                                    dbStateManager={dbStateManager || undefined}
-                                                />
-                                            )
-                                        },
-                                        ...(availableGeometryColumns.length > 0 ? [{
-                                            id: 'map',
-                                            title: '地図',
-                                            content: (
-                                                <div className="h-full flex flex-col">
-                                                    {availableGeometryColumns.length > 1 && (
-                                                        <div className="p-2 border-b border-gray-200 bg-gray-50">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm font-medium">Geometryカラム:</span>
-                                                                <select
-                                                                    value={selectedGeometryColumn}
-                                                                    onChange={(e) => setSelectedGeometryColumn(e.target.value)}
-                                                                    className="text-sm px-2 py-1 border border-gray-300 rounded"
-                                                                >
-                                                                    {availableGeometryColumns.map(col => (
-                                                                        <option key={col} value={col}>{col}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1">
-                                                        <Map
-                                                            db={db}
-                                                            dbStateManager={dbStateManager || undefined}
-                                                            selectedTable={selectedTable}
-                                                            selectedColumns={mapSelectedColumns}
-                                                            geometryColumnName={selectedGeometryColumn}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )
-                                        }] : [])
-                                    ]}
-                                    defaultActiveTab="table"
-                                />
-                            </div>
-                            <ResizableDivider
-                                onResize={setSqlAreaHeight}
-                                minHeight={100}
-                                maxHeight={500}
-                            />
                             <div
-                                className="flex-shrink-0 bg-white border-t border-gray-200 overflow-hidden"
+                                className="flex-shrink-0 bg-white border-b border-gray-200 overflow-hidden"
                                 style={{ height: `${sqlAreaHeight}px` }}
                             >
                                 <div className="h-full p-2.5 overflow-auto">
@@ -564,6 +497,78 @@ function ModelingPage() {
                                         dbStateManager={dbStateManager}
                                     />
                                 </div>
+                            </div>
+                            <ResizableDivider
+                                onResize={setSqlAreaHeight}
+                                minHeight={100}
+                                maxHeight={500}
+                                direction="top"
+                            />
+                            <div className="flex-1 overflow-hidden flex flex-col">
+                                {/* Table Section */}
+                                <div 
+                                    className="flex-shrink-0 overflow-hidden border-b border-gray-200"
+                                    style={{ height: `${tableAreaHeight}px` }}
+                                >
+                                    <Table
+                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
+                                        connection={connection}
+                                        tableName={selectedTable}
+                                        dbStateManager={dbStateManager || undefined}
+                                    />
+                                </div>
+                                
+                                {/* Resizable divider between table and graph/map */}
+                                {(currentChat?.type === 'graph' || (currentChat?.type === 'map' && availableGeometryColumns.length > 0)) && (
+                                    <ResizableDivider
+                                        onResize={setTableAreaHeight}
+                                        minHeight={100}
+                                        maxHeight={600}
+                                        direction="top"
+                                    />
+                                )}
+                                
+                                {/* Graph Section (for graph chats) */}
+                                {currentChat?.type === 'graph' && (
+                                    <div className="flex-1 overflow-hidden">
+                                        <ChartGrid
+                                            charts={chartSpec ? [chartSpec] : []}
+                                            db={db}
+                                            dbStateManager={dbStateManager || undefined}
+                                        />
+                                    </div>
+                                )}
+                                
+                                {/* Map Section (for map chats) */}
+                                {currentChat?.type === 'map' && availableGeometryColumns.length > 0 && (
+                                    <div className="flex-1 overflow-hidden flex flex-col">
+                                        {availableGeometryColumns.length > 1 && (
+                                            <div className="p-2 border-b border-gray-200 bg-gray-50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium">Geometryカラム:</span>
+                                                    <select
+                                                        value={selectedGeometryColumn}
+                                                        onChange={(e) => setSelectedGeometryColumn(e.target.value)}
+                                                        className="text-sm px-2 py-1 border border-gray-300 rounded"
+                                                    >
+                                                        {availableGeometryColumns.map(col => (
+                                                            <option key={col} value={col}>{col}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="flex-1">
+                                            <Map
+                                                db={db}
+                                                dbStateManager={dbStateManager || undefined}
+                                                selectedTable={selectedTable}
+                                                selectedColumns={mapSelectedColumns}
+                                                geometryColumnName={selectedGeometryColumn}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}

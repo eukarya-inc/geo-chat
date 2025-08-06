@@ -4,12 +4,14 @@ interface ResizableDividerProps {
   onResize: (height: number) => void;
   minHeight?: number;
   maxHeight?: number;
+  direction?: 'top' | 'bottom';
 }
 
 export function ResizableDivider({
   onResize,
   minHeight = 100,
-  maxHeight = 600
+  maxHeight = 600,
+  direction = 'bottom'
 }: ResizableDividerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dividerRef = useRef<HTMLDivElement>(null);
@@ -25,12 +27,20 @@ export function ResizableDivider({
     const handleMouseMove = (e: MouseEvent) => {
       if (!dividerRef.current) return;
 
-      const rect = dividerRef.current.parentElement?.getBoundingClientRect();
-      if (!rect) return;
+      const rect = dividerRef.current.getBoundingClientRect();
+      const parentRect = dividerRef.current.parentElement?.getBoundingClientRect();
+      if (!rect || !parentRect) return;
 
-      const newHeight = rect.bottom - e.clientY;
-      const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
+      let newHeight: number;
+      if (direction === 'top') {
+        // For top direction, measure from the divider position to the top of parent
+        newHeight = e.clientY - parentRect.top;
+      } else {
+        // For bottom direction, measure from the bottom of parent to cursor
+        newHeight = parentRect.bottom - e.clientY;
+      }
       
+      const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
       onResize(clampedHeight);
     };
 
@@ -45,7 +55,7 @@ export function ResizableDivider({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onResize, minHeight, maxHeight]);
+  }, [isDragging, onResize, minHeight, maxHeight, direction]);
 
   return (
     <div
