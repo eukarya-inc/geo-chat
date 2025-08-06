@@ -51,12 +51,14 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
   const [totalRows, setTotalRows] = useState(0);
   const [arrowCache] = useState(new Map<string, ArrowTable>());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const loadingWindowsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    const loadInitialData = async () => {
+    const loadInitialData = async (retryCount = 0) => {
       try {
         setLoading(true);
+        setError(null);
         // Clear cache and reset loading windows when connection or table changes
         arrowCache.clear();
         loadingWindowsRef.current.clear();
@@ -91,19 +93,47 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
           
           // Store initial Arrow table in cache
           arrowCache.set('window-0-100', initialData.arrowTable);
+          
+          // Success - set loading to false
+          setLoading(false);
         } finally {
           if (shouldClose) {
             await conn.close();
           }
         }
       } catch (error) {
-        console.error("Error loading table data:", error);
+        // Retry on various errors that might indicate the table isn't ready yet
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const shouldRetry = (
+          errorMessage.includes('No columns found') ||
+          errorMessage.includes('does not exist') ||
+          errorMessage.includes('not found') ||
+          errorMessage.includes('Parser Error')
+        ) && retryCount < 5; // Increase retry count to 5
+        
+        if (shouldRetry) {
+          // Keep loading state true while retrying
+          setTimeout(() => {
+            loadInitialData(retryCount + 1);
+          }, 300 * (retryCount + 1)); // Shorter initial delay, still exponential
+          return; // Don't set loading to false, we're still trying
+        }
+        
         // Reset state on error
         setColumns([]);
         setColumnTypes({});
         setTotalRows(0);
-      } finally {
-        setLoading(false);
+        setLoading(false); // Only set loading to false when we're done retrying
+        
+        // Provide more detailed error message
+        let displayMessage = errorMessage;
+        
+        // Check if it's a "no columns found" error
+        if (errorMessage.includes('No columns found')) {
+          displayMessage = `Table "${tableName}" was not found or has no columns. Please make sure the table exists in the current schema.`;
+        }
+        
+        setError(displayMessage);
       }
     };
 
@@ -224,6 +254,21 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
 
   if (loading) {
     return <div style={{ padding: "20px" }}>Loading table...</div>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "20px", color: "#dc3545" }}>
+        <strong>Error loading table:</strong>
+        <div style={{ marginTop: "10px", fontSize: "14px", fontFamily: "monospace" }}>
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (columns.length === 0) {
+    return <div style={{ padding: "20px" }}>No columns found in table</div>;
   }
 
   return (

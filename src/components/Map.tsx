@@ -3,7 +3,7 @@ import { Feature, GeoJsonProperties, Geometry } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getTileEnvelope, getZxyFromUrl } from '../utils/tileUtils';
+import { getTileEnvelope } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
 import MapStyleEditor from './MapStyleEditor';
@@ -18,16 +18,28 @@ interface DuckDBConnection {
     close: () => Promise<void>;
 }
 
+interface ViewState {
+    center?: [number, number];
+    zoom?: number;
+    bearing?: number;
+    pitch?: number;
+}
+
 interface MapProps {
     db: AsyncDuckDB;
     dbStateManager?: DBStateManager;
-    selectedTable: string | null;
+    selectedTable: string | null;  // For backward compatibility and primary table
+    tables?: string[];  // New prop for multiple tables: ["schema.table1", "table2", ...]
     selectedColumns: string[];
     geojsonUrl?: string;
     onMapReady?: (styleManager: MapStyleManager) => void;
     onStyleChange?: (styleChanger: (style: maplibregl.StyleSpecification) => void) => void;
     mapStyleManager?: MapStyleManager;
     geometryColumnName?: string;
+    onViewStateChange?: (viewState: ViewState) => void;
+    initialViewState?: ViewState;
+    initialStyle?: maplibregl.StyleSpecification;
+    onStyleUpdate?: (style: maplibregl.StyleSpecification) => void;
 }
 
 interface QueryParams {
@@ -66,7 +78,7 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
 const generateVectorTileQuery = (params: QueryParams): string => {
     const { zxy, selectedTable, selectedColumns, geometryColumnName, schema } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
-    const geomCol = geometryColumnName || 'geom';
+    const geomCol = geometryColumnName || 'geometry';
     
     // Use schema-qualified table name if schema is set
     const qualifiedTableName = schema ? `${schema}.${selectedTable}` : selectedTable;
@@ -112,13 +124,18 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 const MapComponent: React.FC<MapProps> = ({ 
     db, 
     dbStateManager,
-    selectedTable, 
+    selectedTable,
+    tables, 
     selectedColumns, 
     geojsonUrl, 
     onMapReady, 
     onStyleChange, 
     mapStyleManager, 
-    geometryColumnName = 'geom'
+    geometryColumnName = 'geometry',
+    onViewStateChange,
+    initialViewState,
+    initialStyle,
+    onStyleUpdate
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -134,11 +151,13 @@ const MapComponent: React.FC<MapProps> = ({
     const isApplyingCustomStyleRef = useRef<boolean>(false);
     const hasCustomStyleRef = useRef<boolean>(false);
     const customStyleRef = useRef<maplibregl.StyleSpecification | null>(null);
+    const initialStyleRef = useRef<maplibregl.StyleSpecification | undefined>(initialStyle);
 
     // Keep refs updated
     useEffect(() => {
         selectedTableRef.current = selectedTable;
         selectedColumnsRef.current = selectedColumns;
+        initialStyleRef.current = initialStyle;
         
         // Clear tile cache when table, columns, or geometry column change to force refresh
         if (selectedTable) {
@@ -330,7 +349,22 @@ const MapComponent: React.FC<MapProps> = ({
         if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && initializedRef.current) {
             fitMapToData(selectedTable, geometryColumnName);
         }
-    }, [geometryColumnName, selectedTable, fitMapToData]);
+    }, [geometryColumnName, selectedTable, dbStateManager]);
+
+    // Helper to generate distinct colors for different tables
+    const getTableColor = (index: number) => {
+        const colors = [
+            '#ff6600', // orange
+            '#0080ff', // blue  
+            '#00aa00', // green
+            '#ff00ff', // magenta
+            '#ffaa00', // yellow
+            '#00ffff', // cyan
+            '#ff0000', // red
+            '#8800ff', // purple
+        ];
+        return colors[index % colors.length];
+    };
 
     // Function to update map layers dynamically
     const updateMapLayers = useCallback((map: maplibregl.Map) => {
@@ -341,60 +375,89 @@ const MapComponent: React.FC<MapProps> = ({
             (styleManagerRef.current as any).map = map;
         }
 
-        // Remove existing data layers
-        const existingLayers = ['duckdb-polygons', 'duckdb-polygon-outlines', 'duckdb-lines', 'duckdb-points', 'duckdb-points-labels', 'geojson-polygons', 'geojson-lines', 'geojson-points'];
-        existingLayers.forEach(layerId => {
-            if (map.getLayer(layerId)) {
-                map.removeLayer(layerId);
+        // Remove all existing DuckDB layers and sources
+        // First remove layers
+        const allLayers = map.getStyle().layers || [];
+        allLayers.forEach(layer => {
+            if (layer.id.startsWith('duckdb-')) {
+                map.removeLayer(layer.id);
             }
         });
-
-        // Remove existing data sources
-        if (map.getSource('duckdb-vector')) {
-            map.removeSource('duckdb-vector');
-            // Clear tile cache when removing source to prevent ArrayBuffer issues
-            tileCache.current.clear();
-        }
+        
+        // Then remove sources
+        const allSources = Object.keys(map.getStyle().sources || {});
+        allSources.forEach(sourceId => {
+            if (sourceId.startsWith('duckdb-')) {
+                map.removeSource(sourceId);
+            }
+        });
+        
+        // Clear tile cache
+        tileCache.current.clear();
+        
+        // Also remove old geojson source if it exists
         if (map.getSource('geojson-source')) {
+            const geojsonLayers = ['geojson-polygons', 'geojson-lines', 'geojson-points'];
+            geojsonLayers.forEach(layerId => {
+                if (map.getLayer(layerId)) map.removeLayer(layerId);
+            });
             map.removeSource('geojson-source');
         }
 
-        // Add DuckDB layers if table is selected
-        if (selectedTable) {
+        // Determine which tables to add
+        let tablesToAdd: string[] = [];
+        
+        // Use tables prop if provided, otherwise fall back to selectedTable
+        if (tables && tables.length > 0) {
+            tablesToAdd = tables;
+        } else if (selectedTable) {
+            const currentSchema = dbStateManager?.getCurrentSchema();
+            const tableSpec = currentSchema && currentSchema !== 'main' 
+                ? `${currentSchema}.${selectedTable}` 
+                : selectedTable;
+            tablesToAdd = [tableSpec];
+        }
+        
+        // Add layers for each table
+        tablesToAdd.forEach((tableSpec, index) => {
+            const sourceId = `duckdb-${tableSpec.replace(/\./g, '_')}`;
+            const color = getTableColor(index);
+            
             try {
-                map.addSource('duckdb-vector', {
+                map.addSource(sourceId, {
                     type: 'vector',
-                    tiles: ['duckdb-vector://{z}/{x}/{y}.pbf'],
+                    tiles: [`duckdb://${tableSpec}/{z}/{x}/{y}.pbf`],
                     minzoom: 0,
                     maxzoom: 24,
                 });
-            } catch {
-                // Source already exists, continue
+            } catch (e) {
+                console.error(`Failed to add source for ${tableSpec}:`, e);
+                return;
             }
-
+            
             // Add polygon fill layer
             map.addLayer({
-                id: 'duckdb-polygons',
-                source: 'duckdb-vector',
+                id: `duckdb-polygons-${tableSpec.replace(/\./g, '_')}`,
+                source: sourceId,
                 'source-layer': 'v',
                 type: 'fill',
                 paint: {
-                    'fill-color': '#ff6600',
+                    'fill-color': color,
                     'fill-opacity': 0.3,
                 },
                 filter: ['==', '$type', 'Polygon'] as ['==', '$type', 'Polygon'],
                 minzoom: 0,
                 maxzoom: 24,
             });
-
-            // Add polygon outline layer for better visibility
+            
+            // Add polygon outline layer
             map.addLayer({
-                id: 'duckdb-polygon-outlines',
-                source: 'duckdb-vector',
+                id: `duckdb-polygon-outlines-${tableSpec.replace(/\./g, '_')}`,
+                source: sourceId,
                 'source-layer': 'v',
                 type: 'line',
                 paint: {
-                    'line-color': '#ff6600',
+                    'line-color': color,
                     'line-width': 1,
                     'line-opacity': 0.8,
                 },
@@ -402,15 +465,15 @@ const MapComponent: React.FC<MapProps> = ({
                 minzoom: 0,
                 maxzoom: 24,
             });
-
-            // Add line layer with distinct color
+            
+            // Add line layer
             map.addLayer({
-                id: 'duckdb-lines',
-                source: 'duckdb-vector',
+                id: `duckdb-lines-${tableSpec.replace(/\./g, '_')}`,
+                source: sourceId,
                 'source-layer': 'v',
                 type: 'line',
                 paint: {
-                    'line-color': '#00aa00',
+                    'line-color': color,
                     'line-width': 3,
                     'line-opacity': 0.9,
                 },
@@ -418,61 +481,53 @@ const MapComponent: React.FC<MapProps> = ({
                 minzoom: 0,
                 maxzoom: 24,
             });
-
-            // Add point layer with default styling if it doesn't exist
-            if (!map.getLayer('duckdb-points')) {
-                map.addLayer({
-                    id: 'duckdb-points',
-                    source: 'duckdb-vector',
-                    'source-layer': 'v',
-                    type: 'circle',
-                    paint: {
-                        'circle-radius': 6,
-                        'circle-color': '#0066ff',
-                        'circle-stroke-width': 1,
-                        'circle-stroke-color': '#ffffff',
-                        'circle-opacity': 0.8,
-                    },
-                    filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
-                    minzoom: 0,
-                    maxzoom: 24,
-                });
-            }
-
-            // Add debug event to check properties in rendered features
-            map.on('click', 'duckdb-points', (e) => {
-                if (e.features && e.features.length > 0) {
-                    // Click event handler - can be extended for popups
-                }
+            
+            // Add point layer
+            map.addLayer({
+                id: `duckdb-points-${tableSpec.replace(/\./g, '_')}`,
+                source: sourceId,
+                'source-layer': 'v',
+                type: 'circle',
+                paint: {
+                    'circle-radius': 6,
+                    'circle-color': color,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.8,
+                },
+                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
+                minzoom: 0,
+                maxzoom: 24,
             });
+        });
+        
+        // Update StyleManager with current map instance to fix stale reference
+        if (styleManagerRef.current) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (styleManagerRef.current as any).map = map;
+        }
 
-
-
-            // Update StyleManager with current map instance to fix stale reference
-            if (styleManagerRef.current) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (styleManagerRef.current as any).map = map;
-            }
-
-            // Add event handlers for DuckDB layers
-            map.on('click', 'duckdb-points', handleFeatureClick);
-            map.on('click', 'duckdb-lines', handleFeatureClick);
-            map.on('click', 'duckdb-polygons', handleFeatureClick);
-            map.on('click', 'duckdb-polygon-outlines', handleFeatureClick);
+        // Add event handlers for all DuckDB layers
+        tablesToAdd.forEach((tableSpec) => {
+            const suffix = tableSpec.replace(/\./g, '_');
+            map.on('click', `duckdb-points-${suffix}`, handleFeatureClick);
+            map.on('click', `duckdb-lines-${suffix}`, handleFeatureClick);
+            map.on('click', `duckdb-polygons-${suffix}`, handleFeatureClick);
+            map.on('click', `duckdb-polygon-outlines-${suffix}`, handleFeatureClick);
 
             const handleMouseEnter = () => map.getCanvas().style.cursor = 'pointer';
             const handleMouseLeave = () => map.getCanvas().style.cursor = '';
 
-            map.on('mouseenter', 'duckdb-points', handleMouseEnter);
-            map.on('mouseenter', 'duckdb-lines', handleMouseEnter);
-            map.on('mouseenter', 'duckdb-polygons', handleMouseEnter);
-            map.on('mouseenter', 'duckdb-polygon-outlines', handleMouseEnter);
+            map.on('mouseenter', `duckdb-points-${suffix}`, handleMouseEnter);
+            map.on('mouseenter', `duckdb-lines-${suffix}`, handleMouseEnter);
+            map.on('mouseenter', `duckdb-polygons-${suffix}`, handleMouseEnter);
+            map.on('mouseenter', `duckdb-polygon-outlines-${suffix}`, handleMouseEnter);
 
-            map.on('mouseleave', 'duckdb-points', handleMouseLeave);
-            map.on('mouseleave', 'duckdb-lines', handleMouseLeave);
-            map.on('mouseleave', 'duckdb-polygons', handleMouseLeave);
-            map.on('mouseleave', 'duckdb-polygon-outlines', handleMouseLeave);
-        }
+            map.on('mouseleave', `duckdb-points-${suffix}`, handleMouseLeave);
+            map.on('mouseleave', `duckdb-lines-${suffix}`, handleMouseLeave);
+            map.on('mouseleave', `duckdb-polygons-${suffix}`, handleMouseLeave);
+            map.on('mouseleave', `duckdb-polygon-outlines-${suffix}`, handleMouseLeave);
+        });
 
         // Add GeoJSON layers if URL is provided
         if (geojsonUrl) {
@@ -559,19 +614,36 @@ const MapComponent: React.FC<MapProps> = ({
                 
             }, 500); // Wait a bit for tiles to load
         }
-    }, [selectedTable, geojsonUrl, handleFeatureClick, fitMapToData, geometryColumnName]);
+    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbStateManager]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
         // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
         // If it already exists, it will be overwritten which is fine for our use case
         try {
-            maplibregl.addProtocol('duckdb-vector', async params => {
+            maplibregl.addProtocol('duckdb', async params => {
+                // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
+                const url = params.url;
+                const match = url.match(/^duckdb:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.pbf$/);
+                if (!match) {
+                    console.error('Invalid DuckDB URL format:', url);
+                    return { data: new Uint8Array() };
+                }
 
-                const zxy = getZxyFromUrl(params.url);
-                if (!zxy) throw new Error('invalid tile url: ' + params.url);
-                const cacheKey = `${zxy.z}/${zxy.x}/${zxy.y}`;
+                const [, tableSpec, z, x, y] = match;
+                const zxy = { z: parseInt(z), x: parseInt(x), y: parseInt(y) };
+                
+                // Parse schema.table or just table
+                let schema: string | null = null;
+                let tableName: string;
+                const tableParts = tableSpec.split('.');
+                if (tableParts.length === 2) {
+                    [schema, tableName] = tableParts;
+                } else {
+                    tableName = tableSpec;
+                }
 
+                const cacheKey = `${tableSpec}/${z}/${x}/${y}`;
 
                 // キャッシュをチェック
                 if (tileCache.current.has(cacheKey)) {
@@ -581,7 +653,6 @@ const MapComponent: React.FC<MapProps> = ({
                     return { data: freshCopy };
                 }
 
-
                 try {
                     if (!connectionRef.current) {
                         throw new Error('Database connection is not available');
@@ -589,11 +660,9 @@ const MapComponent: React.FC<MapProps> = ({
 
                     const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
 
-
-                    const currentTable = selectedTableRef.current;
                     const currentColumns = selectedColumnsRef.current;
 
-                    if (!currentTable) {
+                    if (!tableName) {
                         return { data: new Uint8Array() };
                     }
 
@@ -601,10 +670,10 @@ const MapComponent: React.FC<MapProps> = ({
                     // 選択されたカラムを取得するSQLクエリを構築
                     const query = generateVectorTileQuery({
                         zxy,
-                        selectedTable: currentTable,
+                        selectedTable: tableName,
                         selectedColumns: currentColumns,
                         geometryColumnName,
-                        schema: dbStateManager?.getCurrentSchema(),
+                        schema: schema || dbStateManager?.getCurrentSchema(),
                     });
                     
                     let stmt;
@@ -843,6 +912,11 @@ const MapComponent: React.FC<MapProps> = ({
             // Apply the fixed style without diff to ensure proper layer reloading
             mapRef.current.setStyle(fixedStyle);
             
+            // Notify parent of style update
+            if (onStyleUpdate) {
+                onStyleUpdate(fixedStyle);
+            }
+            
             // Wait for style to load, then re-add data layers
             const handleStyleLoad = () => {
                 setIsLoading(false);
@@ -868,7 +942,7 @@ const MapComponent: React.FC<MapProps> = ({
             isApplyingCustomStyleRef.current = false;
             setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }, [fixStylePropertyReferences, updateMapLayers]);
+    }, [fixStylePropertyReferences, updateMapLayers, onStyleUpdate]);
 
     // Expose style change handler
     useEffect(() => {
@@ -932,8 +1006,8 @@ const MapComponent: React.FC<MapProps> = ({
                 // Add vector protocol handler
                 registerDuckDBProtocol();
 
-                // マップの初期化
-                const defaultStyle = {
+                // マップの初期化 - Only OSM base layer, no DuckDB layers yet
+                const defaultStyle = initialStyleRef.current || {
                     version: 8,
                     glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
                     sources: {
@@ -944,75 +1018,12 @@ const MapComponent: React.FC<MapProps> = ({
                             tileSize: 256,
                             attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                         },
-                        'duckdb-vector': {
-                            type: 'vector',
-                            tiles: ['duckdb-vector://{z}/{x}/{y}.pbf'],
-                            minzoom: 0,
-                            maxzoom: 24,
-                        },
                     },
                     layers: [
                         {
                             id: 'osm-layer',
                             source: 'osm',
                             type: 'raster',
-                        },
-                        {
-                            id: 'duckdb-polygons',
-                            type: 'fill',
-                            source: 'duckdb-vector',
-                            'source-layer': 'v',
-                            minzoom: 0,
-                            maxzoom: 24,
-                            filter: ['==', '$type', 'Polygon'],
-                            paint: {
-                                'fill-color': '#ff6600',
-                                'fill-opacity': 0.3,
-                            },
-                        },
-                        {
-                            id: 'duckdb-polygon-outlines',
-                            type: 'line',
-                            source: 'duckdb-vector',
-                            'source-layer': 'v',
-                            minzoom: 0,
-                            maxzoom: 24,
-                            filter: ['==', '$type', 'Polygon'],
-                            paint: {
-                                'line-color': '#ff6600',
-                                'line-width': 1,
-                                'line-opacity': 0.8,
-                            },
-                        },
-                        {
-                            id: 'duckdb-lines',
-                            type: 'line',
-                            source: 'duckdb-vector',
-                            'source-layer': 'v',
-                            minzoom: 0,
-                            maxzoom: 24,
-                            filter: ['==', '$type', 'LineString'],
-                            paint: {
-                                'line-color': '#00aa00',
-                                'line-width': 3,
-                                'line-opacity': 0.9,
-                            },
-                        },
-                        {
-                            id: 'duckdb-points',
-                            type: 'circle',
-                            source: 'duckdb-vector',
-                            'source-layer': 'v',
-                            minzoom: 0,
-                            maxzoom: 24,
-                            filter: ['==', '$type', 'Point'],
-                            paint: {
-                                'circle-radius': 6,
-                                'circle-color': '#0066ff',
-                                'circle-stroke-width': 1,
-                                'circle-stroke-color': '#ffffff',
-                                'circle-opacity': 0.8,
-                            },
                         },
                     ],
                 } as maplibregl.StyleSpecification;
@@ -1024,8 +1035,10 @@ const MapComponent: React.FC<MapProps> = ({
                 
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
-                    zoom: 5, // 初期ズームレベル
-                    center: [139.7482, 35.6591], // 東京付近の座標
+                    zoom: initialViewState?.zoom ?? 5, // 初期ズームレベル
+                    center: initialViewState?.center ?? [139.7482, 35.6591], // 東京付近の座標
+                    bearing: initialViewState?.bearing ?? 0,
+                    pitch: initialViewState?.pitch ?? 0,
                     style: styleToUse,
                     antialias: true,
                     // Try to enable preserveDrawingBuffer for export
@@ -1062,6 +1075,28 @@ const MapComponent: React.FC<MapProps> = ({
                     }
                 });
 
+                // Track view state changes
+                if (onViewStateChange) {
+                    const updateViewState = () => {
+                        const center = mapInstance.getCenter();
+                        const zoom = mapInstance.getZoom();
+                        const bearing = mapInstance.getBearing();
+                        const pitch = mapInstance.getPitch();
+                        
+                        onViewStateChange({
+                            center: [center.lng, center.lat],
+                            zoom,
+                            bearing,
+                            pitch
+                        });
+                    };
+
+                    mapInstance.on('moveend', updateViewState);
+                    mapInstance.on('zoomend', updateViewState);
+                    mapInstance.on('pitchend', updateViewState);
+                    mapInstance.on('rotateend', updateViewState);
+                }
+
                 // クリーンアップ関数
                 return () => {
                     if (mapInstance) {
@@ -1080,7 +1115,15 @@ const MapComponent: React.FC<MapProps> = ({
 
         initMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db, selectedTable, selectedColumns, geojsonUrl, updateMapLayers, registerDuckDBProtocol, geometryColumnName]);
+    }, [db, geometryColumnName]);
+    
+    // Update layers when tables or selectedTable changes
+    useEffect(() => {
+        if (mapRef.current && initializedRef.current) {
+            updateMapLayers(mapRef.current);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTable, tables, selectedColumns, geojsonUrl]);
     
     // Separate effect for onMapReady to avoid triggering re-initialization
     useEffect(() => {
