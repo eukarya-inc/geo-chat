@@ -1,9 +1,18 @@
 import { useState, useRef } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
 import type { CoreMessage } from 'ai';
+import type { StyleSpecification } from 'maplibre-gl';
 import { ChatTypeMenu } from './ChatTypeMenu';
 
 export type ChatType = 'graph' | 'map';
+
+export interface MapState {
+    center?: [number, number];
+    zoom?: number;
+    bearing?: number;
+    pitch?: number;
+    style?: StyleSpecification;
+}
 
 export interface Chat {
     id: string;
@@ -13,6 +22,7 @@ export interface Chat {
     messages: CoreMessage[];
     schemaName?: string;
     selectedTable?: string | null;
+    mapState?: MapState;
 }
 
 interface ChatListProps {
@@ -80,7 +90,7 @@ export function ChatList({
                     </div>
                 ) : (
                     <div className="p-2">
-                        {chats.map((chat) => (
+                        {[...chats].reverse().map((chat) => (
                             <div
                                 key={chat.id}
                                 className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
