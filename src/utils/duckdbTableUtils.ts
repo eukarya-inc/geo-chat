@@ -138,10 +138,52 @@ export async function getTableSchema(
   connection: AsyncDuckDBConnection,
   tableName: string
 ): Promise<TableColumn[]> {
+  // First, try using DESCRIBE which respects the current search_path
+  try {
+    const result = await connection.query(`DESCRIBE ${tableName}`);
+    const columns: TableColumn[] = [];
+    
+    for (const row of result.toArray()) {
+      columns.push({
+        name: row.column_name as string,
+        type: row.column_type as string,
+      });
+    }
+    
+    if (columns.length > 0) {
+      return columns;
+    }
+  } catch {
+    // If DESCRIBE fails, fall back to information_schema query
+  }
+  
+  // Fall back to information_schema query if DESCRIBE fails
+  // Split schema and table name if present
+  const parts = tableName.split('.');
+  let schemaName = 'main';
+  let actualTableName = tableName;
+  
+  if (parts.length === 2) {
+    schemaName = parts[0];
+    actualTableName = parts[1];
+  } else {
+    // If no schema specified, try to get current schema from search_path
+    try {
+      const searchPathResult = await connection.query(`SELECT current_schema()`);
+      const currentSchema = searchPathResult.toArray()[0]?.current_schema;
+      if (currentSchema) {
+        schemaName = currentSchema as string;
+      }
+    } catch {
+      // Ignore error, use 'main' as default
+    }
+  }
+  
   const result = await connection.query(`
     SELECT column_name, data_type
     FROM information_schema.columns
-    WHERE table_name = '${tableName}'
+    WHERE table_schema = '${schemaName}' 
+      AND table_name = '${actualTableName}'
     ORDER BY ordinal_position
   `);
 
@@ -188,6 +230,11 @@ export async function getTableData(
     getTableRowCount(connection, tableName),
   ]);
 
+  // If no columns found, throw a meaningful error
+  if (columns.length === 0) {
+    throw new Error(`No columns found for table ${tableName}`);
+  }
+
   const columnNames = buildColumnNamesString(columns);
   // Use the table name as-is (it might already include schema prefix)
   const result = await connection.query(
@@ -211,6 +258,12 @@ export async function getTableDataByWindow(
   endRow: number
 ): Promise<ArrowTable> {
   const columns = await getTableSchema(connection, tableName);
+  
+  // If no columns found, return empty table
+  if (columns.length === 0) {
+    return new ArrowTable();
+  }
+  
   const limit = endRow - startRow;
   const offset = startRow;
 
