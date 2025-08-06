@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { AsyncDuckDBConnection, AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
@@ -14,45 +14,64 @@ const TableSelector: React.FC<TableSelectorProps> = ({ db, dbStateManager, selec
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Function to fetch tables
+  const fetchTables = useCallback(async () => {
+    if (!db) {
+      setTables([]);
+      return;
+    }
+
+    setLoading(true);
+
+    let conn: AsyncDuckDBConnection | null = null;
+
+    try {
+      // Use dbStateManager if available for schema-aware table listing
+      if (dbStateManager) {
+        const tableNames = await dbStateManager.getTables();
+        setTables(tableNames);
+      } else {
+        conn = await db.connect();
+        const result = await conn.query('SHOW TABLES');
+        const tableRows = result.toArray();
+        const tableNames = tableRows.map(row => row.name as string).sort();
+        setTables(tableNames);
+      }
+    } catch {
+      setTables([]);
+    } finally {
+      setLoading(false);
+      if (conn) {
+        try {
+          await conn.close();
+        } catch {
+          // Ignore error closing connection
+        }
+      }
+    }
+  }, [db, dbStateManager]);
+
+  // Initial fetch and refresh on prop changes
   useEffect(() => {
-    const fetchTables = async () => {
-      if (!db) {
-        setTables([]);
-        return;
-      }
-
-      setLoading(true);
-
-      let conn: AsyncDuckDBConnection | null = null;
-
-      try {
-        // Use dbStateManager if available for schema-aware table listing
-        if (dbStateManager) {
-          const tableNames = await dbStateManager.getTables();
-          setTables(tableNames);
-        } else {
-          conn = await db.connect();
-          const result = await conn.query('SHOW TABLES');
-          const tableRows = result.toArray();
-          const tableNames = tableRows.map(row => row.name as string).sort();
-          setTables(tableNames);
-        }
-      } catch {
-        setTables([]);
-      } finally {
-        setLoading(false);
-        if (conn) {
-          try {
-            await conn.close();
-          } catch {
-            // Ignore error closing connection
-          }
-        }
-      }
-    };
-
     fetchTables();
-  }, [db, refreshTrigger]);
+  }, [fetchTables, refreshTrigger]);
+
+  // Subscribe to table changes from dbStateManager
+  useEffect(() => {
+    if (!dbStateManager) return;
+
+    const unsubscribe = dbStateManager.onTableChange(() => {
+      // Refresh table list when tables change
+      // Add a small delay to ensure the table is fully created
+      setTimeout(() => {
+        fetchTables();
+      }, 600);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [dbStateManager, fetchTables]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
