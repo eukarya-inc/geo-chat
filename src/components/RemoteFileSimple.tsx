@@ -103,28 +103,8 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
                 dbStateManager.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
             }
 
-            console.log('Table created:', tableName);
-
             setError(null);
             setUrl('');
-
-            // Debug: Check what tables actually exist
-            try {
-                const debugConn = dbStateManager 
-                    ? await dbStateManager.connectWithSchema()
-                    : await db.connect();
-                const tablesResult = await debugConn.query('SHOW TABLES;');
-                console.log('RemoteFileSimple: Tables in database after creation:', tablesResult.toArray());
-
-                // Check the actual row count
-                const countResult = await debugConn.query(`SELECT COUNT(*) as count FROM ${tableName}`);
-                const actualCount = countResult.toArray()[0]?.count;
-                console.log(`RemoteFileSimple: Actual row count in ${tableName}:`, actualCount);
-
-                await debugConn.close();
-            } catch (debugError) {
-                console.error('RemoteFileSimple: Error during debug check:', debugError);
-            }
 
             // Send a simple table creation message
             const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
