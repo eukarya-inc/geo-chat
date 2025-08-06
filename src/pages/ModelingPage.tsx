@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import RemoteFileSimple from '../components/RemoteFileSimple';
 import TableSQLDisplay from '../components/TableSQLDisplay';
+import TableSelector from '../components/TableSelector';
 import { ResizableDivider } from '../components/ResizableDivider';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
@@ -14,6 +15,7 @@ import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
 import { ChatList, type Chat, type ChatType } from '../components/ChatList';
 import { createSchemaManager, type SchemaManager } from '../lib/duckdb/schemaManager';
 import type { CoreMessage } from 'ai';
+import { TableCellsIcon } from '@heroicons/react/24/outline';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
@@ -32,12 +34,27 @@ function ModelingPage() {
     }, []);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
-    const [availableGeometryColumns, setAvailableGeometryColumns] = useState<string[]>([]);
-    const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geom');
+    const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geometry');
 
     // Chat management state
     const [chats, setChats] = useState<Chat[]>([]);
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+    
+    // Handle table selection and update chat state
+    const handleTableSelection = useCallback((tableName: string | null) => {
+        setSelectedTable(tableName);
+        
+        // Update the selected table in the current chat
+        if (selectedChatId && tableName) {
+            setChats(prevChats => 
+                prevChats.map(chat => 
+                    chat.id === selectedChatId 
+                        ? { ...chat, selectedTable: tableName }
+                        : chat
+                )
+            );
+        }
+    }, [selectedChatId]);
     const [schemaManager, setSchemaManager] = useState<SchemaManager | null>(null);
     
     // Get current chat
@@ -57,17 +74,12 @@ function ModelingPage() {
     // Save selected table to current chat when it changes
     useEffect(() => {
         if (selectedChatId && selectedTable !== undefined) {
-            console.log('Saving selected table to chat:', {
-                chatId: selectedChatId,
-                selectedTable
-            });
             setChats(prevChats => {
                 const updatedChats = prevChats.map(chat =>
                     chat.id === selectedChatId
                         ? { ...chat, selectedTable }
                         : chat
                 );
-                console.log('Updated chats:', updatedChats.map(c => ({ id: c.id, selectedTable: c.selectedTable })));
                 return updatedChats;
             });
         }
@@ -168,13 +180,6 @@ function ModelingPage() {
         // Find the chat being selected
         const targetChat = chats.find(chat => chat.id === chatId);
         if (!targetChat) return;
-
-        console.log('selectChat called:', {
-            chatId,
-            targetChat,
-            savedTable: targetChat.selectedTable,
-            allChats: chats.map(c => ({ id: c.id, selectedTable: c.selectedTable }))
-        });
 
         // Set the selected chat ID - this will trigger the useEffect that switches schema
         setSelectedChatId(chatId);
@@ -303,10 +308,9 @@ function ModelingPage() {
                         try {
                             // Check if table exists in this schema
                             await conn.query(`SELECT 1 FROM "${targetChat.selectedTable}" LIMIT 0`);
-                            console.log(`✅ Direct restoration: Setting table ${targetChat.selectedTable} for chat ${selectedChatId}`);
                             setSelectedTable(targetChat.selectedTable);
                         } catch {
-                            console.log(`❌ Direct restoration: Table ${targetChat.selectedTable} not found in schema`);
+                            // Table not found in schema, reset selection
                             setSelectedTable(null);
                         }
                     }
@@ -347,28 +351,30 @@ function ModelingPage() {
                 // Error forcing consistency
             }
 
-            // Auto-select the newly created table
+            // Auto-select the newly created table with a delay to ensure data is ready
             if (tableName) {
-                setSelectedTable(tableName);
+                // Wait longer for the table data to be fully committed and visible
+                setTimeout(() => {
+                    handleTableSelection(tableName);
+                    // Force a connection timestamp update to refresh the Table component
+                    setConnectionTimestamp(Date.now());
+                }, 800);
             }
         });
 
         return () => {
             unsubscribe();
         };
-    }, [dbStateManager]);
+    }, [dbStateManager, handleTableSelection]);
 
     // Check for geom column and available columns when table is selected
     useEffect(() => {
         const checkGeomColumn = async () => {
             if (!selectedTable || !connection) {
-                setAvailableGeometryColumns([]);
                 return;
             }
 
             const result = await checkTableGeometry(connection, selectedTable);
-
-            setAvailableGeometryColumns(result.geometryColumns);
 
             if (result.geometryColumns.length > 0) {
                 setSelectedGeometryColumn(result.geometryColumns[0]);
@@ -488,7 +494,7 @@ function ModelingPage() {
                         onMessagesChange={handleMessagesChange}
                         onSendMessageReady={handleSendMessageReady}
                         selectedTable={selectedTable}
-                        onTableSelect={setSelectedTable}
+                        onTableSelect={handleTableSelection}
                         remoteFileComponent={(onClose) => (
                             <RemoteFileSimple 
                                 db={db} 
@@ -528,6 +534,23 @@ function ModelingPage() {
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {db && selectedTable && connection && (
                         <>
+                            {/* Table Selector Header - moved to top */}
+                            <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                                <div className="flex items-center gap-2">
+                                    <TableCellsIcon className="w-4 h-4 text-gray-600" />
+                                    <div className="flex-1">
+                                        <TableSelector
+                                            db={db}
+                                            dbStateManager={dbStateManager || undefined}
+                                            selectedTable={selectedTable}
+                                            onTableSelect={handleTableSelection}
+                                            refreshTrigger={connectionTimestamp}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* SQL Section */}
                             <div
                                 className="flex-shrink-0 bg-white border-b border-gray-200 overflow-hidden"
                                 style={{ height: `${sqlAreaHeight}px` }}
@@ -551,42 +574,16 @@ function ModelingPage() {
                                     className="flex-shrink-0 overflow-hidden border-b border-gray-200"
                                     style={{ height: `${tableAreaHeight}px` }}
                                 >
-                                    <div className="h-full flex flex-col">
-                                        {/* Table Name Header */}
-                                        <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
-                                            <div className="flex items-center gap-2">
-                                                <svg 
-                                                    className="w-4 h-4 text-gray-600" 
-                                                    fill="none" 
-                                                    stroke="currentColor" 
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path 
-                                                        strokeLinecap="round" 
-                                                        strokeLinejoin="round" 
-                                                        strokeWidth={2} 
-                                                        d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" 
-                                                    />
-                                                </svg>
-                                                <span className="font-medium text-gray-700">
-                                                    {selectedTable}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        {/* Table Content */}
-                                        <div className="flex-1 overflow-hidden">
-                                            <Table
-                                                key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
-                                                connection={connection}
-                                                tableName={selectedTable}
-                                                dbStateManager={dbStateManager || undefined}
-                                            />
-                                        </div>
-                                    </div>
+                                    <Table
+                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
+                                        connection={connection}
+                                        tableName={selectedTable}
+                                        dbStateManager={dbStateManager || undefined}
+                                    />
                                 </div>
                                 
                                 {/* Resizable divider between table and graph/map */}
-                                {(currentChat?.type === 'graph' || (currentChat?.type === 'map' && availableGeometryColumns.length > 0)) && (
+                                {(currentChat?.type === 'graph' || currentChat?.type === 'map') && (
                                     <ResizableDivider
                                         onResize={setTableAreaHeight}
                                         minHeight={100}
@@ -607,35 +604,59 @@ function ModelingPage() {
                                 )}
                                 
                                 {/* Map Section (for map chats) */}
-                                {currentChat?.type === 'map' && availableGeometryColumns.length > 0 && (
-                                    <div className="flex-1 overflow-hidden flex flex-col">
-                                        {availableGeometryColumns.length > 1 && (
-                                            <div className="p-2 border-b border-gray-200 bg-gray-50">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium">Geometryカラム:</span>
-                                                    <select
-                                                        value={selectedGeometryColumn}
-                                                        onChange={(e) => setSelectedGeometryColumn(e.target.value)}
-                                                        className="text-sm px-2 py-1 border border-gray-300 rounded"
-                                                    >
-                                                        {availableGeometryColumns.map(col => (
-                                                            <option key={col} value={col}>{col}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="flex-1">
-                                            <Map
-                                                db={db}
-                                                dbStateManager={dbStateManager || undefined}
-                                                selectedTable={selectedTable}
-                                                selectedColumns={mapSelectedColumns}
-                                                geometryColumnName={selectedGeometryColumn}
-                                            />
-                                        </div>
+                                {currentChat?.type === 'map' && (
+                                    <div className="flex-1 overflow-hidden">
+                                        <Map
+                                            db={db}
+                                            dbStateManager={dbStateManager || undefined}
+                                            selectedTable={selectedTable}
+                                            selectedColumns={mapSelectedColumns}
+                                            geometryColumnName={selectedGeometryColumn}
+                                            onViewStateChange={(viewState) => {
+                                                // Save map state to chat
+                                                if (selectedChatId) {
+                                                    setChats(prevChats =>
+                                                        prevChats.map(chat =>
+                                                            chat.id === selectedChatId
+                                                                ? { 
+                                                                    ...chat, 
+                                                                    mapState: {
+                                                                        ...chat.mapState,
+                                                                        center: viewState.center,
+                                                                        zoom: viewState.zoom,
+                                                                        bearing: viewState.bearing,
+                                                                        pitch: viewState.pitch
+                                                                    }
+                                                                }
+                                                                : chat
+                                                        )
+                                                    );
+                                                }
+                                            }}
+                                            initialViewState={currentChat.mapState}
+                                            initialStyle={currentChat.mapState?.style}
+                                            onStyleUpdate={(style) => {
+                                                // Save style to chat
+                                                if (selectedChatId) {
+                                                    setChats(prevChats =>
+                                                        prevChats.map(chat =>
+                                                            chat.id === selectedChatId
+                                                                ? { 
+                                                                    ...chat, 
+                                                                    mapState: {
+                                                                        ...chat.mapState,
+                                                                        style
+                                                                    }
+                                                                }
+                                                                : chat
+                                                        )
+                                                    );
+                                                }
+                                            }}
+                                        />
                                     </div>
                                 )}
+                                
                             </div>
                         </>
                     )}
