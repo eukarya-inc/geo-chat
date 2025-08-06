@@ -8,7 +8,7 @@ import { format } from 'sql-formatter';
 export function formatSQL(sql: string): string {
   try {
     return format(sql, {
-      language: 'sql', // DuckDB uses standard SQL syntax
+      language: 'sqlite', // Use SQLite dialect for better DuckDB compatibility
       keywordCase: 'upper',
       indentStyle: 'standard',
       linesBetweenQueries: 2,
