@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import VegaLiteChart from './VegaLiteChart';
+import { TableCreatedMessage } from './TableCreatedMessage';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 
@@ -11,6 +12,8 @@ interface MessageRendererProps {
     className?: string;
     db?: AsyncDuckDB;
     dbStateManager?: DBStateManager;
+    selectedTable?: string | null;
+    onTableSelect?: (tableName: string) => void;
 }
 
 interface CollapsibleSectionProps {
@@ -19,7 +22,7 @@ interface CollapsibleSectionProps {
     defaultOpen?: boolean;
 }
 
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, defaultOpen = false }) => {
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = React.memo(({ title, children, defaultOpen = false }) => {
     return (
         <details className="group my-3" open={defaultOpen}>
             <summary className="cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 transition-colors duration-200 rounded-md select-none">
@@ -47,9 +50,16 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
             </div>
         </details>
     );
-};
+});
 
-const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, className, db, dbStateManager }) => {
+const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ 
+    content, 
+    className, 
+    db, 
+    dbStateManager,
+    selectedTable,
+    onTableSelect 
+}) => {
     // Check if content contains Vega-Lite specifications
     const vegaSpecRegex = /<!--VEGA_SPEC_START-->\n(.*?)\n<!--VEGA_SPEC_END-->/gs;
     const vegaMatches = Array.from(content.matchAll(vegaSpecRegex));
@@ -57,6 +67,10 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
     // Check if content contains SQL results
     const sqlResultRegex = /<!--SQL_RESULT_START-->\n(.*?)\n<!--SQL_RESULT_END-->/gs;
     const sqlResultMatches = Array.from(content.matchAll(sqlResultRegex));
+    
+    // Check for CREATE TABLE statements - just match the marker
+    const tableCreatedRegex = /<!--TABLE_CREATED:(.+?)-->/g;
+    const tableMatches = Array.from(content.matchAll(tableCreatedRegex));
 
     // Process content to identify and replace SQL results and Vega specs
     const processedContent = useMemo(() => {
@@ -64,9 +78,10 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
         let lastIndex = 0;
 
         // Combine all matches and sort by index
-        const allMatches: { match: RegExpMatchArray; type: 'vega' | 'sql' }[] = [
+        const allMatches: { match: RegExpMatchArray; type: 'vega' | 'sql' | 'table' }[] = [
             ...vegaMatches.map(match => ({ match, type: 'vega' as const })),
-            ...sqlResultMatches.map(match => ({ match, type: 'sql' as const }))
+            ...sqlResultMatches.map(match => ({ match, type: 'sql' as const })),
+            ...tableMatches.map(match => ({ match, type: 'table' as const }))
         ].sort((a, b) => (a.match.index || 0) - (b.match.index || 0));
 
         allMatches.forEach((item) => {
@@ -144,6 +159,18 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
                         </div>
                     </CollapsibleSection>
                 );
+            } else if (type === 'table' && onTableSelect) {
+                // Handle table creation - match[1] is table name
+                const tableName = match[1];
+                parts.push(
+                    <div key={`table-${matchIndex}`} className="my-2">
+                        <TableCreatedMessage
+                            tableName={tableName}
+                            isSelected={selectedTable === tableName}
+                            onClick={() => onTableSelect(tableName)}
+                        />
+                    </div>
+                );
             }
 
             lastIndex = matchIndex + match[0].length;
@@ -165,10 +192,10 @@ const CollapsibleMessageRenderer: React.FC<MessageRendererProps> = ({ content, c
         }
 
         return parts;
-    }, [content, db, dbStateManager, sqlResultMatches, vegaMatches]); // Only re-process when content changes
+    }, [content, selectedTable]); // Re-process when content or selectedTable changes
 
     // If no special content, render as normal markdown
-    if (vegaMatches.length === 0 && sqlResultMatches.length === 0) {
+    if (vegaMatches.length === 0 && sqlResultMatches.length === 0 && tableMatches.length === 0) {
         return (
             <div className={`${className} space-y-3`}>
                 <ReactMarkdown

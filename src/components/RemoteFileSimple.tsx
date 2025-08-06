@@ -7,9 +7,11 @@ interface RemoteFileSimpleProps {
     db: AsyncDuckDB;
     dbStateManager?: DBStateManager;
     onTableCreated?: (tableName: string) => void;
+    onSendMessage?: (message: string) => void;
+    onExampleMessages?: (tableMessage: string, followUpMessage: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager, onTableCreated }) => {
+const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager, onTableCreated, onSendMessage, onExampleMessages }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -23,18 +25,21 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
         const basePath = import.meta.env.BASE_URL || '/';
         const sampleUrl = `${window.location.origin}${basePath}data/customer.parquet`;
         setUrl(sampleUrl);
+        
         // Automatically create table after setting URL
         setTimeout(() => {
-            createTableFromUrl(sampleUrl);
+            createTableFromUrl(sampleUrl, true);
         }, 100);
     };
 
-    const createTableFromUrl = async (urlOverride?: string) => {
+    const createTableFromUrl = async (urlOverride?: string, isFromExample: boolean = false) => {
         const targetUrl = urlOverride || url;
         if (!db || !targetUrl.trim()) {
             console.log('RemoteFileSimple: missing db or url');
             return;
         }
+        
+        // Don't send any message here - we'll handle it after table creation
 
         setIsCreatingTable(true);
         let conn = null;
@@ -119,6 +124,17 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
                 await debugConn.close();
             } catch (debugError) {
                 console.error('RemoteFileSimple: Error during debug check:', debugError);
+            }
+
+            // Send a simple table creation message
+            const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
+            
+            if (isFromExample && onExampleMessages) {
+                // For Example button, use special handler that adds both messages at once
+                onExampleMessages(tableMessage, 'どんな分析ができそうですか？');
+            } else if (onSendMessage) {
+                // For regular Create Table button, just send the table message
+                onSendMessage(tableMessage);
             }
 
             onTableCreated?.(tableName);

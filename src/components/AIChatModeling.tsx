@@ -13,9 +13,20 @@ interface AIChatProps {
     messages: CoreMessage[];
     onMessagesChange: (messages: CoreMessage[]) => void;
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
+    selectedTable?: string | null;
+    onTableSelect?: (tableName: string) => void;
 }
 
-export default function AIChat({ db, dbStateManager, apiKey, chatId, messages, onMessagesChange, onSendMessageReady }: AIChatProps) {
+export default function AIChat({ 
+    db, 
+    dbStateManager, 
+    apiKey, 
+    messages, 
+    onMessagesChange, 
+    onSendMessageReady,
+    selectedTable,
+    onTableSelect 
+}: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
@@ -88,7 +99,7 @@ export default function AIChat({ db, dbStateManager, apiKey, chatId, messages, o
         if (onSendMessageReady) {
             onSendMessageReady(sendMessage);
         }
-    }, [onSendMessageReady]); // Remove sendMessage from dependencies to avoid infinite loop
+    }, [onSendMessageReady, sendMessage]); // Include sendMessage to always have latest version
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         // IME変換中（isComposing）の場合は送信しない
@@ -143,18 +154,14 @@ export default function AIChat({ db, dbStateManager, apiKey, chatId, messages, o
                                 {message.role === 'user' ? 'あなた' : 'Claude'}:
                             </strong>
                             <div className="mt-1 text-gray-800 break-words">
-                                {message.role === 'user' ? (
-                                    <div className="whitespace-pre-wrap break-all">
-                                        {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
-                                    </div>
-                                ) : (
-                                    <CollapsibleMessageRenderer
-                                        content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
-                                        className="prose prose-sm max-w-none"
-                                        db={db}
-                                        dbStateManager={dbStateManager}
-                                    />
-                                )}
+                                <CollapsibleMessageRenderer
+                                    content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                    className="prose prose-sm max-w-none"
+                                    db={db}
+                                    dbStateManager={dbStateManager}
+                                    selectedTable={selectedTable}
+                                    onTableSelect={onTableSelect}
+                                />
                                 {isStreamingMessage && (
                                     <span className="inline-block animate-pulse ml-0.5">▊</span>
                                 )}

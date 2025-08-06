@@ -23,6 +23,8 @@ class DatabaseStateManager implements DBStateManager {
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
   private sqlHistory: SQLHistoryManager;
   private currentSchema: string | null = null;
+  private activeConnections: Set<AsyncDuckDBConnection> = new Set();
+  private connectionMutex: Promise<void> = Promise.resolve();
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
@@ -30,7 +32,23 @@ class DatabaseStateManager implements DBStateManager {
   }
 
   setCurrentSchema(schema: string | null): void {
+    // If schema is changing, close all active connections
+    if (this.currentSchema !== schema) {
+      this.closeAllConnections();
+    }
     this.currentSchema = schema;
+  }
+  
+  private async closeAllConnections(): Promise<void> {
+    const connections = Array.from(this.activeConnections);
+    for (const conn of connections) {
+      try {
+        await conn.close();
+      } catch {
+        // Ignore errors when closing connections
+      }
+    }
+    this.activeConnections.clear();
   }
 
   getCurrentSchema(): string | null {
@@ -38,15 +56,60 @@ class DatabaseStateManager implements DBStateManager {
   }
 
   async connectWithSchema(): Promise<AsyncDuckDBConnection> {
-    const conn = await this.db.connect();
-    if (this.currentSchema) {
-      await conn.query(`SET search_path = '${this.currentSchema}'`);
-    }
-    return conn;
+    // Use mutex to prevent concurrent connection creation
+    await this.connectionMutex;
+    
+    const connectionPromise = (async () => {
+      try {
+        // Close old connections if we have too many
+        if (this.activeConnections.size > 5) {
+          const connectionsToClose = Array.from(this.activeConnections).slice(0, 2);
+          for (const oldConn of connectionsToClose) {
+            try {
+              await oldConn.close();
+              this.activeConnections.delete(oldConn);
+            } catch {
+              // Ignore errors when closing old connections
+            }
+          }
+        }
+
+        const conn = await this.db.connect();
+        this.activeConnections.add(conn);
+        
+        if (this.currentSchema) {
+          try {
+            await conn.query(`SET search_path = '${this.currentSchema}'`);
+          } catch (error) {
+            // If setting search_path fails, close connection and throw
+            await conn.close();
+            this.activeConnections.delete(conn);
+            throw new Error(`Failed to set schema ${this.currentSchema}: ${error}`);
+          }
+        }
+        
+        // Wrap the connection to track when it's closed
+        const originalClose = conn.close.bind(conn);
+        conn.close = async () => {
+          this.activeConnections.delete(conn);
+          return originalClose();
+        };
+        
+        return conn;
+      } catch (error) {
+        console.error('DBStateManager: Failed to create schema-aware connection:', error);
+        throw error;
+      }
+    })();
+    
+    // Update mutex for next call
+    this.connectionMutex = connectionPromise.then(() => {}, () => {});
+    
+    return connectionPromise;
   }
 
   async forceConsistency(): Promise<void> {
-    const conn = await this.db.connect();
+    const conn = await this.connectWithSchema();
     try {
       // Force immediate synchronization across all connections
       await conn.query('CHECKPOINT;');
@@ -63,7 +126,7 @@ class DatabaseStateManager implements DBStateManager {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Database consistency enforced
-    } catch (error) {
+    } catch {
       // DB consistency checkpoint failed (non-critical)
     } finally {
       await conn.close();
@@ -133,7 +196,7 @@ class DatabaseStateManager implements DBStateManager {
       // Force schema refresh in DuckDB
       await conn.query('PRAGMA schema_version;');
       await conn.query('PRAGMA database_list;');
-    } catch (error) {
+    } catch {
       // Schema refresh failed (non-critical)
     } finally {
       await conn.close();
@@ -176,6 +239,13 @@ class DatabaseStateManager implements DBStateManager {
           await conn.close();
         }
       } catch (error) {
+        // Check if this is a memory access error
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('memory access out of bounds')) {
+          console.error(`DBStateManager: Memory access error when validating table ${tableName}. Aborting validation.`);
+          return false; // Don't retry on memory errors
+        }
+        
         if (attempt < maxRetries - 1) {
           // Table validation failed, retrying...
           await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
@@ -197,13 +267,8 @@ class DatabaseStateManager implements DBStateManager {
   }
 
   async getTables(): Promise<string[]> {
-    const conn = await this.db.connect();
+    const conn = await this.connectWithSchema();
     try {
-      // Set search_path if schema is set
-      if (this.currentSchema) {
-        await conn.query(`SET search_path = '${this.currentSchema}'`);
-      }
-      
       // Query tables from the current schema only
       const schemaName = this.currentSchema || 'main';
       const result = await conn.query(`
@@ -220,6 +285,14 @@ class DatabaseStateManager implements DBStateManager {
       
       // Retrieved tables from current schema
       return tableNames;
+    } catch (error) {
+      // Check if this is a memory access error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('memory access out of bounds')) {
+        console.error('DBStateManager: Memory access error when retrieving tables');
+        return []; // Return empty array on memory error
+      }
+      throw error;
     } finally {
       await conn.close();
     }
@@ -230,19 +303,22 @@ class DatabaseStateManager implements DBStateManager {
       throw new Error(`Table '${tableName}' does not exist or is not accessible`);
     }
 
-    const conn = await this.db.connect();
+    const conn = await this.connectWithSchema();
     try {
-      // Set search_path if schema is set
-      if (this.currentSchema) {
-        await conn.query(`SET search_path = '${this.currentSchema}'`);
-      }
-      
       const result = await conn.query(`DESCRIBE ${tableName}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return result.toArray().map((row: any) => ({
         name: row.column_name as string,
         type: row.column_type as string
       }));
+    } catch (error) {
+      // Check if this is a memory access error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('memory access out of bounds')) {
+        console.error(`DBStateManager: Memory access error when describing table ${tableName}`);
+        throw new Error(`Memory access error when accessing table '${tableName}'. The schema context may be corrupted.`);
+      }
+      throw error;
     } finally {
       await conn.close();
     }
@@ -252,13 +328,8 @@ class DatabaseStateManager implements DBStateManager {
   async executeQuery(sql: string): Promise<any[]> {
     // Executing query
     
-    const conn = await this.db.connect();
+    const conn = await this.connectWithSchema();
     try {
-      // Set search_path if schema is set
-      if (this.currentSchema) {
-        await conn.query(`SET search_path = '${this.currentSchema}'`);
-      }
-      
       const result = await conn.query(sql);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = result.toArray().map((row: any) => {
@@ -274,6 +345,12 @@ class DatabaseStateManager implements DBStateManager {
       // Query execution completed
       return data;
     } catch (error) {
+      // Check if this is a memory access error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('memory access out of bounds')) {
+        console.error('DBStateManager: Memory access error during query execution');
+        throw new Error('Memory access error during query execution. The schema context may be corrupted.');
+      }
       console.error('DBStateManager: Query failed:', sql, error);
       throw error;
     } finally {

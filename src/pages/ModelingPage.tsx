@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AIChat from '../components/AIChatModeling';
 import { Table } from '../components/Table';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import RemoteFileSimple from '../components/RemoteFileSimple';
-import TableSelector from '../components/TableSelector';
 import TableSQLDisplay from '../components/TableSQLDisplay';
 import { ResizableDivider } from '../components/ResizableDivider';
 import { useDuckDB } from '../lib/duckdb/useDuckDB';
@@ -24,14 +23,12 @@ function ModelingPage() {
     const [apiKey, setApiKey] = useState<string>('');
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
-    const [tableRefreshKey, setTableRefreshKey] = useState(0);
-    const [showTableSelector, setShowTableSelector] = useState(true);
     const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
     const [tableAreaHeight, setTableAreaHeight] = useState(300);
-    const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
+    const sendMessageRef = useRef<((message: string) => void) | null>(null);
 
     const handleSendMessageReady = useCallback((sendFn: (message: string) => void) => {
-        setSendMessage(() => sendFn);
+        sendMessageRef.current = sendFn;
     }, []);
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
@@ -57,6 +54,40 @@ function ModelingPage() {
         );
     }, []);
 
+    // Save selected table to current chat when it changes
+    useEffect(() => {
+        if (selectedChatId && selectedTable !== undefined) {
+            console.log('Saving selected table to chat:', {
+                chatId: selectedChatId,
+                selectedTable
+            });
+            setChats(prevChats => {
+                const updatedChats = prevChats.map(chat =>
+                    chat.id === selectedChatId
+                        ? { ...chat, selectedTable }
+                        : chat
+                );
+                console.log('Updated chats:', updatedChats.map(c => ({ id: c.id, selectedTable: c.selectedTable })));
+                return updatedChats;
+            });
+        }
+    }, [selectedTable, selectedChatId]);
+
+    // Special handler for Example button that sends both messages
+    const handleExampleMessages = useCallback((tableMessage: string, followUpMessage: string) => {
+        if (!sendMessageRef.current) return;
+        
+        // Send table message first (won't go to AI due to TABLE_CREATED marker)
+        sendMessageRef.current(tableMessage);
+        
+        // Send follow-up message after a delay
+        setTimeout(() => {
+            if (sendMessageRef.current) {
+                sendMessageRef.current(followUpMessage);
+            }
+        }, 300);
+    }, []);
+
     // Chat management functions
     const createNewChat = async (type: ChatType) => {
         if (!schemaManager) {
@@ -71,7 +102,8 @@ function ModelingPage() {
                 title: `${typeLabel}チャット ${chats.length + 1}`,
                 type,
                 createdAt: new Date(),
-                messages: []
+                messages: [],
+                selectedTable: null
             };
 
             // Create schema for the new chat
@@ -109,13 +141,7 @@ function ModelingPage() {
             const remainingChats = chats.filter(chat => chat.id !== chatId);
             if (remainingChats.length > 0) {
                 const nextChat = remainingChats[0];
-                setSelectedChatId(nextChat.id);
-                // Switch to the next chat's schema
-                await schemaManager.switchToSchema(nextChat.id);
-                // Update dbStateManager
-                if (dbStateManager) {
-                    dbStateManager.setCurrentSchema(schemaManager.getCurrentSchema());
-                }
+                await selectChat(nextChat.id);
             } else {
                 setSelectedChatId(null);
                 // Reset to main schema
@@ -124,16 +150,34 @@ function ModelingPage() {
                 if (dbStateManager) {
                     dbStateManager.setCurrentSchema(null);
                 }
+                // Reset table selection
+                setSelectedTable(null);
             }
-
-            // Reset table selection
-            setSelectedTable(null);
 
             // Notify table change
             if (dbStateManager) {
                 dbStateManager.notifyTableChange();
             }
         }
+    };
+
+    // Handle chat selection
+    const selectChat = async (chatId: string) => {
+        if (!schemaManager) return;
+
+        // Find the chat being selected
+        const targetChat = chats.find(chat => chat.id === chatId);
+        if (!targetChat) return;
+
+        console.log('selectChat called:', {
+            chatId,
+            targetChat,
+            savedTable: targetChat.selectedTable,
+            allChats: chats.map(c => ({ id: c.id, selectedTable: c.selectedTable }))
+        });
+
+        // Set the selected chat ID - this will trigger the useEffect that switches schema
+        setSelectedChatId(chatId);
     };
 
     // Initialize API key from encrypted storage or environment variable
@@ -178,7 +222,8 @@ function ModelingPage() {
                             title: 'グラフチャット 1',
                             type: 'graph',
                             createdAt: new Date(),
-                            messages: []
+                            messages: [],
+                            selectedTable: null
                         };
 
                         await manager.createSchema(firstChat.id);
@@ -201,43 +246,17 @@ function ModelingPage() {
                 initializeFirstChat();
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [db]); // Only depend on db to avoid re-creating chats
 
-    // Switch schema when chat is selected
+    // Combined schema switching and connection setup
     useEffect(() => {
-        if (!schemaManager || !selectedChatId) return;
+        if (!schemaManager || !db || !selectedChatId) return;
 
-        const switchSchema = async () => {
-            await schemaManager.switchToSchema(selectedChatId);
-
-            // Update dbStateManager with current schema
-            if (dbStateManager) {
-                const schemaName = schemaManager.getCurrentSchema();
-                dbStateManager.setCurrentSchema(schemaName);
-            }
-
-            // Reset table selection
-            setSelectedTable(null);
-
-            // Notify table change to refresh table list
-            if (dbStateManager) {
-                // Use a timeout to break the synchronous update cycle
-                setTimeout(() => {
-                    dbStateManager.notifyTableChange();
-                }, 0);
-            }
-        };
-
-        switchSchema();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedChatId]); // Only re-run when selectedChatId changes
-
-    // Set up connection with schema
-    useEffect(() => {
         let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
         let isCleanedUp = false;
 
-        const createConnection = async () => {
+        const switchSchemaAndConnect = async () => {
             // First close any existing connection
             if (connection) {
                 try {
@@ -245,36 +264,67 @@ function ModelingPage() {
                 } catch (e) {
                     console.error('Error closing previous connection:', e);
                 }
-                // Force connection reset to trigger Table re-render
                 setConnection(null);
             }
 
-            if (db && schemaManager && selectedChatId) {
-                try {
-                    const conn = await db.connect();
-                    currentConnection = conn;
+            // Wait a bit longer to ensure all connections are fully closed
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-                    // Set search_path for this connection
-                    const currentSchema = schemaManager.getCurrentSchema();
-                    if (currentSchema) {
-                        await conn.query(`SET search_path = '${currentSchema}'`);
-                    }
+            try {
+                // Switch schema first
+                await schemaManager.switchToSchema(selectedChatId);
 
-                    if (!isCleanedUp) {
-                        setConnection(conn);
-                        setConnectionTimestamp(Date.now());
-                    }
-                } catch (error) {
-                    console.error('Error creating connection:', error);
-                    setConnection(null);
+                // Update dbStateManager with current schema
+                if (dbStateManager) {
+                    const schemaName = schemaManager.getCurrentSchema();
+                    dbStateManager.setCurrentSchema(schemaName);
                 }
-            } else {
+
+                // Reset selection - will be restored by separate effect
+                setSelectedTable(null);
+
+                // Create new connection with the new schema
+                const conn = await db.connect();
+                currentConnection = conn;
+
+                // Set search_path for this connection
+                const currentSchema = schemaManager.getCurrentSchema();
+                if (currentSchema) {
+                    await conn.query(`SET search_path = '${currentSchema}'`);
+                }
+
+                if (!isCleanedUp) {
+                    setConnection(conn);
+                    setConnectionTimestamp(Date.now());
+                    
+                    // Restore table selection for this chat
+                    const targetChat = chats.find(chat => chat.id === selectedChatId);
+                    if (targetChat?.selectedTable) {
+                        try {
+                            // Check if table exists in this schema
+                            await conn.query(`SELECT 1 FROM "${targetChat.selectedTable}" LIMIT 0`);
+                            console.log(`✅ Direct restoration: Setting table ${targetChat.selectedTable} for chat ${selectedChatId}`);
+                            setSelectedTable(targetChat.selectedTable);
+                        } catch {
+                            console.log(`❌ Direct restoration: Table ${targetChat.selectedTable} not found in schema`);
+                            setSelectedTable(null);
+                        }
+                    }
+                    
+                    // Notify table change after connection is established
+                    if (dbStateManager) {
+                        setTimeout(() => {
+                            dbStateManager.notifyTableChange();
+                        }, 300);
+                    }
+                }
+            } catch (error) {
+                console.error('Error switching schema and creating connection:', error);
                 setConnection(null);
-                setConnectionTimestamp(Date.now());
             }
         };
 
-        createConnection();
+        switchSchemaAndConnect();
 
         return () => {
             isCleanedUp = true;
@@ -282,7 +332,8 @@ function ModelingPage() {
                 currentConnection.close().catch(() => {});
             }
         };
-    }, [db, schemaManager, selectedChatId]); // Re-create connection when schema changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedChatId, db, schemaManager]); // Only depend on selectedChatId, db, and schemaManager
 
     // Subscribe to table changes from dbStateManager
     useEffect(() => {
@@ -296,16 +347,10 @@ function ModelingPage() {
                 // Error forcing consistency
             }
 
-            // Force TableSelector to completely remount
-            setShowTableSelector(false);
-            setTimeout(() => {
-                setShowTableSelector(true);
-                setTableRefreshKey(prev => prev + 1);
-                // Auto-select the newly created table
-                if (tableName) {
-                    setSelectedTable(tableName);
-                }
-            }, 100);
+            // Auto-select the newly created table
+            if (tableName) {
+                setSelectedTable(tableName);
+            }
         });
 
         return () => {
@@ -379,7 +424,7 @@ function ModelingPage() {
                 <ChatList
                     chats={chats}
                     selectedChatId={selectedChatId}
-                    onSelectChat={(chatId) => setSelectedChatId(chatId)}
+                    onSelectChat={selectChat}
                     onCreateChat={createNewChat}
                     onDeleteChat={deleteChat}
                     isInitialized={!!schemaManager}
@@ -442,6 +487,8 @@ function ModelingPage() {
                         messages={chats.find(c => c.id === selectedChatId)?.messages || []}
                         onMessagesChange={handleMessagesChange}
                         onSendMessageReady={handleSendMessageReady}
+                        selectedTable={selectedTable}
+                        onTableSelect={setSelectedTable}
                     />
                 ) : !isLoadingApiKey && db ? (
                     <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
@@ -461,28 +508,18 @@ function ModelingPage() {
             {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
                 <div className="flex flex-col gap-4 p-2.5 flex-shrink-0 bg-white">
-                    {db && <RemoteFileSimple db={db} dbStateManager={dbStateManager || undefined} onTableCreated={(tableName) => {
-                        setSelectedTable(tableName);
-                        if (dbStateManager) {
-                            dbStateManager.notifyTableChange();
-                        }
-                        // Send auto message when customer table is created
-                        if (tableName === 'customer' && sendMessage) {
-                            setTimeout(() => {
-                                sendMessage('customerテーブルでどんな可視化できそうですか？');
-                            }, 500);
-                        }
-                    }} />}
-                    {db && showTableSelector && (
-                        <TableSelector
-                            key={`${selectedChatId}-${tableRefreshKey}`} // Force re-render on chat change
-                            db={db}
-                            dbStateManager={dbStateManager || undefined}
-                            refreshTrigger={tableRefreshKey}
-                            selectedTable={selectedTable}
-                            onTableSelect={setSelectedTable}
-                        />
-                    )}
+                    {db && <RemoteFileSimple 
+                        db={db} 
+                        dbStateManager={dbStateManager || undefined} 
+                        onTableCreated={(tableName) => {
+                            setSelectedTable(tableName);
+                            if (dbStateManager) {
+                                dbStateManager.notifyTableChange();
+                            }
+                        }}
+                        onSendMessage={sendMessageRef.current || undefined}
+                        onExampleMessages={handleExampleMessages}
+                    />}
                 </div>
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {db && selectedTable && connection && (
@@ -510,12 +547,38 @@ function ModelingPage() {
                                     className="flex-shrink-0 overflow-hidden border-b border-gray-200"
                                     style={{ height: `${tableAreaHeight}px` }}
                                 >
-                                    <Table
-                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
-                                        connection={connection}
-                                        tableName={selectedTable}
-                                        dbStateManager={dbStateManager || undefined}
-                                    />
+                                    <div className="h-full flex flex-col">
+                                        {/* Table Name Header */}
+                                        <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                                            <div className="flex items-center gap-2">
+                                                <svg 
+                                                    className="w-4 h-4 text-gray-600" 
+                                                    fill="none" 
+                                                    stroke="currentColor" 
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path 
+                                                        strokeLinecap="round" 
+                                                        strokeLinejoin="round" 
+                                                        strokeWidth={2} 
+                                                        d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" 
+                                                    />
+                                                </svg>
+                                                <span className="font-medium text-gray-700">
+                                                    {selectedTable}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {/* Table Content */}
+                                        <div className="flex-1 overflow-hidden">
+                                            <Table
+                                                key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
+                                                connection={connection}
+                                                tableName={selectedTable}
+                                                dbStateManager={dbStateManager || undefined}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 {/* Resizable divider between table and graph/map */}

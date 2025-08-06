@@ -74,8 +74,24 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
   // Extract table name from SQL query
   function extractTableName(spec: VegaLiteSpec): string {
     if (spec.data?.sql) {
-      const match = spec.data.sql.match(/FROM\s+(\w+)/i);
-      return match ? match[1] : '';
+      // Handle both "FROM table" and "FROM schema.table" patterns
+      // Also handle quoted identifiers like "schema"."table"
+      const patterns = [
+        /FROM\s+["']?(\w+)\.["']?(\w+)["']?/i,  // schema.table or "schema"."table"
+        /FROM\s+["']?(\w+)["']?/i                 // simple table name
+      ];
+      
+      for (const pattern of patterns) {
+        const match = spec.data.sql.match(pattern);
+        if (match) {
+          // If it's a schema.table pattern, return just the table name (second capture group)
+          if (match.length > 2) {
+            return match[2];
+          }
+          // Otherwise return the first capture group (simple table name)
+          return match[1];
+        }
+      }
     }
     return '';
   }
@@ -168,6 +184,10 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       return 'nominal';
     };
 
+    // Get schema-qualified table name if schema is set
+    const currentSchema = dbStateManager?.getCurrentSchema();
+    const qualifiedTableName = currentSchema ? `${currentSchema}.${config.tableName}` : config.tableName;
+
     const baseSpec: VegaLiteSpec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
       title: config.title || `${config.plotType.charAt(0).toUpperCase() + config.plotType.slice(1)} Chart`,
@@ -177,7 +197,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
       ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {}),
       data: {
-        sql: `SELECT * FROM ${config.tableName} LIMIT 1000`
+        sql: `SELECT * FROM ${qualifiedTableName} LIMIT 1000`
       },
       config: {
         view: { stroke: null },
@@ -301,7 +321,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       console.error('Error generating spec:', error);
       return initialSpec;
     }
-  }, [config, columns, initialSpec]);
+  }, [config, columns, initialSpec, dbStateManager]);
 
   // Update spec when configuration changes
   useEffect(() => {
