@@ -13,7 +13,7 @@ import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
 import { generateDefaultCharts } from '../utils/autoChartGenerator';
 import Map from '../components/Map';
 import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
-import { ChatList, type Chat } from '../components/ChatList';
+import { ChatList, type Chat, type ChatType } from '../components/ChatList';
 import { createSchemaManager, type SchemaManager } from '../lib/duckdb/schemaManager';
 import type { CoreMessage } from 'ai';
 
@@ -55,16 +55,18 @@ function ModelingPage() {
     }, []);
 
     // Chat management functions
-    const createNewChat = async () => {
+    const createNewChat = async (type: ChatType) => {
         if (!schemaManager) {
             console.error('SchemaManager is not initialized');
             return;
         }
 
         try {
+            const typeLabel = type === 'graph' ? 'グラフ' : '地図';
             const newChat: Chat = {
                 id: `chat-${Date.now()}`,
-                title: `チャット ${chats.length + 1}`,
+                title: `${typeLabel}チャット ${chats.length + 1}`,
+                type,
                 createdAt: new Date(),
                 messages: []
             };
@@ -170,7 +172,8 @@ function ModelingPage() {
                     try {
                         const firstChat: Chat = {
                             id: `chat-${Date.now()}`,
-                            title: 'チャット 1',
+                            title: 'グラフチャット 1',
+                            type: 'graph',
                             createdAt: new Date(),
                             messages: []
                         };
@@ -442,10 +445,10 @@ function ModelingPage() {
                         <div className="text-center">
                             <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
                             <button
-                                onClick={createNewChat}
+                                onClick={() => createNewChat('graph')}
                                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                             >
-                                新しいチャットを作成
+                                新しいグラフチャットを作成
                             </button>
                         </div>
                     </div>

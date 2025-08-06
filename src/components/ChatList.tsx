@@ -1,10 +1,14 @@
-import { useState } from 'react';
-import { PlusIcon, TrashIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
+import { useState, useRef } from 'react';
+import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
 import type { CoreMessage } from 'ai';
+import { ChatTypeMenu } from './ChatTypeMenu';
+
+export type ChatType = 'graph' | 'map';
 
 export interface Chat {
     id: string;
     title: string;
+    type: ChatType;
     createdAt: Date;
     messages: CoreMessage[];
     schemaName?: string;
@@ -14,7 +18,7 @@ interface ChatListProps {
     chats: Chat[];
     selectedChatId: string | null;
     onSelectChat: (chatId: string) => void;
-    onCreateChat: () => void | Promise<void>;
+    onCreateChat: (type: ChatType) => void | Promise<void>;
     onDeleteChat: (chatId: string) => void | Promise<void>;
     isInitialized?: boolean;
 }
@@ -28,12 +32,26 @@ export function ChatList({
     isInitialized = false
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+    const [showTypeMenu, setShowTypeMenu] = useState(false);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+
+    const getChatIcon = (type: ChatType) => {
+        switch (type) {
+            case 'graph':
+                return ChartBarIcon;
+            case 'map':
+                return MapIcon;
+            default:
+                return ChartBarIcon;
+        }
+    };
 
     return (
         <div className="h-full flex flex-col">
             <div className="p-4 border-b border-gray-200">
                 <button
-                    onClick={onCreateChat}
+                    ref={buttonRef}
+                    onClick={() => setShowTypeMenu(true)}
                     disabled={!isInitialized}
                     className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded transition-colors ${
                         isInitialized 
@@ -46,6 +64,12 @@ export function ChatList({
                         {isInitialized ? '新しいチャット' : '初期化中...'}
                     </span>
                 </button>
+                <ChatTypeMenu
+                    isOpen={showTypeMenu}
+                    onClose={() => setShowTypeMenu(false)}
+                    onSelectType={onCreateChat}
+                    anchorRef={buttonRef}
+                />
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -67,7 +91,10 @@ export function ChatList({
                                 onMouseEnter={() => setHoveredChatId(chat.id)}
                                 onMouseLeave={() => setHoveredChatId(null)}
                             >
-                                <ChatBubbleLeftIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                {(() => {
+                                    const Icon = getChatIcon(chat.type);
+                                    return <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />;
+                                })()}
                                 <div className="flex-1 min-w-0">
                                     <div className="text-sm font-medium truncate">
                                         {chat.title}
