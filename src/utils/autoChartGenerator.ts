@@ -40,7 +40,7 @@ export async function generateDefaultCharts(
       chart = {
         title: `${tableName} - Time Series`,
         spec: {
-          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${valueColumn.name} over time`,
           data: {
             sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
@@ -73,7 +73,7 @@ export async function generateDefaultCharts(
       chart = {
         title: `${tableName} - Bar Chart`,
         spec: {
-          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${valueColumn.name} by ${categoryColumn.name}`,
           data: {
             sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
@@ -103,7 +103,7 @@ export async function generateDefaultCharts(
       chart = {
         title: `${tableName} - Scatter Plot`,
         spec: {
-          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${xColumn.name} vs ${yColumn.name}`,
           data: {
             sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
@@ -147,7 +147,7 @@ export async function generateDefaultCharts(
       chart = {
         title: `${tableName} - Values`,
         spec: {
-          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: column.name,
           data: {
             sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
@@ -180,7 +180,7 @@ export async function generateDefaultCharts(
       chart = {
         title: `${tableName} - Categories`,
         spec: {
-          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: column.name,
           data: {
             sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
