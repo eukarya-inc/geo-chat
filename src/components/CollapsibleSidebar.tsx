@@ -11,7 +11,6 @@ interface CollapsibleSidebarProps {
 export function CollapsibleSidebar({ 
     children, 
     isCollapsed,
-    onToggle,
     width = '300px',
     minWidth = '0px'
 }: CollapsibleSidebarProps) {

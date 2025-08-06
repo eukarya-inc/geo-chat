@@ -12,6 +12,7 @@ export interface Chat {
     createdAt: Date;
     messages: CoreMessage[];
     schemaName?: string;
+    selectedTable?: string | null;
 }
 
 interface ChatListProps {

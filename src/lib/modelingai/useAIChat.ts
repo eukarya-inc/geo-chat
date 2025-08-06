@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { CoreMessage, streamText } from 'ai';
 import { generateSystemPrompt } from './systemPrompt';
@@ -123,6 +123,20 @@ export function useAIChat(
         if ('sqlExplanation' in result && result.sqlExplanation) {
           resultText += `\n📝 **SQL解説:**\n${result.sqlExplanation}\n\n`;
         }
+        
+        // Check if this was a CREATE TABLE statement and add table message
+        if ('sql' in result && result.sql) {
+          const sql = String(result.sql);
+          const upperSql = sql.toUpperCase();
+          if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
+            // Extract table name from SQL
+            const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+            if (tableNameMatch) {
+              const tableName = tableNameMatch[2];
+              resultText += `\n<!--TABLE_CREATED:${tableName}-->\n`;
+            }
+          }
+        }
       }
 
       newContent += resultText;
@@ -141,8 +155,18 @@ export function useAIChat(
 
     const userMessage: CoreMessage = { role: 'user', content: message.trim() };
 
-    // Add user message
-    onMessagesChange?.([...messages, userMessage]);
+    // Check if this is a table creation message (contains TABLE_CREATED marker)
+    const isTableCreationMessage = message.includes('<!--TABLE_CREATED:');
+
+    // Add user message (keep HTML comments for rendering)
+    const newMessages = [...messages, userMessage];
+    onMessagesChange?.(newMessages);
+
+    // If it's a table creation message, don't send to AI
+    if (isTableCreationMessage) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -160,21 +184,29 @@ export function useAIChat(
 
       // Remove HTML comment markers before sending to AI
       const cleanMessages = (msgs: CoreMessage[]): CoreMessage[] => {
-        return msgs.map(msg => ({
-          ...msg,
-          content: typeof msg.content === 'string'
-            ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
-            : msg.content
-        }) as CoreMessage);
+        return msgs
+          .map(msg => ({
+            ...msg,
+            content: typeof msg.content === 'string'
+              ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
+              : msg.content
+          }) as CoreMessage)
+          .filter(msg => {
+            // Filter out messages that are empty after cleaning
+            if (typeof msg.content === 'string') {
+              return msg.content.length > 0;
+            }
+            return true;
+          });
       };
 
-      const allMessagesWithUser = [...messages, userMessage];
-      const allMessages = cleanMessages(allMessagesWithUser);
+      // Clean messages only for AI (keep original messages for rendering)
+      const allMessagesForAI = cleanMessages([...messages, userMessage]);
 
       const result = streamText({
         model: anthropicClient('claude-3-5-sonnet-20241022'),
         system: generateSystemPrompt(),
-        messages: allMessages,
+        messages: allMessagesForAI,
         tools: {
           ...(db && {
             duckdb_query: createDuckDBTool(db, dbStateManager || undefined, apiKey),
@@ -190,8 +222,8 @@ export function useAIChat(
       let fullContent = '';
       const assistantMessage: CoreMessage = { role: 'assistant', content: '' };
 
-      // Add placeholder for streaming message
-      const currentMessagesBase = [...messages, userMessage, assistantMessage];
+      // Add placeholder for streaming message (keep using original messages with HTML comments)
+      const currentMessagesBase = [...newMessages, assistantMessage];
       onMessagesChange?.(currentMessagesBase);
 
       // Use fullStream to handle both text and tool calls
@@ -213,14 +245,14 @@ export function useAIChat(
 
       // Ensure final content is set
       if (!fullContent) {
-        const updatedMessages = [...messages, userMessage, { role: 'assistant' as const, content: 'エラーが発生しました' }];
+        const updatedMessages = [...newMessages, { role: 'assistant' as const, content: 'エラーが発生しました' }];
         onMessagesChange?.(updatedMessages);
       }
 
     } catch (err) {
       // Handle abort error specifically
       if (err instanceof Error && err.name === 'AbortError') {
-        const currentMessages = [...messages, userMessage, { role: 'assistant' as const, content: '' }];
+        const currentMessages = [...newMessages, { role: 'assistant' as const, content: '' }];
         if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
           currentMessages[currentMessages.length - 1] = {
             role: 'assistant',
@@ -235,7 +267,7 @@ export function useAIChat(
       setError(err instanceof Error ? err : new Error(errorMsg));
 
       // Update the current assistant message with error info instead of adding new message
-      const currentMessages = [...messages, userMessage, { role: 'assistant' as const, content: '' }];
+      const currentMessages = [...newMessages, { role: 'assistant' as const, content: '' }];
       if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
         const currentContent = currentMessages[currentMessages.length - 1].content;
         // Preserve line breaks in error messages by wrapping multi-line errors in code block

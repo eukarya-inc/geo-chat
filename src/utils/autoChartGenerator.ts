@@ -24,6 +24,10 @@ export async function generateDefaultCharts(
 
     // Select all columns for the query
     const columnNames = columns.map(col => col.name).join(', ');
+    
+    // Get schema-qualified table name if schema is set
+    const currentSchema = dbStateManager.getCurrentSchema();
+    const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
 
     // Determine the best chart type based on column types
     let chart: ChartGenerationResult | null = null;
@@ -39,7 +43,7 @@ export async function generateDefaultCharts(
           $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
           title: `${valueColumn.name} over time`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
           },
           mark: {
             type: 'line',
@@ -72,7 +76,7 @@ export async function generateDefaultCharts(
           $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
           title: `${valueColumn.name} by ${categoryColumn.name}`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
           },
           mark: 'bar',
           encoding: {
@@ -102,7 +106,7 @@ export async function generateDefaultCharts(
           $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
           title: `${xColumn.name} vs ${yColumn.name}`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
           },
           mark: {
             type: 'circle',
@@ -146,7 +150,7 @@ export async function generateDefaultCharts(
           $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
           title: column.name,
           data: {
-            sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
           },
           mark: 'bar',
           encoding: {
@@ -179,7 +183,7 @@ export async function generateDefaultCharts(
           $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
           title: column.name,
           data: {
-            sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
           },
           mark: 'bar',
           encoding: {

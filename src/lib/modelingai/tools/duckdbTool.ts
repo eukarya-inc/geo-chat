@@ -66,7 +66,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             // Extract table name from CREATE TABLE statements
             let createdTableName: string | undefined;
             if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
-              const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/i);
+              const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
               if (tableNameMatch) {
                 createdTableName = tableNameMatch[2];
                 
@@ -86,10 +86,10 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             }
             
             if (dbStateManager) {
-              // Increased timeout to ensure table is fully committed
+              // Small timeout to ensure table is fully committed
               setTimeout(() => {
                 dbStateManager.notifyTableChange(createdTableName);
-              }, 500);
+              }, 100);
             }
           }
 

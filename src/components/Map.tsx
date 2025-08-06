@@ -39,6 +39,7 @@ interface QueryParams {
     selectedTable: string;
     selectedColumns: string[];
     geometryColumnName: string;
+    schema?: string | null;
 }
 
 const calculateSimplifyTolerance = (zoomLevel: number): number => {
@@ -63,9 +64,12 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
 };
 
 const generateVectorTileQuery = (params: QueryParams): string => {
-    const { zxy, selectedTable, selectedColumns, geometryColumnName } = params;
+    const { zxy, selectedTable, selectedColumns, geometryColumnName, schema } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
     const geomCol = geometryColumnName || 'geom';
+    
+    // Use schema-qualified table name if schema is set
+    const qualifiedTableName = schema ? `${schema}.${selectedTable}` : selectedTable;
 
     // Build column selection - always convert to JSON for consistent handling
     let finalColumnSelection = '';
@@ -90,7 +94,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
             -- 空間フィルタリングを先に実行
             SELECT 
                 ${withColumns}
-            FROM ${selectedTable}
+            FROM ${qualifiedTableName}
             WHERE ST_Intersects(
                 "${geomCol}",
                 ST_MakeEnvelope(?, ?, ?, ?)
@@ -281,12 +285,16 @@ const MapComponent: React.FC<MapProps> = ({
         if (!mapRef.current || !connectionRef.current) return;
         
         try {
+            // Use schema-qualified table name if schema is set
+            const currentSchema = dbStateManager?.getCurrentSchema();
+            const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
+            
             // Query the bounds using a robust method that handles mixed geometry types
             const result = await connectionRef.current.query(`
                 WITH bounds AS (
                     SELECT 
                         ST_Envelope("${geomColumn}") as envelope
-                    FROM ${tableName}
+                    FROM ${qualifiedTableName}
                     WHERE "${geomColumn}" IS NOT NULL
                 ),
                 all_bounds AS (
@@ -315,7 +323,7 @@ const MapComponent: React.FC<MapProps> = ({
         } catch (error) {
             console.error('Error fitting map to data bounds:', error);
         }
-    }, []);
+    }, [dbStateManager]);
 
     // Re-fit bounds when geometry column changes
     useEffect(() => {
@@ -596,6 +604,7 @@ const MapComponent: React.FC<MapProps> = ({
                         selectedTable: currentTable,
                         selectedColumns: currentColumns,
                         geometryColumnName,
+                        schema: dbStateManager?.getCurrentSchema(),
                     });
                     
                     let stmt;
