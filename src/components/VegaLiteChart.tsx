@@ -189,7 +189,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     const qualifiedTableName = currentSchema ? `${currentSchema}.${config.tableName}` : config.tableName;
 
     const baseSpec: VegaLiteSpec = {
-      $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+      $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
       title: config.title || `${config.plotType.charAt(0).toUpperCase() + config.plotType.slice(1)} Chart`,
       width: config.width,
       height: config.height,

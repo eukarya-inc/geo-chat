@@ -254,7 +254,7 @@ function generateVegaLiteSpec({
 
   // Base specification with DuckDB connection
   const baseSpec: VegaLiteSpec = {
-    $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+    $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
     title: title,
     width: width,
     height: height,
