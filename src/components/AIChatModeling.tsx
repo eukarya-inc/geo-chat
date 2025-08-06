@@ -16,7 +16,6 @@ interface AIChatProps {
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
-    onOpenRemoteFile?: () => void;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
@@ -29,7 +28,6 @@ export default function AIChat({
     onSendMessageReady,
     selectedTable,
     onTableSelect,
-    onOpenRemoteFile,
     remoteFileComponent
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
