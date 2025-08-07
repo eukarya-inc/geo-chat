@@ -25,6 +25,7 @@ export interface DuckDBToolResult {
   columnCount?: number;
   suggestions?: string[];
   sqlExplanation?: string;
+  createdTable?: string;
 }
 
 export interface ToolResultContent {
