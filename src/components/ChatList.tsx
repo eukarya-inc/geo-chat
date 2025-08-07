@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
-import type { CoreMessage } from 'ai';
+import type { StructuredMessage } from '../types/message';
 import type { StyleSpecification } from 'maplibre-gl';
 import { ChatTypeMenu } from './ChatTypeMenu';
 
@@ -19,7 +19,7 @@ export interface Chat {
     title: string;
     type: ChatType;
     createdAt: Date;
-    messages: CoreMessage[];
+    messages: StructuredMessage[];
     schemaName?: string;
     selectedTable?: string | null;
     mapState?: MapState;
