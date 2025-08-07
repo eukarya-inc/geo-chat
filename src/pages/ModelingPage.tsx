@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AIChat from '../components/AIChatModeling';
+import AIChatAssistantUI from '../components/AIChatAssistantUI';
 import { Table } from '../components/Table';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import RemoteFileSimple from '../components/RemoteFileSimple';
@@ -10,16 +11,17 @@ import { useDuckDB } from '../lib/duckdb/useDuckDB';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from '../utils/encryption';
 import { ChartGrid, type ChartSpec } from '../components/ChartGrid';
 import { generateDefaultCharts } from '../utils/autoChartGenerator';
-import Map from '../components/Map';
+import Map, { type TableStyle, type ExtraStyle } from '../components/Map';
 import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
 import { ChatList, type Chat, type ChatType } from '../components/ChatList';
 import { createSchemaManager, type SchemaManager } from '../lib/duckdb/schemaManager';
 import type { StructuredMessage } from '../types/message';
-import { TableCellsIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, BeakerIcon, SparklesIcon } from '@heroicons/react/24/outline';
 
 function ModelingPage() {
     const { db, dbStateManager } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
+    const [useAssistantUI, setUseAssistantUI] = useState<boolean>(false);
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
     const [connectionTimestamp, setConnectionTimestamp] = useState<number>(Date.now());
     const [apiKey, setApiKey] = useState<string>('');
@@ -35,6 +37,8 @@ function ModelingPage() {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geometry');
+    const [tableStyles, setTableStyles] = useState<Record<string, TableStyle>>({});
+    const [extraMapStyle, setExtraMapStyle] = useState<ExtraStyle | undefined>(undefined);
 
     // Chat management state
     const [chats, setChats] = useState<Chat[]>([]);
@@ -439,6 +443,25 @@ function ModelingPage() {
 
             {/* Left Half - AI Chat (Modeling Tools) */}
             <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
+                {/* Toggle Button for assistant-ui */}
+                <div className="p-2 bg-gray-100 border-b border-gray-300 flex items-center justify-between">
+                    <div className="text-sm font-medium text-gray-700">Chat Interface</div>
+                    <button
+                        onClick={() => setUseAssistantUI(!useAssistantUI)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                            useAssistantUI
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                        title={useAssistantUI ? 'Using assistant-ui (New)' : 'Using original implementation'}
+                    >
+                        {useAssistantUI ? (
+                            <><SparklesIcon className="w-4 h-4" /> assistant-ui</>
+                        ) : (
+                            <><BeakerIcon className="w-4 h-4" /> Original</>
+                        )}
+                    </button>
+                </div>
                 {(showApiKeyInput && !isLoadingApiKey) && (
                     <div className="p-4 bg-gray-50 border-b border-gray-300 flex-shrink-0">
                         <div className="mb-2.5 text-sm font-bold">
@@ -485,35 +508,69 @@ function ModelingPage() {
                     </div>
                 )}
                 {!isLoadingApiKey && db && selectedChatId ? (
-                    <AIChat
-                        db={db}
-                        dbStateManager={dbStateManager || undefined}
-                        apiKey={apiKey}
-                        chatId={selectedChatId}
-                        messages={chats.find(c => c.id === selectedChatId)?.messages || []}
-                        onMessagesChange={handleMessagesChange}
-                        onSendMessageReady={handleSendMessageReady}
-                        selectedTable={selectedTable}
-                        onTableSelect={handleTableSelection}
-                        remoteFileComponent={(onClose) => (
-                            <RemoteFileSimple 
-                                db={db} 
-                                dbStateManager={dbStateManager || undefined} 
-                                onTableCreated={(tableName) => {
-                                    setSelectedTable(tableName);
-                                    if (dbStateManager) {
-                                        dbStateManager.notifyTableChange();
-                                    }
-                                    onClose();
-                                }}
-                                onSendMessage={sendMessageRef.current || undefined}
-                                onExampleMessages={(tableMessage, followUpMessage) => {
-                                    handleExampleMessages(tableMessage, followUpMessage);
-                                    onClose();
-                                }}
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        {useAssistantUI ? (
+                            <AIChatAssistantUI
+                                db={db}
+                                dbStateManager={dbStateManager || undefined}
+                                apiKey={apiKey}
+                                chatId={selectedChatId}
+                                messages={chats.find(c => c.id === selectedChatId)?.messages || []}
+                                onMessagesChange={handleMessagesChange}
+                                onSendMessageReady={handleSendMessageReady}
+                                selectedTable={selectedTable}
+                                onTableSelect={handleTableSelection}
+                                remoteFileComponent={(onClose) => (
+                                    <RemoteFileSimple 
+                                        db={db} 
+                                        dbStateManager={dbStateManager || undefined} 
+                                        onTableCreated={(tableName) => {
+                                            setSelectedTable(tableName);
+                                            if (dbStateManager) {
+                                                dbStateManager.notifyTableChange();
+                                            }
+                                            onClose();
+                                        }}
+                                        onSendMessage={sendMessageRef.current || undefined}
+                                        onExampleMessages={(tableMessage, followUpMessage) => {
+                                            handleExampleMessages(tableMessage, followUpMessage);
+                                            onClose();
+                                        }}
+                                    />
+                                )}
                             />
+                        ) : (
+                        <AIChat
+                            db={db}
+                            dbStateManager={dbStateManager || undefined}
+                            apiKey={apiKey}
+                            chatId={selectedChatId}
+                            messages={chats.find(c => c.id === selectedChatId)?.messages || []}
+                            onMessagesChange={handleMessagesChange}
+                            onSendMessageReady={handleSendMessageReady}
+                            selectedTable={selectedTable}
+                            onTableSelect={handleTableSelection}
+                            remoteFileComponent={(onClose) => (
+                                <RemoteFileSimple 
+                                    db={db} 
+                                    dbStateManager={dbStateManager || undefined} 
+                                    onTableCreated={(tableName) => {
+                                        setSelectedTable(tableName);
+                                        if (dbStateManager) {
+                                            dbStateManager.notifyTableChange();
+                                        }
+                                        onClose();
+                                    }}
+                                    onSendMessage={sendMessageRef.current || undefined}
+                                    onExampleMessages={(tableMessage, followUpMessage) => {
+                                        handleExampleMessages(tableMessage, followUpMessage);
+                                        onClose();
+                                    }}
+                                />
+                            )}
+                        />
                         )}
-                    />
+                    </div>
                 ) : !isLoadingApiKey && db ? (
                     <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
                         <div className="text-center">
@@ -612,6 +669,50 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             selectedColumns={mapSelectedColumns}
                                             geometryColumnName={selectedGeometryColumn}
+                                            tableStyles={currentChat?.tableStyles || tableStyles}
+                                            extraStyle={currentChat?.extraMapStyle || extraMapStyle}
+                                            onTableStyleChanged={(tableName, style) => {
+                                                // Update local state
+                                                setTableStyles(prev => ({
+                                                    ...prev,
+                                                    [tableName]: style
+                                                }));
+                                                
+                                                // Save to chat
+                                                if (selectedChatId) {
+                                                    setChats(prevChats =>
+                                                        prevChats.map(chat =>
+                                                            chat.id === selectedChatId
+                                                                ? { 
+                                                                    ...chat, 
+                                                                    tableStyles: {
+                                                                        ...chat.tableStyles,
+                                                                        [tableName]: style
+                                                                    }
+                                                                }
+                                                                : chat
+                                                        )
+                                                    );
+                                                }
+                                            }}
+                                            onExtraStyleChange={(style) => {
+                                                // Update local state
+                                                setExtraMapStyle(style);
+                                                
+                                                // Save to chat
+                                                if (selectedChatId) {
+                                                    setChats(prevChats =>
+                                                        prevChats.map(chat =>
+                                                            chat.id === selectedChatId
+                                                                ? { 
+                                                                    ...chat, 
+                                                                    extraMapStyle: style
+                                                                }
+                                                                : chat
+                                                        )
+                                                    );
+                                                }
+                                            }}
                                             onViewStateChange={(viewState) => {
                                                 // Save map state to chat
                                                 if (selectedChatId) {
