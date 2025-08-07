@@ -60,11 +60,12 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
 
           // Simple table refresh for DDL operations
           let sqlExplanation: string | undefined;
+          let createdTableName: string | undefined;
+          
           if (isTableOperation) {
             await conn.query('CHECKPOINT;');
             
             // Extract table name from CREATE TABLE statements
-            let createdTableName: string | undefined;
             if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
               const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
               if (tableNameMatch) {
@@ -107,6 +108,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
             columnCount?: number;
             suggestions?: string[];
             sqlExplanation?: string;
+            createdTable?: string;
           } = {
             success: true,
             data,
@@ -117,6 +119,11 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           // Add SQL explanation if available
           if (sqlExplanation) {
             metadata.sqlExplanation = sqlExplanation;
+          }
+          
+          // Add createdTable if a table was created
+          if (createdTableName) {
+            metadata.createdTable = createdTableName;
           }
 
           // Add column info for better understanding

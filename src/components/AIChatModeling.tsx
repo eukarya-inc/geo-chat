@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import { useAIChat } from '../lib/modelingai/useAIChat';
+import { useAIChat } from '../lib/modelingai';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 import type { StructuredMessage } from '../types/message';
@@ -159,45 +159,78 @@ export default function AIChat({
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
             <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
                 {messages.length === 0 && (
-                    <p className="text-gray-500 italic">
+                    <p className="text-gray-500">
                         チャットを開始しましょう。データの可視化やモデリングについて質問してみてください。
                     </p>
                 )}
                 {messages.map((message, index) => {
                     const isLastMessage = index === messages.length - 1;
                     const isStreamingMessage = isLastMessage && message.role === 'assistant' && isLoading;
+                    const isUser = message.role === 'user';
+                    
+                    // Check if message contains only TABLE_CREATED marker
+                    const messageContent = typeof message.content === 'string' ? message.content : '';
+                    const isTableOnlyMessage = messageContent.includes('<!--TABLE_CREATED:') && 
+                                              messageContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
 
-                    return (
-                        <div
-                            key={index}
-                            className={`mb-2.5 p-2 rounded overflow-hidden ${
-                                message.role === 'user'
-                                    ? 'bg-blue-50'
-                                    : 'bg-green-50'
-                            } text-gray-800`}
-                        >
-                            <strong className="text-gray-800">
-                                {message.role === 'user' ? 'あなた' : 'Claude'}:
-                            </strong>
-                            <div className="mt-1 text-gray-800 break-words">
+                    // Table-only messages should be rendered without wrapper
+                    if (isTableOnlyMessage) {
+                        return (
+                            <div key={index} className="mb-4 w-full">
                                 <StructuredMessageRenderer
                                     message={message}
-                                    className="prose prose-sm max-w-none"
+                                    className="prose prose-xs max-w-none"
                                     db={db}
                                     dbStateManager={dbStateManager}
                                     selectedTable={selectedTable}
                                     onTableSelect={onTableSelect}
                                 />
-                                {isStreamingMessage && (
-                                    <span className="inline-block animate-pulse ml-0.5">▊</span>
-                                )}
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div
+                            key={index}
+                            className={`mb-4 flex ${
+                                isUser ? 'justify-end' : 'justify-start'
+                            }`}
+                        >
+                            <div
+                                className={`overflow-hidden ${
+                                    isUser
+                                        ? 'p-2.5 rounded-lg bg-gray-100 text-gray-800'
+                                        : ''
+                                }`}
+                                style={{
+                                    maxWidth: isUser ? '60%' : '100%',
+                                    minWidth: isUser ? '150px' : undefined
+                                }}
+                            >
+                                <div className={`break-words ${
+                                    isUser ? 'text-gray-800' : ''
+                                }`}>
+                                    <StructuredMessageRenderer
+                                        message={message}
+                                        className="prose max-w-none"
+                                        db={db}
+                                        dbStateManager={dbStateManager}
+                                        selectedTable={selectedTable}
+                                        onTableSelect={onTableSelect}
+                                    />
+                                    {isStreamingMessage && (
+                                        <span className="inline-block animate-pulse ml-0.5">▊</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );
                 })}
                 {isLoading && messages.length === 0 && (
-                    <div className="p-2 bg-green-50 rounded italic text-gray-600">
-                        Claude is thinking...
+                    <div className="flex justify-start mb-4">
+                        <div className="italic text-gray-600 w-full">
+                            考えています...
+                        </div>
                     </div>
                 )}
                 <div ref={messagesEndRef} />

@@ -25,8 +25,8 @@ interface CollapsibleSectionProps {
 
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, defaultOpen = false }) => {
     return (
-        <details className="group my-3" open={defaultOpen}>
-            <summary className="cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 transition-colors duration-200 rounded-md p-2 select-none">
+        <details className="group my-1" open={defaultOpen}>
+            <summary className="cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 transition-colors duration-200 rounded-md p-1.5 select-none">
                 <div className="prose prose-sm max-w-none">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
@@ -46,7 +46,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
             </summary>
-            <div className="pl-3 mt-2">
+            <div className="pl-2 mt-1">
                 {children}
             </div>
         </details>
@@ -114,12 +114,12 @@ const renderContentBlock = (
                     );
                 }
                 
-                return <div key={index} className="space-y-3">{parts}</div>;
+                return <div key={index} className="space-y-1">{parts}</div>;
             }
             
             // No table markers, render as plain markdown
             return (
-                <div key={index} className="prose prose-sm max-w-none">
+                <div key={index} className="prose max-w-none">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeHighlight]}
@@ -141,8 +141,8 @@ const renderContentBlock = (
                         title="🔧 **SQL実行中:**" 
                         defaultOpen={false}
                     >
-                        <pre className="p-3 bg-gray-100 rounded-md overflow-x-auto">
-                            <code className="language-sql">{formattedSQL}</code>
+                        <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
+                            <code className="language-sql text-xs">{formattedSQL}</code>
                         </pre>
                     </CollapsibleSection>
                 );
@@ -154,22 +154,24 @@ const renderContentBlock = (
             if (block.name === 'duckdb_query') {
                 const result = block.result as DuckDBToolResult;
                 
-                // Check if this created a table (do this first, before checking for errors or data)
-                let tableCreated: string | null = null;
-                if (result?.sql) {
-                    const upperSql = String(result.sql).toUpperCase();
-                    if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
-                        const tableNameMatch = String(result.sql).match(/CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
-                        if (tableNameMatch) {
-                            tableCreated = tableNameMatch[1];
-                        }
-                    }
+                // Check if this created a table from the result
+                const tableCreated = result?.createdTable || null;
+                
+                // Debug logging
+                if (result?.sql && (result.sql.toUpperCase().includes('CREATE TABLE') || result.sql.toUpperCase().includes('CREATE OR REPLACE'))) {
+                    console.log('CREATE TABLE detected in result:', {
+                        sql: result.sql,
+                        createdTable: result?.createdTable,
+                        hasData: !!result?.data,
+                        dataLength: Array.isArray(result?.data) ? result.data.length : 0,
+                        result: result
+                    });
                 }
                 
                 if (result?.error) {
                     const errorMsg = String(result.error);
                     return (
-                        <div key={index} className="my-3 text-red-600">
+                        <div key={index} className="my-1 text-red-600">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {errorMsg.includes('\n') 
                                     ? `❌ **エラー:**\n\`\`\`\n${errorMsg}\n\`\`\``
@@ -179,15 +181,10 @@ const renderContentBlock = (
                     );
                 }
                 
-                // If a table was created but there's no data to show, show the table created message
-                if (tableCreated && !result?.data) {
+                // If a table was created but there's no data to show (or data is empty), show the table created message
+                if (tableCreated && (!result?.data || (Array.isArray(result.data) && result.data.length === 0))) {
                     return (
                         <div key={index}>
-                            <div className="prose prose-sm max-w-none my-2">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    ✅ **テーブルを作成しました**
-                                </ReactMarkdown>
-                            </div>
                             <TableCreatedMessage
                                 tableName={tableCreated}
                                 isSelected={selectedTable === tableCreated}
@@ -195,6 +192,24 @@ const renderContentBlock = (
                             />
                         </div>
                     );
+                }
+                
+                // For CREATE TABLE AS SELECT, show both the result and table created message
+                if (tableCreated && result?.data) {
+                    const data = Array.isArray(result.data) ? result.data : [result.data];
+                    
+                    // If it's just a single row with Count or similar, just show table created message
+                    if (data.length === 1 && data[0] && typeof data[0] === 'object' && Object.keys(data[0]).length === 1) {
+                        return (
+                            <div key={index}>
+                                <TableCreatedMessage
+                                    tableName={tableCreated}
+                                    isSelected={selectedTable === tableCreated}
+                                    onClick={() => onTableSelect?.(tableCreated)}
+                                />
+                            </div>
+                        );
+                    }
                 }
                 
                 if (result?.data) {
@@ -223,16 +238,16 @@ const renderContentBlock = (
                     
                     return (
                         <CollapsibleSection key={index} title={title} defaultOpen={false}>
-                            <pre className="p-3 bg-gray-100 rounded-md overflow-x-auto">
-                                <code>{displayStr}</code>
+                            <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
+                                <code className="text-xs">{displayStr}</code>
                             </pre>
                             {summary && (
-                                <div className="mt-2 text-sm text-gray-600">
+                                <div className="mt-1 text-xs text-gray-600">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
                                 </div>
                             )}
                             {result.sqlExplanation && (
-                                <div className="mt-3 prose prose-sm">
+                                <div className="mt-1.5 prose prose-xs text-xs">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {`📝 **SQL解説:**\n${result.sqlExplanation}`}
                                     </ReactMarkdown>
@@ -274,7 +289,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                 
                 {/* Render streaming text if present */}
                 {message.streaming && (
-                    <div className="prose prose-sm max-w-none">
+                    <div className="prose max-w-none">
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeHighlight]}
@@ -331,7 +346,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
         const remainingText = stringContent.slice(lastIndex);
         if (remainingText.trim()) {
             parts.push(
-                <div key={`text-end`} className="prose prose-sm max-w-none">
+                <div key={`text-end`} className="prose max-w-none">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeHighlight]}
@@ -348,7 +363,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     // No table markers, render as plain markdown
     return (
         <div className={className}>
-            <div className="prose prose-sm max-w-none">
+            <div className="prose max-w-none">
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}
