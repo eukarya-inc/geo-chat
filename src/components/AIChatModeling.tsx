@@ -200,7 +200,7 @@ export default function AIChat({
                                 className={`overflow-hidden ${
                                     isUser
                                         ? 'p-2.5 rounded-lg bg-gray-100 text-gray-800'
-                                        : ''
+                                        : 'w-full'
                                 }`}
                                 style={{
                                     maxWidth: isUser ? '60%' : '100%',
