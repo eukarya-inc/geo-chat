@@ -7,13 +7,17 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBStateManager } from '../duckdb/dbStateManager';
 import { completionTool } from './tools/completionTool';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
+import type { StructuredMessage, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
+
+// Re-export CoreMessage type for components to use
+export type { CoreMessage };
 
 export function useAIChat(
   db?: AsyncDuckDB | null,
   dbStateManager?: DBStateManager | null,
   customApiKey?: string,
-  messages: CoreMessage[] = [],
-  onMessagesChange?: (messages: CoreMessage[]) => void
+  messages: StructuredMessage[] = [],
+  onMessagesChange?: (messages: StructuredMessage[]) => void
 ) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   const [input, setInput] = useState('');
@@ -33,127 +37,88 @@ export function useAIChat(
     }
   }, [abortController]);
 
-  const handleTextDelta = useCallback((textDelta: string, fullContent: string, baseMessages: CoreMessage[]) => {
-    const newContent = fullContent + textDelta;
-    // Update the last message with new content
+  const handleTextDelta = useCallback((textDelta: string, streamingText: string, baseMessages: StructuredMessage[]): [string, StructuredMessage[]] => {
+    const newStreamingText = streamingText + textDelta;
+    // Update the last message's streaming property
     const updatedMessages = [...baseMessages];
-    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
+    updatedMessages[updatedMessages.length - 1] = {
+      ...updatedMessages[updatedMessages.length - 1],
+      streaming: newStreamingText
+    };
     onMessagesChange?.(updatedMessages);
-    return newContent;
+    return [newStreamingText, updatedMessages];
   }, [onMessagesChange]);
 
-  const handleToolCall = useCallback((part: { toolName: string; args: Record<string, unknown> }, fullContent: string, baseMessages: CoreMessage[]) => {
-    const args = part.args;
-    let newContent = fullContent;
-
-    if (part.toolName === 'duckdb_query') {
-      // Handle DuckDB tool call
-      const sql = (args?.sql as string) || 'クエリ実行中';
-      const formattedSQL = formatSQLCompact(sql);
-      const toolCallText = `\n\n🔧 **SQL実行中:**\n\`\`\`sql\n${formattedSQL}\n\`\`\`\n`;
-      newContent += toolCallText;
-    }
-
-    // Update the last message with new content
+  const handleToolCall = useCallback((part: { toolCallId?: string; toolName: string; args: Record<string, unknown> }, currentStreamingText: string, baseMessages: StructuredMessage[]): [string, StructuredMessage[]] => {
+    // If there's streaming text, commit it as a text block first
     const updatedMessages = [...baseMessages];
-    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
-    onMessagesChange?.(updatedMessages);
-    return newContent;
-  }, [onMessagesChange]);
+    const lastMessage = updatedMessages[updatedMessages.length - 1];
 
-  const handleToolResult = useCallback((part: { toolName: string; result: Record<string, unknown> }, fullContent: string, baseMessages: CoreMessage[]) => {
-    let newContent = fullContent;
-    if (part.toolName === 'duckdb_query') {
-      // Handle DuckDB query results
-      const result = part.result;
-      let resultText = '';
+    if (lastMessage.role === 'assistant') {
+      const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
 
-      if (result?.error) {
-        const errorMsg = String(result.error);
-        // Preserve line breaks in error messages by wrapping multi-line errors in code block
-        resultText = errorMsg.includes('\n')
-          ? `\n❌ **エラー:**\n\`\`\`\n${errorMsg}\n\n\`\`\`\n`
-          : `\n❌ **エラー:** ${errorMsg}\n\n`;
-      } else if (result?.data) {
-        const data = Array.isArray(result.data) ? result.data : [result.data];
-        const rowCount = Array.isArray(result.data) ? result.data.length : 1;
-
-        // Smart truncation based on data size and type
-        if (rowCount > 100) {
-          // For very large datasets, show summary + first few rows + last few rows
-          const firstRows = data.slice(0, 3);
-          const lastRows = data.slice(-2);
-          const sampleData = [...firstRows, { "...": `${rowCount - 5} more rows` }, ...lastRows];
-          const dataStr = JSON.stringify(sampleData, null, 2);
-          resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 抜粋表示)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📊 **データサマリー:** 全${rowCount}行のうち最初の3行と最後の2行を表示。完全なデータを確認するには、LIMITクエリまたは集計クエリをお試しください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
-        } else if (rowCount > 20) {
-          // For medium datasets, show first 10 and indicate there are more
-          const firstRows = data.slice(0, 10);
-          const dataStr = JSON.stringify(firstRows, null, 2);
-          resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 最初の10行を表示)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📋 残り${rowCount - 10}行があります。すべてを確認するには、データの絞り込みまたは集計をお試しください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
-        } else {
-          // For small datasets, show all data but with size limit
-          const dataStr = JSON.stringify(data, null, 2);
-
-          if (dataStr.length > 8000) {
-            // Even small datasets can have very wide rows - truncate but show more than before
-            const truncated = dataStr.substring(0, 8000) + '...';
-            resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行 - 表示が切り詰められています)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${truncated}\n\`\`\`\n\n⚠️ データが長すぎるため一部が省略されました。特定の列のみを選択するか、データを集計してみてください。\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
-          } else {
-            resultText = `\n<!--SQL_RESULT_START-->\n✅ **結果:** (${rowCount}行)\n<!--SQL_RESULT_CONTENT_START-->\n\`\`\`json\n${dataStr}\n\`\`\`\n<!--SQL_RESULT_CONTENT_END-->\n<!--SQL_RESULT_END-->\n`;
-          }
-        }
-
-        // Add column information if available
-        if ('columns' in result && Array.isArray(result.columns) && 'columnCount' in result) {
-          const columns = result.columns as string[];
-          const columnCount = result.columnCount as number;
-          resultText += `\n📋 **カラム情報:** ${columnCount}列 (${columns.slice(0, 5).join(', ')}${columns.length > 5 ? ', ...' : ''})\n\n`;
-        }
-
-        // Add suggestions for working with the data
-        if ('suggestions' in result && Array.isArray(result.suggestions)) {
-          const suggestions = result.suggestions as string[];
-          if (suggestions.length > 0) {
-            resultText += `\n💡 **提案:**\n${suggestions.map((s: string) => `• ${s}`).join('\n')}\n`;
-          }
-        }
-
-        // Add SQL explanation if available
-        if ('sqlExplanation' in result && result.sqlExplanation) {
-          resultText += `\n📝 **SQL解説:**\n${result.sqlExplanation}\n\n`;
-        }
-        
-        // Check if this was a CREATE TABLE statement and add table message
-        if ('sql' in result && result.sql) {
-          const sql = String(result.sql);
-          const upperSql = sql.toUpperCase();
-          if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
-            // Extract table name from SQL - handle both CREATE TABLE and CREATE TABLE AS
-            const tableNameMatch = sql.match(/CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
-            if (tableNameMatch) {
-              const tableName = tableNameMatch[1];
-              resultText += `\n<!--TABLE_CREATED:${tableName}-->\n`;
-            }
-          }
-        }
+      // Add streaming text as a text block if it exists
+      if (currentStreamingText) {
+        existingContent.push({ type: 'text' as const, text: currentStreamingText });
       }
 
-      newContent += resultText;
+      // Add tool call as structured content
+      existingContent.push({
+        type: 'tool_use' as const,
+        id: part.toolCallId || `tool_${Date.now()}`,
+        name: part.toolName,
+        input: part.args
+      });
+
+      updatedMessages[updatedMessages.length - 1] = {
+        ...lastMessage,
+        content: existingContent,
+        streaming: ''
+      };
     }
 
-    // Update the last message with new content
-    const updatedMessages = [...baseMessages];
-    updatedMessages[updatedMessages.length - 1] = { role: 'assistant', content: newContent };
     onMessagesChange?.(updatedMessages);
-    return newContent;
+    return ['', updatedMessages]; // Return empty string as streaming text is now committed
+  }, [onMessagesChange]);
+
+  const handleToolResult = useCallback((part: { toolCallId?: string; toolName: string; result: Record<string, unknown> }, currentStreamingText: string, baseMessages: StructuredMessage[]): [string, StructuredMessage[]] => {
+    // If there's streaming text, commit it as a text block first
+    const updatedMessages = [...baseMessages];
+    const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+    // Add tool result as structured content
+    if (lastMessage.role === 'assistant') {
+      const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
+
+      // Add streaming text as a text block if it exists
+      if (currentStreamingText) {
+        existingContent.push({ type: 'text' as const, text: currentStreamingText });
+      }
+
+      // Add tool result
+      existingContent.push({
+        type: 'tool_result' as const,
+        id: part.toolCallId || `tool_result_${Date.now()}`,
+        name: part.toolName,
+        result: part.result
+      });
+
+      updatedMessages[updatedMessages.length - 1] = {
+        ...lastMessage,
+        content: existingContent,
+        streaming: ''
+      };
+    }
+
+    onMessagesChange?.(updatedMessages);
+    return ['', updatedMessages]; // Return empty string as content is now structured
   }, [onMessagesChange]);
 
   // Core message sending logic
   const sendMessage = useCallback(async (message: string) => {
     if (!message.trim() || !apiKey || isLoading) return;
 
-    const userMessage: CoreMessage = { role: 'user', content: message.trim() };
+    const userMessage: StructuredMessage = { role: 'user', content: message.trim() };
 
     // Check if this is a table creation message (contains TABLE_CREATED marker)
     const isTableCreationMessage = message.includes('<!--TABLE_CREATED:');
@@ -182,15 +147,24 @@ export function useAIChat(
         },
       });
 
-      // Remove HTML comment markers before sending to AI
-      const cleanMessages = (msgs: CoreMessage[]): CoreMessage[] => {
+      // Convert structured messages to CoreMessage format for AI
+      const convertToCoreMessages = (msgs: StructuredMessage[]): CoreMessage[] => {
         return msgs
-          .map(msg => ({
-            ...msg,
-            content: typeof msg.content === 'string'
-              ? msg.content.replace(/<!--[^>]*-->/g, '').trim()
-              : msg.content
-          }) as CoreMessage)
+          .map(msg => {
+            let content = '';
+            if (typeof msg.content === 'string') {
+              content = msg.content.replace(/<!--[^>]*-->/g, '').trim();
+            } else if (Array.isArray(msg.content)) {
+              // Convert structured content to text for AI
+              content = msg.content.map(block => {
+                if (block.type === 'text') {
+                  return block.text;
+                }
+                return '';
+              }).join('');
+            }
+            return { role: msg.role, content } as CoreMessage;
+          })
           .filter(msg => {
             // Filter out messages that are empty after cleaning
             if (typeof msg.content === 'string') {
@@ -200,8 +174,8 @@ export function useAIChat(
           });
       };
 
-      // Clean messages only for AI (keep original messages for rendering)
-      const allMessagesForAI = cleanMessages([...messages, userMessage]);
+      // Convert messages for AI (keep original messages for rendering)
+      const allMessagesForAI = convertToCoreMessages([...messages, userMessage]);
 
       const result = streamText({
         model: anthropicClient('claude-3-5-sonnet-20241022'),
@@ -219,46 +193,120 @@ export function useAIChat(
         abortSignal: controller.signal,
       });
 
-      let fullContent = '';
-      const assistantMessage: CoreMessage = { role: 'assistant', content: '' };
+      let currentStreamingText = '';
+      const assistantMessage: StructuredMessage = { role: 'assistant', content: [], streaming: '' };
 
-      // Add placeholder for streaming message (keep using original messages with HTML comments)
-      const currentMessagesBase = [...newMessages, assistantMessage];
-      onMessagesChange?.(currentMessagesBase);
+      // Add placeholder for streaming message
+      let currentMessages = [...newMessages, assistantMessage];
+      onMessagesChange?.(currentMessages);
+
+      // Collect response content blocks for logging
+      // const logContent: StructuredContent[] = [];
 
       // Use fullStream to handle both text and tool calls
       for await (const part of result.fullStream) {
         switch (part.type) {
           case 'text-delta':
-            fullContent = handleTextDelta(part.textDelta, fullContent, currentMessagesBase);
+            [currentStreamingText, currentMessages] = handleTextDelta(part.textDelta, currentStreamingText, currentMessages);
             break;
 
           case 'tool-call':
-            fullContent = handleToolCall(part, fullContent, currentMessagesBase);
+            // Tool call will commit any streaming text and add itself as structured content
+            [currentStreamingText, currentMessages] = handleToolCall(part, currentStreamingText, currentMessages);
             break;
 
           case 'tool-result':
-            fullContent = handleToolResult(part, fullContent, currentMessagesBase);
+            // Tool result will commit any streaming text and add itself as structured content
+            [currentStreamingText, currentMessages] = handleToolResult(part, currentStreamingText, currentMessages);
             break;
         }
       }
 
-      // Ensure final content is set
-      if (!fullContent) {
-        const updatedMessages = [...newMessages, { role: 'assistant' as const, content: 'エラーが発生しました' }];
-        onMessagesChange?.(updatedMessages);
+      // Commit any remaining streaming text as a final text block
+      if (currentStreamingText) {
+        const lastMessage = currentMessages[currentMessages.length - 1];
+        if (lastMessage.role === 'assistant') {
+          const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
+          existingContent.push({ type: 'text', text: currentStreamingText });
+          const updatedMessage = {
+            ...lastMessage,
+            content: existingContent,
+            streaming: undefined // Remove streaming property when done
+          };
+          currentMessages = [...newMessages, updatedMessage];
+          onMessagesChange?.(currentMessages);
+        }
+      } else {
+        // Even if no remaining streaming text, we need to clear the streaming property
+        const lastMessage = currentMessages[currentMessages.length - 1];
+        if (lastMessage.role === 'assistant' && lastMessage.streaming !== undefined) {
+          const updatedMessage = {
+            ...lastMessage,
+            streaming: undefined
+          };
+          currentMessages = [...newMessages, updatedMessage];
+          onMessagesChange?.(currentMessages);
+        }
       }
+
+      // Get the final structured content for logging
+      const assistantContent = currentMessages[currentMessages.length - 1].content;
+
+      // Build full content string for logging (with HTML comments)
+      let fullContent = '';
+      if (Array.isArray(assistantContent)) {
+        for (const block of assistantContent) {
+          if (block.type === 'text') {
+            fullContent += block.text;
+          } else if (block.type === 'tool_use' && block.name === 'duckdb_query') {
+            const input = block.input as DuckDBToolInput;
+            const formattedSQL = formatSQLCompact(input.sql);
+            fullContent += `\n\n🔧 **SQL実行中:**\n\`\`\`sql\n${formattedSQL}\n\`\`\`\n`;
+          } else if (block.type === 'tool_result' && block.name === 'duckdb_query') {
+            const result = block.result as DuckDBToolResult;
+            if (result?.error) {
+              fullContent += `\n❌ **エラー:** ${result.error}\n\n`;
+            } else if (result?.data) {
+              const rowCount = Array.isArray(result.data) ? result.data.length : 1;
+              fullContent += `\n✅ **結果:** (${rowCount}行)\n`;
+              // Add table created marker if applicable
+              if (result.sql) {
+                const upperSql = String(result.sql).toUpperCase();
+                if (upperSql.includes('CREATE TABLE')) {
+                  const tableNameMatch = String(result.sql).match(/CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+                  if (tableNameMatch) {
+                    fullContent += `<!--TABLE_CREATED:${tableNameMatch[1]}-->\n`;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Log conversation in Claude API response format
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        messages: [
+          {
+            role: 'user',
+            content: message
+          },
+          {
+            role: 'assistant',
+            content: assistantContent,  // Structured response blocks
+            fullContent: fullContent  // Raw content with HTML comments
+          }
+        ]
+      }, null, 2));
 
     } catch (err) {
       // Handle abort error specifically
       if (err instanceof Error && err.name === 'AbortError') {
-        const currentMessages = [...newMessages, { role: 'assistant' as const, content: '' }];
-        if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
-          currentMessages[currentMessages.length - 1] = {
-            role: 'assistant',
-            content: currentMessages[currentMessages.length - 1].content + '\n\n⏹️ **処理が停止されました**'
-          };
-        }
+        const currentMessages: StructuredMessage[] = [...newMessages, {
+          role: 'assistant',
+          content: [{ type: 'text' as const, text: '⏹️ **処理が停止されました**' }]
+        }];
         onMessagesChange?.(currentMessages);
         return;
       }
@@ -266,28 +314,15 @@ export function useAIChat(
       const errorMsg = err instanceof Error ? String(err.message) : 'エラーが発生しました';
       setError(err instanceof Error ? err : new Error(errorMsg));
 
-      // Update the current assistant message with error info instead of adding new message
-      const currentMessages = [...newMessages, { role: 'assistant' as const, content: '' }];
-      if (currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant') {
-        const currentContent = currentMessages[currentMessages.length - 1].content;
-        // Preserve line breaks in error messages by wrapping multi-line errors in code block
-        const errorContent = errorMsg.includes('\n')
-          ? `\n\n❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
-          : `\n\n❌ **エラーが発生しました:** ${errorMsg}\n\n`;
-        currentMessages[currentMessages.length - 1] = {
-          role: 'assistant',
-          content: currentContent + errorContent
-        };
-      } else {
-        // Preserve line breaks in error messages by wrapping multi-line errors in code block
-        const errorContent = errorMsg.includes('\n')
-          ? `❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
-          : `❌ **エラーが発生しました:** ${errorMsg}\n\n`;
-        currentMessages.push({
-          role: 'assistant',
-          content: errorContent
-        });
-      }
+      // Add error as structured content
+      const errorContent = errorMsg.includes('\n')
+        ? `❌ **エラーが発生しました:**\n\`\`\`\n${errorMsg}\n\n\`\`\``
+        : `❌ **エラーが発生しました:** ${errorMsg}\n\n`;
+
+      const currentMessages: StructuredMessage[] = [...newMessages, {
+        role: 'assistant',
+        content: [{ type: 'text' as const, text: errorContent }]
+      }];
       onMessagesChange?.(currentMessages);
     } finally {
       setIsLoading(false);

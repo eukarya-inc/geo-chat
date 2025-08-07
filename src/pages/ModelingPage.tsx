@@ -14,7 +14,7 @@ import Map from '../components/Map';
 import { checkTableGeometry } from '../utils/duckdbGeometryHelpers';
 import { ChatList, type Chat, type ChatType } from '../components/ChatList';
 import { createSchemaManager, type SchemaManager } from '../lib/duckdb/schemaManager';
-import type { CoreMessage } from 'ai';
+import type { StructuredMessage } from '../types/message';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
 
 function ModelingPage() {
@@ -61,7 +61,7 @@ function ModelingPage() {
     const currentChat = chats.find(chat => chat.id === selectedChatId);
 
     // Update messages for a specific chat
-    const updateChatMessages = useCallback((chatId: string, messages: CoreMessage[]) => {
+    const updateChatMessages = useCallback((chatId: string, messages: StructuredMessage[]) => {
         setChats(prevChats =>
             prevChats.map(chat =>
                 chat.id === chatId
@@ -417,7 +417,7 @@ function ModelingPage() {
     }, [selectedTable, dbStateManager]);
 
     // Create memoized callback for message updates
-    const handleMessagesChange = useCallback((messages: CoreMessage[]) => {
+    const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
         if (selectedChatId) {
             updateChatMessages(selectedChatId, messages);
         }

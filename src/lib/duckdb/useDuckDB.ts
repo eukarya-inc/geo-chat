@@ -7,7 +7,7 @@ export function useDuckDB() {
     const [db, setDb] = useState<duckdb.AsyncDuckDB | null>(null);
     const [dbStateManager, setDbStateManager] = useState<DBStateManager | null>(null);
     const [error, setError] = useState<Error | null>(null);
-    const isInitialized = useRef(false); // 初期化されたかどうかを追跡するref
+    const isInitialized = useRef(false);
 
     useEffect(() => {
         async function initDB() {
@@ -15,7 +15,7 @@ export function useDuckDB() {
                 console.log('useDuckDB: Requesting global database instance');
                 const db = await getGlobalDB();
                 console.log('useDuckDB: Got global database instance');
-                
+
                 console.log('useDuckDB: Setting database state');
                 setDb(db);
                 setDbStateManager(createDBStateManager(db));
@@ -33,11 +33,6 @@ export function useDuckDB() {
             initDB();
             isInitialized.current = true;
         }
-
-        return () => {
-            // Don't terminate the global DB here - it's shared
-            // Only terminate on app shutdown
-        };
     }, []);
 
     return { db, dbStateManager, error };

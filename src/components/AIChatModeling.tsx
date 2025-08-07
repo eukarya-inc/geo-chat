@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai/useAIChat';
-import CollapsibleMessageRenderer from './CollapsibleMessageRenderer';
+import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
-import type { CoreMessage } from 'ai';
+import type { StructuredMessage } from '../types/message';
 import { PlusIcon } from '@heroicons/react/24/outline';
 
 interface AIChatProps {
@@ -11,20 +11,20 @@ interface AIChatProps {
     dbStateManager?: DBStateManager;
     apiKey?: string;
     chatId?: string | null;
-    messages: CoreMessage[];
-    onMessagesChange: (messages: CoreMessage[]) => void;
+    messages: StructuredMessage[];
+    onMessagesChange: (messages: StructuredMessage[]) => void;
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
-export default function AIChat({ 
-    db, 
-    dbStateManager, 
-    apiKey, 
-    messages, 
-    onMessagesChange, 
+export default function AIChat({
+    db,
+    dbStateManager,
+    apiKey,
+    messages,
+    onMessagesChange,
     onSendMessageReady,
     selectedTable,
     onTableSelect,
@@ -66,7 +66,7 @@ export default function AIChat({
     const handleScroll = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
-        
+
         // If user is not at bottom, they have manually scrolled
         userHasScrolledRef.current = !isNearBottom();
     };
@@ -82,7 +82,7 @@ export default function AIChat({
         if (messages.length <= 2 || isNearBottom()) {
             const now = Date.now();
             const timeSinceLastScroll = now - lastScrollTimeRef.current;
-            
+
             // Throttle scrolling to once per second to allow manual scrolling
             if (timeSinceLastScroll >= 1000 || messages.length <= 2) {
                 lastScrollTimeRef.current = now;
@@ -110,8 +110,8 @@ export default function AIChat({
     // Handle click outside to close popup
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (showPopup && 
-                popupRef.current && 
+            if (showPopup &&
+                popupRef.current &&
                 buttonRef.current &&
                 !popupRef.current.contains(event.target as Node) &&
                 !buttonRef.current.contains(event.target as Node)) {
@@ -128,7 +128,7 @@ export default function AIChat({
     }, [showPopup]);
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        // IME変換中（isComposing）の場合は送信しない
+        // During IME conversion (isComposing), do not send
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
             handleSubmit(e);
@@ -180,8 +180,8 @@ export default function AIChat({
                                 {message.role === 'user' ? 'あなた' : 'Claude'}:
                             </strong>
                             <div className="mt-1 text-gray-800 break-words">
-                                <CollapsibleMessageRenderer
-                                    content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                                <StructuredMessageRenderer
+                                    message={message}
                                     className="prose prose-sm max-w-none"
                                     db={db}
                                     dbStateManager={dbStateManager}
@@ -224,9 +224,9 @@ export default function AIChat({
                             >
                                 <PlusIcon className="w-5 h-5" />
                             </button>
-                            
+
                             {showPopup && (
-                                <div 
+                                <div
                                     ref={popupRef}
                                     className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
                                     style={{ width: '500px', maxHeight: '400px' }}
