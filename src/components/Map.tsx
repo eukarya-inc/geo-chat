@@ -1,6 +1,15 @@
 import { AsyncDuckDB, AsyncPreparedStatement } from '@duckdb/duckdb-wasm';
 import { Feature, GeoJsonProperties, Geometry } from 'geojson';
 import maplibregl from 'maplibre-gl';
+import type { 
+    LayerSpecification,
+    FillLayerSpecification,
+    LineLayerSpecification,
+    CircleLayerSpecification,
+    SymbolLayerSpecification,
+    FillExtrusionLayerSpecification,
+    HeatmapLayerSpecification
+} from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTileEnvelope } from '../utils/tileUtils';
@@ -25,7 +34,27 @@ interface ViewState {
     pitch?: number;
 }
 
-interface MapProps {
+// Layer definition for vector tile sources (excludes source and source-layer as they're added dynamically)
+export type VectorTileLayer = Omit<
+    | FillLayerSpecification
+    | LineLayerSpecification
+    | CircleLayerSpecification
+    | SymbolLayerSpecification
+    | FillExtrusionLayerSpecification
+    | HeatmapLayerSpecification,
+    'source' | 'source-layer'
+>;
+
+// Array of layer style definitions for a table
+export type TableStyle = VectorTileLayer[];
+
+// Extra style can include any layer types including raster/hillshade
+export type ExtraStyle = {
+    sources?: Record<string, maplibregl.SourceSpecification>;
+    layers?: LayerSpecification[];
+};
+
+export interface MapProps {
     db: AsyncDuckDB;
     dbStateManager?: DBStateManager;
     selectedTable: string | null;  // For backward compatibility and primary table
@@ -40,6 +69,10 @@ interface MapProps {
     initialViewState?: ViewState;
     initialStyle?: maplibregl.StyleSpecification;
     onStyleUpdate?: (style: maplibregl.StyleSpecification) => void;
+    tableStyles?: Record<string /*table name*/, TableStyle>;
+    extraStyle?: ExtraStyle;
+    onTableStyleChanged?: (tableName: string, style: TableStyle) => void;
+    onExtraStyleChange?: (style: ExtraStyle) => void;
 }
 
 interface QueryParams {
@@ -135,7 +168,11 @@ const MapComponent: React.FC<MapProps> = ({
     onViewStateChange,
     initialViewState,
     initialStyle,
-    onStyleUpdate
+    onStyleUpdate,
+    tableStyles = {},
+    extraStyle,
+    onTableStyleChanged,
+    onExtraStyleChange
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -366,6 +403,63 @@ const MapComponent: React.FC<MapProps> = ({
         return colors[index % colors.length];
     };
 
+    // Get default style layers for a table
+    const getDefaultTableStyle = (tableName: string, index: number): TableStyle => {
+        const color = getTableColor(index);
+        const tableIdSuffix = tableName.replace(/\./g, '_');
+        
+        return [
+            // Polygon fill layer
+            {
+                id: `duckdb-polygons-${tableIdSuffix}`,
+                type: 'fill',
+                filter: ['==', '$type', 'Polygon'],
+                paint: {
+                    'fill-color': color,
+                    'fill-opacity': 0.3,
+                },
+            } as FillLayerSpecification,
+            // Polygon outline layer
+            {
+                id: `duckdb-polygon-outlines-${tableIdSuffix}`,
+                type: 'line',
+                filter: ['==', '$type', 'Polygon'],
+                paint: {
+                    'line-color': color,
+                    'line-width': 1,
+                    'line-opacity': 0.8,
+                },
+            } as LineLayerSpecification,
+            // Line layer
+            {
+                id: `duckdb-lines-${tableIdSuffix}`,
+                type: 'line',
+                filter: ['==', '$type', 'LineString'],
+                paint: {
+                    'line-color': color,
+                    'line-width': 3,
+                    'line-opacity': 0.9,
+                },
+            } as LineLayerSpecification,
+            // Point layer
+            {
+                id: `duckdb-points-${tableIdSuffix}`,
+                type: 'circle',
+                filter: ['==', '$type', 'Point'],
+                paint: {
+                    'circle-radius': 6,
+                    'circle-color': color,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.8,
+                },
+            } as CircleLayerSpecification,
+        ];
+    };
+
+    // Track which tables have been initialized with default styles
+    const initializedTablesRef = useRef<Set<string>>(new Set());
+
     // Function to update map layers dynamically
     const updateMapLayers = useCallback((map: maplibregl.Map) => {
         
@@ -421,7 +515,22 @@ const MapComponent: React.FC<MapProps> = ({
         // Add layers for each table
         tablesToAdd.forEach((tableSpec, index) => {
             const sourceId = `duckdb-${tableSpec.replace(/\./g, '_')}`;
-            const color = getTableColor(index);
+            
+            // Check if this table is being added for the first time
+            const isNewTable = !initializedTablesRef.current.has(tableSpec);
+            
+            // Get or create style for this table
+            let tableStyle = tableStyles[tableSpec];
+            if (!tableStyle || tableStyle.length === 0) {
+                // Generate default style if not provided
+                tableStyle = getDefaultTableStyle(tableSpec, index);
+                
+                // Notify parent about new default style if this is a new table
+                if (isNewTable && onTableStyleChanged) {
+                    onTableStyleChanged(tableSpec, tableStyle);
+                    initializedTablesRef.current.add(tableSpec);
+                }
+            }
             
             try {
                 map.addSource(sourceId, {
@@ -435,69 +544,28 @@ const MapComponent: React.FC<MapProps> = ({
                 return;
             }
             
-            // Add polygon fill layer
-            map.addLayer({
-                id: `duckdb-polygons-${tableSpec.replace(/\./g, '_')}`,
-                source: sourceId,
-                'source-layer': 'v',
-                type: 'fill',
-                paint: {
-                    'fill-color': color,
-                    'fill-opacity': 0.3,
-                },
-                filter: ['==', '$type', 'Polygon'] as ['==', '$type', 'Polygon'],
-                minzoom: 0,
-                maxzoom: 24,
-            });
-            
-            // Add polygon outline layer
-            map.addLayer({
-                id: `duckdb-polygon-outlines-${tableSpec.replace(/\./g, '_')}`,
-                source: sourceId,
-                'source-layer': 'v',
-                type: 'line',
-                paint: {
-                    'line-color': color,
-                    'line-width': 1,
-                    'line-opacity': 0.8,
-                },
-                filter: ['==', '$type', 'Polygon'] as ['==', '$type', 'Polygon'],
-                minzoom: 0,
-                maxzoom: 24,
-            });
-            
-            // Add line layer
-            map.addLayer({
-                id: `duckdb-lines-${tableSpec.replace(/\./g, '_')}`,
-                source: sourceId,
-                'source-layer': 'v',
-                type: 'line',
-                paint: {
-                    'line-color': color,
-                    'line-width': 3,
-                    'line-opacity': 0.9,
-                },
-                filter: ['==', '$type', 'LineString'] as ['==', '$type', 'LineString'],
-                minzoom: 0,
-                maxzoom: 24,
-            });
-            
-            // Add point layer
-            map.addLayer({
-                id: `duckdb-points-${tableSpec.replace(/\./g, '_')}`,
-                source: sourceId,
-                'source-layer': 'v',
-                type: 'circle',
-                paint: {
-                    'circle-radius': 6,
-                    'circle-color': color,
-                    'circle-stroke-width': 1,
-                    'circle-stroke-color': '#ffffff',
-                    'circle-opacity': 0.8,
-                },
-                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
-                minzoom: 0,
-                maxzoom: 24,
+            // Add all layers defined in the tableStyle array
+            tableStyle.forEach((layerStyle: VectorTileLayer) => {
+                try {
+                    // Create a complete layer definition
+                    const layer: LayerSpecification = {
+                        ...layerStyle,
+                        source: sourceId,
+                        'source-layer': 'v',
+                        minzoom: layerStyle.minzoom ?? 0,
+                        maxzoom: layerStyle.maxzoom ?? 24,
+                    } as LayerSpecification;
+                    
+                    // Ensure the layer has a unique ID
+                    if (!layer.id) {
+                        console.warn(`Layer for table ${tableSpec} is missing an id, skipping`);
+                        return;
+                    }
+                    
+                    map.addLayer(layer);
+                } catch (e) {
+                    console.error(`Failed to add layer for ${tableSpec}:`, e, layerStyle);
+                }
             });
         });
         
@@ -509,24 +577,23 @@ const MapComponent: React.FC<MapProps> = ({
 
         // Add event handlers for all DuckDB layers
         tablesToAdd.forEach((tableSpec) => {
-            const suffix = tableSpec.replace(/\./g, '_');
-            map.on('click', `duckdb-points-${suffix}`, handleFeatureClick);
-            map.on('click', `duckdb-lines-${suffix}`, handleFeatureClick);
-            map.on('click', `duckdb-polygons-${suffix}`, handleFeatureClick);
-            map.on('click', `duckdb-polygon-outlines-${suffix}`, handleFeatureClick);
-
+            // Get the table style to know which layers exist
+            const tableStyle = tableStyles[tableSpec] || getDefaultTableStyle(tableSpec, tablesToAdd.indexOf(tableSpec));
+            
             const handleMouseEnter = () => map.getCanvas().style.cursor = 'pointer';
             const handleMouseLeave = () => map.getCanvas().style.cursor = '';
-
-            map.on('mouseenter', `duckdb-points-${suffix}`, handleMouseEnter);
-            map.on('mouseenter', `duckdb-lines-${suffix}`, handleMouseEnter);
-            map.on('mouseenter', `duckdb-polygons-${suffix}`, handleMouseEnter);
-            map.on('mouseenter', `duckdb-polygon-outlines-${suffix}`, handleMouseEnter);
-
-            map.on('mouseleave', `duckdb-points-${suffix}`, handleMouseLeave);
-            map.on('mouseleave', `duckdb-lines-${suffix}`, handleMouseLeave);
-            map.on('mouseleave', `duckdb-polygons-${suffix}`, handleMouseLeave);
-            map.on('mouseleave', `duckdb-polygon-outlines-${suffix}`, handleMouseLeave);
+            
+            // Add event handlers for each layer defined in the style
+            tableStyle.forEach((layerStyle: VectorTileLayer) => {
+                if (layerStyle.id) {
+                    // Add click handler
+                    map.on('click', layerStyle.id, handleFeatureClick);
+                    
+                    // Add hover handlers
+                    map.on('mouseenter', layerStyle.id, handleMouseEnter);
+                    map.on('mouseleave', layerStyle.id, handleMouseLeave);
+                }
+            });
         });
 
         // Add GeoJSON layers if URL is provided
@@ -590,6 +657,44 @@ const MapComponent: React.FC<MapProps> = ({
             map.on('mouseleave', 'geojson-polygons', handleMouseLeave);
         }
         
+        // Apply extra style if provided
+        if (extraStyle && map.getStyle()) {
+            const currentStyle = map.getStyle();
+            mergeStyles(currentStyle, extraStyle);
+            
+            // Add extra sources if provided
+            if (extraStyle.sources) {
+                Object.entries(extraStyle.sources).forEach(([sourceId, sourceSpec]) => {
+                    if (!map.getSource(sourceId)) {
+                        try {
+                            map.addSource(sourceId, sourceSpec);
+                        } catch (e) {
+                            console.warn(`Failed to add extra source ${sourceId}:`, e);
+                        }
+                    }
+                });
+            }
+            
+            // Add extra layers if provided
+            if (extraStyle.layers) {
+                extraStyle.layers.forEach(layer => {
+                    // Check if layer already exists
+                    if (!map.getLayer(layer.id)) {
+                        try {
+                            map.addLayer(layer);
+                        } catch (e) {
+                            console.warn(`Failed to add extra layer ${layer.id}:`, e);
+                        }
+                    }
+                });
+            }
+            
+            // Notify parent if extra style was applied
+            if (onExtraStyleChange && !isApplyingCustomStyleRef.current) {
+                onExtraStyleChange(extraStyle);
+            }
+        }
+        
         // Final StyleManager synchronization after all layer operations
         if (styleManagerRef.current) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -614,7 +719,7 @@ const MapComponent: React.FC<MapProps> = ({
                 
             }, 500); // Wait a bit for tiles to load
         }
-    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbStateManager]);
+    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbStateManager, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
@@ -882,6 +987,25 @@ const MapComponent: React.FC<MapProps> = ({
         return fixedStyle;
     }, [fixPropertyReferences]);
 
+    // Function to merge styles
+    const mergeStyles = useCallback((baseStyle: maplibregl.StyleSpecification, overlayStyle: ExtraStyle | null | undefined): maplibregl.StyleSpecification => {
+        const merged = JSON.parse(JSON.stringify(baseStyle)); // Deep clone
+        
+        if (!overlayStyle) return merged;
+        
+        // Merge sources
+        if (overlayStyle.sources) {
+            merged.sources = { ...merged.sources, ...overlayStyle.sources };
+        }
+        
+        // Merge layers
+        if (overlayStyle.layers) {
+            merged.layers = [...(merged.layers || []), ...overlayStyle.layers];
+        }
+        
+        return merged;
+    }, []);
+
     // Function to handle style changes
     const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
         if (!mapRef.current || !initializedRef.current) {
@@ -1096,6 +1220,11 @@ const MapComponent: React.FC<MapProps> = ({
                     mapInstance.on('pitchend', updateViewState);
                     mapInstance.on('rotateend', updateViewState);
                 }
+                
+                // Notify about initial extra style
+                if (extraStyle && onExtraStyleChange) {
+                    onExtraStyleChange(extraStyle);
+                }
 
                 // クリーンアップ関数
                 return () => {
@@ -1123,7 +1252,7 @@ const MapComponent: React.FC<MapProps> = ({
             updateMapLayers(mapRef.current);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, tables, selectedColumns, geojsonUrl]);
+    }, [selectedTable, tables, selectedColumns, geojsonUrl, tableStyles, extraStyle]);
     
     // Separate effect for onMapReady to avoid triggering re-initialization
     useEffect(() => {

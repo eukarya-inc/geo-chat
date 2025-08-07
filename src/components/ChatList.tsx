@@ -3,6 +3,7 @@ import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/
 import type { StructuredMessage } from '../types/message';
 import type { StyleSpecification } from 'maplibre-gl';
 import { ChatTypeMenu } from './ChatTypeMenu';
+import type { TableStyle, ExtraStyle } from './Map';
 
 export type ChatType = 'graph' | 'map';
 
@@ -23,6 +24,8 @@ export interface Chat {
     schemaName?: string;
     selectedTable?: string | null;
     mapState?: MapState;
+    tableStyles?: Record<string, TableStyle>;
+    extraMapStyle?: ExtraStyle;
 }
 
 interface ChatListProps {
