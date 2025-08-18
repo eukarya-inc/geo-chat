@@ -29,11 +29,4 @@ export default defineConfig({
             }
         }
     },
-    //@ts-expect-error vitest config is not typed
-    test: {
-        globals: true,
-        environment: 'jsdom',
-        setupFiles: [],
-        exclude: ['node_modules', 'dist', 'tmp', '.idea', '.git', '.cache'],
-    },
 });
