@@ -18,7 +18,7 @@ import type { StructuredMessage } from '../types/message';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
 
 function ModelingPage() {
-    const { db, dbStateManager } = useDuckDB();
+    const { dbContext } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
     const [connectionTimestamp, setConnectionTimestamp] = useState<number>(Date.now());
@@ -127,17 +127,17 @@ function ModelingPage() {
             setChats([...chats, newChat]);
             setSelectedChatId(newChat.id);
 
-            // Update dbStateManager with current schema
-            if (dbStateManager) {
-                dbStateManager.setCurrentSchema(schemaManager.getCurrentSchema());
+            // Update dbContext with current schema
+            if (dbContext) {
+                dbContext.setCurrentSchema(schemaManager.getCurrentSchema());
             }
 
             // Reset table selection since we're in a new schema
             setSelectedTable(null);
 
             // Notify table change to refresh table list
-            if (dbStateManager) {
-                dbStateManager.notifyTableChange();
+            if (dbContext) {
+                dbContext.notifyTableChange();
             }
         } catch (error) {
             console.error('Error creating new chat:', error);
@@ -160,17 +160,17 @@ function ModelingPage() {
                 setSelectedChatId(null);
                 // Reset to main schema
                 await schemaManager.resetToMain();
-                // Update dbStateManager
-                if (dbStateManager) {
-                    dbStateManager.setCurrentSchema(null);
+                // Update dbContext
+                if (dbContext) {
+                    dbContext.setCurrentSchema(null);
                 }
                 // Reset table selection
                 setSelectedTable(null);
             }
 
             // Notify table change
-            if (dbStateManager) {
-                dbStateManager.notifyTableChange();
+            if (dbContext) {
+                dbContext.notifyTableChange();
             }
         }
     };
@@ -216,8 +216,8 @@ function ModelingPage() {
 
     // Initialize schema manager and create first chat
     useEffect(() => {
-        if (db) {
-            const manager = createSchemaManager(db);
+        if (dbContext) {
+            const manager = createSchemaManager(dbContext);
             setSchemaManager(manager);
 
             // Auto-create first chat if no chats exist
@@ -239,10 +239,10 @@ function ModelingPage() {
                         setChats([firstChat]);
                         setSelectedChatId(firstChat.id);
 
-                        if (dbStateManager) {
-                            dbStateManager.setCurrentSchema(manager.getCurrentSchema());
+                        if (dbContext) {
+                            dbContext.setCurrentSchema(manager.getCurrentSchema());
                             setTimeout(() => {
-                                dbStateManager.notifyTableChange();
+                                dbContext.notifyTableChange();
                             }, 0);
                         }
                     } catch (error) {
@@ -254,11 +254,11 @@ function ModelingPage() {
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db]); // Only depend on db to avoid re-creating chats
+    }, [dbContext]); // Only depend on dbContext to avoid re-creating chats
 
     // Combined schema switching and connection setup
     useEffect(() => {
-        if (!schemaManager || !db || !selectedChatId) return;
+        if (!schemaManager || !dbContext || !selectedChatId) return;
 
         let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
         let isCleanedUp = false;
@@ -281,17 +281,17 @@ function ModelingPage() {
                 // Switch schema first
                 await schemaManager.switchToSchema(selectedChatId);
 
-                // Update dbStateManager with current schema
-                if (dbStateManager) {
+                // Update dbContext with current schema
+                if (dbContext) {
                     const schemaName = schemaManager.getCurrentSchema();
-                    dbStateManager.setCurrentSchema(schemaName);
+                    dbContext.setCurrentSchema(schemaName);
                 }
 
                 // Reset selection - will be restored by separate effect
                 setSelectedTable(null);
 
                 // Create new connection with the new schema
-                const conn = await db.connect();
+                const conn = await dbContext.connect();
                 currentConnection = conn;
 
                 // Set search_path for this connection
@@ -318,9 +318,9 @@ function ModelingPage() {
                     }
                     
                     // Notify table change after connection is established
-                    if (dbStateManager) {
+                    if (dbContext) {
                         setTimeout(() => {
-                            dbStateManager.notifyTableChange();
+                            dbContext.notifyTableChange();
                         }, 300);
                     }
                 }
@@ -339,16 +339,16 @@ function ModelingPage() {
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedChatId, db, schemaManager]); // Only depend on selectedChatId, db, and schemaManager
+    }, [selectedChatId, dbContext, schemaManager]); // Only depend on selectedChatId, dbContext, and schemaManager
 
-    // Subscribe to table changes from dbStateManager
+    // Subscribe to table changes from dbContext
     useEffect(() => {
-        if (!dbStateManager) return;
+        if (!dbContext) return;
 
-        const unsubscribe = dbStateManager.onTableChange(async (tableName?: string) => {
+        const unsubscribe = dbContext.onTableChange(async (tableName?: string) => {
             // Force consistency across all connections
             try {
-                await dbStateManager.forceConsistency();
+                await dbContext.forceConsistency();
             } catch {
                 // Error forcing consistency
             }
@@ -367,7 +367,7 @@ function ModelingPage() {
         return () => {
             unsubscribe();
         };
-    }, [dbStateManager, handleTableSelection]);
+    }, [dbContext, handleTableSelection]);
 
     // Check for geom column and available columns when table is selected
     useEffect(() => {
@@ -390,13 +390,13 @@ function ModelingPage() {
     // Generate preview chart when table is selected
     useEffect(() => {
         const generateChart = async () => {
-            if (!selectedTable || !dbStateManager) {
+            if (!selectedTable || !dbContext) {
                 setChartSpec(null);
                 return;
             }
 
             try {
-                const defaultCharts = await generateDefaultCharts(selectedTable, dbStateManager);
+                const defaultCharts = await generateDefaultCharts(selectedTable, dbContext);
 
                 if (defaultCharts.length > 0) {
                     const result = defaultCharts[0];
@@ -416,7 +416,7 @@ function ModelingPage() {
         };
 
         generateChart();
-    }, [selectedTable, dbStateManager]);
+    }, [selectedTable, dbContext]);
 
     // Create memoized callback for message updates
     const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
@@ -486,11 +486,10 @@ function ModelingPage() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && selectedChatId ? (
+                {!isLoadingApiKey && dbContext && selectedChatId ? (
                     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         <AIChat
-                            db={db}
-                            dbStateManager={dbStateManager || undefined}
+                            dbContext={dbContext}
                             apiKey={apiKey}
                             chatId={selectedChatId}
                             messages={chats.find(c => c.id === selectedChatId)?.messages || []}
@@ -500,12 +499,11 @@ function ModelingPage() {
                             onTableSelect={handleTableSelection}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple 
-                                    db={db} 
-                                    dbStateManager={dbStateManager || undefined} 
+                                    dbContext={dbContext} 
                                     onTableCreated={(tableName) => {
                                         setSelectedTable(tableName);
-                                        if (dbStateManager) {
-                                            dbStateManager.notifyTableChange();
+                                        if (dbContext) {
+                                            dbContext.notifyTableChange();
                                         }
                                         onClose();
                                     }}
@@ -518,7 +516,7 @@ function ModelingPage() {
                             )}
                         />
                     </div>
-                ) : !isLoadingApiKey && db ? (
+                ) : !isLoadingApiKey && dbContext ? (
                     <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
                         <div className="text-center">
                             <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
@@ -536,7 +534,7 @@ function ModelingPage() {
             {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-hidden flex flex-col">
-                    {db && selectedTable && connection && (
+                    {dbContext && selectedTable && connection && (
                         <>
                             {/* Table Selector Header - moved to top */}
                             <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
@@ -544,8 +542,7 @@ function ModelingPage() {
                                     <TableCellsIcon className="w-4 h-4 text-gray-600" />
                                     <div className="flex-1">
                                         <TableSelector
-                                            db={db}
-                                            dbStateManager={dbStateManager || undefined}
+                                            dbContext={dbContext}
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
                                             refreshTrigger={connectionTimestamp}
@@ -562,7 +559,7 @@ function ModelingPage() {
                                 <div className="h-full p-2.5 overflow-auto">
                                     <TableSQLDisplay
                                         tableName={selectedTable}
-                                        dbStateManager={dbStateManager}
+                                        dbContext={dbContext}
                                     />
                                 </div>
                             </div>
@@ -582,7 +579,7 @@ function ModelingPage() {
                                         key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
                                         connection={connection}
                                         tableName={selectedTable}
-                                        dbStateManager={dbStateManager || undefined}
+                                        dbContext={dbContext}
                                     />
                                 </div>
                                 
@@ -601,8 +598,7 @@ function ModelingPage() {
                                     <div className="flex-1 overflow-hidden">
                                         <ChartGrid
                                             charts={chartSpec ? [chartSpec] : []}
-                                            db={db}
-                                            dbStateManager={dbStateManager || undefined}
+                                            dbContext={dbContext}
                                         />
                                     </div>
                                 )}
@@ -611,8 +607,7 @@ function ModelingPage() {
                                 {currentChat?.type === 'map' && (
                                     <div className="flex-1 overflow-hidden">
                                         <Map
-                                            db={db}
-                                            dbStateManager={dbStateManager || undefined}
+                                            dbContext={dbContext}
                                             selectedTable={selectedTable}
                                             selectedColumns={mapSelectedColumns}
                                             geometryColumnName={selectedGeometryColumn}
@@ -708,7 +703,7 @@ function ModelingPage() {
                             </div>
                         </>
                     )}
-                    {db && !selectedTable && (
+                    {dbContext && !selectedTable && (
                         <div className="flex items-center justify-center h-full text-gray-500">
                             テーブルを選択してください
                         </div>

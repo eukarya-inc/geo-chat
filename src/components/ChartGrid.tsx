@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import VegaLiteChart from './VegaLiteChart';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import type { VegaLiteSpec } from '../types/vega';
 
 export interface ChartSpec {
@@ -13,11 +12,10 @@ export interface ChartSpec {
 
 interface ChartGridProps {
   charts: ChartSpec[];
-  db?: AsyncDuckDB;
-  dbStateManager?: DBStateManager;
+  dbContext: DBContext;
 }
 
-export const ChartGrid: React.FC<ChartGridProps> = ({ charts, db, dbStateManager }) => {
+export const ChartGrid: React.FC<ChartGridProps> = ({ charts, dbContext }) => {
   // Account for p-4 (32px) + p-4 inside (32px) + action buttons (~40px) = 104px
   const CONTAINER_PADDING = 104;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,11 +89,10 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, db, dbStateManager
       <VegaLiteChart 
         key={firstChartId}
         spec={getSpecWithDimensions(firstChartSpec)} 
-        db={db} 
-        dbStateManager={dbStateManager} 
+        dbContext={dbContext} 
       />
     );
-  }, [charts.length, firstChartId, firstChartSpec, db, dbStateManager, getSpecWithDimensions]);
+  }, [charts.length, firstChartId, firstChartSpec, dbContext, getSpecWithDimensions]);
 
   if (charts.length === 0) {
     return (
@@ -134,8 +131,7 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, db, dbStateManager
                 <div className="p-4">
                   <VegaLiteChart 
                     spec={getSpecWithDimensions(chart.spec)} 
-                    db={db} 
-                    dbStateManager={dbStateManager} 
+                    dbContext={dbContext} 
                   />
                 </div>
               </div>

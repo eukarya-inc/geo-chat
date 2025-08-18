@@ -1,11 +1,10 @@
-import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
+import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { Table } from './Table';
 
 interface TableListProps {
-    db: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext: DBContext;
     selectedTable: string | null;
     onTableSelect: (tableName: string) => void;
     selectedColumns: Record<string, string[]>;
@@ -22,19 +21,19 @@ interface ColumnInfo {
     type: string;
 }
 
-const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable, onTableSelect, selectedColumns, onColumnSelect }) => {
+const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTableSelect, selectedColumns, onColumnSelect }) => {
     const [show, setShow] = useState(true);
     const [tables, setTables] = useState<TableInfo[]>([]);
     const [tableColumns, setTableColumns] = useState<Record<string, ColumnInfo[]>>({});
     const [showDataView, setShowDataView] = useState<string | null>(null);
-    const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
+    const [connection, setConnection] = useState<AsyncDuckDBConnection | null>(null);
     const mountedRef = useRef(false);
 
     const fetchTableColumns = useCallback(async (tableName: string) => {
-        if (!db) return;
+        if (!dbContext) return;
 
         try {
-            const conn = await db.connect();
+            const conn = await dbContext.connect();
             const result = await conn.query(`DESCRIBE ${tableName};`);
             const columns = result.toArray().map(row => ({
                 name: row.column_name,
@@ -66,17 +65,17 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
         } catch (err) {
             console.error('Error fetching table columns:', err);
         }
-    }, [db, selectedColumns, onColumnSelect]);
+    }, [dbContext, selectedColumns, onColumnSelect]);
 
     const fetchTables = useCallback(async () => {
-        if (!db) {
+        if (!dbContext) {
             console.log('TableList: Database not available');
             return;
         }
 
         try {
             console.log('TableList: Fetching tables');
-            const conn = await db.connect();
+            const conn = await dbContext.connect();
             const result = await conn.query('SHOW TABLES;');
             const allTableNames = result.toArray().map(row => row.name);
             
@@ -123,19 +122,19 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
         } catch (err) {
             console.error('Error fetching tables:', err);
         }
-    }, [db, fetchTableColumns]);
+    }, [dbContext, fetchTableColumns]);
 
     useEffect(() => {
         mountedRef.current = true;
         fetchTables();
-    }, [fetchTables, db]);
+    }, [fetchTables, dbContext]);
 
     // Subscribe to table changes from state manager
     useEffect(() => {
-        if (!dbStateManager) return;
+        if (!dbContext) return;
 
         console.log('TableList: Setting up table change listener');
-        const unsubscribe = dbStateManager.onTableChange(() => {
+        const unsubscribe = dbContext.onTableChange(() => {
             console.log('TableList: Received table change notification, refreshing...');
             fetchTables();
         });
@@ -144,7 +143,7 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
             console.log('TableList: Cleaning up table change listener');
             unsubscribe();
         };
-    }, [dbStateManager, fetchTables]);
+    }, [dbContext, fetchTables]);
 
     const handleColumnCheckboxChange = (tableName: string, columnName: string, checked: boolean) => {
         const currentColumns = selectedColumns[tableName] || [];
@@ -156,10 +155,10 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
     };
 
     const handleShowData = async (tableName: string) => {
-        if (!db) return;
+        if (!dbContext) return;
 
         try {
-            const conn = await db.connect();
+            const conn = await dbContext.connect();
             setConnection(conn);
             setShowDataView(tableName);
         } catch (err) {
@@ -168,14 +167,14 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
     };
 
     const handleDeleteTable = async (tableName: string) => {
-        if (!db) return;
+        if (!dbContext) return;
         
         if (!window.confirm(`テーブル "${tableName}" を削除しますか？この操作は取り消せません。`)) {
             return;
         }
 
         try {
-            const conn = await db.connect();
+            const conn = await dbContext.connect();
             await conn.query(`DROP TABLE ${tableName};`);
             await conn.close();
             
@@ -193,8 +192,8 @@ const TableList: React.FC<TableListProps> = ({ db, dbStateManager, selectedTable
             }
             
             // Notify state manager
-            if (dbStateManager) {
-                dbStateManager.notifyTableChange();
+            if (dbContext) {
+                dbContext.notifyTableChange();
             }
         } catch (err) {
             console.error('Error deleting table:', err);

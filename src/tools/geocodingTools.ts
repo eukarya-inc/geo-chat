@@ -1,4 +1,4 @@
-import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import { geocodeMultipleAddresses, isLikelyAddress } from '../utils/geocoding';
 
 export interface TableColumn {
@@ -18,8 +18,8 @@ export interface GeocodingTableResult {
 /**
  * Analyze a table to find potential address columns
  */
-export async function analyzeTableForGeocoding(db: AsyncDuckDB, tableName: string): Promise<GeocodingTableResult> {
-  const conn = await db.connect();
+export async function analyzeTableForGeocoding(dbContext: DBContext, tableName: string): Promise<GeocodingTableResult> {
+  const conn = await dbContext.connect();
   
   try {
     // Get table schema
@@ -84,13 +84,13 @@ export async function analyzeTableForGeocoding(db: AsyncDuckDB, tableName: strin
  * Add geocoded columns (lat, lng, display_name) to a table
  */
 export async function addGeocodedColumnsToTable(
-  db: AsyncDuckDB, 
+  dbContext: DBContext, 
   tableName: string, 
   addressColumn: string,
   batchSize: number = 10,
   rateLimitMs: number = 1000
 ): Promise<{ success: boolean; message: string; stats: { total: number; successful: number; failed: number } }> {
-  const conn = await db.connect();
+  const conn = await dbContext.connect();
   
   try {
     // First, add the new columns if they don't exist

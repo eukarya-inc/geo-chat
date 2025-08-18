@@ -1,11 +1,9 @@
-import * as duckdb from "@duckdb/duckdb-wasm";
 import { useEffect, useRef, useState } from "react";
-import { createDBStateManager, type DBStateManager } from "./dbStateManager";
+import { createDBContext, type DBContext } from "./dbContext";
 import { getGlobalDB } from "./globalDB";
 
 export function useDuckDB() {
-    const [db, setDb] = useState<duckdb.AsyncDuckDB | null>(null);
-    const [dbStateManager, setDbStateManager] = useState<DBStateManager | null>(null);
+    const [dbContext, setDbContext] = useState<DBContext | null>(null);
     const [error, setError] = useState<Error | null>(null);
     const isInitialized = useRef(false);
 
@@ -16,10 +14,9 @@ export function useDuckDB() {
                 const db = await getGlobalDB();
                 console.log('useDuckDB: Got global database instance');
 
-                console.log('useDuckDB: Setting database state');
-                setDb(db);
-                setDbStateManager(createDBStateManager(db));
-                console.log('useDuckDB: Database state set successfully');
+                console.log('useDuckDB: Setting database context');
+                setDbContext(createDBContext(db));
+                console.log('useDuckDB: Database context set successfully');
             } catch (err) {
                 setError(
                     err instanceof Error
@@ -35,5 +32,5 @@ export function useDuckDB() {
         }
     }, []);
 
-    return { db, dbStateManager, error };
+    return { dbContext, error };
 }

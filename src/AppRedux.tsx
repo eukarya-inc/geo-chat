@@ -14,12 +14,12 @@ import { storeEncryptedApiKey } from './utils/encryption';
 function AppRedux() {
     // Get state from Redux instead of local state
     const dispatch = useAppDispatch();
-    const { connection: db, dbStateManager } = useAppSelector(state => state.duckdb);
+    const { connection: db, dbContext } = useAppSelector(state => state.duckdb);
     const { selectedTable, selectedColumns } = useAppSelector(state => state.data);
     const { styleManager: mapStyleManager } = useAppSelector(state => state.map);
     const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
 
-    console.log('AppRedux: Render with database:', !!db, 'dbStateManager:', !!dbStateManager);
+    console.log('AppRedux: Render with database:', !!db, 'dbContext:', !!dbContext);
 
     const handleColumnSelect = (tableName: string, columns: string[]) => {
         console.log('AppRedux: Column selection changed for table:', tableName, 'columns:', columns);
@@ -126,7 +126,7 @@ function AppRedux() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
             </div>
 
             {/* Right Half - DuckDB and Map */}
@@ -145,20 +145,19 @@ function AppRedux() {
                     flexShrink: 0,
                     backgroundColor: 'white'
                 }}>
-                    {db && <RemoteFile db={db} onTableCreated={(tableName) => {
+                    {dbContext && <RemoteFile dbContext={dbContext} onTableCreated={(tableName) => {
                         console.log('AppRedux: Table created, auto-selecting:', tableName);
                         dispatch(setSelectedTable(tableName));
-                        // Also trigger TableList refresh via dbStateManager
-                        if (dbStateManager) {
-                            console.log('AppRedux: Triggering TableList refresh via dbStateManager');
-                            dbStateManager.notifyTableChange();
+                        // Also trigger TableList refresh via dbContext
+                        if (dbContext) {
+                            console.log('AppRedux: Triggering TableList refresh via dbContext');
+                            dbContext.notifyTableChange();
                         }
                     }} />}
-                    {db && (
+                    {dbContext && (
                         <TableList
                             key="main-table-list"
-                            db={db}
-                            dbStateManager={dbStateManager || undefined}
+                            dbContext={dbContext}
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelect}
                             selectedColumns={selectedColumns}
@@ -167,10 +166,10 @@ function AppRedux() {
                     )}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                    {db && (
+                    {dbContext && (
                         <MapComponent
                             key="main-map"
-                            db={db}
+                            dbContext={dbContext}
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
                             onMapReady={handleMapReady}

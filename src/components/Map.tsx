@@ -1,4 +1,4 @@
-import { AsyncDuckDB, AsyncPreparedStatement } from '@duckdb/duckdb-wasm';
+import { AsyncPreparedStatement } from '@duckdb/duckdb-wasm';
 import { Feature, GeoJsonProperties, Geometry } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import type { 
@@ -16,7 +16,7 @@ import { getTileEnvelope } from '../utils/tileUtils';
 import { MapStyleManager } from '../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../utils/vectorTileUtils';
 import MapStyleEditor from './MapStyleEditor';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{
@@ -55,8 +55,7 @@ export type ExtraStyle = {
 };
 
 export interface MapProps {
-    db: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext: DBContext;
     selectedTable: string | null;  // For backward compatibility and primary table
     tables?: string[];  // New prop for multiple tables: ["schema.table1", "table2", ...]
     selectedColumns: string[];
@@ -155,8 +154,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 };
 
 const MapComponent: React.FC<MapProps> = ({ 
-    db, 
-    dbStateManager,
+    dbContext,
     selectedTable,
     tables, 
     selectedColumns, 
@@ -211,6 +209,7 @@ const MapComponent: React.FC<MapProps> = ({
                 }
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedTable, selectedColumns, geometryColumnName]);
 
     // Export functions
@@ -342,7 +341,7 @@ const MapComponent: React.FC<MapProps> = ({
         
         try {
             // Use schema-qualified table name if schema is set
-            const currentSchema = dbStateManager?.getCurrentSchema();
+            const currentSchema = dbContext?.getCurrentSchema();
             const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
             
             // Query the bounds using a robust method that handles mixed geometry types
@@ -379,14 +378,15 @@ const MapComponent: React.FC<MapProps> = ({
         } catch (error) {
             console.error('Error fitting map to data bounds:', error);
         }
-    }, [dbStateManager]);
+    }, [dbContext]);
 
     // Re-fit bounds when geometry column changes
     useEffect(() => {
         if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && initializedRef.current) {
             fitMapToData(selectedTable, geometryColumnName);
         }
-    }, [geometryColumnName, selectedTable, dbStateManager]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [geometryColumnName, selectedTable, dbContext]);
 
     // Helper to generate distinct colors for different tables
     const getTableColor = (index: number) => {
@@ -505,7 +505,7 @@ const MapComponent: React.FC<MapProps> = ({
         if (tables && tables.length > 0) {
             tablesToAdd = tables;
         } else if (selectedTable) {
-            const currentSchema = dbStateManager?.getCurrentSchema();
+            const currentSchema = dbContext?.getCurrentSchema();
             const tableSpec = currentSchema && currentSchema !== 'main' 
                 ? `${currentSchema}.${selectedTable}` 
                 : selectedTable;
@@ -719,7 +719,8 @@ const MapComponent: React.FC<MapProps> = ({
                 
             }, 500); // Wait a bit for tiles to load
         }
-    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbStateManager, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbContext, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
@@ -778,7 +779,7 @@ const MapComponent: React.FC<MapProps> = ({
                         selectedTable: tableName,
                         selectedColumns: currentColumns,
                         geometryColumnName,
-                        schema: schema || dbStateManager?.getCurrentSchema(),
+                        schema: schema || dbContext?.getCurrentSchema(),
                     });
                     
                     let stmt;
@@ -921,6 +922,7 @@ const MapComponent: React.FC<MapProps> = ({
         } catch {
             // Failed to register protocol
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [geometryColumnName]);
 
     // Function to fix property references in style expressions
@@ -1106,7 +1108,7 @@ const MapComponent: React.FC<MapProps> = ({
 
 
         // DuckDBの初期化状態を確認
-        if (db) {
+        if (dbContext) {
             setMapError(null);
         } else {
             return;
@@ -1116,12 +1118,8 @@ const MapComponent: React.FC<MapProps> = ({
         const initMap = async () => {
             try {
                 // 接続を保持
-                // Use schema-aware connection if dbStateManager is available
-                if (dbStateManager) {
-                    connectionRef.current = await dbStateManager.connectWithSchema();
-                } else {
-                    connectionRef.current = await db.connect();
-                }
+                // Use schema-aware connection
+                connectionRef.current = await dbContext.connectWithSchema();
                 if (!connectionRef.current) {
                     setMapError('DuckDBへの接続に失敗しました');
                     return;
@@ -1244,7 +1242,7 @@ const MapComponent: React.FC<MapProps> = ({
 
         initMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db, geometryColumnName]);
+    }, [dbContext, geometryColumnName]);
     
     // Update layers when tables or selectedTable changes
     useEffect(() => {

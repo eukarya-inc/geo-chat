@@ -1,66 +1,46 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { AsyncDuckDBConnection, AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 interface TableSelectorProps {
-  db: AsyncDuckDB | null;
-  dbStateManager?: DBStateManager;
+  dbContext: DBContext;
   selectedTable: string | null;
   onTableSelect: (tableName: string | null) => void;
   refreshTrigger?: number;
 }
 
-const TableSelector: React.FC<TableSelectorProps> = ({ db, dbStateManager, selectedTable, onTableSelect, refreshTrigger }) => {
+const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, refreshTrigger }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Function to fetch tables
   const fetchTables = useCallback(async () => {
-    if (!db) {
+    if (!dbContext) {
       setTables([]);
       return;
     }
 
     setLoading(true);
 
-    let conn: AsyncDuckDBConnection | null = null;
-
     try {
-      // Use dbStateManager if available for schema-aware table listing
-      if (dbStateManager) {
-        const tableNames = await dbStateManager.getTables();
-        setTables(tableNames);
-      } else {
-        conn = await db.connect();
-        const result = await conn.query('SHOW TABLES');
-        const tableRows = result.toArray();
-        const tableNames = tableRows.map(row => row.name as string).sort();
-        setTables(tableNames);
-      }
+      const tableNames = await dbContext.getTables();
+      setTables(tableNames);
     } catch {
       setTables([]);
     } finally {
       setLoading(false);
-      if (conn) {
-        try {
-          await conn.close();
-        } catch {
-          // Ignore error closing connection
-        }
-      }
     }
-  }, [db, dbStateManager]);
+  }, [dbContext]);
 
   // Initial fetch and refresh on prop changes
   useEffect(() => {
     fetchTables();
   }, [fetchTables, refreshTrigger]);
 
-  // Subscribe to table changes from dbStateManager
+  // Subscribe to table changes from dbContext
   useEffect(() => {
-    if (!dbStateManager) return;
+    if (!dbContext) return;
 
-    const unsubscribe = dbStateManager.onTableChange(() => {
+    const unsubscribe = dbContext.onTableChange(() => {
       // Refresh table list when tables change
       // Add a small delay to ensure the table is fully created
       setTimeout(() => {
@@ -71,7 +51,7 @@ const TableSelector: React.FC<TableSelectorProps> = ({ db, dbStateManager, selec
     return () => {
       unsubscribe();
     };
-  }, [dbStateManager, fetchTables]);
+  }, [dbContext, fetchTables]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -84,7 +64,7 @@ const TableSelector: React.FC<TableSelectorProps> = ({ db, dbStateManager, selec
       <select
         value={selectedTable || ''}
         onChange={handleChange}
-        disabled={loading || !db}
+        disabled={loading || !dbContext}
         className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
       >
         <option value="" className="text-gray-500">-- テーブルを選択 --</option>

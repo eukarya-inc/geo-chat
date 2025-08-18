@@ -2,7 +2,7 @@ import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { Table, tableToIPC } from 'apache-arrow';
 import { ArrowService } from './arrowService';
 import { GeoArrowService } from './geoArrowService';
-import { DBStateManager } from '../../lib/duckdb/dbStateManager';
+import { DBContext } from '../../lib/duckdb/dbContext';
 
 export interface QueryResult {
   arrow: Table;
@@ -18,10 +18,10 @@ export class EnhancedDBManager {
   private db: AsyncDuckDB;
   private arrowService: ArrowService;
   private geoArrowService: GeoArrowService;
-  private stateManager: DBStateManager;
+  private stateManager: DBContext;
   private queryCache: Map<string, QueryResult>;
 
-  constructor(db: AsyncDuckDB, stateManager: DBStateManager) {
+  constructor(db: AsyncDuckDB, stateManager: DBContext) {
     this.db = db;
     this.stateManager = stateManager;
     this.arrowService = new ArrowService(db);

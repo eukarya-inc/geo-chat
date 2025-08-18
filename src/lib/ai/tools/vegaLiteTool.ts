@@ -1,7 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import { DBStateManager } from '../../duckdb/dbStateManager';
+import { DBContext } from '../../duckdb/dbContext';
 
 interface VegaLiteEncoding {
   x?: {
@@ -52,8 +51,7 @@ interface VegaLiteSpec {
   encoding?: VegaLiteEncoding;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function createVegaLiteTool(db: AsyncDuckDB, _p0?: DBStateManager | undefined) {
+export function createVegaLiteTool(dbContext: DBContext) {
   return tool({
     description,
     parameters: z.object({
@@ -90,7 +88,7 @@ export function createVegaLiteTool(db: AsyncDuckDB, _p0?: DBStateManager | undef
 
         // Force database sync before validation
         console.log(`VegaLite: Starting validation for table ${tableName}`);
-        const conn = await db.connect();
+        const conn = await dbContext.connect();
         
         try {
           // Force checkpoint to ensure all changes are visible

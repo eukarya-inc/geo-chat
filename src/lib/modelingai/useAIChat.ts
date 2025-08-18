@@ -2,13 +2,11 @@ import { useState, useCallback } from 'react';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../duckdb/dbStateManager';
+import type { DBContext } from '../duckdb/dbContext';
 import type { StructuredMessage, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 
 export function useAIChat(
-  db?: AsyncDuckDB | null,
-  dbStateManager?: DBStateManager | null,
+  dbContext: DBContext | null,
   customApiKey?: string,
   messages: StructuredMessage[] = [],
   onMessagesChange?: (messages: StructuredMessage[]) => void
@@ -181,8 +179,7 @@ export function useAIChat(
       const generator = createAIStreamGenerator({
         messages: coreMessages,
         apiKey,
-        db: db || undefined,
-        dbStateManager: dbStateManager || undefined,
+        dbContext: dbContext || undefined,
         abortSignal: controller.signal
       });
 
@@ -259,7 +256,7 @@ export function useAIChat(
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [apiKey, isLoading, messages, db, dbStateManager, processStreamPart, onMessagesChange]);
+  }, [apiKey, isLoading, messages, dbContext, processStreamPart, onMessagesChange]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

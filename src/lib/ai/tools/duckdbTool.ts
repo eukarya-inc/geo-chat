@@ -1,10 +1,9 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
+import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
-export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager) {
+export function createDuckDBTool(dbContext: DBContext) {
   return tool({
     description,
     parameters: z.object({
@@ -18,9 +17,7 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log('DuckDBTool: Database instance ID:', (db as any).__instanceId || 'no-id');
-        const conn = await db.connect();
+        const conn = await dbContext.connect();
         try {
           const result = await conn.query(sql);
 
@@ -28,10 +25,10 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
           const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
-          if (isTableOperation && dbStateManager) {
+          if (isTableOperation && dbContext) {
             console.log('DuckDBTool: Table operation detected, triggering refresh');
             setTimeout(() => {
-              dbStateManager.notifyTableChange();
+              dbContext.notifyTableChange();
             }, 100);
           }
 

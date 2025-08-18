@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { VegaLite } from 'react-vega';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 import type { VegaLiteSpec } from '../types/vega';
 
 interface VegaLiteChartProps {
   spec: VegaLiteSpec;
-  db?: AsyncDuckDB;
-  dbStateManager?: DBStateManager;
+  dbContext?: DBContext;
 }
 
 interface ColumnInfo {
@@ -16,7 +14,7 @@ interface ColumnInfo {
   type: string;
 }
 
-const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStateManager }) => {
+const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext }) => {
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,10 +114,10 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
   // Fetch available tables using state manager
   useEffect(() => {
     const fetchTables = async () => {
-      if (!dbStateManager) return;
+      if (!dbContext) return;
       
       try {
-        const tableNames = await dbStateManager.getTables();
+        const tableNames = await dbContext.getTables();
         setTables(tableNames);
       } catch (err) {
         console.error('Error fetching tables:', err);
@@ -127,16 +125,16 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     };
 
     fetchTables();
-  }, [dbStateManager]);
+  }, [dbContext]);
 
   // Subscribe to table changes
   useEffect(() => {
-    if (!dbStateManager) return;
+    if (!dbContext) return;
 
-    const unsubscribe = dbStateManager.onTableChange(async () => {
+    const unsubscribe = dbContext.onTableChange(async () => {
       console.log('VegaLite: Received table change notification, refreshing tables');
       try {
-        const tableNames = await dbStateManager.getTables();
+        const tableNames = await dbContext.getTables();
         setTables(tableNames);
       } catch (err) {
         console.error('Error refreshing tables:', err);
@@ -144,18 +142,18 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     });
 
     return unsubscribe;
-  }, [dbStateManager]);
+  }, [dbContext]);
 
   // Fetch columns when table changes
   useEffect(() => {
     const fetchColumns = async () => {
-      if (!dbStateManager || !config.tableName) {
+      if (!dbContext || !config.tableName) {
         setColumns([]);
         return;
       }
 
       try {
-        const cols = await dbStateManager.getTableColumns(config.tableName);
+        const cols = await dbContext.getTableColumns(config.tableName);
         setColumns(cols);
       } catch (err) {
         console.error('Error fetching columns:', err);
@@ -164,7 +162,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     };
 
     fetchColumns();
-  }, [dbStateManager, config.tableName]);
+  }, [dbContext, config.tableName]);
 
   // Generate new spec based on configuration
   const generateSpec = useCallback(() => {
@@ -185,7 +183,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     };
 
     // Get schema-qualified table name if schema is set
-    const currentSchema = dbStateManager?.getCurrentSchema();
+    const currentSchema = dbContext?.getCurrentSchema();
     const qualifiedTableName = currentSchema ? `${currentSchema}.${config.tableName}` : config.tableName;
 
     const baseSpec: VegaLiteSpec = {
@@ -321,7 +319,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
       console.error('Error generating spec:', error);
       return initialSpec;
     }
-  }, [config, columns, initialSpec, dbStateManager]);
+  }, [config, columns, initialSpec, dbContext]);
 
   // Update spec when configuration changes
   useEffect(() => {
@@ -336,7 +334,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
   // Fetch data when spec changes
   useEffect(() => {
     const fetchData = async () => {
-      if (!dbStateManager || !currentSpec.data?.sql) {
+      if (!dbContext || !currentSpec.data?.sql) {
         setLoading(false);
         return;
       }
@@ -346,7 +344,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
         setError(null);
 
         console.log('VegaLite: Executing SQL:', currentSpec.data.sql);
-        const rows = await dbStateManager.executeQuery(currentSpec.data.sql);
+        const rows = await dbContext.executeQuery(currentSpec.data.sql);
         
         console.log(`VegaLite: Fetched ${rows.length} rows for chart`);
         setData(rows);
@@ -359,7 +357,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbStat
     };
 
     fetchData();
-  }, [dbStateManager, currentSpec.data?.sql]);
+  }, [dbContext, currentSpec.data?.sql]);
 
   const getNumericColumns = () => columns.filter((col: ColumnInfo) => 
     col.type.toLowerCase().includes('int') || 

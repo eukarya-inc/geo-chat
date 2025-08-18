@@ -11,11 +11,10 @@ import { createDebugLayersTool } from './tools/debugLayersTool';
 import { createDataAnalysisTool } from './tools/dataAnalysisTool';
 import { createGeocodingTools } from './tools/geocodingTool';
 import { createAnalyzeLayerPropertiesTool } from './tools/analyzeLayerProperties';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { MapStyleManager } from '../../utils/mapStyleManager';
-import type { DBStateManager } from '../duckdb/dbStateManager';
+import type { DBContext } from '../duckdb/dbContext';
 
-export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManager | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
+export function useAIChat(dbContext: DBContext | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState('');
@@ -459,11 +458,11 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
         system: generateSystemPrompt(),
         messages: allMessages,
         tools: { 
-          ...(db && { 
-            duckdb_query: createDuckDBTool(db, dbStateManager || undefined),
-            vega_lite_chart: createVegaLiteTool(db, dbStateManager || undefined),
-            analyze_data: createDataAnalysisTool(db),
-            ...createGeocodingTools(db),
+          ...(dbContext && { 
+            duckdb_query: createDuckDBTool(dbContext),
+            vega_lite_chart: createVegaLiteTool(dbContext),
+            analyze_data: createDataAnalysisTool(dbContext),
+            ...createGeocodingTools(dbContext),
           }),
           ...(mapStyleManager && {
             update_map_style: createMapStyleTool(mapStyleManager),
@@ -551,7 +550,7 @@ export function useAIChat(db?: AsyncDuckDB | null, dbStateManager?: DBStateManag
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [input, apiKey, isLoading, messages, db, dbStateManager, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
+  }, [input, apiKey, isLoading, messages, dbContext, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {

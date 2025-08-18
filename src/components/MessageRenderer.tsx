@@ -4,14 +4,12 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import VegaLiteChart from './VegaLiteChart';
 import { TableCreatedMessage } from './TableCreatedMessage';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 interface MessageRendererProps {
     content: string;
     className?: string;
-    db?: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext?: DBContext;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
 }
@@ -19,8 +17,7 @@ interface MessageRendererProps {
 const MessageRenderer: React.FC<MessageRendererProps> = ({ 
     content, 
     className, 
-    db, 
-    dbStateManager,
+    dbContext,
     selectedTable,
     onTableSelect 
 }) => {
@@ -81,8 +78,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({
                     <div key={`chart-${index}`} style={{ margin: '20px 0' }}>
                         <VegaLiteChart 
                             spec={vegaSpec} 
-                            db={db}
-                            dbStateManager={dbStateManager}
+                            dbContext={dbContext || undefined}
                         />
                     </div>
                 );

@@ -1,9 +1,9 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { DBContext } from '../../duckdb/dbContext';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
-export function createDataAnalysisTool(db: AsyncDuckDB) {
+export function createDataAnalysisTool(dbContext: DBContext) {
   return tool({
     description: `Analyze table structure and data to understand available properties for map styling.
     
@@ -29,7 +29,7 @@ Capabilities:
 
     execute: async ({ action, table_name, column_name, limit }) => {
       try {
-        const conn = await db.connect();
+        const conn = await dbContext.connect();
         
         try {
           switch (action) {

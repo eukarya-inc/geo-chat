@@ -1,12 +1,12 @@
-import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useState } from 'react';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 interface RemoteFileProps {
-    db: AsyncDuckDB;
+    dbContext: DBContext;
     onTableCreated?: (tableName: string) => void;
 }
 
-const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
+const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, onTableCreated }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -17,9 +17,9 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
     };
 
     const createTableFromUrl = async () => {
-        console.log('RemoteFile: createTableFromUrl called with:', { db: !!db, url: url.trim() });
-        if (!db || !url.trim()) {
-            console.log('RemoteFile: Early return - missing db or url');
+        console.log('RemoteFile: createTableFromUrl called with:', { dbContext: !!dbContext, url: url.trim() });
+        if (!dbContext || !url.trim()) {
+            console.log('RemoteFile: Early return - missing dbContext or url');
             return;
         }
 
@@ -29,8 +29,8 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
         let conn = null;
 
         try {
-            console.log('RemoteFile: Database instance ID:', (db as { __instanceId?: string }).__instanceId || 'no-id');
-            conn = await db.connect();
+            console.log('RemoteFile: Using dbContext');
+            conn = await dbContext.connect();
             await conn.query('LOAD spatial;');
             
             // Load httpfs extension for HTTP access
@@ -249,7 +249,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
             
             // Debug: Check what tables actually exist
             try {
-                const debugConn = await db.connect();
+                const debugConn = await dbContext.connect();
                 const tablesResult = await debugConn.query('SHOW TABLES;');
                 console.log('RemoteFile: Tables in database after creation:', tablesResult.toArray());
                 
@@ -278,7 +278,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
         <div className="remote-file">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                 <h3 style={{ margin: 0 }}>Remote File</h3>
-                <button onClick={() => setShow(!show)} disabled={!db}>
+                <button onClick={() => setShow(!show)} disabled={!dbContext}>
                     {show ? '隠す' : '表示'}
                 </button>
             </div>
@@ -302,7 +302,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ db, onTableCreated }) => {
                             placeholder="Enter file URL (.parquet, .csv, .geojson, .shp)"
                             style={{ flex: 1, padding: '0.5em' }}
                         />
-                        <button onClick={createTableFromUrl} disabled={!db || !url.trim() || isCreatingTable}>
+                        <button onClick={createTableFromUrl} disabled={!dbContext || !url.trim() || isCreatingTable}>
                             {isCreatingTable ? 'テーブル作成中...' : 'Create Table from URL'}
                         </button>
                     </div>
