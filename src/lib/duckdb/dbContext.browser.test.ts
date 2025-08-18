@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from './dbContext';
@@ -446,22 +446,14 @@ describe('DBContext Browser Integration', () => {
   });
 
   describe('getSQLHistory', () => {
-    it('should return SQL history manager', () => {
+    it('should return SQL history manager instance', () => {
       const history = dbContext.getSQLHistory();
       
       expect(history).toBeDefined();
-      // SQLHistoryManager methods might not be available in all contexts
-      if (history.addQuery && history.getHistory) {
-        expect(typeof history.addQuery).toBe('function');
-        expect(typeof history.getHistory).toBe('function');
-        
-        // Test basic functionality
-        history.addQuery('SELECT 1');
-        const entries = history.getHistory();
-        
-        expect(entries).toHaveLength(1);
-        expect(entries[0].query).toBe('SELECT 1');
-      }
+      // Just verify it returns a SQLHistoryManager instance
+      // Detailed testing is in sqlHistoryManager.test.ts
+      expect(typeof history.recordCreateTable).toBe('function');
+      expect(typeof history.getAllHistory).toBe('function');
     });
   });
 });
