@@ -6,6 +6,7 @@ import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolR
 import type { DBContext } from '../lib/duckdb/dbContext';
 import { formatSQLCompact } from '../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
+import { PromptSuggestions } from './PromptSuggestions';
 
 interface StructuredMessageRendererProps {
     message: StructuredMessage;
@@ -15,6 +16,7 @@ interface StructuredMessageRendererProps {
     onTableSelect?: (tableName: string) => void;
     hideToolCalls?: boolean;
     isStreaming?: boolean;
+    onPromptClick?: (promptText: string) => void;
 }
 
 interface CollapsibleSectionProps {
@@ -58,7 +60,8 @@ const renderContentBlock = (
     index: number,
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
-    hideToolDetails: boolean = false
+    hideToolDetails: boolean = false,
+    onPromptClick?: (promptText: string) => void
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -157,6 +160,22 @@ const renderContentBlock = (
         }
             
         case 'tool_result': {
+            // Handle completion tool results (suggested prompts)
+            if (block.name === 'completion') {
+                const result = block.result as any;
+                if (result?.suggestedPrompts && Array.isArray(result.suggestedPrompts)) {
+                    return onPromptClick ? (
+                        <PromptSuggestions
+                            key={index}
+                            prompts={result.suggestedPrompts}
+                            onPromptClick={onPromptClick}
+                            title="おすすめの質問:"
+                        />
+                    ) : null;
+                }
+                return null;
+            }
+            
             if (block.name === 'duckdb_query') {
                 const result = block.result as DuckDBToolResult;
                 
@@ -286,7 +305,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     selectedTable,
     onTableSelect,
     hideToolCalls = false,
-    isStreaming = false
+    isStreaming = false,
+    onPromptClick
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -307,7 +327,13 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             // 1. Table creation messages (tool_result with createdTable) - ALWAYS show
             // 2. The last text message (only when not streaming)
             // 3. Text blocks with TABLE_CREATED markers - ALWAYS show
+            // 4. Completion tool results (suggested prompts) - ALWAYS show
             filteredContent = message.content.filter((block, index) => {
+                // Always keep completion tool results (suggested prompts)
+                if (block.type === 'tool_result' && block.name === 'completion') {
+                    return true;
+                }
+                
                 // Always keep table creation tool results
                 if (block.type === 'tool_result' && block.name === 'duckdb_query') {
                     const result = block.result as DuckDBToolResult;
@@ -340,7 +366,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             <div className={className}>
                 {/* Render existing structured content blocks */}
                 {filteredContent.map((block, index) => 
-                    renderContentBlock(block, index, selectedTable, onTableSelect, hideToolCalls)
+                    renderContentBlock(block, index, selectedTable, onTableSelect, hideToolCalls, onPromptClick)
                 )}
                 
                 {/* Render streaming text if present */}
