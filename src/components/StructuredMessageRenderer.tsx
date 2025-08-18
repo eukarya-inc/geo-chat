@@ -162,7 +162,16 @@ const renderContentBlock = (
         case 'tool_result': {
             // Handle completion tool results (suggested prompts)
             if (block.name === 'completion') {
-                const result = block.result as any;
+                const result = block.result as {
+                    suggestedPrompts?: Array<{
+                        id?: string;
+                        text: string;
+                        description?: string;
+                    }>;
+                    success?: boolean;
+                    completionMessage?: string;
+                    timestamp?: string;
+                };
                 if (result?.suggestedPrompts && Array.isArray(result.suggestedPrompts)) {
                     return onPromptClick ? (
                         <PromptSuggestions

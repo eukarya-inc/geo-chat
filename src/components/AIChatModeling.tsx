@@ -29,7 +29,6 @@ export default function AIChat({
     onTableSelect,
     remoteFileComponent
 }: AIChatProps) {
-    const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
@@ -236,7 +235,6 @@ export default function AIChat({
             
             const messagesWithLoading = [...messages, loadingMessage];
             onMessagesChange(messagesWithLoading);
-            setIsLoadingPrompts(true);
             try {
                 const prompts = await generatePromptSuggestions(
                     tableName,
@@ -280,8 +278,6 @@ export default function AIChat({
                 console.error('Failed to load prompt suggestions:', error);
                 // Remove the loading message on error
                 onMessagesChange(messages);
-            } finally {
-                setIsLoadingPrompts(false);
             }
         };
 
@@ -340,13 +336,6 @@ export default function AIChat({
             </div>
         );
     }
-
-    // Check if we only have TABLE_CREATED messages (no real conversation)
-    const hasOnlyTableMessages = messages.length > 0 && messages.every(msg => {
-        const content = typeof msg.content === 'string' ? msg.content : '';
-        return content.includes('<!--TABLE_CREATED:') && 
-               content.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
-    });
 
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
