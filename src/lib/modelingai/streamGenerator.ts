@@ -9,6 +9,7 @@ export interface StreamGeneratorOptions {
   messages: CoreMessage[];
   apiKey: string;
   dbContext?: DBContext | null;
+  schema?: string | null;
   abortSignal?: AbortSignal;
 }
 
@@ -27,6 +28,7 @@ export async function* createAIStreamGenerator({
   messages,
   apiKey,
   dbContext,
+  schema = null,
   abortSignal
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
@@ -43,7 +45,7 @@ export async function* createAIStreamGenerator({
       messages,
       tools: {
         ...(dbContext && {
-          duckdb_query: createDuckDBTool(dbContext, apiKey),
+          duckdb_query: createDuckDBTool(dbContext, schema, apiKey),
         }),
         completion: completionTool,
       },

@@ -6,9 +6,10 @@ interface TableSelectorProps {
   selectedTable: string | null;
   onTableSelect: (tableName: string | null) => void;
   refreshTrigger?: number;
+  schema?: string | null;
 }
 
-const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, refreshTrigger }) => {
+const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, refreshTrigger, schema = null }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -22,14 +23,14 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
     setLoading(true);
 
     try {
-      const tableNames = await dbContext.getTables();
+      const tableNames = await dbContext.getTables(schema);
       setTables(tableNames);
     } catch {
       setTables([]);
     } finally {
       setLoading(false);
     }
-  }, [dbContext]);
+  }, [dbContext, schema]);
 
   // Initial fetch and refresh on prop changes
   useEffect(() => {
@@ -40,7 +41,11 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
   useEffect(() => {
     if (!dbContext) return;
 
-    const unsubscribe = dbContext.onTableChange(() => {
+    const unsubscribe = dbContext.onTableChange((tableName?: string, notifySchema?: string | null) => {
+      // Only refresh if the change is for our schema
+      if (notifySchema !== schema) {
+        return;
+      }
       // Refresh table list when tables change
       // Add a small delay to ensure the table is fully created
       setTimeout(() => {
@@ -51,7 +56,7 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
     return () => {
       unsubscribe();
     };
-  }, [dbContext, fetchTables]);
+  }, [dbContext, fetchTables, schema]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;

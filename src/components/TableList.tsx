@@ -33,9 +33,8 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
         if (!dbContext) return;
 
         try {
-            const conn = await dbContext.connect();
-            const result = await conn.query(`DESCRIBE ${tableName};`);
-            const columns = result.toArray().map(row => ({
+            const result = await dbContext.describeTable(tableName, null);
+            const columns = result.map(row => ({
                 name: row.column_name,
                 type: row.column_type,
             }));
@@ -60,8 +59,6 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
                 console.log(`Auto-selecting all columns for table ${tableName}:`, allColumns);
                 onColumnSelect(tableName, allColumns);
             }
-            
-            await conn.close();
         } catch (err) {
             console.error('Error fetching table columns:', err);
         }
@@ -75,9 +72,7 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
 
         try {
             console.log('TableList: Fetching tables');
-            const conn = await dbContext.connect();
-            const result = await conn.query('SHOW TABLES;');
-            const allTableNames = result.toArray().map(row => row.name);
+            const allTableNames = await dbContext.getTables(null);
             
             // Filter out temporary analysis tables
             const isTemporaryTable = (name: string): boolean => {
@@ -102,8 +97,8 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
             const tablesWithInfo: TableInfo[] = [];
             for (const tableName of tableNames) {
                 try {
-                    const countResult = await conn.query(`SELECT COUNT(*) as count FROM ${tableName};`);
-                    const count = countResult.toArray()[0].count;
+                    const countResult = await dbContext.executeQuery(`SELECT COUNT(*) as count FROM ${tableName};`, null);
+                    const count = countResult[0].count;
                     tablesWithInfo.push({ name: tableName, count: count });
                     
                     // Fetch columns for each table
@@ -118,7 +113,6 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
                 setTables(tablesWithInfo);
                 console.log('TableList: Updated tables:', tablesWithInfo);
             }
-            await conn.close();
         } catch (err) {
             console.error('Error fetching tables:', err);
         }
@@ -134,7 +128,11 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
         if (!dbContext) return;
 
         console.log('TableList: Setting up table change listener');
-        const unsubscribe = dbContext.onTableChange(() => {
+        const unsubscribe = dbContext.onTableChange((tableName?: string, schema?: string | null) => {
+            // TableList doesn't use schemas, so only respond to main schema changes
+            if (schema !== null) {
+                return;
+            }
             console.log('TableList: Received table change notification, refreshing...');
             fetchTables();
         });
@@ -158,7 +156,7 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
         if (!dbContext) return;
 
         try {
-            const conn = await dbContext.connect();
+            const conn = await dbContext.createManagedConnection(null);
             setConnection(conn);
             setShowDataView(tableName);
         } catch (err) {
@@ -174,9 +172,7 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
         }
 
         try {
-            const conn = await dbContext.connect();
-            await conn.query(`DROP TABLE ${tableName};`);
-            await conn.close();
+            await dbContext.dropTable(tableName, null);
             
             // Remove from local state
             setTables(prev => prev.filter(table => table.name !== tableName));
@@ -193,7 +189,7 @@ const TableList: React.FC<TableListProps> = ({ dbContext, selectedTable, onTable
             
             // Notify state manager
             if (dbContext) {
-                dbContext.notifyTableChange();
+                dbContext.notifyTableChange(undefined, null);
             }
         } catch (err) {
             console.error('Error deleting table:', err);

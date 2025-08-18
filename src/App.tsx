@@ -193,7 +193,7 @@ function App() {
                         // Also trigger TableList refresh via dbContext
                         if (dbContext) {
                             console.log('App: Triggering TableList refresh via dbContext');
-                            dbContext.notifyTableChange();
+                            dbContext.notifyTableChange(undefined, null);
                         }
                     }} />}
                     {dbContext && (

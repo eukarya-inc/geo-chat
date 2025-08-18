@@ -1,6 +1,7 @@
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AppWithRedux from './AppWithRedux';
 import ModelingPage from './pages/ModelingPage';
+import { GlobalLoadingProvider } from './contexts/GlobalLoadingContext';
 
 function NavigationBar() {
     const location = useLocation();
@@ -37,7 +38,11 @@ function AppWithRouter() {
                 <div className="flex-1 overflow-hidden relative">
                     <Routes>
                         <Route path="/" element={<AppWithRedux />} />
-                        <Route path="/modeling" element={<ModelingPage />} />
+                        <Route path="/modeling" element={
+                            <GlobalLoadingProvider>
+                                <ModelingPage />
+                            </GlobalLoadingProvider>
+                        } />
                     </Routes>
                 </div>
             </div>

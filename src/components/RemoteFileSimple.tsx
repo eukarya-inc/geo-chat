@@ -4,12 +4,13 @@ import { formatSQL } from '../utils/sqlFormatter';
 
 interface RemoteFileSimpleProps {
     dbContext: DBContext;
+    schema?: string | null;
     onTableCreated?: (tableName: string) => void;
     onSendMessage?: (message: string) => void;
     onExampleMessages?: (tableMessage: string, followUpMessage: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableCreated, onSendMessage, onExampleMessages }) => {
+const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema = null, onTableCreated, onSendMessage, onExampleMessages }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -40,11 +41,8 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableC
         // Don't send any message here - we'll handle it after table creation
 
         setIsCreatingTable(true);
-        let conn = null;
 
         try {
-            // Use schema-aware connection
-            conn = await dbContext.connectWithSchema();
 
             // URLからファイル名を抽出
             const fileName = targetUrl.split('/').pop() || 'remote_file';
@@ -83,13 +81,9 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableC
                 from = `st_read('${targetUrl}')`;
             }
 
-            // Get the current schema and use it in table creation
-            const schemaName = dbContext?.getCurrentSchema() || 'main';
-            const qualifiedTableName = schemaName !== 'main' ? `${schemaName}.${tableName}` : tableName;
-
-            const createTableSQL = `CREATE TABLE ${qualifiedTableName} AS SELECT * FROM ${from}`;
-            await conn.query(createTableSQL);
-            await conn.query('CHECKPOINT;');
+            // Use executeQuery which now handles DDL operations with checkpointing
+            const createTableSQL = `CREATE TABLE ${tableName} AS SELECT * FROM ${from}`;
+            await dbContext.executeQuery(createTableSQL, schema);
 
             // Record the CREATE TABLE SQL in history
             if (dbContext) {
@@ -99,6 +93,9 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableC
 
             setError(null);
             setUrl('');
+            
+            // Notify about table change with schema
+            dbContext.notifyTableChange(tableName, schema);
 
             // Send a simple table creation message
             const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
@@ -116,9 +113,6 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableC
             console.error('Query error:', err);
             setError(err instanceof Error ? err.message : 'Unknown error occurred');
         } finally {
-            if (conn) {
-                await conn.close();
-            }
             setIsCreatingTable(false);
         }
     };

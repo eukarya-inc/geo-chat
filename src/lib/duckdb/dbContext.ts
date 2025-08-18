@@ -2,110 +2,277 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
 
 export interface DBContext {
-  connect(): Promise<AsyncDuckDBConnection>;
+  // For components that need long-lived connections (like Table component)
+  // This is a temporary solution until we refactor all components
+  createManagedConnection(schema: string | null): Promise<AsyncDuckDBConnection>;
   forceConsistency(): Promise<void>;
-  notifyTableChange(tableName?: string): void;
-  onTableChange(callback: (tableName?: string) => void): () => void;
+  notifyTableChange(tableName?: string, schema?: string | null): void;
+  onTableChange(callback: (tableName?: string, schema?: string | null) => void): () => void;
   executeWithRefresh<T>(operation: () => Promise<T>, tableName?: string): Promise<T>;
-  validateTable(tableName: string, maxRetries?: number): Promise<boolean>;
-  getTables(): Promise<string[]>;
-  getTableColumns(tableName: string): Promise<Array<{name: string; type: string}>>;
+  validateTable(tableName: string, schema?: string | null, maxRetries?: number): Promise<boolean>;
+  getTables(schema?: string | null): Promise<string[]>;
+  getTableColumns(tableName: string, schema?: string | null): Promise<Array<{name: string; type: string}>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executeQuery(sql: string): Promise<any[]>;
+  executeQuery(sql: string, schema?: string | null): Promise<any[]>;
   getSQLHistory(): SQLHistoryManager;
-  setCurrentSchema(schema: string | null): void;
-  getCurrentSchema(): string | null;
-  connectWithSchema(): Promise<AsyncDuckDBConnection>;
-  dropTable(tableName: string): Promise<void>;
+  dropTable(tableName: string, schema?: string | null): Promise<void>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  describeTable(tableName: string): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>>;
+  describeTable(tableName: string, schema?: string | null): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>>;
+  getPoolStats(): { schema: string | null; total: number; inUse: number }[];
+  closeSchemaConnections(schema: string | null): Promise<void>;
+}
+
+interface PooledConnection {
+  connection: AsyncDuckDBConnection;
+  schema: string | null;
+  inUse: boolean;
+  lastUsed: number;
+  schemaInitialized: boolean;
 }
 
 class DatabaseContext implements DBContext {
   private db: AsyncDuckDB;
-  private tableChangeCallbacks: Set<(tableName?: string) => void> = new Set();
+  private tableChangeCallbacks: Set<(tableName?: string, schema?: string | null) => void> = new Set();
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
   private sqlHistory: SQLHistoryManager;
-  private currentSchema: string | null = null;
-  private activeConnections: Set<AsyncDuckDBConnection> = new Set();
+  private debugLogging = false; // Set to true to enable debug logs
+  
+  // Connection pool: Map<schema, PooledConnection[]>
+  private connectionPool: Map<string | null, PooledConnection[]> = new Map();
+  private maxConnectionsPerSchema = 10; // Increased from 3 to avoid deadlock
+  private maxIdleTime = 60000; // 60 seconds
   private connectionMutex: Promise<void> = Promise.resolve();
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
     this.sqlHistory = new SQLHistoryManager();
+    
+    // Start cleanup timer for idle connections
+    this.cleanupTimer = setInterval(() => this.cleanupIdleConnections(), 30000); // Every 30 seconds
   }
 
-  async connect(): Promise<AsyncDuckDBConnection> {
-    return this.db.connect();
-  }
-
-  setCurrentSchema(schema: string | null): void {
-    // If schema is changing, close all active connections
-    if (this.currentSchema !== schema) {
-      this.closeAllConnections();
+  
+  private async cleanupIdleConnections(): Promise<void> {
+    const now = Date.now();
+    
+    for (const [schema, connections] of this.connectionPool.entries()) {
+      const toRemove: PooledConnection[] = [];
+      
+      for (const pooledConn of connections) {
+        if (!pooledConn.inUse && (now - pooledConn.lastUsed > this.maxIdleTime)) {
+          toRemove.push(pooledConn);
+        }
+      }
+      
+      for (const pooledConn of toRemove) {
+        try {
+          await pooledConn.connection.close();
+        } catch {
+          // Ignore errors when closing idle connections
+        }
+        const index = connections.indexOf(pooledConn);
+        if (index > -1) {
+          connections.splice(index, 1);
+        }
+      }
+      
+      // Remove schema entry if no connections remain
+      if (connections.length === 0) {
+        this.connectionPool.delete(schema);
+      }
     }
-    this.currentSchema = schema;
   }
   
   private async closeAllConnections(): Promise<void> {
-    const connections = Array.from(this.activeConnections);
-    for (const conn of connections) {
-      try {
-        await conn.close();
-      } catch {
-        // Ignore errors when closing connections
+    for (const connections of this.connectionPool.values()) {
+      for (const pooledConn of connections) {
+        try {
+          await pooledConn.connection.close();
+        } catch {
+          // Ignore errors when closing connections
+        }
       }
     }
-    this.activeConnections.clear();
+    this.connectionPool.clear();
   }
 
-  getCurrentSchema(): string | null {
-    return this.currentSchema;
+  // Sanitize schema name to be valid SQL identifier
+  private sanitizeSchemaName(schema: string | null): string | null {
+    if (!schema) return null;
+    // Replace all non-alphanumeric characters with underscores
+    // Ensure it starts with a letter or underscore (not a number)
+    let sanitized = schema.replace(/[^a-zA-Z0-9_]/g, '_');
+    // If it starts with a number, prefix with underscore
+    if (/^\d/.test(sanitized)) {
+      sanitized = `_${sanitized}`;
+    }
+    return sanitized;
   }
-
-  async connectWithSchema(): Promise<AsyncDuckDBConnection> {
+  
+  // Temporary public method for components that need long-lived connections
+  // This will be removed once all components are refactored
+  async createManagedConnection(schema: string | null): Promise<AsyncDuckDBConnection> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    return this.connect(sanitizedSchema);
+  }
+  
+  private async connect(schema: string | null): Promise<AsyncDuckDBConnection> {
+    const connectStartTime = Date.now();
+    // Sanitize schema name if provided
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    
+    if (this.debugLogging) {
+      console.log(`[connect] Requesting connection for schema: ${sanitizedSchema}`);
+    }
+    
     // Use mutex to prevent concurrent connection creation
     await this.connectionMutex;
+    if (this.debugLogging) {
+      console.log(`[connect] Mutex acquired after ${Date.now() - connectStartTime}ms`);
+    }
     
     const connectionPromise = (async () => {
       try {
-        // Close old connections if we have too many
-        if (this.activeConnections.size > 5) {
-          const connectionsToClose = Array.from(this.activeConnections).slice(0, 2);
-          for (const oldConn of connectionsToClose) {
+        // Get or create connection pool for this schema
+        if (!this.connectionPool.has(sanitizedSchema)) {
+          this.connectionPool.set(sanitizedSchema, []);
+        }
+        
+        const schemaConnections = this.connectionPool.get(sanitizedSchema)!;
+        
+        // Try to find an available connection in the pool
+        for (const pooledConn of schemaConnections) {
+          if (!pooledConn.inUse && pooledConn.schema === sanitizedSchema) {
+            pooledConn.inUse = true;
+            pooledConn.lastUsed = Date.now();
+            
+            if (this.debugLogging) {
+              console.log(`[connect] Reusing existing connection from pool after ${Date.now() - connectStartTime}ms`);
+            }
+            
+            // Ensure schema is set correctly for reused connection
+            if (sanitizedSchema && !pooledConn.schemaInitialized) {
+              try {
+                if (this.debugLogging) {
+                console.log(`[connect] Initializing schema for reused connection`);
+              }
+                // Ensure schema exists and is set (with proper escaping)
+                await pooledConn.connection.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
+                await pooledConn.connection.query(`SET search_path = "${sanitizedSchema}"`);
+                pooledConn.schemaInitialized = true;
+              } catch (error) {
+                console.warn(`Failed to set schema for reused connection: ${error}`);
+                // Continue anyway - connection might still be usable
+              }
+            }
+            
+            // Create a wrapper that returns the connection to the pool
+            const wrappedConnection = this.createWrappedConnection(pooledConn);
+            return wrappedConnection;
+          }
+        }
+        
+        // No available connection, create a new one if under limit
+        if (schemaConnections.length < this.maxConnectionsPerSchema) {
+          if (this.debugLogging) {
+            console.log(`[connect] Creating new connection`);
+          }
+          const connCreateTime = Date.now();
+          const conn = await this.db.connect();
+          if (this.debugLogging) {
+            console.log(`[connect] New connection created in ${Date.now() - connCreateTime}ms`);
+          }
+          
+          // Set schema if specified
+          if (sanitizedSchema) {
             try {
-              await oldConn.close();
-              this.activeConnections.delete(oldConn);
-            } catch {
-              // Ignore errors when closing old connections
+              if (this.debugLogging) {
+                console.log(`[connect] Setting up schema for new connection`);
+              }
+              const schemaSetupTime = Date.now();
+              // First ensure the schema exists (with proper escaping)
+              await conn.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
+              // Then set it as the current schema
+              await conn.query(`SET search_path = "${sanitizedSchema}"`);
+              if (this.debugLogging) {
+                console.log(`[connect] Schema setup completed in ${Date.now() - schemaSetupTime}ms`);
+              }
+            } catch (error) {
+              await conn.close();
+              throw new Error(`Failed to set schema ${sanitizedSchema}: ${error}`);
+            }
+          }
+          
+          const pooledConn: PooledConnection = {
+            connection: conn,
+            schema: sanitizedSchema,
+            inUse: true,
+            lastUsed: Date.now(),
+            schemaInitialized: !!sanitizedSchema
+          };
+          
+          schemaConnections.push(pooledConn);
+          
+          // Create a wrapper that returns the connection to the pool
+          const wrappedConnection = this.createWrappedConnection(pooledConn);
+          if (this.debugLogging) {
+            console.log(`[connect] Total connection time: ${Date.now() - connectStartTime}ms`);
+          }
+          return wrappedConnection;
+        }
+        
+        // Pool is full, wait for an available connection
+        console.log(`[connect] Pool is full for schema ${sanitizedSchema}, waiting for available connection...`);
+        
+        // Wait for a connection to become available (max 5 seconds)
+        const maxWaitTime = 5000;
+        const startWaitTime = Date.now();
+        
+        while (Date.now() - startWaitTime < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // Check if any connection is now available
+          for (const pooledConn of schemaConnections) {
+            if (!pooledConn.inUse && pooledConn.schema === sanitizedSchema) {
+              pooledConn.inUse = true;
+              pooledConn.lastUsed = Date.now();
+              console.log(`[connect] Got connection after waiting ${Date.now() - startWaitTime}ms`);
+              const wrappedConnection = this.createWrappedConnection(pooledConn);
+              return wrappedConnection;
             }
           }
         }
-
-        const conn = await this.db.connect();
-        this.activeConnections.add(conn);
         
-        if (this.currentSchema) {
+        // Timeout - force create a new connection even if over limit
+        console.warn(`[connect] Timeout waiting for connection, forcing new connection`);
+        const conn = await this.db.connect();
+        
+        if (sanitizedSchema) {
           try {
-            await conn.query(`SET search_path = '${this.currentSchema}'`);
+            await conn.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
+            await conn.query(`SET search_path = "${sanitizedSchema}"`);
           } catch (error) {
-            // If setting search_path fails, close connection and throw
             await conn.close();
-            this.activeConnections.delete(conn);
-            throw new Error(`Failed to set schema ${this.currentSchema}: ${error}`);
+            throw new Error(`Failed to set schema ${sanitizedSchema}: ${error}`);
           }
         }
         
-        // Wrap the connection to track when it's closed
-        const originalClose = conn.close.bind(conn);
-        conn.close = async () => {
-          this.activeConnections.delete(conn);
-          return originalClose();
+        const pooledConn: PooledConnection = {
+          connection: conn,
+          schema: sanitizedSchema,
+          inUse: true,
+          lastUsed: Date.now(),
+          schemaInitialized: !!sanitizedSchema
         };
         
-        return conn;
+        schemaConnections.push(pooledConn);
+        const wrappedConnection = this.createWrappedConnection(pooledConn);
+        console.log(`[connect] Forced connection creation after timeout`);
+        return wrappedConnection;
+        
       } catch (error) {
-        console.error('DBContext: Failed to create schema-aware connection:', error);
+        console.error('DBContext: Failed to get connection from pool:', error);
         throw error;
       }
     })();
@@ -115,9 +282,29 @@ class DatabaseContext implements DBContext {
     
     return connectionPromise;
   }
+  
+  private createWrappedConnection(pooledConn: PooledConnection): AsyncDuckDBConnection {
+    const conn = pooledConn.connection;
+    
+    // Create a proxy to intercept the close method
+    return new Proxy(conn, {
+      get(target, prop) {
+        if (prop === 'close') {
+          return async () => {
+            // Return connection to pool instead of closing
+            pooledConn.inUse = false;
+            pooledConn.lastUsed = Date.now();
+            // Don't actually close the connection
+            return Promise.resolve();
+          };
+        }
+        return target[prop as keyof AsyncDuckDBConnection];
+      }
+    });
+  }
 
   async forceConsistency(): Promise<void> {
-    const conn = await this.connectWithSchema();
+    const conn = await this.connect(null);
     try {
       // Force immediate synchronization across all connections
       await conn.query('CHECKPOINT;');
@@ -141,19 +328,19 @@ class DatabaseContext implements DBContext {
     }
   }
 
-  notifyTableChange(tableName?: string): void {
+  notifyTableChange(tableName?: string, schema?: string | null): void {
     // DISABLED DEBOUNCING - Execute immediately to test if debouncing was causing issues
     // Notifying table change to listeners
     this.tableChangeCallbacks.forEach(callback => {
       try {
-        callback(tableName);
+        callback(tableName, schema);
       } catch (error) {
         console.error('Table change callback error:', error);
       }
     });
   }
 
-  onTableChange(callback: (tableName?: string) => void): () => void {
+  onTableChange(callback: (tableName?: string, schema?: string | null) => void): () => void {
     this.tableChangeCallbacks.add(callback);
     return () => {
       this.tableChangeCallbacks.delete(callback);
@@ -176,7 +363,7 @@ class DatabaseContext implements DBContext {
       // Validate table if specified with more retries
       if (tableName) {
         // Validating table after operation
-        const isValid = await this.validateTable(tableName, 5);
+        const isValid = await this.validateTable(tableName, null, 5);
         if (!isValid) {
           console.error(`DBContext: CRITICAL - Table ${tableName} validation failed after creation`);
           // Try one more aggressive sync
@@ -187,7 +374,7 @@ class DatabaseContext implements DBContext {
       
       // Notify table change with longer delay to ensure propagation
       setTimeout(() => {
-        this.notifyTableChange(tableName);
+        this.notifyTableChange(tableName, null); // Schema not available in this context
       }, 500);
       
       return result;
@@ -211,7 +398,8 @@ class DatabaseContext implements DBContext {
     }
   }
 
-  async validateTable(tableName: string, maxRetries: number = 5): Promise<boolean> {
+  async validateTable(tableName: string, schema: string | null = null, maxRetries: number = 5): Promise<boolean> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Force consistency before each validation attempt
@@ -219,10 +407,10 @@ class DatabaseContext implements DBContext {
           await this.forceConsistency();
         }
         
-        const conn = await this.connectWithSchema();
+        const conn = await this.connect(sanitizedSchema);
         try {
-          // Query tables from the current schema only
-          const schemaName = this.currentSchema || 'main';
+          // Query tables from the specified schema
+          const schemaName = sanitizedSchema || 'main';
           const tablesResult = await conn.query(`
             SELECT table_name 
             FROM information_schema.tables 
@@ -261,7 +449,7 @@ class DatabaseContext implements DBContext {
           // Get available tables for better error message
           let availableTables: string[] = [];
           try {
-            availableTables = await this.getTables();
+            availableTables = await this.getTables(schema);
           } catch {
             // Ignore error getting tables
           }
@@ -274,11 +462,14 @@ class DatabaseContext implements DBContext {
     return false;
   }
 
-  async getTables(): Promise<string[]> {
-    const conn = await this.connectWithSchema();
+  async getTables(schema: string | null = null): Promise<string[]> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    
+    const conn = await this.connect(sanitizedSchema);
+    
     try {
-      // Query tables from the current schema only
-      const schemaName = this.currentSchema || 'main';
+      // Query tables from the specified schema
+      const schemaName = sanitizedSchema || 'main';
       const result = await conn.query(`
         SELECT table_name 
         FROM information_schema.tables 
@@ -306,12 +497,13 @@ class DatabaseContext implements DBContext {
     }
   }
 
-  async getTableColumns(tableName: string): Promise<Array<{name: string; type: string}>> {
-    if (!(await this.validateTable(tableName))) {
+  async getTableColumns(tableName: string, schema: string | null = null): Promise<Array<{name: string; type: string}>> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    if (!(await this.validateTable(tableName, schema))) {
       throw new Error(`Table '${tableName}' does not exist or is not accessible`);
     }
 
-    const conn = await this.connectWithSchema();
+    const conn = await this.connect(sanitizedSchema);
     try {
       const result = await conn.query(`DESCRIBE ${tableName}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -332,11 +524,32 @@ class DatabaseContext implements DBContext {
     }
   }
 
+  // Helper function to check if SQL is a DDL operation
+  private isDDLOperation(sql: string): boolean {
+    const upperSql = sql.trim().toUpperCase();
+    return upperSql.includes('CREATE TABLE') ||
+           upperSql.includes('CREATE OR REPLACE TABLE') ||
+           upperSql.includes('DROP TABLE') ||
+           upperSql.includes('ALTER TABLE') ||
+           upperSql.includes('CREATE SCHEMA') ||
+           upperSql.includes('DROP SCHEMA') ||
+           upperSql.includes('CREATE INDEX') ||
+           upperSql.includes('DROP INDEX');
+  }
+  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async executeQuery(sql: string): Promise<any[]> {
-    // Executing query
+  async executeQuery(sql: string, schema: string | null = null): Promise<any[]> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
     
-    const conn = await this.connectWithSchema();
+    // Intercept SHOW TABLES to make it schema-aware and fast
+    const upperSql = sql.trim().toUpperCase();
+    if (upperSql === 'SHOW TABLES' || upperSql === 'SHOW TABLES;') {
+      // Use the optimized getTables method instead
+      const tables = await this.getTables(schema);
+      return tables.map(name => ({ name }));
+    }
+    
+    const conn = await this.connect(sanitizedSchema);
     try {
       const result = await conn.query(sql);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -349,6 +562,16 @@ class DatabaseContext implements DBContext {
           ])
         );
       });
+      
+      // For DDL operations, force checkpoint to ensure changes are persisted
+      if (this.isDDLOperation(sql)) {
+        await conn.query('CHECKPOINT;');
+        try {
+          await conn.query('PRAGMA force_checkpoint;');
+        } catch {
+          // force_checkpoint might not be available in all versions
+        }
+      }
       
       // Query execution completed
       return data;
@@ -370,25 +593,76 @@ class DatabaseContext implements DBContext {
     return this.sqlHistory;
   }
 
-  async dropTable(tableName: string): Promise<void> {
-    const conn = await this.connectWithSchema();
+  async dropTable(tableName: string, schema: string | null = null): Promise<void> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    const conn = await this.connect(sanitizedSchema);
     try {
       await conn.query(`DROP TABLE IF EXISTS "${tableName}"`);
-      this.notifyTableChange();
+      this.notifyTableChange(undefined, schema);
     } finally {
       await conn.close();
     }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async describeTable(tableName: string): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>> {
-    const conn = await this.connectWithSchema();
+  async describeTable(tableName: string, schema: string | null = null): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    const conn = await this.connect(sanitizedSchema);
     try {
       const result = await conn.query(`DESCRIBE "${tableName}"`);
       return result.toArray();
     } finally {
       await conn.close();
     }
+  }
+  
+  getPoolStats(): { schema: string | null; total: number; inUse: number }[] {
+    const stats: { schema: string | null; total: number; inUse: number }[] = [];
+    
+    for (const [schema, connections] of this.connectionPool.entries()) {
+      const inUse = connections.filter(c => c.inUse).length;
+      stats.push({
+        schema: schema,
+        total: connections.length,
+        inUse: inUse
+      });
+    }
+    
+    return stats;
+  }
+  
+  async closeSchemaConnections(schema: string | null): Promise<void> {
+    const connections = this.connectionPool.get(schema);
+    if (!connections) return;
+    
+    // Close all connections for this schema
+    for (const pooledConn of connections) {
+      try {
+        // Force close the actual connection, bypassing the proxy
+        const actualConn = pooledConn.connection;
+        await actualConn.close();
+      } catch {
+        // Ignore errors when closing connections
+      }
+    }
+    
+    // Remove from pool
+    this.connectionPool.delete(schema);
+  }
+  
+  // Clean up resources when the context is destroyed
+  async destroy(): Promise<void> {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    
+    if (this.refreshDebounceTimeout) {
+      clearTimeout(this.refreshDebounceTimeout);
+      this.refreshDebounceTimeout = null;
+    }
+    
+    await this.closeAllConnections();
   }
 }
 

@@ -56,6 +56,7 @@ export type ExtraStyle = {
 
 export interface MapProps {
     dbContext: DBContext;
+    schema?: string | null;  // Current schema context
     selectedTable: string | null;  // For backward compatibility and primary table
     tables?: string[];  // New prop for multiple tables: ["schema.table1", "table2", ...]
     selectedColumns: string[];
@@ -108,12 +109,12 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
 };
 
 const generateVectorTileQuery = (params: QueryParams): string => {
-    const { zxy, selectedTable, selectedColumns, geometryColumnName, schema } = params;
+    const { zxy, selectedTable, selectedColumns, geometryColumnName } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
     const geomCol = geometryColumnName || 'geometry';
     
-    // Use schema-qualified table name if schema is set
-    const qualifiedTableName = schema ? `${schema}.${selectedTable}` : selectedTable;
+    // Don't use schema-qualified table name - connection already has schema context
+    const qualifiedTableName = selectedTable;
 
     // Build column selection - always convert to JSON for consistent handling
     let finalColumnSelection = '';
@@ -155,6 +156,7 @@ const generateVectorTileQuery = (params: QueryParams): string => {
 
 const MapComponent: React.FC<MapProps> = ({ 
     dbContext,
+    schema = null,
     selectedTable,
     tables, 
     selectedColumns, 
@@ -340,9 +342,8 @@ const MapComponent: React.FC<MapProps> = ({
         if (!mapRef.current || !connectionRef.current) return;
         
         try {
-            // Use schema-qualified table name if schema is set
-            const currentSchema = dbContext?.getCurrentSchema();
-            const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
+            // Don't use schema-qualified table name - connection already has schema context
+            const qualifiedTableName = tableName;
             
             // Query the bounds using a robust method that handles mixed geometry types
             const result = await connectionRef.current.query(`
@@ -378,7 +379,7 @@ const MapComponent: React.FC<MapProps> = ({
         } catch (error) {
             console.error('Error fitting map to data bounds:', error);
         }
-    }, [dbContext]);
+    }, []);
 
     // Re-fit bounds when geometry column changes
     useEffect(() => {
@@ -505,10 +506,8 @@ const MapComponent: React.FC<MapProps> = ({
         if (tables && tables.length > 0) {
             tablesToAdd = tables;
         } else if (selectedTable) {
-            const currentSchema = dbContext?.getCurrentSchema();
-            const tableSpec = currentSchema && currentSchema !== 'main' 
-                ? `${currentSchema}.${selectedTable}` 
-                : selectedTable;
+            // Don't include schema in tableSpec - use table name only
+            const tableSpec = selectedTable;
             tablesToAdd = [tableSpec];
         }
         
@@ -740,11 +739,10 @@ const MapComponent: React.FC<MapProps> = ({
                 const zxy = { z: parseInt(z), x: parseInt(x), y: parseInt(y) };
                 
                 // Parse schema.table or just table
-                let schema: string | null = null;
                 let tableName: string;
                 const tableParts = tableSpec.split('.');
                 if (tableParts.length === 2) {
-                    [schema, tableName] = tableParts;
+                    [, tableName] = tableParts;
                 } else {
                     tableName = tableSpec;
                 }
@@ -774,12 +772,13 @@ const MapComponent: React.FC<MapProps> = ({
 
 
                     // 選択されたカラムを取得するSQLクエリを構築
+                    // Don't pass schema - connection already has schema context
                     const query = generateVectorTileQuery({
                         zxy,
                         selectedTable: tableName,
                         selectedColumns: currentColumns,
                         geometryColumnName,
-                        schema: schema || dbContext?.getCurrentSchema(),
+                        schema: null,  // Don't use URL-extracted schema
                     });
                     
                     let stmt;
@@ -922,7 +921,6 @@ const MapComponent: React.FC<MapProps> = ({
         } catch {
             // Failed to register protocol
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [geometryColumnName]);
 
     // Function to fix property references in style expressions
@@ -1119,7 +1117,7 @@ const MapComponent: React.FC<MapProps> = ({
             try {
                 // 接続を保持
                 // Use schema-aware connection
-                connectionRef.current = await dbContext.connectWithSchema();
+                connectionRef.current = await dbContext.createManagedConnection(schema);
                 if (!connectionRef.current) {
                     setMapError('DuckDBへの接続に失敗しました');
                     return;

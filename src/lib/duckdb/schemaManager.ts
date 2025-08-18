@@ -14,9 +14,9 @@ export class SchemaManager {
      */
     async createSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
-            await conn.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+            await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
             console.log(`SchemaManager: Created schema ${schemaName}`);
         } finally {
             await conn.close();
@@ -28,12 +28,12 @@ export class SchemaManager {
      */
     async switchToSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
             // First ensure the schema exists
-            await conn.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+            await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
             // Then set it as the current schema
-            await conn.query(`SET search_path = '${schemaName}'`);
+            await conn.query(`SET search_path = "${schemaName}"`);
             this.currentSchema = schemaName;
             console.log(`SchemaManager: Switched to schema ${schemaName}`);
         } finally {
@@ -46,12 +46,12 @@ export class SchemaManager {
      */
     async deleteSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
             // First switch to main schema to avoid dropping the current schema
-            await conn.query(`SET search_path = 'main'`);
+            await conn.query(`SET search_path = "main"`);
             // Then drop the schema
-            await conn.query(`DROP SCHEMA IF EXISTS ${schemaName} CASCADE`);
+            await conn.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
             console.log(`SchemaManager: Deleted schema ${schemaName}`);
             
             if (this.currentSchema === schemaName) {
@@ -70,7 +70,7 @@ export class SchemaManager {
             return [];
         }
 
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
             // Set search path to current schema
             await conn.query(`SET search_path = '${this.currentSchema}'`);
@@ -102,7 +102,7 @@ export class SchemaManager {
             throw new Error('No schema is currently selected');
         }
 
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
             // Create table in current schema as a copy of the main schema table
             await conn.query(`
@@ -126,10 +126,10 @@ export class SchemaManager {
      * Execute a query in the current schema context
      */
     async executeInSchema<T>(queryFn: (conn: AsyncDuckDBConnection) => Promise<T>): Promise<T> {
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
             if (this.currentSchema) {
-                await conn.query(`SET search_path = '${this.currentSchema}'`);
+                await conn.query(`SET search_path = "${this.currentSchema}"`);
             }
             return await queryFn(conn);
         } finally {
@@ -140,7 +140,7 @@ export class SchemaManager {
     /**
      * Generate schema name from chat ID
      */
-    private getSchemaName(chatId: string): string {
+    getSchemaName(chatId: string): string {
         // Replace any special characters that might cause issues in SQL
         return `chat_${chatId.replace(/[^a-zA-Z0-9]/g, '_')}`;
     }
@@ -149,9 +149,9 @@ export class SchemaManager {
      * Reset to main schema
      */
     async resetToMain(): Promise<void> {
-        const conn = await this.dbContext.connect();
+        const conn = await this.dbContext.createManagedConnection(null);
         try {
-            await conn.query(`SET search_path = 'main'`);
+            await conn.query(`SET search_path = "main"`);
             this.currentSchema = null;
             console.log('SchemaManager: Reset to main schema');
         } finally {

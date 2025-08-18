@@ -151,7 +151,7 @@ function AppRedux() {
                         // Also trigger TableList refresh via dbContext
                         if (dbContext) {
                             console.log('AppRedux: Triggering TableList refresh via dbContext');
-                            dbContext.notifyTableChange();
+                            dbContext.notifyTableChange(undefined, null);
                         }
                     }} />}
                     {dbContext && (

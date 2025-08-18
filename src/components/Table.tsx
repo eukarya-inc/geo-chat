@@ -56,24 +56,17 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
 
   useEffect(() => {
     const loadInitialData = async (retryCount = 0) => {
+      setLoading(true);
+      setError(null);
+      // Clear cache and reset loading windows when connection or table changes
+      arrowCache.clear();
+      loadingWindowsRef.current.clear();
+      
+      // Use dbContext connection if available to ensure proper schema context
+      const conn = connection;
+      
       try {
-        setLoading(true);
-        setError(null);
-        // Clear cache and reset loading windows when connection or table changes
-        arrowCache.clear();
-        loadingWindowsRef.current.clear();
-        
-        // Use dbContext connection if available to ensure proper schema context
-        let conn = connection;
-        let shouldClose = false;
-        
-        if (dbContext) {
-          conn = await dbContext.connectWithSchema();
-          shouldClose = true;
-        }
-        
-        try {
-          const initialData = await getTableData(conn, tableName, 0, 100);
+        const initialData = await getTableData(conn, tableName, 0, 100);
         
           const gridColumns: GridColumn[] = initialData.columns.map((col) => ({
             id: col.name,
@@ -96,12 +89,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
           
           // Success - set loading to false
           setLoading(false);
-        } finally {
-          if (shouldClose) {
-            await conn.close();
-          }
-        }
-      } catch (error) {
+        } catch (error) {
         // Retry on various errors that might indicate the table isn't ready yet
         const errorMessage = error instanceof Error ? error.message : String(error);
         const shouldRetry = (
@@ -156,24 +144,12 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
       // Mark as loading
       loadingWindowsRef.current.add(cacheKey);
       
+      // Use dbContext connection if available to ensure proper schema context
+      const conn = connection;
+      
       try {
-        // Use dbContext connection if available to ensure proper schema context
-        let conn = connection;
-        let shouldClose = false;
-        
-        if (dbContext) {
-          conn = await dbContext.connectWithSchema();
-          shouldClose = true;
-        }
-        
-        try {
-          const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd);
-          arrowCache.set(cacheKey, arrowTable);
-        } finally {
-          if (shouldClose) {
-            await conn.close();
-          }
-        }
+        const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd);
+        arrowCache.set(cacheKey, arrowTable);
       } catch (error) {
         console.error("Error loading data window:", error);
       } finally {
@@ -181,7 +157,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
         loadingWindowsRef.current.delete(cacheKey);
       }
     },
-    [connection, tableName, arrowCache, dbContext]
+    [connection, tableName, arrowCache]
   );
 
   // Create a throttled version of loadDataWindow
