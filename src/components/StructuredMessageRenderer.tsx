@@ -64,9 +64,12 @@ const renderContentBlock = (
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
+            // Remove FINAL_MESSAGE marker from display
+            const cleanedText = block.text.replace('<!--FINAL_MESSAGE-->', '').trim();
+            
             // Check for table created markers in text
             const tableCreatedRegex = /<!--TABLE_CREATED:(.+?)-->/g;
-            const tableMatches = Array.from(block.text.matchAll(tableCreatedRegex));
+            const tableMatches = Array.from(cleanedText.matchAll(tableCreatedRegex));
             
             if (tableMatches.length > 0) {
                 const parts: React.ReactNode[] = [];
@@ -74,7 +77,7 @@ const renderContentBlock = (
                 
                 tableMatches.forEach((match, i) => {
                     const matchIndex = match.index || 0;
-                    const beforeText = block.text.slice(lastIndex, matchIndex);
+                    const beforeText = cleanedText.slice(lastIndex, matchIndex);
                     
                     if (beforeText.trim()) {
                         parts.push(
@@ -103,7 +106,7 @@ const renderContentBlock = (
                 });
                 
                 // Add remaining text
-                const remainingText = block.text.slice(lastIndex);
+                const remainingText = cleanedText.slice(lastIndex);
                 if (remainingText.trim()) {
                     parts.push(
                         <div key={`text-${index}-end`}>
@@ -121,13 +124,15 @@ const renderContentBlock = (
             }
             
             // No table markers, render as plain markdown
+            if (!cleanedText) return null;
+            
             return (
                 <div key={index} className="prose max-w-none">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeHighlight]}
                     >
-                        {block.text}
+                        {cleanedText}
                     </ReactMarkdown>
                 </div>
             );
@@ -325,8 +330,10 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                 // Keep text blocks based on conditions
                 if (block.type === 'text') {
                     const hasTableMarker = block.text.includes('<!--TABLE_CREATED:');
-                    // Always show table markers
-                    if (hasTableMarker) return true;
+                    const hasFinalMarker = block.text.includes('<!--FINAL_MESSAGE-->');
+                    
+                    // Always show table markers and final messages
+                    if (hasTableMarker || hasFinalMarker) return true;
                     
                     // Only show last text when not streaming
                     const isLastText = index === lastTextIndex;
@@ -349,16 +356,34 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     renderContentBlock(block, index, selectedTable, onTableSelect, hideToolCalls)
                 )}
                 
-                {/* Render streaming text if present (but not when hideToolCalls is true and streaming) */}
-                {message.streaming && !(hideToolCalls && isStreaming) && (
-                    <div className="prose max-w-none">
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                        >
-                            {message.streaming}
-                        </ReactMarkdown>
-                    </div>
+                {/* Render streaming text if present */}
+                {message.streaming && (
+                    (() => {
+                        // Check if this is a final message
+                        const isFinalMessage = message.streaming.includes('<!--FINAL_MESSAGE-->');
+                        
+                        // Show streaming text if:
+                        // 1. Not hiding tool calls, OR
+                        // 2. It's a final message (always show final messages even when collapsed)
+                        if (!hideToolCalls || isFinalMessage) {
+                            // Remove the FINAL_MESSAGE marker from display
+                            const displayText = message.streaming.replace('<!--FINAL_MESSAGE-->', '').trim();
+                            
+                            if (displayText) {
+                                return (
+                                    <div className="prose max-w-none">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            rehypePlugins={[rehypeHighlight]}
+                                        >
+                                            {displayText}
+                                        </ReactMarkdown>
+                                    </div>
+                                );
+                            }
+                        }
+                        return null;
+                    })()
                 )}
             </div>
         );
