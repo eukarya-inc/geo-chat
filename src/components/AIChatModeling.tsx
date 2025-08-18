@@ -1,10 +1,10 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBStateManager } from '../lib/duckdb/dbStateManager';
 import type { StructuredMessage } from '../types/message';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 interface AIChatProps {
     db: AsyncDuckDB;
@@ -18,6 +18,12 @@ interface AIChatProps {
     onTableSelect?: (tableName: string) => void;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
+
+// Helper function to check if message contains tool calls
+const hasToolCalls = (message: StructuredMessage): boolean => {
+    if (!Array.isArray(message.content)) return false;
+    return message.content.some(block => block.type === 'tool_use' || block.type === 'tool_result');
+};
 
 export default function AIChat({
     db,
@@ -37,6 +43,8 @@ export default function AIChat({
     const [showPopup, setShowPopup] = useState(false);
     const popupRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
+    const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const {
         input,
         handleInputChange,
@@ -47,6 +55,75 @@ export default function AIChat({
         isApiKeyConfigured,
         sendMessage,
     } = useAIChat(db, dbStateManager, apiKey, messages, onMessagesChange);
+
+    // Group messages by user-assistant pairs
+    const messageGroups = useMemo(() => {
+        const groups: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number }[] = [];
+        
+        for (let i = 0; i < messages.length; i++) {
+            const message = messages[i];
+            if (message.role === 'user') {
+                const group: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number } = { 
+                    userMessage: message, 
+                    startIndex: i 
+                };
+                // Check if next message is assistant's response
+                if (i + 1 < messages.length && messages[i + 1].role === 'assistant') {
+                    group.assistantMessage = messages[i + 1];
+                }
+                groups.push(group);
+                if (group.assistantMessage) {
+                    i++; // Skip the assistant message we just processed
+                }
+            }
+        }
+        
+        return groups;
+    }, [messages]);
+
+    // Toggle collapse state for a group
+    const toggleGroupCollapse = (groupIndex: number) => {
+        // Mark this group as manually toggled
+        setManuallyToggledGroups(prev => {
+            const newSet = new Set(prev);
+            newSet.add(groupIndex);
+            return newSet;
+        });
+        
+        // Toggle the collapsed state
+        setCollapsedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(groupIndex)) {
+                newSet.delete(groupIndex);
+            } else {
+                newSet.add(groupIndex);
+            }
+            return newSet;
+        });
+    };
+
+    // Auto-collapse when a new assistant message appears (even if empty during streaming)
+    useEffect(() => {
+        // Check if the last group has an assistant message (it means AI started responding)
+        if (messageGroups.length > 0) {
+            const lastGroup = messageGroups[messageGroups.length - 1];
+            const lastIndex = messageGroups.length - 1;
+            
+            // Only auto-collapse if:
+            // 1. There's an assistant message
+            // 2. It's not already collapsed
+            // 3. It hasn't been manually toggled by the user
+            if (lastGroup.assistantMessage && 
+                !collapsedGroups.has(lastIndex) && 
+                !manuallyToggledGroups.has(lastIndex)) {
+                setCollapsedGroups(prev => {
+                    const newSet = new Set(prev);
+                    newSet.add(lastIndex);
+                    return newSet;
+                });
+            }
+        }
+    }, [messageGroups, collapsedGroups, manuallyToggledGroups]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -163,66 +240,120 @@ export default function AIChat({
                         チャットを開始しましょう。データの可視化やモデリングについて質問してみてください。
                     </p>
                 )}
-                {messages.map((message, index) => {
-                    const isLastMessage = index === messages.length - 1;
-                    const isStreamingMessage = isLastMessage && message.role === 'assistant' && isLoading;
-                    const isUser = message.role === 'user';
+                {messageGroups.map((group, groupIndex) => {
+                    const isLastGroup = groupIndex === messageGroups.length - 1;
+                    const isCollapsed = collapsedGroups.has(groupIndex);
+                    const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
+                    const assistantHasTools = group.assistantMessage && hasToolCalls(group.assistantMessage);
                     
-                    // Check if message contains only TABLE_CREATED marker
-                    const messageContent = typeof message.content === 'string' ? message.content : '';
-                    const isTableOnlyMessage = messageContent.includes('<!--TABLE_CREATED:') && 
-                                              messageContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
-
-                    // Table-only messages should be rendered without wrapper
-                    if (isTableOnlyMessage) {
-                        return (
-                            <div key={index} className="mb-4 w-full">
-                                <StructuredMessageRenderer
-                                    message={message}
-                                    className="prose prose-xs max-w-none"
-                                    db={db}
-                                    dbStateManager={dbStateManager}
-                                    selectedTable={selectedTable}
-                                    onTableSelect={onTableSelect}
-                                />
-                            </div>
-                        );
-                    }
+                    // Check if user message contains only TABLE_CREATED marker
+                    const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
+                    const isTableOnlyMessage = userContent.includes('<!--TABLE_CREATED:') && 
+                                              userContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
 
                     return (
-                        <div
-                            key={index}
-                            className={`mb-4 flex ${
-                                isUser ? 'justify-end' : 'justify-start'
-                            }`}
-                        >
-                            <div
-                                className={`overflow-hidden ${
-                                    isUser
-                                        ? 'p-2.5 rounded-lg bg-gray-100 text-gray-800'
-                                        : 'w-full'
-                                }`}
-                                style={{
-                                    maxWidth: isUser ? '60%' : '100%',
-                                    minWidth: isUser ? '150px' : undefined
-                                }}
-                            >
-                                <div className={`break-words ${
-                                    isUser ? 'text-gray-800' : ''
-                                }`}>
+                        <div key={groupIndex} className="mb-4">
+                            {/* User message */}
+                            {isTableOnlyMessage ? (
+                                <div className="mb-2 w-full">
                                     <StructuredMessageRenderer
-                                        message={message}
-                                        className="prose max-w-none"
+                                        message={group.userMessage}
+                                        className="prose prose-xs max-w-none"
                                         db={db}
                                         dbStateManager={dbStateManager}
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                     />
-                                    {isStreamingMessage && (
-                                        <span className="inline-block animate-pulse ml-0.5">▊</span>
-                                    )}
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex justify-end mb-2">
+                                    <div
+                                        className="p-2.5 rounded-lg bg-gray-100 text-gray-800 overflow-hidden"
+                                        style={{
+                                            maxWidth: '60%',
+                                            minWidth: '150px'
+                                        }}
+                                    >
+                                        <div className="break-words text-gray-800">
+                                            <StructuredMessageRenderer
+                                                message={group.userMessage}
+                                                className="prose max-w-none"
+                                                db={db}
+                                                dbStateManager={dbStateManager}
+                                                selectedTable={selectedTable}
+                                                onTableSelect={onTableSelect}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Assistant message */}
+                            {group.assistantMessage && (
+                                <div className="flex justify-start">
+                                    <div className="w-full">
+                                        {/* Collapse/Expand button (show always when assistant message exists) */}
+                                        {(
+                                            <button
+                                                onClick={() => toggleGroupCollapse(groupIndex)}
+                                                className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-1 relative overflow-hidden"
+                                            >
+                                                {isCollapsed ? (
+                                                    <ChevronRightIcon className="w-4 h-4" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-4 h-4" />
+                                                )}
+                                                <span className="relative">
+                                                    {isCurrentlyLoading ? '思考中...' : (isCollapsed ? '思考過程を表示' : '思考過程を隠す')}
+                                                    {isCurrentlyLoading && isCollapsed && (
+                                                        <span 
+                                                            className="absolute inset-0 animate-shimmer"
+                                                            style={{
+                                                                backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+                                                                backgroundSize: '200% 100%'
+                                                            }}
+                                                        />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        )}
+
+                                        {/* Show full message only when not collapsed */}
+                                        {!isCollapsed && (
+                                            <div className="break-words">
+                                                <StructuredMessageRenderer
+                                                    message={group.assistantMessage}
+                                                    className="prose max-w-none"
+                                                    db={db}
+                                                    dbStateManager={dbStateManager}
+                                                    selectedTable={selectedTable}
+                                                    onTableSelect={onTableSelect}
+                                                    hideToolCalls={false}
+                                                />
+                                                {isCurrentlyLoading && group.assistantMessage.streaming !== undefined && (
+                                                    <span className="inline-block animate-pulse ml-0.5">▊</span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* When collapsed, show table messages always, and final text only when not loading */}
+                                        {isCollapsed && (
+                                            <div className="break-words">
+                                                <StructuredMessageRenderer
+                                                    message={group.assistantMessage}
+                                                    className="prose max-w-none"
+                                                    db={db}
+                                                    dbStateManager={dbStateManager}
+                                                    selectedTable={selectedTable}
+                                                    onTableSelect={onTableSelect}
+                                                    hideToolCalls={true}
+                                                    isStreaming={isCurrentlyLoading ? true : false}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

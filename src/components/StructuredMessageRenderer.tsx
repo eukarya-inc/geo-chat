@@ -15,6 +15,8 @@ interface StructuredMessageRendererProps {
     dbStateManager?: DBStateManager;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
+    hideToolCalls?: boolean;
+    isStreaming?: boolean;
 }
 
 interface CollapsibleSectionProps {
@@ -57,7 +59,8 @@ const renderContentBlock = (
     block: StructuredContent, 
     index: number,
     selectedTable?: string | null,
-    onTableSelect?: (tableName: string) => void
+    onTableSelect?: (tableName: string) => void,
+    hideToolDetails: boolean = false
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -168,6 +171,19 @@ const renderContentBlock = (
                     });
                 }
                 
+                // When hideToolDetails is true and table was created, only show the table creation message
+                if (hideToolDetails && tableCreated) {
+                    return (
+                        <div key={index}>
+                            <TableCreatedMessage
+                                tableName={tableCreated}
+                                isSelected={selectedTable === tableCreated}
+                                onClick={() => onTableSelect?.(tableCreated)}
+                            />
+                        </div>
+                    );
+                }
+                
                 if (result?.error) {
                     const errorMsg = String(result.error);
                     return (
@@ -276,19 +292,65 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     message,
     className,
     selectedTable,
-    onTableSelect
+    onTableSelect,
+    hideToolCalls = false,
+    isStreaming = false
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
+        // Filter content based on hideToolCalls flag
+        let filteredContent = message.content;
+        
+        if (hideToolCalls) {
+            // Find the index of the last text block
+            let lastTextIndex = -1;
+            for (let i = message.content.length - 1; i >= 0; i--) {
+                if (message.content[i].type === 'text') {
+                    lastTextIndex = i;
+                    break;
+                }
+            }
+            
+            // Filter to keep only:
+            // 1. Table creation messages (tool_result with createdTable) - ALWAYS show
+            // 2. The last text message (only when not streaming)
+            // 3. Text blocks with TABLE_CREATED markers - ALWAYS show
+            filteredContent = message.content.filter((block, index) => {
+                // Always keep table creation tool results
+                if (block.type === 'tool_result' && block.name === 'duckdb_query') {
+                    const result = block.result as DuckDBToolResult;
+                    if (result?.createdTable) return true;
+                }
+                
+                // Keep text blocks based on conditions
+                if (block.type === 'text') {
+                    const hasTableMarker = block.text.includes('<!--TABLE_CREATED:');
+                    // Always show table markers
+                    if (hasTableMarker) return true;
+                    
+                    // Only show last text when not streaming
+                    const isLastText = index === lastTextIndex;
+                    if (isLastText && !isStreaming) {
+                        // Don't show if it's empty
+                        if (block.text.trim() === '') return false;
+                        return true;
+                    }
+                }
+                
+                // Hide everything else
+                return false;
+            });
+        }
+            
         return (
             <div className={className}>
                 {/* Render existing structured content blocks */}
-                {message.content.map((block, index) => 
-                    renderContentBlock(block, index, selectedTable, onTableSelect)
+                {filteredContent.map((block, index) => 
+                    renderContentBlock(block, index, selectedTable, onTableSelect, hideToolCalls)
                 )}
                 
-                {/* Render streaming text if present */}
-                {message.streaming && (
+                {/* Render streaming text if present (but not when hideToolCalls is true and streaming) */}
+                {message.streaming && !(hideToolCalls && isStreaming) && (
                     <div className="prose max-w-none">
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
