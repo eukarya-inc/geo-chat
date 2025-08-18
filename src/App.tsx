@@ -10,7 +10,7 @@ import type { MapStyleManager } from './utils/mapStyleManager';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from './utils/encryption';
 
 function App() {
-    const { db, dbStateManager } = useDuckDB();
+    const { dbContext } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({});
     const [mapStyleManager, setMapStyleManager] = useState<MapStyleManager | null>(null);
@@ -18,7 +18,7 @@ function App() {
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
     
-    console.log('App: Render with database:', !!db, 'dbStateManager:', !!dbStateManager);
+    console.log('App: Render with dbContext:', !!dbContext);
 
     const handleColumnSelect = (tableName: string, columns: string[]) => {
         console.log('App: Column selection changed for table:', tableName, 'columns:', columns);
@@ -168,7 +168,7 @@ function App() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && db && <AIChat db={db} dbStateManager={dbStateManager || undefined} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
             </div>
             
             {/* Right Half - DuckDB and Map */}
@@ -187,20 +187,19 @@ function App() {
                     flexShrink: 0,
                     backgroundColor: 'white'
                 }}>
-                    {db && <RemoteFile db={db} onTableCreated={(tableName) => {
+                    {dbContext && <RemoteFile dbContext={dbContext} onTableCreated={(tableName) => {
                         console.log('App: Table created, auto-selecting:', tableName);
                         setSelectedTable(tableName);
-                        // Also trigger TableList refresh via dbStateManager
-                        if (dbStateManager) {
-                            console.log('App: Triggering TableList refresh via dbStateManager');
-                            dbStateManager.notifyTableChange();
+                        // Also trigger TableList refresh via dbContext
+                        if (dbContext) {
+                            console.log('App: Triggering TableList refresh via dbContext');
+                            dbContext.notifyTableChange();
                         }
                     }} />}
-                    {db && (
+                    {dbContext && (
                         <TableList
                             key="main-table-list"
-                            db={db}
-                            dbStateManager={dbStateManager || undefined}
+                            dbContext={dbContext}
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelect}
                             selectedColumns={selectedColumns}
@@ -209,10 +208,10 @@ function App() {
                     )}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                    {db && (
+                    {dbContext && (
                         <MapComponent
                             key="main-map"
-                            db={db}
+                            dbContext={dbContext}
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
                             onMapReady={handleMapReady}

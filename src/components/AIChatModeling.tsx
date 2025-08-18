@@ -1,14 +1,12 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { type AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useAIChat } from '../lib/modelingai';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 interface AIChatProps {
-    db: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext: DBContext;
     apiKey?: string;
     chatId?: string | null;
     messages: StructuredMessage[];
@@ -19,15 +17,8 @@ interface AIChatProps {
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
-// Helper function to check if message contains tool calls
-const hasToolCalls = (message: StructuredMessage): boolean => {
-    if (!Array.isArray(message.content)) return false;
-    return message.content.some(block => block.type === 'tool_use' || block.type === 'tool_result');
-};
-
 export default function AIChat({
-    db,
-    dbStateManager,
+    dbContext,
     apiKey,
     messages,
     onMessagesChange,
@@ -54,7 +45,7 @@ export default function AIChat({
         // error,
         isApiKeyConfigured,
         sendMessage,
-    } = useAIChat(db, dbStateManager, apiKey, messages, onMessagesChange);
+    } = useAIChat(dbContext, apiKey, messages, onMessagesChange);
 
     // Group messages by user-assistant pairs
     const messageGroups = useMemo(() => {
@@ -244,7 +235,6 @@ export default function AIChat({
                     const isLastGroup = groupIndex === messageGroups.length - 1;
                     const isCollapsed = collapsedGroups.has(groupIndex);
                     const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
-                    const assistantHasTools = group.assistantMessage && hasToolCalls(group.assistantMessage);
                     
                     // Check if user message contains only TABLE_CREATED marker
                     const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
@@ -259,8 +249,7 @@ export default function AIChat({
                                     <StructuredMessageRenderer
                                         message={group.userMessage}
                                         className="prose prose-xs max-w-none"
-                                        db={db}
-                                        dbStateManager={dbStateManager}
+                                        dbContext={dbContext}
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                     />
@@ -278,8 +267,7 @@ export default function AIChat({
                                             <StructuredMessageRenderer
                                                 message={group.userMessage}
                                                 className="prose max-w-none"
-                                                db={db}
-                                                dbStateManager={dbStateManager}
+                                                        dbContext={dbContext}
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                             />
@@ -324,8 +312,7 @@ export default function AIChat({
                                                 <StructuredMessageRenderer
                                                     message={group.assistantMessage}
                                                     className="prose max-w-none"
-                                                    db={db}
-                                                    dbStateManager={dbStateManager}
+                                                                dbContext={dbContext}
                                                     selectedTable={selectedTable}
                                                     onTableSelect={onTableSelect}
                                                     hideToolCalls={false}
@@ -342,8 +329,7 @@ export default function AIChat({
                                                 <StructuredMessageRenderer
                                                     message={group.assistantMessage}
                                                     className="prose max-w-none"
-                                                    db={db}
-                                                    dbStateManager={dbStateManager}
+                                                                dbContext={dbContext}
                                                     selectedTable={selectedTable}
                                                     onTableSelect={onTableSelect}
                                                     hideToolCalls={true}

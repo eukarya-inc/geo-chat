@@ -1,10 +1,10 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
+import type { DBContext } from '../../duckdb/dbContext';
 import { geocodeSingleAddress, geocodeMultipleAddresses } from '../../../utils/geocoding';
 import { analyzeTableForGeocoding, addGeocodedColumnsToTable } from '../../../tools/geocodingTools';
 
-export function createGeocodingTools(db: AsyncDuckDB) {
+export function createGeocodingTools(dbContext: DBContext) {
   return {
     geocode_address: tool({
       description: `Geocode a single address using OpenStreetMap Nominatim API. Returns latitude, longitude and full address.`,
@@ -60,7 +60,7 @@ export function createGeocodingTools(db: AsyncDuckDB) {
       }),
       execute: async ({ tableName }) => {
         try {
-          const analysis = await analyzeTableForGeocoding(db, tableName);
+          const analysis = await analyzeTableForGeocoding(dbContext, tableName);
           return {
             success: true,
             data: analysis,
@@ -86,7 +86,7 @@ export function createGeocodingTools(db: AsyncDuckDB) {
       }),
       execute: async ({ tableName, addressColumn, batchSize = 10, rateLimitMs = 1000 }) => {
         try {
-          const result = await addGeocodedColumnsToTable(db, tableName, addressColumn, batchSize, rateLimitMs);
+          const result = await addGeocodedColumnsToTable(dbContext, tableName, addressColumn, batchSize, rateLimitMs);
           return {
             success: result.success,
             data: result.stats,

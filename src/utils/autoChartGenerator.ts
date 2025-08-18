@@ -1,5 +1,5 @@
 import type { VegaLiteSpec } from '../types/vega';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 
 
 interface ChartGenerationResult {
@@ -9,10 +9,10 @@ interface ChartGenerationResult {
 
 export async function generateDefaultCharts(
   tableName: string,
-  dbStateManager: DBStateManager
+  dbContext: DBContext
 ): Promise<ChartGenerationResult[]> {
   try {
-    const columns = await dbStateManager.getTableColumns(tableName);
+    const columns = await dbContext.getTableColumns(tableName);
     if (!columns || columns.length === 0) {
       return [];
     }
@@ -26,7 +26,7 @@ export async function generateDefaultCharts(
     const columnNames = columns.map(col => col.name).join(', ');
     
     // Get schema-qualified table name if schema is set
-    const currentSchema = dbStateManager.getCurrentSchema();
+    const currentSchema = dbContext.getCurrentSchema();
     const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
 
     // Determine the best chart type based on column types

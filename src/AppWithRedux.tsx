@@ -18,7 +18,7 @@ function AppWithRedux() {
   // These will be used in PR2 when we migrate App component
   // const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
   // const { db } = useInitializeDuckDB();
-  // const { dbStateManager } = useAppSelector(state => state.duckdb);
+  // const { dbContext } = useAppSelector(state => state.duckdb);
   
   // For now, just initialize DuckDB in Redux store
   useInitializeDuckDB();

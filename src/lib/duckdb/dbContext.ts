@@ -1,7 +1,8 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
 
-export interface DBStateManager {
+export interface DBContext {
+  connect(): Promise<AsyncDuckDBConnection>;
   forceConsistency(): Promise<void>;
   notifyTableChange(tableName?: string): void;
   onTableChange(callback: (tableName?: string) => void): () => void;
@@ -15,9 +16,12 @@ export interface DBStateManager {
   setCurrentSchema(schema: string | null): void;
   getCurrentSchema(): string | null;
   connectWithSchema(): Promise<AsyncDuckDBConnection>;
+  dropTable(tableName: string): Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  describeTable(tableName: string): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>>;
 }
 
-class DatabaseStateManager implements DBStateManager {
+class DatabaseContext implements DBContext {
   private db: AsyncDuckDB;
   private tableChangeCallbacks: Set<(tableName?: string) => void> = new Set();
   private refreshDebounceTimeout: NodeJS.Timeout | null = null;
@@ -29,6 +33,10 @@ class DatabaseStateManager implements DBStateManager {
   constructor(db: AsyncDuckDB) {
     this.db = db;
     this.sqlHistory = new SQLHistoryManager();
+  }
+
+  async connect(): Promise<AsyncDuckDBConnection> {
+    return this.db.connect();
   }
 
   setCurrentSchema(schema: string | null): void {
@@ -97,7 +105,7 @@ class DatabaseStateManager implements DBStateManager {
         
         return conn;
       } catch (error) {
-        console.error('DBStateManager: Failed to create schema-aware connection:', error);
+        console.error('DBContext: Failed to create schema-aware connection:', error);
         throw error;
       }
     })();
@@ -170,7 +178,7 @@ class DatabaseStateManager implements DBStateManager {
         // Validating table after operation
         const isValid = await this.validateTable(tableName, 5);
         if (!isValid) {
-          console.error(`DBStateManager: CRITICAL - Table ${tableName} validation failed after creation`);
+          console.error(`DBContext: CRITICAL - Table ${tableName} validation failed after creation`);
           // Try one more aggressive sync
           await this.forceConsistency();
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -184,7 +192,7 @@ class DatabaseStateManager implements DBStateManager {
       
       return result;
     } catch (error) {
-      console.error('DBStateManager: Operation failed:', error);
+      console.error('DBContext: Operation failed:', error);
       throw error;
     }
   }
@@ -242,7 +250,7 @@ class DatabaseStateManager implements DBStateManager {
         // Check if this is a memory access error
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes('memory access out of bounds')) {
-          console.error(`DBStateManager: Memory access error when validating table ${tableName}. Aborting validation.`);
+          console.error(`DBContext: Memory access error when validating table ${tableName}. Aborting validation.`);
           return false; // Don't retry on memory errors
         }
         
@@ -259,7 +267,7 @@ class DatabaseStateManager implements DBStateManager {
           }
           
           const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}` : '';
-          console.error(`DBStateManager: Table ${tableName} validation failed after ${maxRetries} attempts.${tableList} Error:`, error);
+          console.error(`DBContext: Table ${tableName} validation failed after ${maxRetries} attempts.${tableList} Error:`, error);
         }
       }
     }
@@ -289,7 +297,7 @@ class DatabaseStateManager implements DBStateManager {
       // Check if this is a memory access error
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('memory access out of bounds')) {
-        console.error('DBStateManager: Memory access error when retrieving tables');
+        console.error('DBContext: Memory access error when retrieving tables');
         return []; // Return empty array on memory error
       }
       throw error;
@@ -315,7 +323,7 @@ class DatabaseStateManager implements DBStateManager {
       // Check if this is a memory access error
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('memory access out of bounds')) {
-        console.error(`DBStateManager: Memory access error when describing table ${tableName}`);
+        console.error(`DBContext: Memory access error when describing table ${tableName}`);
         throw new Error(`Memory access error when accessing table '${tableName}'. The schema context may be corrupted.`);
       }
       throw error;
@@ -348,10 +356,10 @@ class DatabaseStateManager implements DBStateManager {
       // Check if this is a memory access error
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('memory access out of bounds')) {
-        console.error('DBStateManager: Memory access error during query execution');
+        console.error('DBContext: Memory access error during query execution');
         throw new Error('Memory access error during query execution. The schema context may be corrupted.');
       }
-      console.error('DBStateManager: Query failed:', sql, error);
+      console.error('DBContext: Query failed:', sql, error);
       throw error;
     } finally {
       await conn.close();
@@ -361,8 +369,29 @@ class DatabaseStateManager implements DBStateManager {
   getSQLHistory(): SQLHistoryManager {
     return this.sqlHistory;
   }
+
+  async dropTable(tableName: string): Promise<void> {
+    const conn = await this.connectWithSchema();
+    try {
+      await conn.query(`DROP TABLE IF EXISTS "${tableName}"`);
+      this.notifyTableChange();
+    } finally {
+      await conn.close();
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async describeTable(tableName: string): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>> {
+    const conn = await this.connectWithSchema();
+    try {
+      const result = await conn.query(`DESCRIBE "${tableName}"`);
+      return result.toArray();
+    } finally {
+      await conn.close();
+    }
+  }
 }
 
-export function createDBStateManager(db: AsyncDuckDB): DBStateManager {
-  return new DatabaseStateManager(db);
+export function createDBContext(db: AsyncDuckDB): DBContext {
+  return new DatabaseContext(db);
 }

@@ -3,16 +3,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../types/message';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import { formatSQLCompact } from '../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 
 interface StructuredMessageRendererProps {
     message: StructuredMessage;
     className?: string;
-    db?: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext?: DBContext;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     hideToolCalls?: boolean;

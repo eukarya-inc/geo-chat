@@ -1,17 +1,15 @@
-import { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { useState } from 'react';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import { formatSQL } from '../utils/sqlFormatter';
 
 interface RemoteFileSimpleProps {
-    db: AsyncDuckDB;
-    dbStateManager?: DBStateManager;
+    dbContext: DBContext;
     onTableCreated?: (tableName: string) => void;
     onSendMessage?: (message: string) => void;
     onExampleMessages?: (tableMessage: string, followUpMessage: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager, onTableCreated, onSendMessage, onExampleMessages }) => {
+const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, onTableCreated, onSendMessage, onExampleMessages }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -34,8 +32,8 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
 
     const createTableFromUrl = async (urlOverride?: string, isFromExample: boolean = false) => {
         const targetUrl = urlOverride || url;
-        if (!db || !targetUrl.trim()) {
-            console.log('RemoteFileSimple: missing db or url');
+        if (!dbContext || !targetUrl.trim()) {
+            console.log('RemoteFileSimple: missing dbContext or url');
             return;
         }
         
@@ -45,12 +43,8 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
         let conn = null;
 
         try {
-            // Use schema-aware connection if dbStateManager is available
-            if (dbStateManager) {
-                conn = await dbStateManager.connectWithSchema();
-            } else {
-                conn = await db.connect();
-            }
+            // Use schema-aware connection
+            conn = await dbContext.connectWithSchema();
 
             // URLからファイル名を抽出
             const fileName = targetUrl.split('/').pop() || 'remote_file';
@@ -90,7 +84,7 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
             }
 
             // Get the current schema and use it in table creation
-            const schemaName = dbStateManager?.getCurrentSchema() || 'main';
+            const schemaName = dbContext?.getCurrentSchema() || 'main';
             const qualifiedTableName = schemaName !== 'main' ? `${schemaName}.${tableName}` : tableName;
 
             const createTableSQL = `CREATE TABLE ${qualifiedTableName} AS SELECT * FROM ${from}`;
@@ -98,9 +92,9 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
             await conn.query('CHECKPOINT;');
 
             // Record the CREATE TABLE SQL in history
-            if (dbStateManager) {
+            if (dbContext) {
                 const formattedSQL = formatSQL(createTableSQL);
-                dbStateManager.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
+                dbContext.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
             }
 
             setError(null);
@@ -138,19 +132,19 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ db, dbStateManager,
                     onChange={handleUrlChange}
                     placeholder="Enter file URL (.parquet, .csv, .geojson, .shp)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
-                    disabled={!db || isCreatingTable}
+                    disabled={!dbContext || isCreatingTable}
                 />
                 <div className="flex gap-2">
                     <button
                         onClick={() => createTableFromUrl()}
-                        disabled={!db || !url.trim() || isCreatingTable}
+                        disabled={!dbContext || !url.trim() || isCreatingTable}
                         className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
                     >
                         {isCreatingTable ? 'Creating Table...' : 'Create Table'}
                     </button>
                     <button
                         onClick={loadSampleData}
-                        disabled={!db || isCreatingTable}
+                        disabled={!dbContext || isCreatingTable}
                         className="px-4 py-2 bg-gray-500 text-white text-sm font-medium rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
                     >
                         Example

@@ -2,39 +2,39 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { DBStateManager } from '../lib/duckdb/dbStateManager';
+import type { DBContext } from '../lib/duckdb/dbContext';
 import type { SQLHistoryEntry } from '../lib/duckdb/sqlHistoryManager';
 import { SQLFlowVisualization } from './SQLFlowVisualization';
 
 interface TableSQLDisplayProps {
   tableName: string | null;
-  dbStateManager: DBStateManager | null;
+  dbContext: DBContext | null;
 }
 
-export default function TableSQLDisplay({ tableName, dbStateManager }: TableSQLDisplayProps) {
+export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDisplayProps) {
   const [sqlEntry, setSqlEntry] = useState<SQLHistoryEntry | undefined>(undefined);
   const [showVisualization, setShowVisualization] = useState(false);
 
   useEffect(() => {
-    if (!tableName || !dbStateManager) {
+    if (!tableName || !dbContext) {
       setSqlEntry(undefined);
       return;
     }
 
     // Get the SQL for the current table
-    const entry = dbStateManager.getSQLHistory().getTableSQL(tableName);
+    const entry = dbContext.getSQLHistory().getTableSQL(tableName);
     setSqlEntry(entry);
 
     // Subscribe to SQL history changes
-    const unsubscribe = dbStateManager.getSQLHistory().subscribe(() => {
-      const updatedEntry = dbStateManager.getSQLHistory().getTableSQL(tableName);
+    const unsubscribe = dbContext.getSQLHistory().subscribe(() => {
+      const updatedEntry = dbContext.getSQLHistory().getTableSQL(tableName);
       setSqlEntry(updatedEntry);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [tableName, dbStateManager]);
+  }, [tableName, dbContext]);
 
   if (!sqlEntry || !tableName) {
     return null;

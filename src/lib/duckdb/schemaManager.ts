@@ -1,11 +1,12 @@
-import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
+import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
+import type { DBContext } from './dbContext';
 
 export class SchemaManager {
-    private db: AsyncDuckDB;
+    private dbContext: DBContext;
     private currentSchema: string | null = null;
 
-    constructor(db: AsyncDuckDB) {
-        this.db = db;
+    constructor(dbContext: DBContext) {
+        this.dbContext = dbContext;
     }
 
     /**
@@ -13,7 +14,7 @@ export class SchemaManager {
      */
     async createSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             await conn.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
             console.log(`SchemaManager: Created schema ${schemaName}`);
@@ -27,7 +28,7 @@ export class SchemaManager {
      */
     async switchToSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             // First ensure the schema exists
             await conn.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
@@ -45,7 +46,7 @@ export class SchemaManager {
      */
     async deleteSchema(chatId: string): Promise<void> {
         const schemaName = this.getSchemaName(chatId);
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             // First switch to main schema to avoid dropping the current schema
             await conn.query(`SET search_path = 'main'`);
@@ -69,7 +70,7 @@ export class SchemaManager {
             return [];
         }
 
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             // Set search path to current schema
             await conn.query(`SET search_path = '${this.currentSchema}'`);
@@ -101,7 +102,7 @@ export class SchemaManager {
             throw new Error('No schema is currently selected');
         }
 
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             // Create table in current schema as a copy of the main schema table
             await conn.query(`
@@ -125,7 +126,7 @@ export class SchemaManager {
      * Execute a query in the current schema context
      */
     async executeInSchema<T>(queryFn: (conn: AsyncDuckDBConnection) => Promise<T>): Promise<T> {
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             if (this.currentSchema) {
                 await conn.query(`SET search_path = '${this.currentSchema}'`);
@@ -148,7 +149,7 @@ export class SchemaManager {
      * Reset to main schema
      */
     async resetToMain(): Promise<void> {
-        const conn = await this.db.connect();
+        const conn = await this.dbContext.connect();
         try {
             await conn.query(`SET search_path = 'main'`);
             this.currentSchema = null;
@@ -159,6 +160,6 @@ export class SchemaManager {
     }
 }
 
-export function createSchemaManager(db: AsyncDuckDB): SchemaManager {
-    return new SchemaManager(db);
+export function createSchemaManager(dbContext: DBContext): SchemaManager {
+    return new SchemaManager(dbContext);
 }

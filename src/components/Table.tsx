@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
 import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
-import type { DBStateManager } from "../lib/duckdb/dbStateManager";
+import type { DBContext } from "../lib/duckdb/dbContext";
 import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../utils/duckdbTableUtils";
 import { Table as ArrowTable } from "apache-arrow";
 import { throttle } from "../utils/throttle";
@@ -32,10 +32,10 @@ const scrollbarStyles = `
 interface TableProps {
   connection: AsyncDuckDBConnection;
   tableName: string;
-  dbStateManager?: DBStateManager;
+  dbContext?: DBContext;
 }
 
-export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateManager }) => {
+export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }) => {
   // Inject scrollbar styles
   useEffect(() => {
     const styleElement = document.createElement('style');
@@ -63,12 +63,12 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
         arrowCache.clear();
         loadingWindowsRef.current.clear();
         
-        // Use dbStateManager connection if available to ensure proper schema context
+        // Use dbContext connection if available to ensure proper schema context
         let conn = connection;
         let shouldClose = false;
         
-        if (dbStateManager) {
-          conn = await dbStateManager.connectWithSchema();
+        if (dbContext) {
+          conn = await dbContext.connectWithSchema();
           shouldClose = true;
         }
         
@@ -138,7 +138,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
     };
 
     loadInitialData();
-  }, [connection, tableName, arrowCache, dbStateManager]);
+  }, [connection, tableName, arrowCache, dbContext]);
 
   const loadDataWindow = useCallback(
     async (startRow: number) => {
@@ -157,12 +157,12 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
       loadingWindowsRef.current.add(cacheKey);
       
       try {
-        // Use dbStateManager connection if available to ensure proper schema context
+        // Use dbContext connection if available to ensure proper schema context
         let conn = connection;
         let shouldClose = false;
         
-        if (dbStateManager) {
-          conn = await dbStateManager.connectWithSchema();
+        if (dbContext) {
+          conn = await dbContext.connectWithSchema();
           shouldClose = true;
         }
         
@@ -181,7 +181,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbStateMana
         loadingWindowsRef.current.delete(cacheKey);
       }
     },
-    [connection, tableName, arrowCache, dbStateManager]
+    [connection, tableName, arrowCache, dbContext]
   );
 
   // Create a throttled version of loadDataWindow

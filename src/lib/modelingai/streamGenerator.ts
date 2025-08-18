@@ -1,7 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { streamText, type CoreMessage } from 'ai';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../duckdb/dbStateManager';
+import type { DBContext } from '../duckdb/dbContext';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool } from './tools/completionTool';
@@ -9,8 +8,7 @@ import { completionTool } from './tools/completionTool';
 export interface StreamGeneratorOptions {
   messages: CoreMessage[];
   apiKey: string;
-  db?: AsyncDuckDB | null;
-  dbStateManager?: DBStateManager | null;
+  dbContext?: DBContext | null;
   abortSignal?: AbortSignal;
 }
 
@@ -28,8 +26,7 @@ export type StreamPart =
 export async function* createAIStreamGenerator({
   messages,
   apiKey,
-  db,
-  dbStateManager,
+  dbContext,
   abortSignal
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
@@ -45,8 +42,8 @@ export async function* createAIStreamGenerator({
       system: generateSystemPrompt(),
       messages,
       tools: {
-        ...(db && {
-          duckdb_query: createDuckDBTool(db, dbStateManager || undefined, apiKey),
+        ...(dbContext && {
+          duckdb_query: createDuckDBTool(dbContext, apiKey),
         }),
         completion: completionTool,
       },

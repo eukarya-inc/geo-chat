@@ -1,12 +1,11 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { DBStateManager } from '../../../lib/duckdb/dbStateManager';
+import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 
-export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManager, apiKey?: string) {
+export function createDuckDBTool(dbContext: DBContext, apiKey?: string) {
   return tool({
     description,
     parameters: z.object({
@@ -34,15 +33,13 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        // Use schema-aware connection if dbStateManager is available
-        const conn = dbStateManager 
-          ? await dbStateManager.connectWithSchema()
-          : await db.connect();
+        // Use schema-aware connection
+        const conn = await dbContext.connectWithSchema();
         
         // Intercept SHOW TABLES to make it schema-aware
         let querySql = sql;
-        if (dbStateManager && (upperSql.trim() === 'SHOW TABLES' || upperSql.trim() === 'SHOW TABLES;')) {
-          const schemaName = dbStateManager.getCurrentSchema() || 'main';
+        if (upperSql.trim() === 'SHOW TABLES' || upperSql.trim() === 'SHOW TABLES;') {
+          const schemaName = dbContext.getCurrentSchema() || 'main';
           querySql = `
             SELECT table_name as name
             FROM information_schema.tables 
@@ -80,20 +77,20 @@ export function createDuckDBTool(db: AsyncDuckDB, dbStateManager?: DBStateManage
                 }
                 
                 // Record the CREATE TABLE SQL in history with explanation
-                if (dbStateManager) {
-                  dbStateManager.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation);
+                if (dbContext) {
+                  dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation);
                 }
               }
             }
             
-            if (dbStateManager) {
+            if (dbContext) {
               // Add more aggressive consistency checks for CREATE TABLE
               await conn.query('CHECKPOINT;');
               await conn.query('PRAGMA force_checkpoint;');
               
               // Increase timeout to ensure table is fully committed and visible
               setTimeout(() => {
-                dbStateManager.notifyTableChange(createdTableName);
+                dbContext.notifyTableChange(createdTableName);
               }, 300);
             }
           }

@@ -6,17 +6,17 @@ import { EnhancedDBManager } from '../services/duckdb/enhancedDBManager';
  * Hook to get the enhanced DuckDB manager with Arrow support
  */
 export function useEnhancedDB() {
-  const { connection: db, dbStateManager } = useAppSelector(state => state.duckdb);
+  const { connection: db, dbContext } = useAppSelector(state => state.duckdb);
   const [enhancedDB, setEnhancedDB] = useState<EnhancedDBManager | null>(null);
 
   useEffect(() => {
-    if (db && dbStateManager) {
-      const manager = new EnhancedDBManager(db, dbStateManager);
+    if (db && dbContext) {
+      const manager = new EnhancedDBManager(db, dbContext);
       setEnhancedDB(manager);
     } else {
       setEnhancedDB(null);
     }
-  }, [db, dbStateManager]);
+  }, [db, dbContext]);
 
   return enhancedDB;
 }
