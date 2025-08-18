@@ -4,6 +4,7 @@ import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBContext } from '../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { generatePromptSuggestions } from '../lib/modelingai/promptSuggestionService';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -28,6 +29,7 @@ export default function AIChat({
     onTableSelect,
     remoteFileComponent
 }: AIChatProps) {
+    const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
@@ -163,6 +165,23 @@ export default function AIChat({
         }
     }, [messages]);
 
+    // Also scroll when messages update (for completion tool results)
+    useEffect(() => {
+        // Check if the last message contains completion tool results
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && Array.isArray(lastMessage.content)) {
+            const hasCompletionResult = lastMessage.content.some(
+                block => block.type === 'tool_result' && block.name === 'completion'
+            );
+            if (hasCompletionResult) {
+                // Wait a bit for the DOM to update, then scroll
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 200);
+            }
+        }
+    }, [messages]);
+
     // Reset user scroll flag when loading ends and user is at bottom
     useEffect(() => {
         if (!isLoading && isNearBottom()) {
@@ -176,6 +195,103 @@ export default function AIChat({
             onSendMessageReady(sendMessage);
         }
     }, [onSendMessageReady, sendMessage]); // Include sendMessage to always have latest version
+
+    // Generate prompt suggestions when a table is selected and add them to messages
+    useEffect(() => {
+        const loadPromptSuggestions = async () => {
+            // Check if we just created a table (last message has TABLE_CREATED)
+            const lastMessage = messages[messages.length - 1];
+            if (!lastMessage || lastMessage.role !== 'user') return;
+            
+            const content = typeof lastMessage.content === 'string' ? lastMessage.content : '';
+            if (!content.includes('<!--TABLE_CREATED:')) return;
+            
+            // Check if we already have an assistant message after this table creation
+            // to avoid adding duplicate prompt suggestions
+            if (messages.length > 1) {
+                const prevMessage = messages[messages.length - 2];
+                if (prevMessage && typeof prevMessage.content === 'string' && 
+                    prevMessage.content.includes('<!--TABLE_CREATED:')) {
+                    // This table creation already has responses, skip
+                    return;
+                }
+            }
+            
+            // Extract table name from the marker
+            const tableMatch = content.match(/<!--TABLE_CREATED:([^-]+)-->/);
+            const tableName = tableMatch ? tableMatch[1] : selectedTable;
+            
+            if (!tableName || !dbContext || !apiKey) return;
+
+            // Add a loading message first
+            const loadingMessage: StructuredMessage = {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'text',
+                        text: `テーブル「${tableName}」を分析中... おすすめの分析を生成しています...`
+                    }
+                ]
+            };
+            
+            const messagesWithLoading = [...messages, loadingMessage];
+            onMessagesChange(messagesWithLoading);
+            setIsLoadingPrompts(true);
+            try {
+                const prompts = await generatePromptSuggestions(
+                    tableName,
+                    dbContext,
+                    chatId || null,
+                    apiKey || ''
+                );
+                
+                // Create a synthetic assistant message with prompt suggestions
+                if (prompts.length > 0) {
+                    const promptMessage: StructuredMessage = {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool_result',
+                                id: `synthetic-${Date.now()}`,
+                                name: 'completion',
+                                result: {
+                                    success: true,
+                                    suggestedPrompts: prompts.map((p, i) => ({
+                                        id: `prompt-${i}`,
+                                        text: p.text,
+                                        description: p.category
+                                    })),
+                                    completionMessage: `テーブル「${tableName}」が作成されました。以下の分析をお試しください:`,
+                                    timestamp: new Date().toISOString()
+                                }
+                            }
+                        ]
+                    };
+                    
+                    // Replace the loading message with the prompt message
+                    // Remove the last message (loading) and add the prompt message
+                    const updatedMessages = [...messages, promptMessage];
+                    onMessagesChange(updatedMessages);
+                } else {
+                    // If no prompts generated, remove the loading message
+                    onMessagesChange(messages);
+                }
+            } catch (error) {
+                console.error('Failed to load prompt suggestions:', error);
+                // Remove the loading message on error
+                onMessagesChange(messages);
+            } finally {
+                setIsLoadingPrompts(false);
+            }
+        };
+
+        loadPromptSuggestions();
+    }, [messages, selectedTable, dbContext, chatId, apiKey, onMessagesChange]);
+
+    // Handle prompt click - send message
+    const handlePromptSelection = (promptText: string) => {
+        sendMessage(promptText);
+    };
 
     // Handle click outside to close popup
     useEffect(() => {
@@ -225,6 +341,13 @@ export default function AIChat({
         );
     }
 
+    // Check if we only have TABLE_CREATED messages (no real conversation)
+    const hasOnlyTableMessages = messages.length > 0 && messages.every(msg => {
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        return content.includes('<!--TABLE_CREATED:') && 
+               content.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
+    });
+
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
             <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5">
@@ -254,6 +377,7 @@ export default function AIChat({
                                         dbContext={dbContext}
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
+                                        onPromptClick={handlePromptSelection}
                                     />
                                 </div>
                             ) : (
@@ -272,6 +396,7 @@ export default function AIChat({
                                                         dbContext={dbContext}
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
+                                                onPromptClick={handlePromptSelection}
                                             />
                                         </div>
                                     </div>
@@ -282,10 +407,28 @@ export default function AIChat({
                             {group.assistantMessage && (
                                 <div className="flex justify-start">
                                     <div className="w-full">
-                                        {/* Collapse/Expand button (show always when assistant message exists) */}
-                                        {(
-                                            <button
-                                                onClick={() => toggleGroupCollapse(groupIndex)}
+                                        {/* Check if this is a prompt-only or loading message */}
+                                        {(() => {
+                                            const isPromptOnlyMessage = 
+                                                Array.isArray(group.assistantMessage.content) &&
+                                                group.assistantMessage.content.length === 1 &&
+                                                group.assistantMessage.content[0].type === 'tool_result' &&
+                                                group.assistantMessage.content[0].name === 'completion';
+                                            
+                                            const isLoadingMessage = 
+                                                Array.isArray(group.assistantMessage.content) &&
+                                                group.assistantMessage.content.length === 1 &&
+                                                group.assistantMessage.content[0].type === 'text' &&
+                                                group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
+                                            
+                                            // Don't show collapse button for prompt-only or loading messages
+                                            if (isPromptOnlyMessage || isLoadingMessage) {
+                                                return null;
+                                            }
+                                            
+                                            return (
+                                                <button
+                                                    onClick={() => toggleGroupCollapse(groupIndex)}
                                                 className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-1 relative overflow-hidden"
                                             >
                                                 {isCollapsed ? (
@@ -306,45 +449,86 @@ export default function AIChat({
                                                     )}
                                                 </span>
                                             </button>
-                                        )}
+                                            );
+                                        })()}
 
-                                        {/* Show full message only when not collapsed */}
-                                        {!isCollapsed && (
-                                            <div className="break-words">
-                                                <StructuredMessageRenderer
-                                                    message={group.assistantMessage}
-                                                    className="prose max-w-none"
+                                        {/* Check if this is a prompt-only or loading message */}
+                                        {(() => {
+                                            const isPromptOnlyMessage = 
+                                                Array.isArray(group.assistantMessage.content) &&
+                                                group.assistantMessage.content.length === 1 &&
+                                                group.assistantMessage.content[0].type === 'tool_result' &&
+                                                group.assistantMessage.content[0].name === 'completion';
+                                            
+                                            const isLoadingMessage = 
+                                                Array.isArray(group.assistantMessage.content) &&
+                                                group.assistantMessage.content.length === 1 &&
+                                                group.assistantMessage.content[0].type === 'text' &&
+                                                group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
+                                            
+                                            // Always show prompt-only or loading messages fully
+                                            if (isPromptOnlyMessage || isLoadingMessage) {
+                                                return (
+                                                    <div className="break-words">
+                                                        <StructuredMessageRenderer
+                                                            message={group.assistantMessage}
+                                                            className="prose max-w-none"
+                                                            dbContext={dbContext}
+                                                            selectedTable={selectedTable}
+                                                            onTableSelect={onTableSelect}
+                                                            hideToolCalls={false}
+                                                            onPromptClick={handlePromptSelection}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // For regular messages, show based on collapsed state
+                                            return (
+                                                <>
+                                                    {/* Show full message only when not collapsed */}
+                                                    {!isCollapsed && (
+                                                        <div className="break-words">
+                                                            <StructuredMessageRenderer
+                                                                message={group.assistantMessage}
+                                                                className="prose max-w-none"
                                                                 dbContext={dbContext}
-                                                    selectedTable={selectedTable}
-                                                    onTableSelect={onTableSelect}
-                                                    hideToolCalls={false}
-                                                />
-                                                {isCurrentlyLoading && group.assistantMessage.streaming !== undefined && (
-                                                    <span className="inline-block animate-pulse ml-0.5">▊</span>
-                                                )}
-                                            </div>
-                                        )}
+                                                                selectedTable={selectedTable}
+                                                                onTableSelect={onTableSelect}
+                                                                hideToolCalls={false}
+                                                                onPromptClick={handlePromptSelection}
+                                                            />
+                                                            {isCurrentlyLoading && group.assistantMessage.streaming !== undefined && (
+                                                                <span className="inline-block animate-pulse ml-0.5">▊</span>
+                                                            )}
+                                                        </div>
+                                                    )}
 
-                                        {/* When collapsed, show table messages always, and final text only when not loading */}
-                                        {isCollapsed && (
-                                            <div className="break-words">
-                                                <StructuredMessageRenderer
-                                                    message={group.assistantMessage}
-                                                    className="prose max-w-none"
+                                                    {/* When collapsed, show table messages always, and final text only when not loading */}
+                                                    {isCollapsed && (
+                                                        <div className="break-words">
+                                                            <StructuredMessageRenderer
+                                                                message={group.assistantMessage}
+                                                                className="prose max-w-none"
                                                                 dbContext={dbContext}
-                                                    selectedTable={selectedTable}
-                                                    onTableSelect={onTableSelect}
-                                                    hideToolCalls={true}
-                                                    isStreaming={isCurrentlyLoading ? true : false}
-                                                />
-                                            </div>
-                                        )}
+                                                                selectedTable={selectedTable}
+                                                                onTableSelect={onTableSelect}
+                                                                hideToolCalls={true}
+                                                                isStreaming={isCurrentlyLoading ? true : false}
+                                                                onPromptClick={handlePromptSelection}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}
                         </div>
                     );
                 })}
+                
                 {isLoading && messages.length === 0 && (
                     <div className="flex justify-start mb-4">
                         <div className="italic text-gray-600 w-full">
