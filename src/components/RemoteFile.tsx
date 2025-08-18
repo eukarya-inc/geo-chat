@@ -30,7 +30,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, onTableCreated }) =>
 
         try {
             console.log('RemoteFile: Using dbContext');
-            conn = await dbContext.connect();
+            conn = await dbContext.createManagedConnection(null);
             await conn.query('LOAD spatial;');
             
             // Load httpfs extension for HTTP access
@@ -249,7 +249,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, onTableCreated }) =>
             
             // Debug: Check what tables actually exist
             try {
-                const debugConn = await dbContext.connect();
+                const debugConn = await dbContext.createManagedConnection(null);
                 const tablesResult = await debugConn.query('SHOW TABLES;');
                 console.log('RemoteFile: Tables in database after creation:', tablesResult.toArray());
                 

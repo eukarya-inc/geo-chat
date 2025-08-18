@@ -88,73 +88,33 @@ export function createVegaLiteTool(dbContext: DBContext) {
 
         // Force database sync before validation
         console.log(`VegaLite: Starting validation for table ${tableName}`);
-        const conn = await dbContext.connect();
         
+        // Force checkpoint to ensure all changes are visible
         try {
-          // Force checkpoint to ensure all changes are visible
+          await dbContext.executeQuery('CHECKPOINT;', null);
+          console.log('VegaLite: Checkpoint completed');
+        } catch (checkpointError) {
+          console.log('VegaLite: Checkpoint failed (non-critical):', checkpointError);
+        }
+        
+        // Validate table exists using high-level method
+        const tableExists = await dbContext.validateTable(tableName, null, 5);
+        
+        if (!tableExists) {
+          // Get available tables for error message
           try {
-            await conn.query('CHECKPOINT;');
-            console.log('VegaLite: Checkpoint completed');
-          } catch (checkpointError) {
-            console.log('VegaLite: Checkpoint failed (non-critical):', checkpointError);
+            const availableTables = await dbContext.getTables(null);
+            const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}.` : '';
+            throw new Error(`Table '${tableName}' does not exist.${tableList} Please ensure the table was created successfully.`);
+          } catch {
+            throw new Error(`Table '${tableName}' does not exist. Please ensure the table was created successfully.`);
           }
-          
-          // Simple table validation with retries
-          let tableExists = false;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            try {
-              // Also try SHOW TABLES first to see what's available
-              if (attempt === 0) {
-                const tablesResult = await conn.query('SHOW TABLES;');
-                const availableTables: string[] = [];
-                for (let i = 0; i < tablesResult.numRows; i++) {
-                  availableTables.push(tablesResult.getChildAt(0)?.get(i) as string);
-                }
-                console.log(`VegaLite: Available tables on attempt ${attempt + 1}:`, availableTables);
-              }
-              
-              await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
-              tableExists = true;
-              console.log(`VegaLite: Table ${tableName} found on attempt ${attempt + 1}`);
-              break;
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            } catch (error) {
-              console.log(`VegaLite: Table ${tableName} not found on attempt ${attempt + 1}, retrying...`);
-              if (attempt < 4) {
-                // Wait longer between retries and force another checkpoint
-                await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
-                try {
-                  await conn.query('CHECKPOINT;');
-                } catch { /* empty */ }
-              }
-            }
-          }
-          
-          if (!tableExists) {
-            // Get available tables for error message
-            try {
-              const tablesResult = await conn.query('SHOW TABLES;');
-              const availableTables: string[] = [];
-              for (let i = 0; i < tablesResult.numRows; i++) {
-                availableTables.push(tablesResult.getChildAt(0)?.get(i) as string);
-              }
-              
-              const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}.` : '';
-              throw new Error(`Table '${tableName}' does not exist.${tableList} Please ensure the table was created successfully.`);
-            } catch {
-              throw new Error(`Table '${tableName}' does not exist. Please ensure the table was created successfully.`);
-            }
-          }
-          
-          // Get table schema directly
-          const schemaResult = await conn.query(`DESCRIBE ${tableName}`);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const columns = schemaResult.toArray().map((row: any) => ({
-            name: row.column_name,
-            type: row.column_type
-          }));
+        }
+        
+        // Get table schema using high-level method
+        const columns = await dbContext.getTableColumns(tableName, null);
 
-          const columnNames = columns.map((col: { name: string; type: string }) => col.name);
+          const columnNames = columns.map(col => col.name);
           
           // Validate fields exist
           if (xField && !columnNames.includes(xField)) {
@@ -192,10 +152,6 @@ export function createVegaLiteTool(dbContext: DBContext) {
             message: `Generated ${plotType} plot from table ${tableName}`,
             sql: vegaSpec.data.sql
           };
-          
-        } finally {
-          await conn.close();
-        }
       } catch (error) {
         console.error('Error creating Vega-Lite plot:', error);
         return {

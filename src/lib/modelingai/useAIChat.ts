@@ -1,33 +1,65 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import type { DBContext } from '../duckdb/dbContext';
 import type { StructuredMessage, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
+import { useGlobalLoading } from '../../hooks/useGlobalLoading';
 
 export function useAIChat(
   dbContext: DBContext | null,
+  schema: string | null,
   customApiKey?: string,
   messages: StructuredMessage[] = [],
   onMessagesChange?: (messages: StructuredMessage[]) => void
 ) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const previousSchemaRef = useRef<string | null>(schema);
+  const currentSchemaRef = useRef<string | null>(schema);
+  const { 
+    isAnyLoading, 
+    registerLoading, 
+    unregisterLoading, 
+    isLoading: isSchemaLoading,
+    getAbortController 
+  } = useGlobalLoading();
+  
+  // Use global loading state for this chat
+  const isLoading = schema ? isSchemaLoading(schema) : false;
+  const abortController = schema ? getAbortController(schema) : null;
+
+  // Update current schema ref
+  useEffect(() => {
+    currentSchemaRef.current = schema;
+  }, [schema]);
+
+  // Reset UI state when schema changes, but don't abort ongoing requests
+  useEffect(() => {
+    if (previousSchemaRef.current !== schema && previousSchemaRef.current !== null) {
+      // Schema has changed, reset UI state for the new chat
+      // but DON'T abort ongoing requests - let them complete in the background
+      
+      // Only reset error and input, loading state is now managed globally
+      setError(null);
+      // Clear input when switching chats
+      setInput('');
+      
+      previousSchemaRef.current = schema;
+    }
+  }, [schema]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
   }, []);
 
   const handleStop = useCallback(() => {
-    if (abortController) {
+    if (abortController && schema) {
       abortController.abort();
-      setAbortController(null);
-      setIsLoading(false);
+      unregisterLoading(schema);
     }
-  }, [abortController]);
+  }, [abortController, schema, unregisterLoading]);
 
   // Process stream parts and update messages
   const processStreamPart = useCallback((
@@ -149,7 +181,10 @@ export function useAIChat(
 
   // Core message sending logic using the stream generator
   const sendMessage = useCallback(async (message: string) => {
-    if (!message.trim() || !apiKey || isLoading) return;
+    if (!message.trim() || !apiKey || isLoading || isAnyLoading) return;
+
+    // Capture the current schema at the start of the request
+    const requestSchema = schema;
 
     const userMessage: StructuredMessage = { role: 'user', content: message.trim() };
 
@@ -164,12 +199,13 @@ export function useAIChat(
     const newMessages = [...messages, userMessage];
     onMessagesChange?.(newMessages);
 
-    setIsLoading(true);
     setError(null);
-
-    // Create abort controller
+    
+    // Create abort controller and register this chat as loading globally
     const controller = new AbortController();
-    setAbortController(controller);
+    if (requestSchema) {
+      registerLoading(requestSchema, controller);
+    }
 
     try {
       // Convert messages to CoreMessage format
@@ -180,6 +216,7 @@ export function useAIChat(
         messages: coreMessages,
         apiKey,
         dbContext: dbContext || undefined,
+        schema: requestSchema,
         abortSignal: controller.signal
       });
 
@@ -192,12 +229,21 @@ export function useAIChat(
       
       let currentMessages = [...newMessages, assistantMessage];
       let streamingText = '';
-      onMessagesChange?.(currentMessages);
+      // Only update UI if we're still in the same chat
+      if (currentSchemaRef.current === requestSchema) {
+        onMessagesChange?.(currentMessages);
+      }
 
       // Process the stream
       for await (const part of generator) {
-        [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
-        onMessagesChange?.(currentMessages);
+        // Only update messages if we're still in the same chat
+        if (currentSchemaRef.current === requestSchema) {
+          [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
+          onMessagesChange?.(currentMessages);
+        } else {
+          // Still process the stream to completion but don't update UI
+          [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
+        }
       }
 
       // Log the conversation (for debugging)
@@ -251,12 +297,18 @@ export function useAIChat(
         role: 'assistant',
         content: [{ type: 'text' as const, text: errorContent }]
       }];
-      onMessagesChange?.(currentMessages);
+      // Only update UI if we're still in the same chat
+      if (currentSchemaRef.current === requestSchema) {
+        onMessagesChange?.(currentMessages);
+      }
     } finally {
-      setIsLoading(false);
-      setAbortController(null);
+      // Unregister from global loading state only if we're still in the same chat
+      // Otherwise, the user can still stop it when they return
+      if (currentSchemaRef.current === requestSchema && requestSchema) {
+        unregisterLoading(requestSchema);
+      }
     }
-  }, [apiKey, isLoading, messages, dbContext, processStreamPart, onMessagesChange]);
+  }, [apiKey, isLoading, isAnyLoading, messages, dbContext, schema, processStreamPart, onMessagesChange, registerLoading, unregisterLoading]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,6 +336,7 @@ export function useAIChat(
     handleSubmit,
     handleStop,
     isLoading,
+    isAnyLoading,
     error,
     isApiKeyConfigured,
     handleSuggestedPromptClick,

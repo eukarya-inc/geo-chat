@@ -29,28 +29,25 @@ Capabilities:
 
     execute: async ({ action, table_name, column_name, limit }) => {
       try {
-        const conn = await dbContext.connect();
-        
-        try {
-          switch (action) {
-            case 'describe_table': {
-              // Get table schema
-              const schemaResult = await conn.query(`
-                SELECT column_name, data_type, is_nullable
-                FROM information_schema.columns 
-                WHERE table_name = '${table_name}'
-                ORDER BY ordinal_position
-              `);
-              
-              const columns = convertBigIntToString(schemaResult.toArray()) as Array<{
+        switch (action) {
+          case 'describe_table': {
+            // Get table schema
+            const schemaResult = await dbContext.executeQuery(`
+              SELECT column_name, data_type, is_nullable
+              FROM information_schema.columns 
+              WHERE table_name = '${table_name}'
+              ORDER BY ordinal_position
+            `, null);
+            
+            const columns = convertBigIntToString(schemaResult) as Array<{
                 column_name: string;
                 data_type: string;
                 is_nullable: string;
               }>;
               
               // Get row count
-              const countResult = await conn.query(`SELECT COUNT(*) as total_rows FROM "${table_name}"`);
-              const countArray = convertBigIntToString(countResult.toArray()) as Array<{
+              const countResult = await dbContext.executeQuery(`SELECT COUNT(*) as total_rows FROM "${table_name}"`, null);
+              const countArray = convertBigIntToString(countResult) as Array<{
                 total_rows: string | number;
               }>;
               const totalRows = countArray[0].total_rows;
@@ -74,13 +71,13 @@ Capabilities:
               }
 
               // Get column data type first
-              const typeResult = await conn.query(`
+              const typeResult = await dbContext.executeQuery(`
                 SELECT data_type 
                 FROM information_schema.columns 
                 WHERE table_name = '${table_name}' AND column_name = '${column_name}'
-              `);
+              `, null);
               
-              const columnTypeResult = convertBigIntToString(typeResult.toArray()) as Array<{
+              const columnTypeResult = convertBigIntToString(typeResult) as Array<{
                 data_type: string;
               }>;
               const columnType = columnTypeResult[0]?.data_type;
@@ -95,7 +92,7 @@ Capabilities:
 
               // For numeric columns, get statistics
               if (columnType.includes('INTEGER') || columnType.includes('DOUBLE') || columnType.includes('DECIMAL') || columnType.includes('FLOAT')) {
-                const statsResult = await conn.query(`
+                const statsResult = await dbContext.executeQuery(`
                   SELECT 
                     MIN("${column_name}") as min_value,
                     MAX("${column_name}") as max_value,
@@ -104,13 +101,13 @@ Capabilities:
                     COUNT(*) as total_values,
                     COUNT(*) - COUNT("${column_name}") as null_values
                   FROM "${table_name}"
-                `);
+                `, null);
                 
-                const stats = (convertBigIntToString(statsResult.toArray()) as Array<Record<string, unknown>>)[0];
+                const stats = (convertBigIntToString(statsResult) as Array<Record<string, unknown>>)[0];
                 analysis = { ...analysis, ...stats };
               } else {
                 // For text/categorical columns, get unique values
-                const uniqueResult = await conn.query(`
+                const uniqueResult = await dbContext.executeQuery(`
                   SELECT 
                     "${column_name}" as value,
                     COUNT(*) as count
@@ -119,9 +116,9 @@ Capabilities:
                   GROUP BY "${column_name}"
                   ORDER BY count DESC
                   LIMIT 20
-                `);
+                `, null);
                 
-                const uniqueValues = (convertBigIntToString(uniqueResult.toArray()) as Array<{
+                const uniqueValues = (convertBigIntToString(uniqueResult) as Array<{
                   value: unknown;
                   count: string | number;
                 }>).map(row => ({
@@ -140,12 +137,12 @@ Capabilities:
             }
 
             case 'get_sample_data': {
-              const sampleResult = await conn.query(`
+              const sampleResult = await dbContext.executeQuery(`
                 SELECT * FROM "${table_name}" 
                 LIMIT ${limit}
-              `);
+              `, null);
               
-              const sampleData = convertBigIntToString(sampleResult.toArray()) as Array<Record<string, unknown>>;
+              const sampleData = convertBigIntToString(sampleResult) as Array<Record<string, unknown>>;
               
               return {
                 success: true,
@@ -158,9 +155,6 @@ Capabilities:
             default:
               return { success: false, error: `Unknown action: ${action}` };
           }
-        } finally {
-          await conn.close();
-        }
       } catch (error) {
         return {
           success: false,

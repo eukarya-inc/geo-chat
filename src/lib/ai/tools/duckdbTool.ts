@@ -17,12 +17,11 @@ export function createDuckDBTool(dbContext: DBContext) {
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        const conn = await dbContext.connect();
-        try {
-          const result = await conn.query(sql);
-
-          // Convert BigInt values immediately after getting the result
-          const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
+        // Use executeQuery which handles connections internally
+        const rawData = await dbContext.executeQuery(sql, null);
+        
+        // Convert BigInt values (already done by executeQuery, but ensure consistency)
+        const data = convertBigIntToString(rawData) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
           if (isTableOperation && dbContext) {
@@ -71,9 +70,6 @@ export function createDuckDBTool(dbContext: DBContext) {
           }
 
           return metadata;
-        } finally {
-          await conn.close();
-        }
       } catch (error) {
         let errorMessage = 'Unknown error occurred';
 

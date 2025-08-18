@@ -13,9 +13,10 @@ export interface ChartSpec {
 interface ChartGridProps {
   charts: ChartSpec[];
   dbContext: DBContext;
+  schema?: string | null;
 }
 
-export const ChartGrid: React.FC<ChartGridProps> = ({ charts, dbContext }) => {
+export const ChartGrid: React.FC<ChartGridProps> = ({ charts, dbContext, schema = null }) => {
   // Account for p-4 (32px) + p-4 inside (32px) + action buttons (~40px) = 104px
   const CONTAINER_PADDING = 104;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,9 +91,10 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, dbContext }) => {
         key={firstChartId}
         spec={getSpecWithDimensions(firstChartSpec)} 
         dbContext={dbContext} 
+        schema={schema}
       />
     );
-  }, [charts.length, firstChartId, firstChartSpec, dbContext, getSpecWithDimensions]);
+  }, [charts.length, firstChartId, firstChartSpec, dbContext, getSpecWithDimensions, schema]);
 
   if (charts.length === 0) {
     return (
@@ -132,6 +134,7 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, dbContext }) => {
                   <VegaLiteChart 
                     spec={getSpecWithDimensions(chart.spec)} 
                     dbContext={dbContext} 
+                    schema={schema}
                   />
                 </div>
               </div>

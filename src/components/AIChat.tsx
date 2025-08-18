@@ -279,7 +279,7 @@ export default function AIChat({ dbContext, mapStyleManager, apiKey }: AIChatPro
                         value={input}
                         onChange={handleInputChange}
                         onKeyPress={handleKeyPress}
-                        placeholder="Claudeに質問してください..."
+                        placeholder="質問してみましょう"
                         style={{
                             flex: 1,
                             padding: '10px',

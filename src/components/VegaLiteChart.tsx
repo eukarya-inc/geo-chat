@@ -7,6 +7,7 @@ import type { VegaLiteSpec } from '../types/vega';
 interface VegaLiteChartProps {
   spec: VegaLiteSpec;
   dbContext?: DBContext;
+  schema?: string | null;
 }
 
 interface ColumnInfo {
@@ -14,7 +15,7 @@ interface ColumnInfo {
   type: string;
 }
 
-const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext }) => {
+const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext, schema = null }) => {
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +118,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       if (!dbContext) return;
       
       try {
-        const tableNames = await dbContext.getTables();
+        const tableNames = await dbContext.getTables(schema);
         setTables(tableNames);
       } catch (err) {
         console.error('Error fetching tables:', err);
@@ -125,16 +126,20 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     };
 
     fetchTables();
-  }, [dbContext]);
+  }, [dbContext, schema]);
 
   // Subscribe to table changes
   useEffect(() => {
     if (!dbContext) return;
 
-    const unsubscribe = dbContext.onTableChange(async () => {
+    const unsubscribe = dbContext.onTableChange(async (tableName?: string, notifySchema?: string | null) => {
+      // Only refresh if the change is for our schema
+      if (notifySchema !== schema) {
+        return;
+      }
       console.log('VegaLite: Received table change notification, refreshing tables');
       try {
-        const tableNames = await dbContext.getTables();
+        const tableNames = await dbContext.getTables(schema);
         setTables(tableNames);
       } catch (err) {
         console.error('Error refreshing tables:', err);
@@ -142,7 +147,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     });
 
     return unsubscribe;
-  }, [dbContext]);
+  }, [dbContext, schema]);
 
   // Fetch columns when table changes
   useEffect(() => {
@@ -153,7 +158,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       }
 
       try {
-        const cols = await dbContext.getTableColumns(config.tableName);
+        const cols = await dbContext.getTableColumns(config.tableName, schema);
         setColumns(cols);
       } catch (err) {
         console.error('Error fetching columns:', err);
@@ -162,7 +167,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     };
 
     fetchColumns();
-  }, [dbContext, config.tableName]);
+  }, [dbContext, config.tableName, schema]);
 
   // Generate new spec based on configuration
   const generateSpec = useCallback(() => {
@@ -182,9 +187,8 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       return 'nominal';
     };
 
-    // Get schema-qualified table name if schema is set
-    const currentSchema = dbContext?.getCurrentSchema();
-    const qualifiedTableName = currentSchema ? `${currentSchema}.${config.tableName}` : config.tableName;
+    // Don't use schema-qualified table name - let dbContext handle schema context
+    const tableName = config.tableName;
 
     const baseSpec: VegaLiteSpec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -195,7 +199,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
       ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {}),
       data: {
-        sql: `SELECT * FROM ${qualifiedTableName} LIMIT 1000`
+        sql: `SELECT * FROM ${tableName} LIMIT 1000`
       },
       config: {
         view: { stroke: null },
@@ -319,7 +323,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       console.error('Error generating spec:', error);
       return initialSpec;
     }
-  }, [config, columns, initialSpec, dbContext]);
+  }, [config, columns, initialSpec]);
 
   // Update spec when configuration changes
   useEffect(() => {
@@ -344,7 +348,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         setError(null);
 
         console.log('VegaLite: Executing SQL:', currentSpec.data.sql);
-        const rows = await dbContext.executeQuery(currentSpec.data.sql);
+        const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
         
         console.log(`VegaLite: Fetched ${rows.length} rows for chart`);
         setData(rows);
@@ -357,7 +361,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     };
 
     fetchData();
-  }, [dbContext, currentSpec.data?.sql]);
+  }, [dbContext, currentSpec.data?.sql, schema]);
 
   const getNumericColumns = () => columns.filter((col: ColumnInfo) => 
     col.type.toLowerCase().includes('int') || 

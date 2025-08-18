@@ -9,10 +9,11 @@ interface ChartGenerationResult {
 
 export async function generateDefaultCharts(
   tableName: string,
-  dbContext: DBContext
+  dbContext: DBContext,
+  schema: string | null = null
 ): Promise<ChartGenerationResult[]> {
   try {
-    const columns = await dbContext.getTableColumns(tableName);
+    const columns = await dbContext.getTableColumns(tableName, schema);
     if (!columns || columns.length === 0) {
       return [];
     }
@@ -25,9 +26,8 @@ export async function generateDefaultCharts(
     // Select all columns for the query
     const columnNames = columns.map(col => col.name).join(', ');
     
-    // Get schema-qualified table name if schema is set
-    const currentSchema = dbContext.getCurrentSchema();
-    const qualifiedTableName = currentSchema ? `${currentSchema}.${tableName}` : tableName;
+    // Don't use schema-qualified table name in SQL - let dbContext handle schema context
+    const qualifiedTableName = tableName;
 
     // Determine the best chart type based on column types
     let chart: ChartGenerationResult | null = null;

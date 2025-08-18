@@ -20,6 +20,7 @@ interface AIChatProps {
 export default function AIChat({
     dbContext,
     apiKey,
+    chatId,
     messages,
     onMessagesChange,
     onSendMessageReady,
@@ -42,10 +43,11 @@ export default function AIChat({
         handleSubmit,
         handleStop,
         isLoading,
+        isAnyLoading,
         // error,
         isApiKeyConfigured,
         sendMessage,
-    } = useAIChat(dbContext, apiKey, messages, onMessagesChange);
+    } = useAIChat(dbContext, chatId || null, apiKey, messages, onMessagesChange);
 
     // Group messages by user-assistant pairs
     const messageGroups = useMemo(() => {
@@ -358,7 +360,7 @@ export default function AIChat({
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyPress}
-                    placeholder="Claudeに質問してください..."
+                    placeholder="質問してみましょう"
                     className="w-full p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
                 />
@@ -401,14 +403,15 @@ export default function AIChat({
                     <button
                         type="button"
                         onClick={handleButtonClick}
-                        disabled={!isLoading && !input.trim()}
+                        disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
                         className={`px-5 py-2 text-white font-medium rounded transition-colors duration-200 ${
                             isLoading
                                 ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
-                                : !input.trim()
+                                : !input.trim() || isAnyLoading
                                 ? 'bg-gray-400 cursor-not-allowed'
                                 : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500'
                         } focus:outline-none focus:ring-2 focus:ring-offset-2`}
+                        title={!isLoading && isAnyLoading ? '他のチャットが処理中です' : ''}
                     >
                         {isLoading ? '停止' : '送信'}
                     </button>

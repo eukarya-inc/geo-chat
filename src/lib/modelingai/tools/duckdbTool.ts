@@ -5,7 +5,7 @@ import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 
-export function createDuckDBTool(dbContext: DBContext, apiKey?: string) {
+export function createDuckDBTool(dbContext: DBContext, schema: string | null, apiKey?: string) {
   return tool({
     description,
     parameters: z.object({
@@ -33,34 +33,19 @@ export function createDuckDBTool(dbContext: DBContext, apiKey?: string) {
                                 upperSql.includes('CREATE OR REPLACE TABLE') ||
                                 upperSql.includes('DROP TABLE');
 
-        // Use schema-aware connection
-        const conn = await dbContext.connectWithSchema();
+        // Don't intercept SHOW TABLES here - let dbContext handle schema context
+        const querySql = sql;
         
-        // Intercept SHOW TABLES to make it schema-aware
-        let querySql = sql;
-        if (upperSql.trim() === 'SHOW TABLES' || upperSql.trim() === 'SHOW TABLES;') {
-          const schemaName = dbContext.getCurrentSchema() || 'main';
-          querySql = `
-            SELECT table_name as name
-            FROM information_schema.tables 
-            WHERE table_schema = '${schemaName}'
-              AND table_type = 'BASE TABLE'
-            ORDER BY table_name
-          `;
-        }
-        
-        try {
-          const result = await conn.query(querySql);
-
-          // Convert BigInt values immediately after getting the result
-          const data = convertBigIntToString(result.toArray()) as Record<string, unknown>[];
+        // Execute query - executeQuery now handles DDL operations automatically
+        const result = await dbContext.executeQuery(querySql, schema);
+        const data = convertBigIntToString(result) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
           let sqlExplanation: string | undefined;
           let createdTableName: string | undefined;
           
           if (isTableOperation) {
-            await conn.query('CHECKPOINT;');
+            // Checkpoint is already handled by executeQuery for DDL operations
             
             // Extract table name from CREATE TABLE statements
             if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
@@ -84,13 +69,10 @@ export function createDuckDBTool(dbContext: DBContext, apiKey?: string) {
             }
             
             if (dbContext) {
-              // Add more aggressive consistency checks for CREATE TABLE
-              await conn.query('CHECKPOINT;');
-              await conn.query('PRAGMA force_checkpoint;');
-              
-              // Increase timeout to ensure table is fully committed and visible
+              // Force consistency is already handled by executeQuery for DDL operations
+              // Just notify table change with schema
               setTimeout(() => {
-                dbContext.notifyTableChange(createdTableName);
+                dbContext.notifyTableChange(createdTableName, schema);
               }, 300);
             }
           }
@@ -146,9 +128,6 @@ export function createDuckDBTool(dbContext: DBContext, apiKey?: string) {
           }
 
           return metadata;
-        } finally {
-          await conn.close();
-        }
       } catch (error) {
         let errorMessage = 'Unknown error occurred';
 

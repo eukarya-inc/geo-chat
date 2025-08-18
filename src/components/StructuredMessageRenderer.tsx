@@ -163,17 +163,6 @@ const renderContentBlock = (
                 // Check if this created a table from the result
                 const tableCreated = result?.createdTable || null;
                 
-                // Debug logging
-                if (result?.sql && (result.sql.toUpperCase().includes('CREATE TABLE') || result.sql.toUpperCase().includes('CREATE OR REPLACE'))) {
-                    console.log('CREATE TABLE detected in result:', {
-                        sql: result.sql,
-                        createdTable: result?.createdTable,
-                        hasData: !!result?.data,
-                        dataLength: Array.isArray(result?.data) ? result.data.length : 0,
-                        result: result
-                    });
-                }
-                
                 // When hideToolDetails is true and table was created, only show the table creation message
                 if (hideToolDetails && tableCreated) {
                     return (

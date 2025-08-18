@@ -127,17 +127,12 @@ function ModelingPage() {
             setChats([...chats, newChat]);
             setSelectedChatId(newChat.id);
 
-            // Update dbContext with current schema
-            if (dbContext) {
-                dbContext.setCurrentSchema(schemaManager.getCurrentSchema());
-            }
-
             // Reset table selection since we're in a new schema
             setSelectedTable(null);
 
             // Notify table change to refresh table list
             if (dbContext) {
-                dbContext.notifyTableChange();
+                dbContext.notifyTableChange(undefined, newChat.id);
             }
         } catch (error) {
             console.error('Error creating new chat:', error);
@@ -160,17 +155,13 @@ function ModelingPage() {
                 setSelectedChatId(null);
                 // Reset to main schema
                 await schemaManager.resetToMain();
-                // Update dbContext
-                if (dbContext) {
-                    dbContext.setCurrentSchema(null);
-                }
                 // Reset table selection
                 setSelectedTable(null);
             }
 
             // Notify table change
             if (dbContext) {
-                dbContext.notifyTableChange();
+                dbContext.notifyTableChange(undefined, selectedChatId);
             }
         }
     };
@@ -182,6 +173,9 @@ function ModelingPage() {
         // Find the chat being selected
         const targetChat = chats.find(chat => chat.id === chatId);
         if (!targetChat) return;
+
+        // Clear selected table immediately when switching chats
+        setSelectedTable(null);
 
         // Set the selected chat ID - this will trigger the useEffect that switches schema
         setSelectedChatId(chatId);
@@ -240,9 +234,8 @@ function ModelingPage() {
                         setSelectedChatId(firstChat.id);
 
                         if (dbContext) {
-                            dbContext.setCurrentSchema(manager.getCurrentSchema());
                             setTimeout(() => {
-                                dbContext.notifyTableChange();
+                                dbContext.notifyTableChange(undefined, firstChat.id);
                             }, 0);
                         }
                     } catch (error) {
@@ -281,24 +274,11 @@ function ModelingPage() {
                 // Switch schema first
                 await schemaManager.switchToSchema(selectedChatId);
 
-                // Update dbContext with current schema
-                if (dbContext) {
-                    const schemaName = schemaManager.getCurrentSchema();
-                    dbContext.setCurrentSchema(schemaName);
-                }
-
-                // Reset selection - will be restored by separate effect
-                setSelectedTable(null);
-
                 // Create new connection with the new schema
-                const conn = await dbContext.connect();
+                const conn = await dbContext.createManagedConnection(selectedChatId);
                 currentConnection = conn;
 
-                // Set search_path for this connection
-                const currentSchema = schemaManager.getCurrentSchema();
-                if (currentSchema) {
-                    await conn.query(`SET search_path = '${currentSchema}'`);
-                }
+                // Connection already has schema set correctly by dbContext
 
                 if (!isCleanedUp) {
                     setConnection(conn);
@@ -312,15 +292,26 @@ function ModelingPage() {
                             await conn.query(`SELECT 1 FROM "${targetChat.selectedTable}" LIMIT 0`);
                             setSelectedTable(targetChat.selectedTable);
                         } catch {
-                            // Table not found in schema, reset selection
+                            // Table not found in schema, clear the saved selection
                             setSelectedTable(null);
+                            // Also update the chat to clear the invalid table reference
+                            setChats(prevChats =>
+                                prevChats.map(chat =>
+                                    chat.id === selectedChatId
+                                        ? { ...chat, selectedTable: null }
+                                        : chat
+                                )
+                            );
                         }
+                    } else {
+                        // Ensure table is cleared if chat has no saved selection
+                        setSelectedTable(null);
                     }
                     
                     // Notify table change after connection is established
                     if (dbContext) {
                         setTimeout(() => {
-                            dbContext.notifyTableChange();
+                            dbContext.notifyTableChange(undefined, selectedChatId);
                         }, 300);
                     }
                 }
@@ -345,7 +336,12 @@ function ModelingPage() {
     useEffect(() => {
         if (!dbContext) return;
 
-        const unsubscribe = dbContext.onTableChange(async (tableName?: string) => {
+        const unsubscribe = dbContext.onTableChange(async (tableName?: string, schema?: string | null) => {
+            // Only process table changes for the current chat's schema
+            if (schema !== selectedChatId) {
+                return;
+            }
+
             // Force consistency across all connections
             try {
                 await dbContext.forceConsistency();
@@ -367,7 +363,7 @@ function ModelingPage() {
         return () => {
             unsubscribe();
         };
-    }, [dbContext, handleTableSelection]);
+    }, [dbContext, handleTableSelection, selectedChatId]);
 
     // Check for geom column and available columns when table is selected
     useEffect(() => {
@@ -396,7 +392,7 @@ function ModelingPage() {
             }
 
             try {
-                const defaultCharts = await generateDefaultCharts(selectedTable, dbContext);
+                const defaultCharts = await generateDefaultCharts(selectedTable, dbContext, selectedChatId);
 
                 if (defaultCharts.length > 0) {
                     const result = defaultCharts[0];
@@ -416,7 +412,7 @@ function ModelingPage() {
         };
 
         generateChart();
-    }, [selectedTable, dbContext]);
+    }, [selectedTable, dbContext, selectedChatId]);
 
     // Create memoized callback for message updates
     const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
@@ -500,10 +496,11 @@ function ModelingPage() {
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple 
                                     dbContext={dbContext} 
+                                    schema={selectedChatId}
                                     onTableCreated={(tableName) => {
                                         setSelectedTable(tableName);
                                         if (dbContext) {
-                                            dbContext.notifyTableChange();
+                                            dbContext.notifyTableChange(tableName, selectedChatId);
                                         }
                                         onClose();
                                     }}
@@ -546,6 +543,7 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
                                             refreshTrigger={connectionTimestamp}
+                                            schema={selectedChatId}
                                         />
                                     </div>
                                 </div>
@@ -599,6 +597,7 @@ function ModelingPage() {
                                         <ChartGrid
                                             charts={chartSpec ? [chartSpec] : []}
                                             dbContext={dbContext}
+                                            schema={selectedChatId}
                                         />
                                     </div>
                                 )}
@@ -608,6 +607,7 @@ function ModelingPage() {
                                     <div className="flex-1 overflow-hidden">
                                         <Map
                                             dbContext={dbContext}
+                                            schema={selectedChatId}
                                             selectedTable={selectedTable}
                                             selectedColumns={mapSelectedColumns}
                                             geometryColumnName={selectedGeometryColumn}
