@@ -1,7 +1,10 @@
-name: PR Build Check
+name: CI Check
 
 on:
   pull_request:
+    branches:
+      - main
+  push:
     branches:
       - main
 
@@ -20,6 +23,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browsers
+        run: npx playwright install webkit --with-deps
 
       - name: Run linter
         run: npm run lint

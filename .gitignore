@@ -28,3 +28,6 @@ dist-ssr
 
 tmp/
 *.tsbuildinfo
+
+# Test artifacts
+**/__screenshots__
