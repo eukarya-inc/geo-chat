@@ -284,9 +284,24 @@ export default function AIChat({
         loadPromptSuggestions();
     }, [messages, selectedTable, dbContext, chatId, apiKey, onMessagesChange]);
 
-    // Handle prompt click - send message
+    // Handle prompt click - send message or update input
     const handlePromptSelection = (promptText: string) => {
-        sendMessage(promptText);
+        // Check if the prompt text is already in the input field
+        if (input === promptText) {
+            // If it's already there, submit the form directly
+            // Clear the input field and send message (same behavior as handleSubmit)
+            const changeEvent = {
+                target: { value: '' }
+            } as React.ChangeEvent<HTMLTextAreaElement>;
+            handleInputChange(changeEvent);
+            sendMessage(promptText);
+        } else {
+            // Otherwise, replace the input field with the prompt text
+            const changeEvent = {
+                target: { value: promptText }
+            } as React.ChangeEvent<HTMLTextAreaElement>;
+            handleInputChange(changeEvent);
+        }
     };
 
     // Handle click outside to close popup
