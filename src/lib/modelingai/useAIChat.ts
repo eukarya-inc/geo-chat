@@ -193,17 +193,30 @@ export function useAIChat(
       ? (msgs: StructuredMessage[]) => updateChatMessages(chatId, msgs)
       : onMessagesChange;
 
+    // Clean up any loading messages before adding the new user message
+    const cleanedMessages = messages.filter(msg => {
+      // Remove loading messages for prompt suggestions
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        const hasLoadingText = msg.content.some(block => 
+          block.type === 'text' && 
+          block.text.includes('を分析中... おすすめの分析を生成しています...')
+        );
+        return !hasLoadingText;
+      }
+      return true;
+    });
+
     const userMessage: StructuredMessage = { role: 'user', content: message.trim() };
 
     // Check if this is a table creation message
     if (messageConverter.hasTableCreatedMarker(message)) {
-      const newMessages = [...messages, userMessage];
+      const newMessages = [...cleanedMessages, userMessage];
       requestOnMessagesChange?.(newMessages);
       return;
     }
 
     // Add user message
-    const newMessages = [...messages, userMessage];
+    const newMessages = [...cleanedMessages, userMessage];
     requestOnMessagesChange?.(newMessages);
 
     setError(null);
@@ -318,7 +331,7 @@ export function useAIChat(
         unregisterLoading(requestSchema);
       }
     }
-  }, [apiKey, isLoading, isAnyLoading, messages, dbContext, schema, processStreamPart, onMessagesChange, updateChatMessages, registerLoading, unregisterLoading]);
+  }, [apiKey, isLoading, isAnyLoading, messages, dbContext, schema, chatId, processStreamPart, onMessagesChange, updateChatMessages, registerLoading, unregisterLoading]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

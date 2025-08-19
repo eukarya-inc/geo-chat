@@ -171,7 +171,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       if (notifySchema !== schema) {
         return;
       }
-      console.log('VegaLite: Received table change notification, refreshing tables');
+      // Table change notification received, refreshing tables
       try {
         const tableNames = await dbContext.getTables(schema);
         setTables(tableNames);
@@ -420,10 +420,8 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         setLoading(true);
         setError(null);
 
-        console.log('VegaLite: Executing SQL with schema:', schema, 'SQL:', currentSpec.data.sql);
+        // Execute SQL query for chart data
         const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
-        
-        console.log(`VegaLite: Fetched ${rows.length} rows for chart`);
         setData(rows);
       } catch (err) {
         console.error('Error fetching data for Vega-Lite chart:', err);
