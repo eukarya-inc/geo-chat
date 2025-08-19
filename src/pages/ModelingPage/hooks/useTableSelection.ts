@@ -5,30 +5,41 @@ import type { Chat } from '../../../components/chat/ChatList';
 
 export function useTableSelection(
     dbContext: DBContext | null,
-    selectedChatId: string | null,
+    schemaName: string | null,
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
     setConnectionTimestamp: React.Dispatch<React.SetStateAction<number>>,
-    updateChatState: (updates: Partial<Chat>) => void
+    updateChatState: (updates: Partial<Chat>) => void,
+    currentChat: Chat | undefined
 ) {
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
+    const [prevSchemaName, setPrevSchemaName] = useState<string | null>(null);
+
+    // Clear selected table immediately when schema changes
+    useEffect(() => {
+        if (prevSchemaName !== schemaName && prevSchemaName !== null) {
+            // Schema has changed, immediately clear the selected table
+            setSelectedTable(null);
+        }
+        setPrevSchemaName(schemaName);
+    }, [schemaName, prevSchemaName]);
 
     // Handle table selection and update chat state
     const handleTableSelection = useCallback((tableName: string | null) => {
         setSelectedTable(tableName);
         
         // Update the selected table in the current chat
-        if (selectedChatId && tableName !== undefined) {
+        if (schemaName && tableName !== undefined) {
             updateChatState({ selectedTable: tableName });
         }
-    }, [selectedChatId, updateChatState]);
+    }, [schemaName, updateChatState]);
 
     // Subscribe to table changes from dbContext
     useEffect(() => {
         if (!dbContext) return;
 
         const unsubscribe = dbContext.onTableChange(async (tableName?: string, schema?: string | null) => {
-            // Only process table changes for the current chat's schema
-            if (schema !== selectedChatId) {
+            // Only process table changes for the current schema
+            if (schema !== schemaName) {
                 return;
             }
 
@@ -53,14 +64,41 @@ export function useTableSelection(
         return () => {
             unsubscribe();
         };
-    }, [dbContext, handleTableSelection, selectedChatId, setConnectionTimestamp]);
+    }, [dbContext, handleTableSelection, schemaName, setConnectionTimestamp]);
 
-    // Clear selected table when switching chats
+    // Restore selected table when switching chats (only after connection is ready)
     useEffect(() => {
-        if (!connection) {
-            setSelectedTable(null);
-        }
-    }, [connection]);
+        const restoreTableSelection = async () => {
+            // Only restore if we have a connection and this is the right chat
+            if (connection && currentChat && `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName && dbContext) {
+                if (currentChat.selectedTable) {
+                    // Check if the table actually exists in this schema
+                    try {
+                        const isValid = await dbContext.validateTable(currentChat.selectedTable, schemaName);
+                        if (isValid) {
+                            // Table exists, restore the selection
+                            setSelectedTable(currentChat.selectedTable);
+                            // Update connection timestamp to refresh components
+                            setConnectionTimestamp(Date.now());
+                        } else {
+                            // Table doesn't exist in this schema, clear selection
+                            setSelectedTable(null);
+                            updateChatState({ selectedTable: null });
+                        }
+                    } catch (error) {
+                        console.log('Error validating table during restoration:', error);
+                        setSelectedTable(null);
+                        updateChatState({ selectedTable: null });
+                    }
+                } else {
+                    // No saved table for this chat
+                    setSelectedTable(null);
+                }
+            }
+        };
+
+        restoreTableSelection();
+    }, [connection, currentChat, setConnectionTimestamp, dbContext, schemaName, updateChatState]);
 
     return {
         selectedTable,

@@ -38,6 +38,30 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   });
 
   const [currentSpec, setCurrentSpec] = useState(initialSpec);
+  const [prevSchema, setPrevSchema] = useState(schema);
+
+  // Clear data and config when schema changes
+  useEffect(() => {
+    if (prevSchema !== schema && prevSchema !== null) {
+      setData([]);
+      setError(null);
+      setLoading(true);
+      setColumns([]);
+      // Reset config to prevent using old table names
+      setConfig({
+        tableName: '',
+        plotType: 'scatter',
+        xField: '',
+        yField: '',
+        colorField: '',
+        sizeField: '',
+        title: '',
+        width: 600,
+        height: 400
+      });
+      setPrevSchema(schema);
+    }
+  }, [schema, prevSchema]);
 
   // Update internal state when initialSpec changes
   useEffect(() => {
@@ -167,11 +191,25 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         return;
       }
 
+      // First validate that the table exists in this schema
+      try {
+        const isValid = await dbContext.validateTable(config.tableName, schema);
+        if (!isValid) {
+          // Table doesn't exist in this schema, clear columns silently
+          setColumns([]);
+          return;
+        }
+      } catch (err) {
+        // Validation failed, clear columns silently
+        setColumns([]);
+        return;
+      }
+
       try {
         const cols = await dbContext.getTableColumns(config.tableName, schema);
         setColumns(cols);
       } catch (err) {
-        console.error('Error fetching columns:', err);
+        // This shouldn't happen if validation passed, but handle it gracefully
         setColumns([]);
       }
     };
@@ -357,11 +395,32 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         return;
       }
 
+      // Extract table name from SQL to validate it exists
+      const tableName = extractTableName(currentSpec);
+      if (tableName) {
+        try {
+          const isValid = await dbContext.validateTable(tableName, schema);
+          if (!isValid) {
+            // Table doesn't exist in this schema, silently skip
+            setData([]);
+            setError(null);
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          // Validation failed, silently skip
+          setData([]);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+
       try {
         setLoading(true);
         setError(null);
 
-        console.log('VegaLite: Executing SQL:', currentSpec.data.sql);
+        console.log('VegaLite: Executing SQL with schema:', schema, 'SQL:', currentSpec.data.sql);
         const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
         
         console.log(`VegaLite: Fetched ${rows.length} rows for chart`);
@@ -375,7 +434,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     };
 
     fetchData();
-  }, [dbContext, currentSpec.data?.sql, schema]);
+  }, [dbContext, currentSpec, schema]);
 
   const getNumericColumns = () => columns.filter((col: ColumnInfo) => 
     col.type.toLowerCase().includes('int') || 
@@ -633,4 +692,11 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   );
 };
 
-export default VegaLiteChart;
+export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
+  // Custom comparison to prevent re-renders when only unrelated props change
+  return (
+    prevProps.spec === nextProps.spec &&
+    prevProps.dbContext === nextProps.dbContext &&
+    prevProps.schema === nextProps.schema
+  );
+});

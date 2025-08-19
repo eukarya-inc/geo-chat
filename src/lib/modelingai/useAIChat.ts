@@ -9,9 +9,11 @@ import { useGlobalLoading } from '../../hooks/useGlobalLoading';
 export function useAIChat(
   dbContext: DBContext | null,
   schema: string | null,
+  chatId: string | null,
   customApiKey?: string,
   messages: StructuredMessage[] = [],
-  onMessagesChange?: (messages: StructuredMessage[]) => void
+  onMessagesChange?: (messages: StructuredMessage[]) => void,
+  updateChatMessages?: (chatId: string, messages: StructuredMessage[]) => void
 ) {
   const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
   const [input, setInput] = useState('');
@@ -185,19 +187,24 @@ export function useAIChat(
 
     // Capture the current schema at the start of the request
     const requestSchema = schema;
+    
+    // Create a callback that will always update the correct chat
+    const requestOnMessagesChange = chatId && updateChatMessages 
+      ? (msgs: StructuredMessage[]) => updateChatMessages(chatId, msgs)
+      : onMessagesChange;
 
     const userMessage: StructuredMessage = { role: 'user', content: message.trim() };
 
     // Check if this is a table creation message
     if (messageConverter.hasTableCreatedMarker(message)) {
       const newMessages = [...messages, userMessage];
-      onMessagesChange?.(newMessages);
+      requestOnMessagesChange?.(newMessages);
       return;
     }
 
     // Add user message
     const newMessages = [...messages, userMessage];
-    onMessagesChange?.(newMessages);
+    requestOnMessagesChange?.(newMessages);
 
     setError(null);
     
@@ -231,20 +238,23 @@ export function useAIChat(
       let streamingText = '';
       // Only update UI if we're still in the same chat
       if (currentSchemaRef.current === requestSchema) {
-        onMessagesChange?.(currentMessages);
+        requestOnMessagesChange?.(currentMessages);
       }
 
       // Process the stream
       for await (const part of generator) {
-        // Only update messages if we're still in the same chat
+        // Always process the stream parts to maintain correct state
+        [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
+        
+        // Update UI only if we're still in the same chat
         if (currentSchemaRef.current === requestSchema) {
-          [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
-          onMessagesChange?.(currentMessages);
-        } else {
-          // Still process the stream to completion but don't update UI
-          [currentMessages, streamingText] = processStreamPart(part, currentMessages, streamingText);
+          requestOnMessagesChange?.(currentMessages);
         }
       }
+      
+      // IMPORTANT: Always save the final message state using the captured callback
+      // This ensures the complete message is saved for the correct chat
+      requestOnMessagesChange?.(currentMessages);
 
       // Log the conversation (for debugging)
       const assistantContent = currentMessages[currentMessages.length - 1].content;
@@ -299,16 +309,16 @@ export function useAIChat(
       }];
       // Only update UI if we're still in the same chat
       if (currentSchemaRef.current === requestSchema) {
-        onMessagesChange?.(currentMessages);
+        requestOnMessagesChange?.(currentMessages);
       }
     } finally {
-      // Unregister from global loading state only if we're still in the same chat
-      // Otherwise, the user can still stop it when they return
-      if (currentSchemaRef.current === requestSchema && requestSchema) {
+      // Always unregister the loading state for the request schema
+      // This ensures streaming state is properly cleaned up even when switching chats
+      if (requestSchema) {
         unregisterLoading(requestSchema);
       }
     }
-  }, [apiKey, isLoading, isAnyLoading, messages, dbContext, schema, processStreamPart, onMessagesChange, registerLoading, unregisterLoading]);
+  }, [apiKey, isLoading, isAnyLoading, messages, dbContext, schema, processStreamPart, onMessagesChange, updateChatMessages, registerLoading, unregisterLoading]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

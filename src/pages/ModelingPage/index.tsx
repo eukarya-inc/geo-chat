@@ -8,6 +8,7 @@ import { ResizableDivider } from '../../components/common/ResizableDivider';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
 import Map from '../../components/map';
+import { chatIdToSchemaName } from './utils/schemaUtils';
 import { ChatList } from '../../components/chat/ChatList';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
 import {
@@ -42,6 +43,9 @@ function ModelingPage() {
         updateChatState,
     } = useChatManagement(dbContext);
     
+    // Convert chatId to schemaName at the top level
+    const schemaName = chatIdToSchemaName(selectedChatId);
+    
     // Schema management (uses chats state from above)
     const {
         connection,
@@ -49,7 +53,7 @@ function ModelingPage() {
         setConnectionTimestamp,
     } = useSchemaManagement(
         dbContext,
-        selectedChatId,
+        schemaName,
         chats
     );
     
@@ -57,7 +61,7 @@ function ModelingPage() {
     const {
         selectedTable,
         handleTableSelection,
-    } = useTableSelection(dbContext, selectedChatId, connection, setConnectionTimestamp, updateChatState);
+    } = useTableSelection(dbContext, schemaName, connection, setConnectionTimestamp, updateChatState, currentChat);
     
     // Map visualization
     const {
@@ -69,10 +73,10 @@ function ModelingPage() {
         updateExtraMapStyle,
         updateMapViewState,
         updateMapStyle,
-    } = useMapVisualization(selectedTable, connection, selectedChatId, updateChatState);
+    } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
     
     // Chart visualization
-    const { chartSpec } = useChartVisualization(selectedTable, dbContext, selectedChatId);
+    const { chartSpec } = useChartVisualization(selectedTable, dbContext, schemaName, connection, connectionTimestamp);
     
     // Message handling
     const {
@@ -144,19 +148,21 @@ function ModelingPage() {
                             dbContext={dbContext}
                             apiKey={apiKey}
                             chatId={selectedChatId}
+                            schemaName={schemaName}
                             messages={chats.find(c => c.id === selectedChatId)?.messages || []}
                             onMessagesChange={handleMessagesChange}
+                            updateChatMessages={updateChatMessages}
                             onSendMessageReady={handleSendMessageReady}
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelection}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple
                                     dbContext={dbContext}
-                                    schema={selectedChatId}
+                                    schema={schemaName}
                                     onTableCreated={(tableName) => {
                                         handleTableSelection(tableName);
                                         if (dbContext) {
-                                            dbContext.notifyTableChange(tableName, selectedChatId);
+                                            dbContext.notifyTableChange(tableName, schemaName);
                                         }
                                         onClose();
                                     }}
@@ -199,7 +205,7 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
                                             refreshTrigger={connectionTimestamp}
-                                            schema={selectedChatId}
+                                            schema={schemaName}
                                         />
                                     </div>
                                 </div>
@@ -248,22 +254,23 @@ function ModelingPage() {
                                 )}
 
                                 {/* Graph Section (for graph chats) */}
-                                {currentChat?.type === 'graph' && chartSpec && (
+                                {currentChat?.type === 'graph' && chartSpec && connection && selectedChatId && (
                                     <div className="flex-1 overflow-auto p-4">
                                         <VegaLiteChart
+                                            key={`${schemaName}-${chartSpec.id}`}
                                             spec={chartSpec.spec}
                                             dbContext={dbContext}
-                                            schema={selectedChatId}
+                                            schema={schemaName}
                                         />
                                     </div>
                                 )}
 
                                 {/* Map Section (for map chats) */}
-                                {currentChat?.type === 'map' && (
+                                {currentChat?.type === 'map' && connection && (
                                     <div className="flex-1 overflow-hidden">
                                         <Map
                                             dbContext={dbContext}
-                                            schema={selectedChatId}
+                                            schema={schemaName}
                                             selectedTable={selectedTable}
                                             selectedColumns={mapSelectedColumns}
                                             geometryColumnName={selectedGeometryColumn}
@@ -272,8 +279,8 @@ function ModelingPage() {
                                             onTableStyleChanged={updateTableStyle}
                                             onExtraStyleChange={updateExtraMapStyle}
                                             onViewStateChange={updateMapViewState}
-                                            initialViewState={currentChat.mapState}
-                                            initialStyle={currentChat.mapState?.style}
+                                            initialViewState={currentChat?.mapState}
+                                            initialStyle={currentChat?.mapState?.style}
                                             onStyleUpdate={updateMapStyle}
                                         />
                                     </div>
