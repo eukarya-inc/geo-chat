@@ -9,7 +9,6 @@ export function useSchemaManagement(
     chats: Chat[]
 ) {
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
-    const [connectionTimestamp, setConnectionTimestamp] = useState<number>(Date.now());
 
     // Combined schema switching and connection setup
     useEffect(() => {
@@ -42,7 +41,6 @@ export function useSchemaManagement(
                     await new Promise(resolve => setTimeout(resolve, 100));
                     
                     setConnection(conn);
-                    setConnectionTimestamp(Date.now());
                     
                     // Restore table selection for this chat
                     const targetChat = chats.find(chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName);
@@ -82,8 +80,6 @@ export function useSchemaManagement(
     }, [schemaName, dbContext]); // Only depend on schemaName and dbContext
 
     return {
-        connection,
-        connectionTimestamp,
-        setConnectionTimestamp,
+        connection
     };
 }

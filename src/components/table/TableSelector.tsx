@@ -5,11 +5,10 @@ interface TableSelectorProps {
   dbContext: DBContext;
   selectedTable: string | null;
   onTableSelect: (tableName: string | null) => void;
-  refreshTrigger?: number;
   schema?: string | null;
 }
 
-const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, refreshTrigger, schema = null }) => {
+const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, schema = null }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +34,7 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
   // Initial fetch and refresh on prop changes
   useEffect(() => {
     fetchTables();
-  }, [fetchTables, refreshTrigger]);
+  }, [fetchTables]);
 
   // Subscribe to table changes from dbContext
   useEffect(() => {
