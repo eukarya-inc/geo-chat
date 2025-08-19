@@ -7,7 +7,6 @@ export function useTableSelection(
     dbContext: DBContext | null,
     schemaName: string | null,
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
-    setConnectionTimestamp: React.Dispatch<React.SetStateAction<number>>,
     updateChatState: (updates: Partial<Chat>) => void,
     currentChat: Chat | undefined
 ) {
@@ -55,8 +54,6 @@ export function useTableSelection(
                 // Wait longer for the table data to be fully committed and visible
                 setTimeout(() => {
                     handleTableSelection(tableName);
-                    // Force a connection timestamp update to refresh the Table component
-                    setConnectionTimestamp(Date.now());
                 }, 800);
             }
         });
@@ -64,7 +61,7 @@ export function useTableSelection(
         return () => {
             unsubscribe();
         };
-    }, [dbContext, handleTableSelection, schemaName, setConnectionTimestamp]);
+    }, [dbContext, handleTableSelection, schemaName]);
 
     // Restore selected table when switching chats (only after connection is ready)
     useEffect(() => {
@@ -78,8 +75,6 @@ export function useTableSelection(
                         if (isValid) {
                             // Table exists, restore the selection
                             setSelectedTable(currentChat.selectedTable);
-                            // Update connection timestamp to refresh components
-                            setConnectionTimestamp(Date.now());
                         } else {
                             // Table doesn't exist in this schema, clear selection
                             setSelectedTable(null);
@@ -98,7 +93,7 @@ export function useTableSelection(
         };
 
         restoreTableSelection();
-    }, [connection, currentChat, setConnectionTimestamp, dbContext, schemaName, updateChatState]);
+    }, [connection, currentChat, dbContext, schemaName, updateChatState]);
 
     return {
         selectedTable,

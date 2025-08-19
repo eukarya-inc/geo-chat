@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { useAIChat } from '../../lib/modelingai';
+import { useAI } from '../../lib/ai/useAI';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
@@ -11,7 +11,6 @@ interface AIChatProps {
     apiKey?: string;
     chatId?: string | null;
     schemaName?: string | null;
-    messages: StructuredMessage[];
     onMessagesChange: (messages: StructuredMessage[]) => void;
     updateChatMessages?: (chatId: string, messages: StructuredMessage[]) => void;
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
@@ -25,7 +24,6 @@ export default function AIChat({
     apiKey,
     chatId,
     schemaName,
-    messages,
     onMessagesChange,
     updateChatMessages,
     onSendMessageReady,
@@ -43,19 +41,34 @@ export default function AIChat({
     const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const promptSuggestionAbortRef = useRef<AbortController | null>(null);
+
+    const effectiveChatId = chatId || 'default';
+
+    const handleMessagesChange = (messages: StructuredMessage[]) => {
+        if (chatId && updateChatMessages) {
+            updateChatMessages(chatId, messages);
+        }
+        onMessagesChange(messages);
+    };
+
     const {
+        messages,
+        isLoading,
+        isAnyLoading,
         input,
         handleInputChange,
         handleSubmit,
         handleStop,
-        isLoading,
-        isAnyLoading,
-        // error,
-        isApiKeyConfigured,
         sendMessage,
-    } = useAIChat(dbContext, schemaName || null, chatId || null, apiKey, messages, onMessagesChange, updateChatMessages);
+        isApiKeyConfigured,
+    } = useAI({
+        chatId: effectiveChatId,
+        schema: schemaName,
+        dbContext,
+        apiKey,
+        onMessagesChange: handleMessagesChange
+    });
 
-    // Group messages by user-assistant pairs
     const messageGroups = useMemo(() => {
         const groups: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number }[] = [];
         
@@ -66,13 +79,12 @@ export default function AIChat({
                     userMessage: message, 
                     startIndex: i 
                 };
-                // Check if next message is assistant's response
                 if (i + 1 < messages.length && messages[i + 1].role === 'assistant') {
                     group.assistantMessage = messages[i + 1];
                 }
                 groups.push(group);
                 if (group.assistantMessage) {
-                    i++; // Skip the assistant message we just processed
+                    i++;
                 }
             }
         }
@@ -80,16 +92,13 @@ export default function AIChat({
         return groups;
     }, [messages]);
 
-    // Toggle collapse state for a group
     const toggleGroupCollapse = (groupIndex: number) => {
-        // Mark this group as manually toggled
         setManuallyToggledGroups(prev => {
             const newSet = new Set(prev);
             newSet.add(groupIndex);
             return newSet;
         });
         
-        // Toggle the collapsed state
         setCollapsedGroups(prev => {
             const newSet = new Set(prev);
             if (newSet.has(groupIndex)) {
@@ -101,17 +110,11 @@ export default function AIChat({
         });
     };
 
-    // Auto-collapse when a new assistant message appears (even if empty during streaming)
     useEffect(() => {
-        // Check if the last group has an assistant message (it means AI started responding)
         if (messageGroups.length > 0) {
             const lastGroup = messageGroups[messageGroups.length - 1];
             const lastIndex = messageGroups.length - 1;
             
-            // Only auto-collapse if:
-            // 1. There's an assistant message
-            // 2. It's not already collapsed
-            // 3. It hasn't been manually toggled by the user
             if (lastGroup.assistantMessage && 
                 !collapsedGroups.has(lastIndex) && 
                 !manuallyToggledGroups.has(lastIndex)) {
@@ -128,7 +131,6 @@ export default function AIChat({
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Check if scroll position is near bottom (within 100px)
     const isNearBottom = () => {
         const container = scrollContainerRef.current;
         if (!container) return true;
@@ -138,28 +140,22 @@ export default function AIChat({
         return scrollBottom <= threshold;
     };
 
-    // Track user scroll events
     const handleScroll = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
-        // If user is not at bottom, they have manually scrolled
         userHasScrolledRef.current = !isNearBottom();
     };
 
-    // Auto-scroll effect
     useEffect(() => {
-        // Skip if user has manually scrolled up
         if (userHasScrolledRef.current) {
             return;
         }
 
-        // For first few messages or when near bottom, auto-scroll
         if (messages.length <= 2 || isNearBottom()) {
             const now = Date.now();
             const timeSinceLastScroll = now - lastScrollTimeRef.current;
 
-            // Throttle scrolling to once per second to allow manual scrolling
             if (timeSinceLastScroll >= 1000 || messages.length <= 2) {
                 lastScrollTimeRef.current = now;
                 setTimeout(() => {
@@ -169,16 +165,13 @@ export default function AIChat({
         }
     }, [messages]);
 
-    // Also scroll when messages update (for completion tool results)
     useEffect(() => {
-        // Check if the last message contains completion tool results
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && Array.isArray(lastMessage.content)) {
             const hasCompletionResult = lastMessage.content.some(
                 block => block.type === 'tool_result' && block.name === 'completion'
             );
             if (hasCompletionResult) {
-                // Wait a bit for the DOM to update, then scroll
                 setTimeout(() => {
                     scrollToBottom();
                 }, 200);
@@ -186,55 +179,43 @@ export default function AIChat({
         }
     }, [messages]);
 
-    // Reset user scroll flag when loading ends and user is at bottom
     useEffect(() => {
         if (!isLoading && isNearBottom()) {
             userHasScrolledRef.current = false;
         }
     }, [isLoading]);
 
-    // Pass sendMessage function to parent component
     useEffect(() => {
         if (onSendMessageReady) {
             onSendMessageReady(sendMessage);
         }
-    }, [onSendMessageReady, sendMessage]); // Include sendMessage to always have latest version
+    }, [onSendMessageReady, sendMessage]);
 
-    // Generate prompt suggestions when a table is selected and add them to messages
     useEffect(() => {
         const loadPromptSuggestions = async (abortSignal: AbortSignal) => {
-            // Check if we just created a table (last message has TABLE_CREATED)
             const lastMessage = messages[messages.length - 1];
             if (!lastMessage || lastMessage.role !== 'user') return;
             
             const content = typeof lastMessage.content === 'string' ? lastMessage.content : '';
             if (!content.includes('<!--TABLE_CREATED:')) return;
             
-            // Skip prompt suggestions if this is from Example button
             if (content.includes(':FROM_EXAMPLE-->')) {
                 return;
             }
             
-            // Check if we already have an assistant message after this table creation
-            // to avoid adding duplicate prompt suggestions
             if (messages.length > 1) {
                 const prevMessage = messages[messages.length - 2];
                 if (prevMessage && typeof prevMessage.content === 'string' && 
                     prevMessage.content.includes('<!--TABLE_CREATED:')) {
-                    // This table creation already has responses, skip
                     return;
                 }
             }
             
-            // Extract table name from the marker
-            // Format can be either <!--TABLE_CREATED:tablename--> or <!--TABLE_CREATED:tablename:FROM_EXAMPLE-->
             let tableName: string | null = null;
             if (content.includes(':FROM_EXAMPLE-->')) {
-                // Example format: <!--TABLE_CREATED:customer:FROM_EXAMPLE-->
                 const match = content.match(/<!--TABLE_CREATED:(.+?):FROM_EXAMPLE-->/);
                 tableName = match ? match[1] : null;
             } else {
-                // Regular format: <!--TABLE_CREATED:customer-->
                 const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
                 tableName = match ? match[1] : null;
             }
@@ -242,7 +223,6 @@ export default function AIChat({
             
             if (!tableName || !dbContext || !apiKey) return;
 
-            // Add a loading message first
             const loadingMessage: StructuredMessage = {
                 role: 'assistant',
                 content: [
@@ -257,7 +237,6 @@ export default function AIChat({
             onMessagesChange(messagesWithLoading);
             
             try {
-                // Check if aborted before making API call
                 if (abortSignal.aborted) {
                     onMessagesChange(messages);
                     return;
@@ -270,12 +249,10 @@ export default function AIChat({
                     apiKey || ''
                 );
                 
-                // Check if aborted after API call
                 if (abortSignal.aborted) {
                     return;
                 }
                 
-                // Create a synthetic assistant message with prompt suggestions
                 if (prompts.length > 0) {
                     const promptMessage: StructuredMessage = {
                         role: 'assistant',
@@ -298,37 +275,29 @@ export default function AIChat({
                         ]
                     };
                     
-                    // Replace the loading message with the prompt message
-                    // Remove the last message (loading) and add the prompt message
                     const updatedMessages = [...messages, promptMessage];
                     onMessagesChange(updatedMessages);
                 } else {
-                    // If no prompts generated, remove the loading message
                     onMessagesChange(messages);
                 }
             } catch (error) {
-                // Check if it was aborted
                 if (abortSignal.aborted) {
                     return;
                 }
                 console.error('Failed to load prompt suggestions:', error);
-                // Remove the loading message on error
                 onMessagesChange(messages);
             }
         };
 
-        // Cancel any previous prompt suggestion loading
         if (promptSuggestionAbortRef.current) {
             promptSuggestionAbortRef.current.abort();
         }
 
-        // Create new abort controller
         const abortController = new AbortController();
         promptSuggestionAbortRef.current = abortController;
 
         loadPromptSuggestions(abortController.signal);
 
-        // Cleanup on unmount or when dependencies change
         return () => {
             if (promptSuggestionAbortRef.current) {
                 promptSuggestionAbortRef.current.abort();
@@ -337,19 +306,14 @@ export default function AIChat({
         };
     }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, onMessagesChange]);
 
-    // Handle prompt click - send message or update input
     const handlePromptSelection = (promptText: string) => {
-        // Check if the prompt text is already in the input field
         if (input === promptText) {
-            // If it's already there, submit the form directly
-            // Clear the input field and send message (same behavior as handleSubmit)
             const changeEvent = {
                 target: { value: '' }
             } as React.ChangeEvent<HTMLTextAreaElement>;
             handleInputChange(changeEvent);
             sendMessage(promptText);
         } else {
-            // Otherwise, replace the input field with the prompt text
             const changeEvent = {
                 target: { value: promptText }
             } as React.ChangeEvent<HTMLTextAreaElement>;
@@ -357,7 +321,6 @@ export default function AIChat({
         }
     };
 
-    // Handle click outside to close popup
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (showPopup &&
@@ -378,7 +341,6 @@ export default function AIChat({
     }, [showPopup]);
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        // During IME conversion (isComposing), do not send
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
             handleSubmit(e);
@@ -418,14 +380,12 @@ export default function AIChat({
                     const isCollapsed = collapsedGroups.has(groupIndex);
                     const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
                     
-                    // Check if user message contains only TABLE_CREATED marker
                     const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
                     const isTableOnlyMessage = userContent.includes('<!--TABLE_CREATED:') && 
                                               userContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
 
                     return (
                         <div key={groupIndex} className="mb-4">
-                            {/* User message */}
                             {isTableOnlyMessage ? (
                                 <div className="mb-2 w-full">
                                     <StructuredMessageRenderer
@@ -450,7 +410,7 @@ export default function AIChat({
                                             <StructuredMessageRenderer
                                                 message={group.userMessage}
                                                 className="prose max-w-none"
-                                                        dbContext={dbContext}
+                                                dbContext={dbContext}
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                                 onPromptClick={handlePromptSelection}
@@ -460,11 +420,9 @@ export default function AIChat({
                                 </div>
                             )}
 
-                            {/* Assistant message */}
                             {group.assistantMessage && (
                                 <div className="flex justify-start">
                                     <div className="w-full">
-                                        {/* Check if this is a prompt-only or loading message */}
                                         {(() => {
                                             const isPromptOnlyMessage = 
                                                 Array.isArray(group.assistantMessage.content) &&
@@ -478,7 +436,6 @@ export default function AIChat({
                                                 group.assistantMessage.content[0].type === 'text' &&
                                                 group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
                                             
-                                            // Don't show collapse button for prompt-only or loading messages
                                             if (isPromptOnlyMessage || isLoadingMessage) {
                                                 return null;
                                             }
@@ -486,30 +443,29 @@ export default function AIChat({
                                             return (
                                                 <button
                                                     onClick={() => toggleGroupCollapse(groupIndex)}
-                                                className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-1 relative overflow-hidden"
-                                            >
-                                                {isCollapsed ? (
-                                                    <ChevronRightIcon className="w-4 h-4" />
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4" />
-                                                )}
-                                                <span className="relative">
-                                                    {isCurrentlyLoading ? '思考中...' : (isCollapsed ? '思考過程を表示' : '思考過程を隠す')}
-                                                    {isCurrentlyLoading && isCollapsed && (
-                                                        <span 
-                                                            className="absolute inset-0 animate-shimmer"
-                                                            style={{
-                                                                backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
-                                                                backgroundSize: '200% 100%'
-                                                            }}
-                                                        />
+                                                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-1 relative overflow-hidden"
+                                                >
+                                                    {isCollapsed ? (
+                                                        <ChevronRightIcon className="w-4 h-4" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-4 h-4" />
                                                     )}
-                                                </span>
-                                            </button>
+                                                    <span className="relative">
+                                                        {isCurrentlyLoading ? '思考中...' : (isCollapsed ? '思考過程を表示' : '思考過程を隠す')}
+                                                        {isCurrentlyLoading && isCollapsed && (
+                                                            <span 
+                                                                className="absolute inset-0 animate-shimmer"
+                                                                style={{
+                                                                    backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+                                                                    backgroundSize: '200% 100%'
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </span>
+                                                </button>
                                             );
                                         })()}
 
-                                        {/* Check if this is a prompt-only or loading message */}
                                         {(() => {
                                             const isPromptOnlyMessage = 
                                                 Array.isArray(group.assistantMessage.content) &&
@@ -523,7 +479,6 @@ export default function AIChat({
                                                 group.assistantMessage.content[0].type === 'text' &&
                                                 group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
                                             
-                                            // Always show prompt-only or loading messages fully
                                             if (isPromptOnlyMessage || isLoadingMessage) {
                                                 return (
                                                     <div className="break-words">
@@ -540,10 +495,8 @@ export default function AIChat({
                                                 );
                                             }
                                             
-                                            // For regular messages, show based on collapsed state
                                             return (
                                                 <>
-                                                    {/* Show full message only when not collapsed */}
                                                     {!isCollapsed && (
                                                         <div className="break-words">
                                                             <StructuredMessageRenderer
@@ -561,7 +514,6 @@ export default function AIChat({
                                                         </div>
                                                     )}
 
-                                                    {/* When collapsed, show table messages always, and final text only when not loading */}
                                                     {isCollapsed && (
                                                         <div className="break-words">
                                                             <StructuredMessageRenderer

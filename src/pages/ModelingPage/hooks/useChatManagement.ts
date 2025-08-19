@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Chat } from '../../../components/chat/ChatList';
 import type { StructuredMessage } from '../../../types/message';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
@@ -10,35 +10,8 @@ export function useChatManagement(
     const [chats, setChats] = useState<Chat[]>([]);
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
 
-    // Get current chat with all properties
-    const currentChatFull = chats.find(chat => chat.id === selectedChatId);
-    
-    // Create a stable reference for current chat without messages
-    // This prevents re-renders when messages update during streaming
-    const currentChat = useMemo(() => {
-        if (!currentChatFull) return undefined;
-        
-        // Return chat data without messages to prevent unnecessary re-renders
-        return {
-            id: currentChatFull.id,
-            title: currentChatFull.title,
-            type: currentChatFull.type,
-            createdAt: currentChatFull.createdAt,
-            messages: [], // Provide empty array to maintain type compatibility
-            selectedTable: currentChatFull.selectedTable,
-            tableStyles: currentChatFull.tableStyles,
-            extraMapStyle: currentChatFull.extraMapStyle,
-            mapState: currentChatFull.mapState
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        selectedChatId, // Only re-create when chat ID changes
-        currentChatFull?.selectedTable,
-        // Stringify objects for stable comparison
-        JSON.stringify(currentChatFull?.tableStyles),
-        JSON.stringify(currentChatFull?.extraMapStyle),
-        JSON.stringify(currentChatFull?.mapState)
-    ]);
+    // Get current chat directly - no need for complex memoization
+    const currentChat = chats.find(chat => chat.id === selectedChatId);
     
     // Initialize first chat if no chats exist
     useEffect(() => {

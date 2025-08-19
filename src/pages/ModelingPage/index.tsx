@@ -47,11 +47,7 @@ function ModelingPage() {
     const schemaName = chatIdToSchemaName(selectedChatId);
     
     // Schema management (uses chats state from above)
-    const {
-        connection,
-        connectionTimestamp,
-        setConnectionTimestamp,
-    } = useSchemaManagement(
+    const { connection } = useSchemaManagement(
         dbContext,
         schemaName,
         chats
@@ -61,7 +57,7 @@ function ModelingPage() {
     const {
         selectedTable,
         handleTableSelection,
-    } = useTableSelection(dbContext, schemaName, connection, setConnectionTimestamp, updateChatState, currentChat);
+    } = useTableSelection(dbContext, schemaName, connection, updateChatState, currentChat);
     
     // Map visualization
     const {
@@ -76,7 +72,10 @@ function ModelingPage() {
     } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
     
     // Chart visualization
-    const { chartSpec } = useChartVisualization(selectedTable, dbContext, schemaName, connection, connectionTimestamp);
+    const { chartSpec } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
+    
+    // Get chat type with fallback to 'graph'
+    const chatType = currentChat?.type || 'graph';
     
     // Message handling
     const {
@@ -149,7 +148,6 @@ function ModelingPage() {
                             apiKey={apiKey}
                             chatId={selectedChatId}
                             schemaName={schemaName}
-                            messages={chats.find(c => c.id === selectedChatId)?.messages || []}
                             onMessagesChange={handleMessagesChange}
                             updateChatMessages={updateChatMessages}
                             onSendMessageReady={handleSendMessageReady}
@@ -204,7 +202,6 @@ function ModelingPage() {
                                             dbContext={dbContext}
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
-                                            refreshTrigger={connectionTimestamp}
                                             schema={schemaName}
                                         />
                                     </div>
@@ -236,7 +233,7 @@ function ModelingPage() {
                                     style={{ height: `${tableAreaHeight}px` }}
                                 >
                                     <Table
-                                        key={`${selectedChatId}-${selectedTable}-${connectionTimestamp}`}
+                                        key={`${selectedChatId}-${selectedTable}`}
                                         connection={connection}
                                         tableName={selectedTable}
                                         dbContext={dbContext}
@@ -244,7 +241,7 @@ function ModelingPage() {
                                 </div>
 
                                 {/* Resizable divider between table and graph/map */}
-                                {(currentChat?.type === 'graph' || currentChat?.type === 'map') && (
+                                {(chatType === 'graph' || chatType === 'map') && (
                                     <ResizableDivider
                                         onResize={setTableAreaHeight}
                                         minHeight={100}
@@ -254,7 +251,7 @@ function ModelingPage() {
                                 )}
 
                                 {/* Graph Section (for graph chats) */}
-                                {currentChat?.type === 'graph' && chartSpec && connection && selectedChatId && (
+                                {chatType === 'graph' && chartSpec && connection && selectedChatId && (
                                     <div className="flex-1 overflow-auto p-4">
                                         <VegaLiteChart
                                             key={`${schemaName}-${chartSpec.id}`}
@@ -266,7 +263,7 @@ function ModelingPage() {
                                 )}
 
                                 {/* Map Section (for map chats) */}
-                                {currentChat?.type === 'map' && connection && (
+                                {chatType === 'map' && connection && (
                                     <div className="flex-1 overflow-hidden">
                                         <Map
                                             dbContext={dbContext}

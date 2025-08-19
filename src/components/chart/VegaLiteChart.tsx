@@ -199,7 +199,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
           setColumns([]);
           return;
         }
-      } catch (err) {
+      } catch {
         // Validation failed, clear columns silently
         setColumns([]);
         return;
@@ -208,7 +208,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       try {
         const cols = await dbContext.getTableColumns(config.tableName, schema);
         setColumns(cols);
-      } catch (err) {
+      } catch {
         // This shouldn't happen if validation passed, but handle it gracefully
         setColumns([]);
       }
@@ -407,7 +407,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
             setLoading(false);
             return;
           }
-        } catch (error) {
+        } catch {
           // Validation failed, silently skip
           setData([]);
           setError(null);

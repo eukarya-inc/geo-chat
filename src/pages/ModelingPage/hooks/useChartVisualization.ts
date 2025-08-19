@@ -8,8 +8,7 @@ export function useChartVisualization(
     selectedTable: string | null,
     dbContext: DBContext | null,
     schemaName: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
-    connectionTimestamp: number
+    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
 
@@ -44,7 +43,7 @@ export function useChartVisualization(
                     setChartSpec(null);
                     return;
                 }
-            } catch (error) {
+            } catch {
                 // Validation failed, clear chart spec silently
                 setChartSpec(null);
                 return;
@@ -56,7 +55,7 @@ export function useChartVisualization(
                 if (defaultCharts.length > 0) {
                     const result = defaultCharts[0];
                     setChartSpec({
-                        id: `preview-${selectedTable}-${schemaName}-${connectionTimestamp}`,
+                        id: `preview-${selectedTable}-${schemaName}`,
                         spec: result.spec,
                         timestamp: new Date(),
                         title: result.title
@@ -71,7 +70,7 @@ export function useChartVisualization(
         };
 
         generateChart();
-    }, [selectedTable, dbContext, schemaName, connection, connectionTimestamp]);
+    }, [selectedTable, dbContext, schemaName, connection]);
 
     return {
         chartSpec,
