@@ -98,7 +98,7 @@ export function createVegaLiteTool(dbContext: DBContext) {
         }
         
         // Validate table exists using high-level method
-        const tableExists = await dbContext.validateTable(tableName, null, 5);
+        const tableExists = await dbContext.validateTable(tableName, null);
         
         if (!tableExists) {
           // Get available tables for error message

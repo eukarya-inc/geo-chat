@@ -1402,4 +1402,4 @@ const MapComponent: React.FC<MapProps> = ({
     );
 };
 
-export default MapComponent;
+export default React.memo(MapComponent);

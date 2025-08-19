@@ -15,7 +15,7 @@ interface MapViewState {
 export function useMapVisualization(
     selectedTable: string | null,
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
-    selectedChatId: string | null,
+    schemaName: string | null,
     updateChatState: (updates: Partial<Chat>) => void
 ) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
@@ -50,7 +50,7 @@ export function useMapVisualization(
         }));
         
         // Save to chat
-        if (selectedChatId) {
+        if (schemaName) {
             updateChatState({
                 tableStyles: {
                     ...tableStyles,
@@ -58,7 +58,7 @@ export function useMapVisualization(
                 }
             });
         }
-    }, [selectedChatId, tableStyles, updateChatState]);
+    }, [schemaName, tableStyles, updateChatState]);
 
     // Update extra map style in chat
     const updateExtraMapStyle = useCallback((style: ExtraStyle | undefined) => {
@@ -66,15 +66,15 @@ export function useMapVisualization(
         setExtraMapStyle(style);
         
         // Save to chat
-        if (selectedChatId) {
+        if (schemaName) {
             updateChatState({ extraMapStyle: style });
         }
-    }, [selectedChatId, updateChatState]);
+    }, [schemaName, updateChatState]);
 
     // Update map view state in chat
     const updateMapViewState = useCallback((viewState: MapViewState) => {
         // Save map state to chat
-        if (selectedChatId) {
+        if (schemaName) {
             updateChatState({
                 mapState: {
                     center: viewState.center,
@@ -84,19 +84,19 @@ export function useMapVisualization(
                 }
             });
         }
-    }, [selectedChatId, updateChatState]);
+    }, [schemaName, updateChatState]);
 
     // Update map style in chat
     const updateMapStyle = useCallback((style: StyleSpecification) => {
         // Save style to chat
-        if (selectedChatId) {
+        if (schemaName) {
             updateChatState({
                 mapState: {
                     style
                 }
             });
         }
-    }, [selectedChatId, updateChatState]);
+    }, [schemaName, updateChatState]);
 
     return {
         mapSelectedColumns,

@@ -5,7 +5,7 @@ import type { Chat } from '../../../components/chat/ChatList';
 
 export function useSchemaManagement(
     dbContext: DBContext | null,
-    selectedChatId: string | null,
+    schemaName: string | null,
     chats: Chat[]
 ) {
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
@@ -13,7 +13,7 @@ export function useSchemaManagement(
 
     // Combined schema switching and connection setup
     useEffect(() => {
-        if (!dbContext || !selectedChatId) return;
+        if (!dbContext || !schemaName) return;
 
         let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
         let isCleanedUp = false;
@@ -33,34 +33,35 @@ export function useSchemaManagement(
             await new Promise(resolve => setTimeout(resolve, 200));
 
             try {
-                // Switch schema first
-                await dbContext.switchToSchema(selectedChatId);
-
                 // Create new connection with the new schema
-                const conn = await dbContext.createManagedConnection(selectedChatId);
+                const conn = await dbContext.createManagedConnection(schemaName);
                 currentConnection = conn;
 
                 if (!isCleanedUp) {
+                    // Ensure connection is fully ready before setting it
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
                     setConnection(conn);
                     setConnectionTimestamp(Date.now());
                     
                     // Restore table selection for this chat
-                    const targetChat = chats.find(chat => chat.id === selectedChatId);
+                    const targetChat = chats.find(chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName);
                     if (targetChat?.selectedTable) {
                         try {
                             // Check if table exists in this schema
                             await conn.query(`SELECT 1 FROM "${targetChat.selectedTable}" LIMIT 0`);
+                            // Table exists, will be restored by useTableSelection hook
                         } catch {
-                            // Table not found in schema, don't update the selection here
-                            // Let the parent component handle this
+                            // Table not found in schema, clear it
+                            console.log(`Table ${targetChat.selectedTable} not found in schema ${schemaName}`);
                         }
                     }
                     
-                    // Notify table change after connection is established
+                    // Notify table change after connection is established with a longer delay
                     if (dbContext) {
                         setTimeout(() => {
-                            dbContext.notifyTableChange(undefined, selectedChatId);
-                        }, 300);
+                            dbContext.notifyTableChange(undefined, schemaName);
+                        }, 500);
                     }
                 }
             } catch (error) {
@@ -78,7 +79,7 @@ export function useSchemaManagement(
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedChatId, dbContext]); // Only depend on selectedChatId and dbContext
+    }, [schemaName, dbContext]); // Only depend on schemaName and dbContext
 
     return {
         connection,

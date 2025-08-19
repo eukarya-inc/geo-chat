@@ -9,7 +9,7 @@ export interface DBContext {
   notifyTableChange(tableName?: string, schema?: string | null): void;
   onTableChange(callback: (tableName?: string, schema?: string | null) => void): () => void;
   executeWithRefresh<T>(operation: () => Promise<T>, tableName?: string): Promise<T>;
-  validateTable(tableName: string, schema?: string | null, maxRetries?: number): Promise<boolean>;
+  validateTable(tableName: string, schema?: string | null): Promise<boolean>;
   getTables(schema?: string | null): Promise<string[]>;
   getTableColumns(tableName: string, schema?: string | null): Promise<Array<{name: string; type: string}>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,13 +21,9 @@ export interface DBContext {
   getPoolStats(): { schema: string | null; total: number; inUse: number }[];
   closeSchemaConnections(schema: string | null): Promise<void>;
   
-  // Schema management methods (formerly SchemaManager)
-  createSchema(chatId: string): Promise<void>;
-  switchToSchema(chatId: string): Promise<void>;
-  deleteSchema(chatId: string): Promise<void>;
-  getSchemaName(chatId: string): string;
-  resetToMain(): Promise<void>;
-  getCurrentSchema(): string | null;
+  // Schema management methods
+  createSchema(schemaName: string): Promise<void>;
+  deleteSchema(schemaName: string): Promise<void>;
 }
 
 interface PooledConnection {
@@ -51,7 +47,6 @@ class DatabaseContext implements DBContext {
   private maxIdleTime = 60000; // 60 seconds
   private connectionMutex: Promise<void> = Promise.resolve();
   private cleanupTimer: NodeJS.Timeout | null = null;
-  private currentSchema: string | null = null;
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
@@ -326,9 +321,6 @@ class DatabaseContext implements DBContext {
         await conn.query('CHECKPOINT;');
       }
       
-      // Brief pause to ensure all operations are flushed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       // Database consistency enforced
     } catch {
       // DB consistency checkpoint failed (non-critical)
@@ -361,30 +353,21 @@ class DatabaseContext implements DBContext {
       // Executing DDL operation
       const result = await operation();
       
-      // Force immediate consistency across all potential connections
-      // DDL operation completed, forcing database sync
-      
-      // Force multiple checkpoints to ensure data is visible across connections
-      await this.forceConsistency();
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Force consistency after DDL operation
       await this.forceConsistency();
       
-      // Validate table if specified with more retries
+      // Validate table if specified
       if (tableName) {
-        // Validating table after operation
-        const isValid = await this.validateTable(tableName, null, 5);
+        const isValid = await this.validateTable(tableName, null);
         if (!isValid) {
-          console.error(`DBContext: CRITICAL - Table ${tableName} validation failed after creation`);
-          // Try one more aggressive sync
+          console.error(`DBContext: Table ${tableName} validation failed after operation`);
+          // Try one more sync
           await this.forceConsistency();
-          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
       
-      // Notify table change with longer delay to ensure propagation
-      setTimeout(() => {
-        this.notifyTableChange(tableName, null); // Schema not available in this context
-      }, 500);
+      // Notify table change immediately
+      this.notifyTableChange(tableName, null);
       
       return result;
     } catch (error) {
@@ -407,68 +390,46 @@ class DatabaseContext implements DBContext {
     }
   }
 
-  async validateTable(tableName: string, schema: string | null = null, maxRetries: number = 5): Promise<boolean> {
+  async validateTable(tableName: string, schema: string | null = null): Promise<boolean> {
     const sanitizedSchema = this.sanitizeSchemaName(schema);
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    
+    try {
+      const conn = await this.connect(sanitizedSchema);
       try {
-        // Force consistency before each validation attempt
-        if (attempt > 0) {
-          await this.forceConsistency();
+        // Query tables from the specified schema
+        const schemaName = sanitizedSchema || 'main';
+        const tablesResult = await conn.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = '${schemaName}'
+            AND table_type = 'BASE TABLE'
+        `);
+        const tableNames: string[] = [];
+        for (let i = 0; i < tablesResult.numRows; i++) {
+          tableNames.push(tablesResult.getChildAt(0)?.get(i) as string);
         }
         
-        const conn = await this.connect(sanitizedSchema);
-        try {
-          // Query tables from the specified schema
-          const schemaName = sanitizedSchema || 'main';
-          const tablesResult = await conn.query(`
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = '${schemaName}'
-              AND table_type = 'BASE TABLE'
-          `);
-          const tableNames: string[] = [];
-          for (let i = 0; i < tablesResult.numRows; i++) {
-            tableNames.push(tablesResult.getChildAt(0)?.get(i) as string);
-          }
-          
-          if (!tableNames.includes(tableName)) {
-            // Table not found in SHOW TABLES, retrying...
-            throw new Error(`Table ${tableName} not in SHOW TABLES`);
-          }
-          
-          // Then try to access it
-          await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
-          // Table validated successfully
-          return true;
-        } finally {
-          await conn.close();
-        }
-      } catch (error) {
-        // Check if this is a memory access error
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes('memory access out of bounds')) {
-          console.error(`DBContext: Memory access error when validating table ${tableName}. Aborting validation.`);
-          return false; // Don't retry on memory errors
+        if (!tableNames.includes(tableName)) {
+          // Table not found - this is an expected case when switching schemas
+          return false;
         }
         
-        if (attempt < maxRetries - 1) {
-          // Table validation failed, retrying...
-          await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
-        } else {
-          // Get available tables for better error message
-          let availableTables: string[] = [];
-          try {
-            availableTables = await this.getTables(schema);
-          } catch {
-            // Ignore error getting tables
-          }
-          
-          const tableList = availableTables.length > 0 ? ` Available tables: ${availableTables.join(', ')}` : '';
-          console.error(`DBContext: Table ${tableName} validation failed after ${maxRetries} attempts.${tableList} Error:`, error);
-        }
+        // Then try to access it
+        await conn.query(`SELECT 1 FROM ${tableName} LIMIT 0`);
+        // Table validated successfully
+        return true;
+      } finally {
+        await conn.close();
       }
+    } catch (error) {
+      // Check if this is a memory access error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('memory access out of bounds')) {
+        console.error(`DBContext: Memory access error when validating table ${tableName}.`);
+      }
+      // Table doesn't exist or can't be accessed
+      return false;
     }
-    return false;
   }
 
   async getTables(schema: string | null = null): Promise<string[]> {
@@ -659,69 +620,38 @@ class DatabaseContext implements DBContext {
     this.connectionPool.delete(schema);
   }
   
-  // Schema management methods (formerly SchemaManager)
-  async createSchema(chatId: string): Promise<void> {
-    const schemaName = this.getSchemaName(chatId);
+  // Schema management methods
+  async createSchema(schemaName: string): Promise<void> {
+    const sanitizedSchema = this.sanitizeSchemaName(schemaName);
+    if (!sanitizedSchema) {
+      throw new Error('Invalid schema name');
+    }
+    
     const conn = await this.createManagedConnection(null);
     try {
-      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-      console.log(`DBContext: Created schema ${schemaName}`);
+      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
+      console.log(`DBContext: Created schema ${sanitizedSchema}`);
     } finally {
       await conn.close();
     }
   }
   
-  async switchToSchema(chatId: string): Promise<void> {
-    const schemaName = this.getSchemaName(chatId);
-    const conn = await this.createManagedConnection(null);
-    try {
-      // First ensure the schema exists
-      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-      // Then set it as the current schema
-      await conn.query(`SET search_path = "${schemaName}"`);
-      this.currentSchema = schemaName;
-      console.log(`DBContext: Switched to schema ${schemaName}`);
-    } finally {
-      await conn.close();
+  async deleteSchema(schemaName: string): Promise<void> {
+    const sanitizedSchema = this.sanitizeSchemaName(schemaName);
+    if (!sanitizedSchema) {
+      throw new Error('Invalid schema name');
     }
-  }
-  
-  async deleteSchema(chatId: string): Promise<void> {
-    const schemaName = this.getSchemaName(chatId);
+    
     const conn = await this.createManagedConnection(null);
     try {
       // First switch to main schema to avoid dropping the current schema
       await conn.query(`SET search_path = "main"`);
       // Then drop the schema
-      await conn.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
-      console.log(`DBContext: Deleted schema ${schemaName}`);
-      
-      if (this.currentSchema === schemaName) {
-        this.currentSchema = null;
-      }
+      await conn.query(`DROP SCHEMA IF EXISTS "${sanitizedSchema}" CASCADE`);
+      console.log(`DBContext: Deleted schema ${sanitizedSchema}`);
     } finally {
       await conn.close();
     }
-  }
-  
-  getSchemaName(chatId: string): string {
-    // Replace any special characters that might cause issues in SQL
-    return `chat_${chatId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-  }
-  
-  async resetToMain(): Promise<void> {
-    const conn = await this.createManagedConnection(null);
-    try {
-      await conn.query(`SET search_path = "main"`);
-      this.currentSchema = null;
-      console.log('DBContext: Reset to main schema');
-    } finally {
-      await conn.close();
-    }
-  }
-  
-  getCurrentSchema(): string | null {
-    return this.currentSchema;
   }
   
   // Clean up resources when the context is destroyed

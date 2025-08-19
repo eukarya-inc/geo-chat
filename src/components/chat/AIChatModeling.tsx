@@ -10,8 +10,10 @@ interface AIChatProps {
     dbContext: DBContext;
     apiKey?: string;
     chatId?: string | null;
+    schemaName?: string | null;
     messages: StructuredMessage[];
     onMessagesChange: (messages: StructuredMessage[]) => void;
+    updateChatMessages?: (chatId: string, messages: StructuredMessage[]) => void;
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
@@ -22,8 +24,10 @@ export default function AIChat({
     dbContext,
     apiKey,
     chatId,
+    schemaName,
     messages,
     onMessagesChange,
+    updateChatMessages,
     onSendMessageReady,
     selectedTable,
     onTableSelect,
@@ -48,7 +52,7 @@ export default function AIChat({
         // error,
         isApiKeyConfigured,
         sendMessage,
-    } = useAIChat(dbContext, chatId || null, apiKey, messages, onMessagesChange);
+    } = useAIChat(dbContext, schemaName || null, chatId || null, apiKey, messages, onMessagesChange, updateChatMessages);
 
     // Group messages by user-assistant pairs
     const messageGroups = useMemo(() => {
@@ -239,7 +243,7 @@ export default function AIChat({
                 const prompts = await generatePromptSuggestions(
                     tableName,
                     dbContext,
-                    chatId || null,
+                    schemaName || null,
                     apiKey || ''
                 );
                 
@@ -282,7 +286,7 @@ export default function AIChat({
         };
 
         loadPromptSuggestions();
-    }, [messages, selectedTable, dbContext, chatId, apiKey, onMessagesChange]);
+    }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, onMessagesChange]);
 
     // Handle prompt click - send message or update input
     const handlePromptSelection = (promptText: string) => {
