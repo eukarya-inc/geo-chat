@@ -1,3 +1,4 @@
+import React from 'react';
 import AIChat from '../../components/chat/AIChatModeling';
 import { Table } from '../../components/table/TableList/Table';
 import RemoteFileSimple from '../../components/remote-file/RemoteFileSimple';
@@ -9,38 +10,77 @@ import VegaLiteChart from '../../components/chart/VegaLiteChart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
-import { useAIChatModeling, useApiKeyManagement, useResizableAreas } from './hooks';
+import {
+    useApiKeyManagement,
+    useResizableAreas,
+    useChatManagement,
+    useSchemaManagement,
+    useTableSelection,
+    useMapVisualization,
+    useChartVisualization,
+    useMessageHandling
+} from './hooks';
 
 function ModelingPage() {
     const { dbContext } = useDuckDB();
+    
+    // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
+    
+    // Resizable areas
     const { sqlAreaHeight, setSqlAreaHeight, tableAreaHeight, setTableAreaHeight } = useResizableAreas();
+    
+    // Chat management (needs to be first for chats state)
     const {
         chats,
         selectedChatId,
         currentChat,
-        schemaManager,
-        selectedTable,
+        createNewChat,
+        deleteChat,
+        selectChat,
+        updateChatMessages,
+        updateChatState,
+    } = useChatManagement(dbContext);
+    
+    // Schema management (uses chats state from above)
+    const {
         connection,
         connectionTimestamp,
-        chartSpec,
+        setConnectionTimestamp,
+    } = useSchemaManagement(
+        dbContext,
+        selectedChatId,
+        chats
+    );
+    
+    // Table selection
+    const {
+        selectedTable,
+        handleTableSelection,
+    } = useTableSelection(dbContext, selectedChatId, connection, setConnectionTimestamp, updateChatState);
+    
+    // Map visualization
+    const {
         mapSelectedColumns,
         selectedGeometryColumn,
         tableStyles,
         extraMapStyle,
-        sendMessageRef,
-        createNewChat,
-        deleteChat,
-        selectChat,
-        handleTableSelection,
-        handleMessagesChange,
-        handleSendMessageReady,
-        handleExampleMessages,
         updateTableStyle,
         updateExtraMapStyle,
         updateMapViewState,
         updateMapStyle,
-    } = useAIChatModeling(dbContext);
+    } = useMapVisualization(selectedTable, connection, selectedChatId, updateChatState);
+    
+    // Chart visualization
+    const { chartSpec } = useChartVisualization(selectedTable, dbContext, selectedChatId);
+    
+    // Message handling
+    const {
+        sendMessageRef,
+        handleSendMessageReady,
+        handleExampleMessages,
+        handleMessagesChange,
+    } = useMessageHandling(selectedChatId, updateChatMessages);
 
     return (
         <div className="flex h-full w-full overflow-hidden">
@@ -52,7 +92,7 @@ function ModelingPage() {
                     onSelectChat={selectChat}
                     onCreateChat={createNewChat}
                     onDeleteChat={deleteChat}
-                    isInitialized={!!schemaManager}
+                    isInitialized={!!dbContext}
                 />
             </div>
 
