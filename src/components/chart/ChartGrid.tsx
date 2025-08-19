@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import VegaLiteChart from './VegaLiteChart';
-import type { DBContext } from '../lib/duckdb/dbContext';
-import type { VegaLiteSpec } from '../types/vega';
+import type { DBContext } from '../../lib/duckdb/dbContext';
+import type { VegaLiteSpec } from '../../types/vega';
 
 export interface ChartSpec {
   id: string;

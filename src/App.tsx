@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import AIChat from './components/AIChat';
-import MapComponent from './components/Map';
-import RemoteFile from './components/RemoteFile';
-import TableList from './components/TableList';
+import AIChat from './components/chat';
+import MapComponent from './components/map';
+import RemoteFile from './components/remote-file';
+import TableList from './components/table/TableList';
 import { useDuckDB } from './lib/duckdb/useDuckDB';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
 import type { MapStyleManager } from './utils/mapStyleManager';

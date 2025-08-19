@@ -2,9 +2,9 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../types/message';
-import type { DBContext } from '../lib/duckdb/dbContext';
-import { formatSQLCompact } from '../utils/sqlFormatter';
+import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
+import type { DBContext } from '../../lib/duckdb/dbContext';
+import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
 

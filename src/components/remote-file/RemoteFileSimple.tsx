@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { DBContext } from '../lib/duckdb/dbContext';
-import { formatSQL } from '../utils/sqlFormatter';
+import type { DBContext } from '../../lib/duckdb/dbContext';
+import { formatSQL } from '../../utils/sqlFormatter';
 
 interface RemoteFileSimpleProps {
     dbContext: DBContext;

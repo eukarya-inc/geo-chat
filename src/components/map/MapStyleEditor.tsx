@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { MapStyleManager } from '../utils/mapStyleManager';
+import type { MapStyleManager } from '../../utils/mapStyleManager';
 
 interface MapStyleEditorProps {
     styleManager: MapStyleManager | null;

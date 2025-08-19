@@ -1,10 +1,10 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { useAIChat } from '../lib/modelingai';
+import { useAIChat } from '../../lib/modelingai';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
-import type { DBContext } from '../lib/duckdb/dbContext';
-import type { StructuredMessage } from '../types/message';
+import type { DBContext } from '../../lib/duckdb/dbContext';
+import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { generatePromptSuggestions } from '../lib/modelingai/promptSuggestionService';
+import { generatePromptSuggestions } from '../../lib/modelingai/promptSuggestionService';
 
 interface AIChatProps {
     dbContext: DBContext;

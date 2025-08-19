@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { Table } from './Table';
 

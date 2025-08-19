@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { DBContext } from '../lib/duckdb/dbContext';
-import type { SQLHistoryEntry } from '../lib/duckdb/sqlHistoryManager';
+import type { DBContext } from '../../../lib/duckdb/dbContext';
+import type { SQLHistoryEntry } from '../../../lib/duckdb/sqlHistoryManager';
 import { SQLFlowVisualization } from './SQLFlowVisualization';
 
 interface TableSQLDisplayProps {

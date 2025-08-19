@@ -2,9 +2,9 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import VegaLiteChart from './VegaLiteChart';
+import VegaLiteChart from '../chart/VegaLiteChart';
 import { TableCreatedMessage } from './TableCreatedMessage';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface MessageRendererProps {
     content: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface TableSelectorProps {
   dbContext: DBContext;

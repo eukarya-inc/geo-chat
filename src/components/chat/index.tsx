@@ -1,8 +1,8 @@
 import { useRef, useEffect } from 'react';
-import { useAIChat } from '../lib/ai/useAIChat';
+import { useAIChat } from '../../lib/ai/useAIChat';
 import MessageRenderer from './MessageRenderer';
-import type { MapStyleManager } from '../utils/mapStyleManager';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { MapStyleManager } from '../../utils/mapStyleManager';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface AIChatProps {
     dbContext: DBContext;

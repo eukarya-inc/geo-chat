@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { VegaLite } from 'react-vega';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
-import type { VegaLiteSpec } from '../types/vega';
+import type { VegaLiteSpec } from '../../types/vega';
 
 interface VegaLiteChartProps {
   spec: VegaLiteSpec;
