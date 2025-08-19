@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface RemoteFileProps {
     dbContext: DBContext;

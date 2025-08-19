@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
-import type { ChatType } from './ChatList';
+import type { ChatType } from './index';
 
 interface ChatTypeMenuProps {
     isOpen: boolean;

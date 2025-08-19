@@ -12,11 +12,11 @@ import type {
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getTileEnvelope } from '../utils/tileUtils';
-import { MapStyleManager } from '../utils/mapStyleManager';
-import { geojsonToVectorTile } from '../utils/vectorTileUtils';
+import { getTileEnvelope } from '../../utils/tileUtils';
+import { MapStyleManager } from '../../utils/mapStyleManager';
+import { geojsonToVectorTile } from '../../utils/vectorTileUtils';
 import MapStyleEditor from './MapStyleEditor';
-import type { DBContext } from '../lib/duckdb/dbContext';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{

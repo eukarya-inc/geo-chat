@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
 import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
-import type { DBContext } from "../lib/duckdb/dbContext";
-import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../utils/duckdbTableUtils";
+import type { DBContext } from "../../../lib/duckdb/dbContext";
+import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../../../utils/duckdbTableUtils";
 import { Table as ArrowTable } from "apache-arrow";
-import { throttle } from "../utils/throttle";
+import { throttle } from "../../../utils/throttle";
 import "@glideapps/glide-data-grid/dist/index.css";
 
 // CSS to ensure scrollbars are visible

@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
-import type { StructuredMessage } from '../types/message';
+import type { StructuredMessage } from '../../../types/message';
 import type { StyleSpecification } from 'maplibre-gl';
 import { ChatTypeMenu } from './ChatTypeMenu';
-import type { TableStyle, ExtraStyle } from './Map';
+import type { TableStyle, ExtraStyle } from '../../map';
 
 export type ChatType = 'graph' | 'map';
 
