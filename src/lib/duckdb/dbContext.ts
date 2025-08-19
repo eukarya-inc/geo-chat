@@ -20,6 +20,14 @@ export interface DBContext {
   describeTable(tableName: string, schema?: string | null): Promise<Array<{column_name: string; column_type: string; [key: string]: any}>>;
   getPoolStats(): { schema: string | null; total: number; inUse: number }[];
   closeSchemaConnections(schema: string | null): Promise<void>;
+  
+  // Schema management methods (formerly SchemaManager)
+  createSchema(chatId: string): Promise<void>;
+  switchToSchema(chatId: string): Promise<void>;
+  deleteSchema(chatId: string): Promise<void>;
+  getSchemaName(chatId: string): string;
+  resetToMain(): Promise<void>;
+  getCurrentSchema(): string | null;
 }
 
 interface PooledConnection {
@@ -43,6 +51,7 @@ class DatabaseContext implements DBContext {
   private maxIdleTime = 60000; // 60 seconds
   private connectionMutex: Promise<void> = Promise.resolve();
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private currentSchema: string | null = null;
 
   constructor(db: AsyncDuckDB) {
     this.db = db;
@@ -648,6 +657,71 @@ class DatabaseContext implements DBContext {
     
     // Remove from pool
     this.connectionPool.delete(schema);
+  }
+  
+  // Schema management methods (formerly SchemaManager)
+  async createSchema(chatId: string): Promise<void> {
+    const schemaName = this.getSchemaName(chatId);
+    const conn = await this.createManagedConnection(null);
+    try {
+      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+      console.log(`DBContext: Created schema ${schemaName}`);
+    } finally {
+      await conn.close();
+    }
+  }
+  
+  async switchToSchema(chatId: string): Promise<void> {
+    const schemaName = this.getSchemaName(chatId);
+    const conn = await this.createManagedConnection(null);
+    try {
+      // First ensure the schema exists
+      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+      // Then set it as the current schema
+      await conn.query(`SET search_path = "${schemaName}"`);
+      this.currentSchema = schemaName;
+      console.log(`DBContext: Switched to schema ${schemaName}`);
+    } finally {
+      await conn.close();
+    }
+  }
+  
+  async deleteSchema(chatId: string): Promise<void> {
+    const schemaName = this.getSchemaName(chatId);
+    const conn = await this.createManagedConnection(null);
+    try {
+      // First switch to main schema to avoid dropping the current schema
+      await conn.query(`SET search_path = "main"`);
+      // Then drop the schema
+      await conn.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      console.log(`DBContext: Deleted schema ${schemaName}`);
+      
+      if (this.currentSchema === schemaName) {
+        this.currentSchema = null;
+      }
+    } finally {
+      await conn.close();
+    }
+  }
+  
+  getSchemaName(chatId: string): string {
+    // Replace any special characters that might cause issues in SQL
+    return `chat_${chatId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  }
+  
+  async resetToMain(): Promise<void> {
+    const conn = await this.createManagedConnection(null);
+    try {
+      await conn.query(`SET search_path = "main"`);
+      this.currentSchema = null;
+      console.log('DBContext: Reset to main schema');
+    } finally {
+      await conn.close();
+    }
+  }
+  
+  getCurrentSchema(): string | null {
+    return this.currentSchema;
   }
   
   // Clean up resources when the context is destroyed
