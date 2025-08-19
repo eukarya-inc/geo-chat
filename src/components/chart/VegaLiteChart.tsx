@@ -58,17 +58,27 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
 
   // Update currentSpec dimensions when initialSpec dimensions change
   useEffect(() => {
-    if (initialSpec.width !== currentSpec.width || initialSpec.height !== currentSpec.height) {
-      setCurrentSpec(prev => ({
-        ...prev,
-        width: initialSpec.width,
-        height: initialSpec.height,
-        // Also update autosize and padding if present
-        ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
-        ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {})
-      }));
-    }
-  }, [initialSpec.width, initialSpec.height, initialSpec.autosize, initialSpec.padding, currentSpec.width, currentSpec.height]);
+    setCurrentSpec(prev => {
+      // Only update if values actually changed
+      const needsUpdate = 
+        prev.width !== initialSpec.width || 
+        prev.height !== initialSpec.height ||
+        prev.autosize !== initialSpec.autosize ||
+        prev.padding !== initialSpec.padding;
+      
+      if (needsUpdate) {
+        return {
+          ...prev,
+          width: initialSpec.width,
+          height: initialSpec.height,
+          // Also update autosize and padding if present
+          ...(initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
+          ...(initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {})
+        };
+      }
+      return prev;
+    });
+  }, [initialSpec.width, initialSpec.height, initialSpec.autosize, initialSpec.padding]);
 
   // Extract table name from SQL query
   function extractTableName(spec: VegaLiteSpec): string {
@@ -329,11 +339,15 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   useEffect(() => {
     if (columns.length > 0) {
       const newSpec = generateSpec();
-      if (JSON.stringify(newSpec) !== JSON.stringify(currentSpec)) {
-        setCurrentSpec(newSpec);
-      }
+      setCurrentSpec(prevSpec => {
+        // Only update if the spec actually changed
+        if (JSON.stringify(newSpec) !== JSON.stringify(prevSpec)) {
+          return newSpec;
+        }
+        return prevSpec;
+      });
     }
-  }, [config, columns, generateSpec, currentSpec]);
+  }, [config, columns, generateSpec]);
 
   // Fetch data when spec changes
   useEffect(() => {
