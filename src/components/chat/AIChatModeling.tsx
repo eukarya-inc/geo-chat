@@ -42,6 +42,7 @@ export default function AIChat({
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
+    const promptSuggestionAbortRef = useRef<AbortController | null>(null);
     const {
         input,
         handleInputChange,
@@ -201,13 +202,18 @@ export default function AIChat({
 
     // Generate prompt suggestions when a table is selected and add them to messages
     useEffect(() => {
-        const loadPromptSuggestions = async () => {
+        const loadPromptSuggestions = async (abortSignal: AbortSignal) => {
             // Check if we just created a table (last message has TABLE_CREATED)
             const lastMessage = messages[messages.length - 1];
             if (!lastMessage || lastMessage.role !== 'user') return;
             
             const content = typeof lastMessage.content === 'string' ? lastMessage.content : '';
             if (!content.includes('<!--TABLE_CREATED:')) return;
+            
+            // Skip prompt suggestions if this is from Example button
+            if (content.includes(':FROM_EXAMPLE-->')) {
+                return;
+            }
             
             // Check if we already have an assistant message after this table creation
             // to avoid adding duplicate prompt suggestions
@@ -221,8 +227,18 @@ export default function AIChat({
             }
             
             // Extract table name from the marker
-            const tableMatch = content.match(/<!--TABLE_CREATED:([^-]+)-->/);
-            const tableName = tableMatch ? tableMatch[1] : selectedTable;
+            // Format can be either <!--TABLE_CREATED:tablename--> or <!--TABLE_CREATED:tablename:FROM_EXAMPLE-->
+            let tableName: string | null = null;
+            if (content.includes(':FROM_EXAMPLE-->')) {
+                // Example format: <!--TABLE_CREATED:customer:FROM_EXAMPLE-->
+                const match = content.match(/<!--TABLE_CREATED:(.+?):FROM_EXAMPLE-->/);
+                tableName = match ? match[1] : null;
+            } else {
+                // Regular format: <!--TABLE_CREATED:customer-->
+                const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
+                tableName = match ? match[1] : null;
+            }
+            tableName = tableName || selectedTable || null;
             
             if (!tableName || !dbContext || !apiKey) return;
 
@@ -239,13 +255,25 @@ export default function AIChat({
             
             const messagesWithLoading = [...messages, loadingMessage];
             onMessagesChange(messagesWithLoading);
+            
             try {
+                // Check if aborted before making API call
+                if (abortSignal.aborted) {
+                    onMessagesChange(messages);
+                    return;
+                }
+                
                 const prompts = await generatePromptSuggestions(
                     tableName,
                     dbContext,
                     schemaName || null,
                     apiKey || ''
                 );
+                
+                // Check if aborted after API call
+                if (abortSignal.aborted) {
+                    return;
+                }
                 
                 // Create a synthetic assistant message with prompt suggestions
                 if (prompts.length > 0) {
@@ -279,13 +307,34 @@ export default function AIChat({
                     onMessagesChange(messages);
                 }
             } catch (error) {
+                // Check if it was aborted
+                if (abortSignal.aborted) {
+                    return;
+                }
                 console.error('Failed to load prompt suggestions:', error);
                 // Remove the loading message on error
                 onMessagesChange(messages);
             }
         };
 
-        loadPromptSuggestions();
+        // Cancel any previous prompt suggestion loading
+        if (promptSuggestionAbortRef.current) {
+            promptSuggestionAbortRef.current.abort();
+        }
+
+        // Create new abort controller
+        const abortController = new AbortController();
+        promptSuggestionAbortRef.current = abortController;
+
+        loadPromptSuggestions(abortController.signal);
+
+        // Cleanup on unmount or when dependencies change
+        return () => {
+            if (promptSuggestionAbortRef.current) {
+                promptSuggestionAbortRef.current.abort();
+                promptSuggestionAbortRef.current = null;
+            }
+        };
     }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, onMessagesChange]);
 
     // Handle prompt click - send message or update input

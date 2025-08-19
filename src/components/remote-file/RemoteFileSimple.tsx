@@ -98,7 +98,10 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
             dbContext.notifyTableChange(tableName, schema);
 
             // Send a simple table creation message
-            const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
+            // Include source info to skip prompt suggestions for Example button
+            const tableMessage = isFromExample 
+                ? `<!--TABLE_CREATED:${tableName}:FROM_EXAMPLE-->`
+                : `<!--TABLE_CREATED:${tableName}-->`;
             
             if (isFromExample && onExampleMessages) {
                 // For Example button, use special handler that adds both messages at once
