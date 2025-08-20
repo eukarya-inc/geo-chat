@@ -219,6 +219,12 @@ Parquet files often contain complex nested structures (STRUCT, LIST, etc.):
   \`\`\`
 - INCORRECT: \`SHOW TABLES; DESCRIBE my_table; SELECT * FROM my_table LIMIT 5;\`
 
+- **JAPANESE COLUMN NAMES**: ALWAYS use double quotes for Japanese column names
+  - CORRECT: \`SELECT "事業者名", "営業収入_千円" FROM revenue_2020;\`
+  - CORRECT: \`CREATE TABLE labor_productivity AS SELECT r."事業者名", r."営業収入_千円" / e."従業員数" AS "一人当たり営業収入" FROM revenue_2020 r JOIN employee_count e ON r."事業者名" = e."事業者名";\`
+  - INCORRECT: \`SELECT 事業者名, 営業収入_千円 FROM revenue_2020;\` (will cause syntax error)
+  - **IMPORTANT**: This applies to ALL Japanese column names in SELECT, WHERE, JOIN, GROUP BY, ORDER BY, etc.
+
 - **generate_series()** returns arrays, use unnest() to convert to rows
 - CORRECT: \`SELECT unnest(generate_series(1, 10)) as number;\`
 - INCORRECT: \`SELECT generate_series(1, 10);\` (returns arrays, not rows)

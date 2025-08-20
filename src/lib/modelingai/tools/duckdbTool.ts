@@ -1,5 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { parse } from 'sqloflow';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 import { generateSQLExplanation } from '../sqlExplanationService';
@@ -13,6 +14,18 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
     }),
     execute: async ({ sql }) => {
       try {
+        // Parse SQL to validate syntax before execution
+        try {
+          parse(sql);
+        } catch (parseError) {
+          const errorMessage = parseError instanceof Error ? parseError.message : 'SQL parse error';
+          return {
+            error: `SQL syntax error: ${errorMessage}`,
+            suggestion: 'Please check your SQL syntax. Japanese column names must be enclosed in double quotes.',
+            sql: sql
+          };
+        }
+
         // Check for multiple SQL statements
         const trimmedSql = sql.trim();
         // Simple check for multiple statements - look for semicolons not in quotes
