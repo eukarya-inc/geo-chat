@@ -115,25 +115,29 @@ export class AIStore {
 
     const userMessage: StructuredMessage = { role: 'user', content: message.trim() };
 
-    if (messageConverter.hasTableCreatedMarker(message)) {
-      const newMessages = [...cleanedMessages, userMessage];
-      session.messages = newMessages;
-      options.onMessagesChange?.(newMessages);
-      this.notifyListeners();
-      return;
-    }
-
     const newMessages = [...cleanedMessages, userMessage];
     session.messages = newMessages;
     session.error = null;
     options.onMessagesChange?.(newMessages);
     this.notifyListeners();
 
+    // Check if this is a TABLE_CREATED only message before setting loading
+    const coreMessages = messageConverter.toCoreMessages(newMessages);
+
+    // Skip AI if there are no messages to send (e.g., only TABLE_CREATED marker)
+    // But still notify listeners so prompt suggestions can be triggered
+    if (coreMessages.length === 0) {
+      // Don't set loading state for TABLE_CREATED messages
+      // Just ensure messages are persisted and listeners are notified
+      options.onMessagesChange?.(newMessages);
+      this.notifyListeners();
+      return;
+    }
+
     const controller = new AbortController();
     this.setLoading(chatId, true, controller);
 
     try {
-      const coreMessages = messageConverter.toCoreMessages(newMessages);
 
       const generator = createAIStreamGenerator({
         messages: coreMessages,

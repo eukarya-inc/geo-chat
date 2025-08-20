@@ -7,10 +7,9 @@ interface RemoteFileSimpleProps {
     schema?: string | null;
     onTableCreated?: (tableName: string) => void;
     onSendMessage?: (message: string) => void;
-    onExampleMessages?: (tableMessage: string, followUpMessage: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema = null, onTableCreated, onSendMessage, onExampleMessages }) => {
+const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema = null, onTableCreated, onSendMessage }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -27,11 +26,11 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
         
         // Automatically create table after setting URL
         setTimeout(() => {
-            createTableFromUrl(sampleUrl, true);
+            createTableFromUrl(sampleUrl);
         }, 100);
     };
 
-    const createTableFromUrl = async (urlOverride?: string, isFromExample: boolean = false) => {
+    const createTableFromUrl = async (urlOverride?: string) => {
         const targetUrl = urlOverride || url;
         if (!dbContext || !targetUrl.trim()) {
             console.log('RemoteFileSimple: missing dbContext or url');
@@ -98,16 +97,10 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
             dbContext.notifyTableChange(tableName, schema);
 
             // Send a simple table creation message
-            // Include source info to skip prompt suggestions for Example button
-            const tableMessage = isFromExample 
-                ? `<!--TABLE_CREATED:${tableName}:FROM_EXAMPLE-->`
-                : `<!--TABLE_CREATED:${tableName}-->`;
+            const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
             
-            if (isFromExample && onExampleMessages) {
-                // For Example button, use special handler that adds both messages at once
-                onExampleMessages(tableMessage, 'どんな分析ができそうですか？');
-            } else if (onSendMessage) {
-                // For regular Create Table button, just send the table message
+            if (onSendMessage) {
+                // Send the table message for all cases (both Example and regular Create Table)
                 onSendMessage(tableMessage);
             }
 

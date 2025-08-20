@@ -81,7 +81,6 @@ function ModelingPage() {
     const {
         sendMessageRef,
         handleSendMessageReady,
-        handleExampleMessages,
         handleMessagesChange,
     } = useMessageHandling(selectedChatId, updateChatMessages);
 
@@ -165,10 +164,6 @@ function ModelingPage() {
                                         onClose();
                                     }}
                                     onSendMessage={sendMessageRef.current || undefined}
-                                    onExampleMessages={(tableMessage, followUpMessage) => {
-                                        handleExampleMessages(tableMessage, followUpMessage);
-                                        onClose();
-                                    }}
                                 />
                             )}
                         />
