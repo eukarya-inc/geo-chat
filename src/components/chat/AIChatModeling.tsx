@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useAI } from '../../lib/ai/useAI';
 import { aiStore } from '../../lib/ai/AIStore';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
+import ChatInput from './ChatInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
@@ -42,6 +43,7 @@ export default function AIChat({
     const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const promptSuggestionAbortRef = useRef<AbortController | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const effectiveChatId = chatId || 'default';
 
@@ -612,13 +614,16 @@ export default function AIChat({
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-2 flex-shrink-0">
-                <textarea
+                <ChatInput
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyPress}
-                    placeholder="質問してみましょう"
+                    dbContext={dbContext}
+                    textareaRef={textareaRef}
+                    placeholder="質問してみましょう（@でテーブル名を補完）"
                     className="w-full p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
+                    schemaName={schemaName}
                 />
                 <div className="flex justify-between">
                     {remoteFileComponent && (
