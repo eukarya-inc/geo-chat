@@ -1,5 +1,6 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useAI } from '../../lib/ai/useAI';
+import { aiStore } from '../../lib/ai/AIStore';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
@@ -44,12 +45,15 @@ export default function AIChat({
 
     const effectiveChatId = chatId || 'default';
 
-    const handleMessagesChange = (messages: StructuredMessage[]) => {
+    const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
+        // Update AIStore's session messages
+        aiStore.updateMessages(effectiveChatId, messages);
+        
         if (chatId && updateChatMessages) {
             updateChatMessages(chatId, messages);
         }
         onMessagesChange(messages);
-    };
+    }, [effectiveChatId, chatId, updateChatMessages, onMessagesChange]);
 
     const {
         messages,
@@ -193,52 +197,80 @@ export default function AIChat({
 
     useEffect(() => {
         const loadPromptSuggestions = async (abortSignal: AbortSignal) => {
-            const lastMessage = messages[messages.length - 1];
-            if (!lastMessage || lastMessage.role !== 'user') return;
-            
-            const content = typeof lastMessage.content === 'string' ? lastMessage.content : '';
-            if (!content.includes('<!--TABLE_CREATED:')) return;
-            
-            if (content.includes(':FROM_EXAMPLE-->')) {
-                return;
-            }
-            
-            if (messages.length > 1) {
-                const prevMessage = messages[messages.length - 2];
-                if (prevMessage && typeof prevMessage.content === 'string' && 
-                    prevMessage.content.includes('<!--TABLE_CREATED:')) {
-                    return;
+            // Find the last user message with TABLE_CREATED
+            let tableCreatedMessage = null;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const msg = messages[i];
+                if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.includes('<!--TABLE_CREATED:')) {
+                    tableCreatedMessage = msg;
+                    break;
                 }
             }
             
-            let tableName: string | null = null;
-            if (content.includes(':FROM_EXAMPLE-->')) {
-                const match = content.match(/<!--TABLE_CREATED:(.+?):FROM_EXAMPLE-->/);
-                tableName = match ? match[1] : null;
-            } else {
-                const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
-                tableName = match ? match[1] : null;
+            if (!tableCreatedMessage) return;
+            
+            const content = tableCreatedMessage.content as string;
+            
+            // Check if we already have prompt suggestions for this table
+            const hasPromptSuggestions = messages.some(msg => 
+                msg.role === 'assistant' && 
+                Array.isArray(msg.content) &&
+                msg.content.some(block => 
+                    block.type === 'tool_result' && 
+                    block.name === 'completion' &&
+                    block.result && typeof block.result === 'object' &&
+                    'suggestedPrompts' in block.result
+                )
+            );
+            
+            if (hasPromptSuggestions) {
+                return;
             }
-            tableName = tableName || selectedTable || null;
+            
+            // Extract table name from the marker
+            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
+            const tableName = match?.[1] || selectedTable || null;
             
             if (!tableName || !dbContext || !apiKey) return;
-
-            const loadingMessage: StructuredMessage = {
-                role: 'assistant',
-                content: [
-                    {
-                        type: 'text',
-                        text: `テーブル「${tableName}」を分析中... おすすめの分析を生成しています...`
-                    }
-                ]
-            };
             
-            const messagesWithLoading = [...messages, loadingMessage];
-            onMessagesChange(messagesWithLoading);
+            // Check if we already have the loading message
+            const hasLoadingMessage = messages.some(msg => 
+                msg.role === 'assistant' && 
+                Array.isArray(msg.content) &&
+                msg.content.some(block => 
+                    block.type === 'text' && 
+                    block.text.includes('を分析中... おすすめの分析を生成しています...')
+                )
+            );
+            
+            if (!hasLoadingMessage) {
+                const loadingMessage: StructuredMessage = {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'text',
+                            text: `テーブル「${tableName}」を分析中... おすすめの分析を生成しています...`
+                        }
+                    ]
+                };
+                
+                const messagesWithLoading = [...messages, loadingMessage];
+                handleMessagesChange(messagesWithLoading);
+            }
             
             try {
                 if (abortSignal.aborted) {
-                    onMessagesChange(messages);
+                    // Remove loading message if aborted
+                    const cleanMessages = messages.filter(msg => {
+                        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                            return !msg.content.some(block => 
+                                block.type === 'text' && 
+                                block.text.includes('を分析中... おすすめの分析を生成しています...')
+                            );
+                        }
+                        return true;
+                    });
+                    handleMessagesChange(cleanMessages);
                     return;
                 }
                 
@@ -275,17 +307,48 @@ export default function AIChat({
                         ]
                     };
                     
-                    const updatedMessages = [...messages, promptMessage];
-                    onMessagesChange(updatedMessages);
+                    // Remove loading message and add prompt message
+                    const updatedMessages = messages.filter(msg => {
+                        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                            return !msg.content.some(block => 
+                                block.type === 'text' && 
+                                block.text.includes('を分析中... おすすめの分析を生成しています...')
+                            );
+                        }
+                        return true;
+                    });
+                    
+                    updatedMessages.push(promptMessage);
+                    handleMessagesChange(updatedMessages);
                 } else {
-                    onMessagesChange(messages);
+                    // Remove loading message
+                    const updatedMessages = messages.filter(msg => {
+                        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                            return !msg.content.some(block => 
+                                block.type === 'text' && 
+                                block.text.includes('を分析中... おすすめの分析を生成しています...')
+                            );
+                        }
+                        return true;
+                    });
+                    handleMessagesChange(updatedMessages);
                 }
             } catch (error) {
                 if (abortSignal.aborted) {
                     return;
                 }
                 console.error('Failed to load prompt suggestions:', error);
-                onMessagesChange(messages);
+                // Remove loading message on error
+                const updatedMessages = messages.filter(msg => {
+                    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                        return !msg.content.some(block => 
+                            block.type === 'text' && 
+                            block.text.includes('を分析中... おすすめの分析を生成しています...')
+                        );
+                    }
+                    return true;
+                });
+                handleMessagesChange(updatedMessages);
             }
         };
 
@@ -304,7 +367,7 @@ export default function AIChat({
                 promptSuggestionAbortRef.current = null;
             }
         };
-    }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, onMessagesChange]);
+    }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, handleMessagesChange]);
 
     const handlePromptSelection = (promptText: string) => {
         if (input === promptText) {

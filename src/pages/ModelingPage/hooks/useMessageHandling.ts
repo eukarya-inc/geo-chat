@@ -12,21 +12,6 @@ export function useMessageHandling(
         sendMessageRef.current = sendFn;
     }, []);
 
-    // Special handler for Example button that sends both messages
-    const handleExampleMessages = useCallback((tableMessage: string, followUpMessage: string) => {
-        if (!sendMessageRef.current) return;
-        
-        // Send table message first (won't go to AI due to TABLE_CREATED marker)
-        sendMessageRef.current(tableMessage);
-        
-        // Send follow-up message after a delay
-        setTimeout(() => {
-            if (sendMessageRef.current) {
-                sendMessageRef.current(followUpMessage);
-            }
-        }, 300);
-    }, []);
-
     // Create memoized callback for message updates
     const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
         if (selectedChatId) {
@@ -37,7 +22,6 @@ export function useMessageHandling(
     return {
         sendMessageRef,
         handleSendMessageReady,
-        handleExampleMessages,
         handleMessagesChange,
     };
 }

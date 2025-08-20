@@ -69,8 +69,7 @@ const renderContentBlock = (
             const cleanedText = block.text.replace('<!--FINAL_MESSAGE-->', '').trim();
             
             // Check for table created markers in text
-            // Matches both <!--TABLE_CREATED:tablename--> and <!--TABLE_CREATED:tablename:FROM_EXAMPLE-->
-            const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)(?::FROM_EXAMPLE)?-->/g;
+            const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
             const tableMatches = Array.from(cleanedText.matchAll(tableCreatedRegex));
             
             if (tableMatches.length > 0) {
@@ -94,7 +93,6 @@ const renderContentBlock = (
                         );
                     }
                     
-                    // Extract table name without the :FROM_EXAMPLE suffix
                     const tableName = match[1];
                     parts.push(
                         <TableCreatedMessage
@@ -416,8 +414,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     // Handle plain string content (for user messages)
     // Check for table created markers in plain string content
     const stringContent = message.content as string;
-    // Updated regex to handle both formats: <!--TABLE_CREATED:tablename--> and <!--TABLE_CREATED:tablename:FROM_EXAMPLE-->
-    const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)(?::FROM_EXAMPLE)?-->/g;
+    const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
     const tableMatches = Array.from(stringContent.matchAll(tableCreatedRegex));
     
     if (tableMatches.length > 0) {

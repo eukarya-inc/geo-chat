@@ -114,7 +114,6 @@ export const messageConverter = {
    * Clean user message by removing TABLE_CREATED markers
    */
   cleanUserMessage(content: string): string {
-    // Remove both formats: <!--TABLE_CREATED:tablename--> and <!--TABLE_CREATED:tablename:FROM_EXAMPLE-->
     return content.replace(/<!--TABLE_CREATED:[^>]+-->/g, '').trim();
   },
 
@@ -129,12 +128,7 @@ export const messageConverter = {
    * Extract table name from TABLE_CREATED marker
    */
   extractTableName(content: string): string | null {
-    // First try to match with :FROM_EXAMPLE
-    let match = content.match(/<!--TABLE_CREATED:([^:>]+):FROM_EXAMPLE-->/);
-    if (match) return match[1];
-    
-    // Then try regular format
-    match = content.match(/<!--TABLE_CREATED:([^:>]+)-->/);
+    const match = content.match(/<!--TABLE_CREATED:([^:>]+)-->/);
     return match ? match[1] : null;
   }
 };
