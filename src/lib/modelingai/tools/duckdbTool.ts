@@ -5,6 +5,7 @@ import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
+import { checkSQLType } from '../../../utils/sqlTypeChecker';
 
 export function createDuckDBTool(dbContext: DBContext, schema: string | null, apiKey?: string) {
   return tool({
@@ -14,25 +15,11 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
     }),
     execute: async ({ sql }) => {
       try {
-        // Parse SQL to validate syntax before execution
-        try {
-          parse(sql);
-        } catch (parseError) {
-          const errorMessage = parseError instanceof Error ? parseError.message : 'SQL parse error';
-          return {
-            error: `SQL syntax error: ${errorMessage}`,
-            suggestion: 'Please check your SQL syntax. Japanese column names must be enclosed in double quotes.',
-            sql: sql
-          };
-        }
-
-        // Check for multiple SQL statements
-        const trimmedSql = sql.trim();
-        // Simple check for multiple statements - look for semicolons not in quotes
-        const statementCount = trimmedSql.split(/;(?=(?:[^']*'[^']*')*[^']*$)/)
-          .filter(s => s.trim().length > 0).length;
+        // Check SQL statement type and multiple statements
+        const sqlType = checkSQLType(sql);
         
-        if (statementCount > 1) {
+        // Check for multiple statements
+        if (sqlType.hasMultipleStatements) {
           return {
             error: 'Multiple SQL statements detected. Please execute one statement at a time.',
             suggestion: 'Split your SQL statements and execute them separately.',
@@ -40,47 +27,52 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
           };
         }
 
-        // Check if this is a DDL operation
-        const upperSql = trimmedSql.toUpperCase();
-        const isTableOperation = upperSql.includes('CREATE TABLE') ||
-                                upperSql.includes('CREATE OR REPLACE TABLE') ||
-                                upperSql.includes('DROP TABLE');
+        // Only parse SQL for CREATE TABLE statements to validate syntax
+        if (sqlType.isCreateTable) {
+          try {
+            parse(sql);
+          } catch (parseError) {
+            const errorMessage = parseError instanceof Error ? parseError.message : 'SQL parse error';
+            return {
+              error: `SQL syntax error: ${errorMessage}`,
+              suggestion: 'Please check your SQL syntax. Japanese column names must be enclosed in double quotes.',
+              sql: sql
+            };
+          }
+        }
 
-        // Don't intercept SHOW TABLES here - let dbContext handle schema context
-        const querySql = sql;
-        
         // Execute query - executeQuery now handles DDL operations automatically
-        const result = await dbContext.executeQuery(querySql, schema);
+        const result = await dbContext.executeQuery(sql, schema);
         const data = convertBigIntToString(result) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
           let sqlExplanation: string | undefined;
           let createdTableName: string | undefined;
-          
-          if (isTableOperation) {
+
+          if (sqlType.isTableOperation) {
             // Checkpoint is already handled by executeQuery for DDL operations
-            
+
             // Extract table name from CREATE TABLE statements
-            if (upperSql.includes('CREATE TABLE') || upperSql.includes('CREATE OR REPLACE TABLE')) {
+            if (sqlType.isCreateTable) {
               const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
               if (tableNameMatch) {
                 createdTableName = tableNameMatch[2];
-                
+
                 // Format SQL for both explanation and storage
                 const formattedSQL = formatSQL(sql);
-                
+
                 // Generate explanation for CREATE TABLE using formatted SQL
                 if (apiKey) {
                   sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
                 }
-                
+
                 // Record the CREATE TABLE SQL in history with explanation
                 if (dbContext) {
                   dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation);
                 }
               }
             }
-            
+
             if (dbContext) {
               // Force consistency is already handled by executeQuery for DDL operations
               // Just notify table change with schema
@@ -107,12 +99,12 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
             rowCount: data.length,
             sql: sql
           };
-          
+
           // Add SQL explanation if available
           if (sqlExplanation) {
             metadata.sqlExplanation = sqlExplanation;
           }
-          
+
           // Add createdTable if a table was created
           if (createdTableName) {
             metadata.createdTable = createdTableName;
