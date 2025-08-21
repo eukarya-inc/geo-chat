@@ -24,6 +24,9 @@ export interface DBContext {
   // Schema management methods
   createSchema(schemaName: string): Promise<void>;
   deleteSchema(schemaName: string): Promise<void>;
+  
+  // Export methods
+  downloadTable(tableName: string, format: 'parquet' | 'csv' | 'json', schema?: string | null): Promise<Blob>;
 }
 
 interface PooledConnection {
@@ -649,6 +652,108 @@ class DatabaseContext implements DBContext {
       // Then drop the schema
       await conn.query(`DROP SCHEMA IF EXISTS "${sanitizedSchema}" CASCADE`);
       console.log(`DBContext: Deleted schema ${sanitizedSchema}`);
+    } finally {
+      await conn.close();
+    }
+  }
+  
+  async downloadTable(tableName: string, format: 'parquet' | 'csv' | 'json', schema: string | null = null): Promise<Blob> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    
+    // Validate table exists
+    if (!(await this.validateTable(tableName, schema))) {
+      throw new Error(`Table '${tableName}' does not exist or is not accessible`);
+    }
+    
+    const conn = await this.connect(sanitizedSchema);
+    try {
+      const fullTableName = sanitizedSchema ? `"${sanitizedSchema}"."${tableName}"` : `"${tableName}"`;
+      
+      switch (format) {
+        case 'parquet': {
+          // Create Parquet file in DuckDB's virtual file system
+          const fileName = `/tmp/${tableName}_${Date.now()}.parquet`;
+          await conn.query(`
+            COPY ${fullTableName} 
+            TO '${fileName}' 
+            (FORMAT PARQUET)
+          `);
+          
+          // Read the file back as binary data
+          const result = await conn.query(`
+            SELECT * FROM read_blob('${fileName}')
+          `);
+          
+          // Extract binary data from result
+          const binaryData = result.getChildAt(0)?.get(0);
+          if (!binaryData) {
+            throw new Error('Failed to read Parquet data');
+          }
+          
+          // Clean up the temporary file
+          try {
+            await conn.query(`CALL remove('${fileName}')`);
+          } catch {
+            // Ignore cleanup errors
+          }
+          
+          return new Blob([binaryData], { type: 'application/octet-stream' });
+        }
+        
+        case 'csv': {
+          // Export as CSV
+          const result = await conn.query(`
+            SELECT * FROM ${fullTableName}
+          `);
+          
+          // Convert result to CSV format
+          const data = result.toArray();
+          if (data.length === 0) {
+            return new Blob([''], { type: 'text/csv' });
+          }
+          
+          // Get column names
+          const columns = Object.keys(data[0]);
+          const csvRows: string[] = [];
+          
+          // Add header
+          csvRows.push(columns.map(col => `"${col}"`).join(','));
+          
+          // Add data rows
+          for (const row of data) {
+            const values = columns.map(col => {
+              const value = row[col];
+              if (value === null || value === undefined) {
+                return '';
+              }
+              // Escape quotes and wrap in quotes if needed
+              const strValue = String(value);
+              if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+                return `"${strValue.replace(/"/g, '""')}"`;
+              }
+              return strValue;
+            });
+            csvRows.push(values.join(','));
+          }
+          
+          return new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        }
+        
+        case 'json': {
+          // Export as JSON
+          const result = await conn.query(`
+            SELECT * FROM ${fullTableName}
+          `);
+          
+          const data = result.toArray();
+          const jsonStr = JSON.stringify(data, null, 2);
+          
+          return new Blob([jsonStr], { type: 'application/json' });
+        }
+        
+        default:
+          throw new Error(`Unsupported format: ${format}`);
+      }
     } finally {
       await conn.close();
     }
