@@ -77,7 +77,7 @@ export async function* createAIStreamGenerator({
           };
           break;
           
-        case 'error':
+        case 'error': {
           // Pass through API errors to be displayed in chat
           const errorMessage = typeof part.error === 'string' 
             ? part.error 
@@ -88,6 +88,7 @@ export async function* createAIStreamGenerator({
             error: errorMessage
           };
           break;
+        }
           
         case 'tool-call':
           yield {
