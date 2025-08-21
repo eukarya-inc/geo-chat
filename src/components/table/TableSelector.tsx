@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { CodeBracketIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 
 interface TableSelectorProps {
   dbContext: DBContext;
   selectedTable: string | null;
   onTableSelect: (tableName: string | null) => void;
   schema?: string | null;
+  showSQL?: boolean;
+  onToggleSQL?: () => void;
+  showGraph?: boolean;
+  onToggleGraph?: () => void;
+  chatType?: string;
 }
 
-const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, schema = null }) => {
+const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable, onTableSelect, schema = null, showSQL, onToggleSQL, showGraph, onToggleGraph, chatType }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -126,16 +132,48 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
           ))}
         </select>
         
+        {/* SQL Toggle button */}
+        {onToggleSQL && (
+          <button
+            onClick={onToggleSQL}
+            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${
+              showSQL 
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={showSQL ? 'SQLを非表示' : 'SQLを表示'}
+          >
+            <CodeBracketIcon className="w-4 h-4" />
+            <span className="text-sm font-medium">SQL</span>
+          </button>
+        )}
+        
+        {/* Graph Toggle button - only show for graph chats */}
+        {chatType === 'graph' && onToggleGraph && (
+          <button
+            onClick={onToggleGraph}
+            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${
+              showGraph 
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={showGraph ? 'グラフを非表示' : 'グラフを表示'}
+          >
+            <ChartBarIcon className="w-4 h-4" />
+            <span className="text-sm font-medium">グラフ</span>
+          </button>
+        )}
+        
         {/* Menu button */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setShowMenu(!showMenu)}
             disabled={!dbContext || !selectedTable}
-            className="p-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+            className="px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
             title="メニュー"
           >
             <svg 
-              className="w-5 h-5" 
+              className="w-4 h-4" 
               fill="currentColor" 
               viewBox="0 0 20 20"
             >
