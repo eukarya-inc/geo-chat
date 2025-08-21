@@ -24,7 +24,7 @@ export const PromptSuggestions: React.FC<PromptSuggestionsProps> = ({
     }
 
     return (
-        <div className={`mt-2 ${className}`}>
+        <div className={`mt-4 ${className}`}>
             {title && (
                 <div className="text-xs text-gray-600 mb-2 font-medium">
                     {title}

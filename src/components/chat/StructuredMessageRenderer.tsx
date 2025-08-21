@@ -205,11 +205,32 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'completion') {
+                const input = block.input as {
+                    suggestedPrompts?: Array<{
+                        id?: string;
+                        text: string;
+                        description?: string;
+                    }>;
+                    completionMessage?: string;
+                };
+                if (input?.suggestedPrompts && Array.isArray(input.suggestedPrompts)) {
+                    return onPromptClick ? (
+                        <PromptSuggestions
+                            key={index}
+                            prompts={input.suggestedPrompts}
+                            onPromptClick={onPromptClick}
+                            title="おすすめの質問:"
+                        />
+                    ) : null;
+                }
+                return null;
+            }
             return null;
         }
             
         case 'tool_result': {
-            // Handle completion tool results (suggested prompts)
+            // Handle completion tool results (for table creation prompts)
             if (block.name === 'completion') {
                 const result = block.result as {
                     suggestedPrompts?: Array<{
@@ -217,20 +238,18 @@ const renderContentBlock = (
                         text: string;
                         description?: string;
                     }>;
-                    success?: boolean;
                     completionMessage?: string;
-                    timestamp?: string;
                 };
+                // Show suggestions if they exist (table creation case)
                 if (result?.suggestedPrompts && Array.isArray(result.suggestedPrompts)) {
                     return onPromptClick ? (
-                        <PromptSuggestions
-                            key={index}
+                        <PromptSuggestions 
                             prompts={result.suggestedPrompts}
                             onPromptClick={onPromptClick}
-                            title="おすすめの質問:"
                         />
                     ) : null;
                 }
+                // If no suggestions, return null
                 return null;
             }
             
@@ -423,13 +442,13 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             
             // Filter to keep only:
             // 1. Table creation messages (tool_result with createdTable) - ALWAYS show
-            // 2. Completion tool results (suggested prompts) - ALWAYS show
+            // 2. Completion tool use (suggested prompts) - ALWAYS show
             // 3. The last text message (only when not streaming)
             // 4. Text blocks with TABLE_CREATED markers - ALWAYS show
             // Note: SQL results and chart update results are hidden when collapsed
             filteredContent = message.content.filter((block, index) => {
-                // Always keep completion tool results (suggested prompts)
-                if (block.type === 'tool_result' && block.name === 'completion') {
+                // Always keep completion tool use (suggested prompts)
+                if (block.type === 'tool_use' && block.name === 'completion') {
                     return true;
                 }
                 
