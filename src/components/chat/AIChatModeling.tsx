@@ -8,6 +8,7 @@ import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { generatePromptSuggestions } from '../../lib/modelingai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
+import type { ChatState } from '../../store/modelingRemoteAtoms';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -20,6 +21,7 @@ interface AIChatProps {
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+    getCurrentChatState?: () => ChatState | null;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
@@ -34,6 +36,7 @@ export default function AIChat({
     selectedTable,
     onTableSelect,
     onChartUpdate,
+    getCurrentChatState,
     remoteFileComponent
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -76,7 +79,8 @@ export default function AIChat({
         dbContext,
         apiKey,
         onMessagesChange: handleMessagesChange,
-        onChartUpdate
+        onChartUpdate,
+        getCurrentChatState
     });
 
     const messageGroups = useMemo(() => {

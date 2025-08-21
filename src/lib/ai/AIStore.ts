@@ -1,6 +1,7 @@
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
+import type { ChatState } from '../../store/modelingRemoteAtoms';
 import { createAIStreamGenerator, type StreamPart } from '../modelingai/streamGenerator';
 import { messageConverter } from '../modelingai/messageConverter';
 
@@ -98,6 +99,7 @@ export class AIStore {
       schema?: string | null;
       onMessagesChange?: (messages: StructuredMessage[]) => void;
       onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+      getCurrentChatState?: () => ChatState | null;
     }
   ): Promise<void> {
     const session = this.getOrCreateSession(chatId, options.schema || null);
@@ -147,7 +149,8 @@ export class AIStore {
         dbContext: options.dbContext,
         schema: options.schema,
         abortSignal: controller.signal,
-        onChartUpdate: options.onChartUpdate
+        onChartUpdate: options.onChartUpdate,
+        getCurrentChatState: options.getCurrentChatState
       });
 
       const assistantMessage: StructuredMessage = { 

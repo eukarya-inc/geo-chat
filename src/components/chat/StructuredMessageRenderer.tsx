@@ -170,6 +170,20 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'get_vega_chart_spec_for_table') {
+                const input = block.input as { table_name: string };
+                return (
+                    <CollapsibleSection 
+                        key={index} 
+                        title={`📊 **グラフ設定を取得中: ${input.table_name}**`}
+                        defaultOpen={false}
+                    >
+                        <div className="p-2 text-xs text-gray-600">
+                            テーブル「{input.table_name}」のVega-Liteチャート設定を取得しています...
+                        </div>
+                    </CollapsibleSection>
+                );
+            }
             return null;
         }
             
@@ -197,6 +211,39 @@ const renderContentBlock = (
                     ) : null;
                 }
                 return null;
+            }
+            
+            // Handle get_vega_chart_spec_for_table tool results
+            if (block.name === 'get_vega_chart_spec_for_table') {
+                const result = block.result as { success: boolean; message: string; spec: VegaChartSpec | null };
+                if (result?.success) {
+                    if (result.spec) {
+                        const title = `✅ **${result.message}**`;
+                        return (
+                            <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                                <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
+                                    <code className="language-json text-xs">{JSON.stringify(result.spec, null, 2)}</code>
+                                </pre>
+                            </CollapsibleSection>
+                        );
+                    } else {
+                        return (
+                            <div key={index} className="my-1 text-gray-500">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {`ℹ️ **${result.message}**`}
+                                </ReactMarkdown>
+                            </div>
+                        );
+                    }
+                } else {
+                    return (
+                        <div key={index} className="my-1 text-red-600">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {`❌ **エラー:** ${result?.message || 'グラフ設定の取得に失敗しました'}`}
+                            </ReactMarkdown>
+                        </div>
+                    );
+                }
             }
             
             // Handle update_vega_chart_spec_for_table tool results
