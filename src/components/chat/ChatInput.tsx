@@ -103,7 +103,7 @@ export default function ChatInput({
         }
         
         onChange(e);
-    }, [onChange, tables]);
+    }, [onChange]);
 
     // Filter tables based on search text
     const filteredTables = tables.filter(table => 
