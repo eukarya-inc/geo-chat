@@ -10,6 +10,7 @@ interface UseAIOptions {
   schema?: string | null;
   dbContext?: DBContext | null;
   apiKey?: string;
+  selectedTable?: string | null;
   onMessagesChange?: (messages: StructuredMessage[]) => void;
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
@@ -20,6 +21,7 @@ export function useAI({
   schema,
   dbContext,
   apiKey,
+  selectedTable,
   onMessagesChange,
   onChartUpdate,
   getCurrentChatState
@@ -54,11 +56,12 @@ export function useAI({
       apiKey: resolvedApiKey,
       dbContext: dbContext || undefined,
       schema,
+      selectedTable,
       onMessagesChange,
       onChartUpdate,
       getCurrentChatState
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, onMessagesChange, onChartUpdate, getCurrentChatState]);
+  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, getCurrentChatState]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

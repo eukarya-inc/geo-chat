@@ -7,7 +7,7 @@ import type { StructuredMessage, StructuredContent } from '../../types/message';
 export const messageConverter = {
   /**
    * Convert StructuredMessage[] to CoreMessage[] for AI SDK
-   * Removes HTML comments and empty messages
+   * Removes ALL HTML comments including CONTEXT markers
    */
   toCoreMessages(messages: StructuredMessage[]): CoreMessage[] {
     const result: CoreMessage[] = [];
@@ -16,8 +16,10 @@ export const messageConverter = {
       let content = '';
       
       if (typeof msg.content === 'string') {
-        // Remove HTML comments and trim
-        content = msg.content.replace(/<!--[^>]*-->/g, '').trim();
+        // Remove ALL HTML comments including CONTEXT markers
+        content = msg.content
+          .replace(/<!--[^>]*-->/g, '')
+          .trim();
       } else if (Array.isArray(msg.content)) {
         // Convert structured content to text
         const textParts = msg.content
@@ -25,7 +27,10 @@ export const messageConverter = {
           .map(block => (block as { text: string }).text)
           .join('');
         
-        content = textParts.replace(/<!--[^>]*-->/g, '').trim();
+        // Remove ALL HTML comments including CONTEXT markers
+        content = textParts
+          .replace(/<!--[^>]*-->/g, '')
+          .trim();
       }
       
       // Only add non-empty messages

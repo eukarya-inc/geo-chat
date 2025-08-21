@@ -57,7 +57,29 @@ export function createChartUpdateTool(
     if (!onChartUpdate) return null;
 
     return tool({
-        description: 'Update or create a Vega-Lite chart specification for a specific table',
+        description: `Update or create a Vega-Lite chart specification for a specific table.
+        
+        IMPORTANT:
+        - ALWAYS specify the "type" field explicitly for each encoding channel
+        - Common types: "quantitative" (numbers), "nominal" (categories), "temporal" (dates), "ordinal" (ordered categories)
+        - The type determines how the data is interpreted and scaled
+        
+        Example specifications:
+        {
+          "mark": "bar",
+          "encoding": {
+            "x": {"field": "segment", "type": "nominal", "title": "Segment"},
+            "y": {"field": "customer_count", "type": "quantitative", "title": "Customer Count"}
+          }
+        }
+        
+        {
+          "mark": "line",
+          "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "Date"},
+            "y": {"field": "sales", "type": "quantitative", "title": "Sales"}
+          }
+        }`,
         parameters: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z.object({
@@ -99,6 +121,60 @@ export function processAIChartSpec(
     tableName: string,
     aiSpec: Partial<VegaChartSpec>
 ): VegaChartSpec {
+    // Helper function to ensure field type is set
+    const ensureFieldType = (field: any): any => {
+        if (!field || typeof field !== 'object') return field;
+        
+        // If type is already set and valid, keep it
+        if (field.type && ['quantitative', 'nominal', 'ordinal', 'temporal'].includes(field.type)) {
+            return field;
+        }
+        
+        // Try to infer type from field name
+        if (field.field) {
+            const fieldName = field.field.toLowerCase();
+            let inferredType = 'nominal';
+            
+            // Check for quantitative fields
+            if (fieldName.includes('count') || fieldName.includes('total') || 
+                fieldName.includes('sum') || fieldName.includes('avg') || 
+                fieldName.includes('balance') || fieldName.includes('amount') ||
+                fieldName.includes('price') || fieldName.includes('cost') ||
+                fieldName.includes('value') || fieldName.includes('quantity') ||
+                fieldName.includes('revenue') || fieldName.includes('sales') ||
+                fieldName.includes('score') || fieldName.includes('rating') ||
+                fieldName.includes('_count') || fieldName.includes('_sum')) {
+                inferredType = 'quantitative';
+            } 
+            // Check for temporal fields
+            else if (fieldName.includes('date') || fieldName.includes('time') ||
+                     fieldName.includes('year') || fieldName.includes('month') ||
+                     fieldName.includes('day') || fieldName.includes('created') ||
+                     fieldName.includes('updated')) {
+                inferredType = 'temporal';
+            } 
+            // Check for nominal/categorical fields
+            else if (fieldName.includes('id') || fieldName.includes('name') || 
+                     fieldName.includes('category') || fieldName.includes('type') ||
+                     fieldName.includes('segment') || fieldName.includes('group') ||
+                     fieldName.includes('status') || fieldName.includes('state') ||
+                     fieldName.includes('country') || fieldName.includes('region') ||
+                     fieldName.includes('city') || fieldName.includes('gender') ||
+                     fieldName.includes('department') || fieldName.includes('brand')) {
+                inferredType = 'nominal';
+            }
+            
+            // If there's an aggregate function, it's likely quantitative
+            if (field.aggregate && ['sum', 'mean', 'average', 'min', 'max', 'count', 'distinct'].includes(field.aggregate)) {
+                inferredType = 'quantitative';
+            }
+            
+            return { ...field, type: inferredType };
+        }
+        
+        return field;
+    };
+    
     // Ensure required Vega-Lite schema
     const processedSpec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -107,8 +183,7 @@ export function processAIChartSpec(
         data: {
             sql: `SELECT * FROM ${tableName} LIMIT 1000`,
             values: []
-        },
-        height: 400
+        }
     } as VegaChartSpec;
 
     // Ensure title exists
@@ -116,33 +191,25 @@ export function processAIChartSpec(
         processedSpec.title = `Chart for ${tableName}`;
     }
 
-    // Fix tooltip fields - ensure they have types
+    // Fix encoding fields - ensure they have proper types
     // Check if this is a single view spec (which has encoding)
     if ('encoding' in processedSpec && processedSpec.encoding) {
-        const encoding = processedSpec.encoding as Record<string, unknown>;
-        if (encoding.tooltip && Array.isArray(encoding.tooltip)) {
-            encoding.tooltip = encoding.tooltip.map((tooltip: { field?: string; type?: string; title?: string; [key: string]: unknown }) => {
-                if (typeof tooltip === 'object' && tooltip.field && !tooltip.type) {
-                    // Try to infer type from field name or use nominal as default
-                    const field = tooltip.field.toLowerCase();
-                    let type = 'nominal';
-                    
-                    if (field.includes('count') || field.includes('total') || 
-                        field.includes('sum') || field.includes('avg') || 
-                        field.includes('balance') || field.includes('amount') ||
-                        field.includes('price') || field.includes('cost')) {
-                        type = 'quantitative';
-                    } else if (field.includes('date') || field.includes('time')) {
-                        type = 'temporal';
-                    } else if (field.includes('id') || field.includes('name') || 
-                              field.includes('category') || field.includes('type')) {
-                        type = 'nominal';
-                    }
-                    
-                    return { ...tooltip, type };
-                }
-                return tooltip;
-            });
+        const encoding = processedSpec.encoding as Record<string, any>;
+        
+        // Process main encoding channels
+        ['x', 'y', 'color', 'size', 'shape', 'opacity', 'theta', 'radius'].forEach(channel => {
+            if (encoding[channel]) {
+                encoding[channel] = ensureFieldType(encoding[channel]);
+            }
+        });
+        
+        // Process tooltip fields
+        if (encoding.tooltip) {
+            if (Array.isArray(encoding.tooltip)) {
+                encoding.tooltip = encoding.tooltip.map(ensureFieldType);
+            } else {
+                encoding.tooltip = ensureFieldType(encoding.tooltip);
+            }
         }
     }
 

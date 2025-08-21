@@ -78,6 +78,7 @@ export default function AIChat({
         schema: schemaName,
         dbContext,
         apiKey,
+        selectedTable,
         onMessagesChange: handleMessagesChange,
         onChartUpdate,
         getCurrentChatState

@@ -4,6 +4,7 @@ import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 import { createAIStreamGenerator, type StreamPart } from '../modelingai/streamGenerator';
 import { messageConverter } from '../modelingai/messageConverter';
+import { generateContextMessage } from '../modelingai/contextMessage';
 
 interface ChatSession {
   id: string;
@@ -97,6 +98,7 @@ export class AIStore {
       apiKey: string;
       dbContext?: DBContext;
       schema?: string | null;
+      selectedTable?: string | null;
       onMessagesChange?: (messages: StructuredMessage[]) => void;
       onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
       getCurrentChatState?: () => ChatState | null;
@@ -126,7 +128,7 @@ export class AIStore {
     this.notifyListeners();
 
     // Check if this is a TABLE_CREATED only message before setting loading
-    const coreMessages = messageConverter.toCoreMessages(newMessages);
+    let coreMessages = messageConverter.toCoreMessages(newMessages);
 
     // Skip AI if there are no messages to send (e.g., only TABLE_CREATED marker)
     // But still notify listeners so prompt suggestions can be triggered
@@ -136,6 +138,28 @@ export class AIStore {
       options.onMessagesChange?.(newMessages);
       this.notifyListeners();
       return;
+    }
+
+    // ALWAYS inject fresh context for every AI request
+    // Context must be at the beginning to avoid "multiple system messages" error
+    try {
+      const contextMessage = await generateContextMessage(options.dbContext || null, options.schema || null, options.selectedTable || null);
+      if (contextMessage) {
+        // Log context message for debugging
+        console.log(`[AI Context Generated for message #${coreMessages.filter(m => m.role === 'user').length}]`);
+        
+        // Add context as the FIRST system message
+        // This avoids the "multiple system messages separated by user/assistant" error
+        coreMessages = [
+          { role: 'system' as const, content: contextMessage },
+          ...coreMessages
+        ];
+      } else {
+        console.log('[AI Context] Not generated - no schema/dbContext or generation failed');
+      }
+    } catch (contextError) {
+      console.error('[AI Context] Error generating context:', contextError);
+      // Continue without context rather than blocking the request
     }
 
     const controller = new AbortController();
@@ -173,7 +197,6 @@ export class AIStore {
         options.onMessagesChange?.(currentMessages);
         this.notifyListeners();
       }
-      
       options.onMessagesChange?.(currentMessages);
 
     } catch (err) {

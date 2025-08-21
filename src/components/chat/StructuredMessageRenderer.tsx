@@ -22,11 +22,29 @@ interface StructuredMessageRendererProps {
 
 interface CollapsibleSectionProps {
     title: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     defaultOpen?: boolean;
 }
 
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, defaultOpen = false }) => {
+    // If no children, render as a simple non-collapsible item
+    if (!children) {
+        return (
+            <div className="my-1 p-1.5">
+                <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                            p: ({ children }) => <span>{children}</span>
+                        }}
+                    >
+                        {title}
+                    </ReactMarkdown>
+                </div>
+            </div>
+        );
+    }
+    
     return (
         <details className="group my-1" open={defaultOpen}>
             <summary className="cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 transition-colors duration-200 rounded-md p-1.5 select-none">
@@ -65,8 +83,11 @@ const renderContentBlock = (
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
-            // Remove FINAL_MESSAGE marker from display
-            const cleanedText = block.text.replace('<!--FINAL_MESSAGE-->', '').trim();
+            // Remove FINAL_MESSAGE and CONTEXT markers from display
+            const cleanedText = block.text
+                .replace('<!--FINAL_MESSAGE-->', '')
+                .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
+                .trim();
             
             // Check for table created markers in text
             const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
@@ -228,20 +249,18 @@ const renderContentBlock = (
                         );
                     } else {
                         return (
-                            <div key={index} className="my-1 text-gray-500">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {`ℹ️ **${result.message}**`}
-                                </ReactMarkdown>
-                            </div>
+                            <CollapsibleSection 
+                                key={index} 
+                                title={`ℹ️ **${result.message}**`}
+                            />
                         );
                     }
                 } else {
                     return (
-                        <div key={index} className="my-1 text-red-600">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {`❌ **エラー:** ${result?.message || 'グラフ設定の取得に失敗しました'}`}
-                            </ReactMarkdown>
-                        </div>
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`❌ **エラー:** ${result?.message || 'グラフ設定の取得に失敗しました'}`}
+                        />
                     );
                 }
             }
@@ -250,21 +269,18 @@ const renderContentBlock = (
             if (block.name === 'update_vega_chart_spec_for_table') {
                 const result = block.result as { success: boolean; message: string; tableName?: string };
                 if (result?.success) {
-                    const title = `✅ **${result.message}**`;
                     return (
-                        <CollapsibleSection key={index} title={title} defaultOpen={false}>
-                            <div className="p-2 text-xs text-gray-600">
-                                グラフの設定が正常に更新されました。
-                            </div>
-                        </CollapsibleSection>
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`✅ **${result.message}**`}
+                        />
                     );
                 } else {
                     return (
-                        <div key={index} className="my-1 text-red-600">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {`❌ **エラー:** ${result?.message || 'グラフの更新に失敗しました'}`}
-                            </ReactMarkdown>
-                        </div>
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`❌ **エラー:** ${result?.message || 'グラフの更新に失敗しました'}`}
+                        />
                     );
                 }
             }
@@ -280,13 +296,12 @@ const renderContentBlock = (
                     // If there's no data or empty data, just show the table creation message
                     if (!result?.data || (Array.isArray(result.data) && result.data.length === 0)) {
                         return (
-                            <div key={index}>
-                                <TableCreatedMessage
-                                    tableName={tableCreated}
-                                    isSelected={selectedTable === tableCreated}
-                                    onClick={() => onTableSelect?.(tableCreated)}
-                                />
-                            </div>
+                            <TableCreatedMessage
+                                key={index}
+                                tableName={tableCreated}
+                                isSelected={selectedTable === tableCreated}
+                                onClick={() => onTableSelect?.(tableCreated)}
+                            />
                         );
                     }
                     
@@ -294,13 +309,12 @@ const renderContentBlock = (
                     const data = Array.isArray(result.data) ? result.data : [result.data];
                     if (data.length === 1 && data[0] && typeof data[0] === 'object' && Object.keys(data[0]).length === 1) {
                         return (
-                            <div key={index}>
-                                <TableCreatedMessage
-                                    tableName={tableCreated}
-                                    isSelected={selectedTable === tableCreated}
-                                    onClick={() => onTableSelect?.(tableCreated)}
-                                />
-                            </div>
+                            <TableCreatedMessage
+                                key={index}
+                                tableName={tableCreated}
+                                isSelected={selectedTable === tableCreated}
+                                onClick={() => onTableSelect?.(tableCreated)}
+                            />
                         );
                     }
                 }
@@ -308,13 +322,17 @@ const renderContentBlock = (
                 if (result?.error) {
                     const errorMsg = String(result.error);
                     return (
-                        <div key={index} className="my-1 text-red-600">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {errorMsg.includes('\n') 
-                                    ? `❌ **エラー:**\n\`\`\`\n${errorMsg}\n\`\`\``
-                                    : `❌ **エラー:** ${errorMsg}`}
-                            </ReactMarkdown>
-                        </div>
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`❌ **エラー:** ${errorMsg.includes('\n') ? '詳細を表示' : errorMsg}`}
+                            defaultOpen={false}
+                        >
+                            {errorMsg.includes('\n') && (
+                                <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
+                                    <code className="text-xs">{errorMsg}</code>
+                                </pre>
+                            )}
+                        </CollapsibleSection>
                     );
                 }
                 
@@ -490,8 +508,10 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     }
     
     // Handle plain string content (for user messages)
-    // Check for table created markers in plain string content
-    const stringContent = message.content as string;
+    // Remove context markers and check for table created markers
+    const stringContent = (message.content as string)
+        .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
+        .trim();
     const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
     const tableMatches = Array.from(stringContent.matchAll(tableCreatedRegex));
     
@@ -548,6 +568,11 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     }
     
     // No table markers, render as plain markdown
+    // But don't render if the content is empty after removing context
+    if (!stringContent) {
+        return null;
+    }
+    
     return (
         <div className={className}>
             <div className="prose max-w-none">
@@ -555,7 +580,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}
                 >
-                    {message.content}
+                    {stringContent}
                 </ReactMarkdown>
             </div>
         </div>
