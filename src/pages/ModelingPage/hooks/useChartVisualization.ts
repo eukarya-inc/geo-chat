@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
-import type { ChartSpec } from '../../../types/chart';
+import type { ChartSpec, VegaChartSpec } from '../../../types/chart';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import {
     toggleTableGraphAtom,
+    setTableGraphAtom,
     updateChatStateAtom,
     currentChatAtom,
     currentChatStateAtom,
@@ -20,6 +21,7 @@ export function useChartVisualization(
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const toggleTableGraph = useSetAtom(toggleTableGraphAtom);
+    const setTableGraph = useSetAtom(setTableGraphAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
     const currentChat = useAtomValue(currentChatAtom);
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -138,9 +140,51 @@ export function useChartVisualization(
         }
     };
 
+    // Function to update chart spec from AI tool
+    const updateChartFromAI = useCallback(async (tableName: string, spec: VegaChartSpec) => {
+        if (!dbContext || !schemaName) {
+            throw new Error('Database context or schema not available');
+        }
+
+        // Validate that the table exists
+        const isValid = await dbContext.validateTable(tableName, schemaName);
+        if (!isValid) {
+            throw new Error(`Table "${tableName}" does not exist in schema "${schemaName}"`);
+        }
+
+        // Create new chart spec
+        const newChartSpec: ChartSpec = {
+            id: `ai-chart-${tableName}-${Date.now()}`,
+            spec: spec,
+            timestamp: new Date(),
+            title: typeof spec.title === 'string' ? spec.title : (typeof spec.title === 'object' && spec.title && 'text' in spec.title ? String(spec.title.text) : undefined) || `Chart for ${tableName}`
+        };
+
+        // Update local state if this is the currently selected table
+        if (tableName === selectedTable) {
+            setChartSpec(newChartSpec);
+        }
+
+        // Update remote state
+        updateChatState({
+            chartSpecs: {
+                ...(currentChatState?.chartSpecs || {}),
+                [tableName]: {
+                    id: newChartSpec.id,
+                    spec: newChartSpec.spec,
+                    timestamp: newChartSpec.timestamp
+                }
+            }
+        });
+
+        // Turn on graph display for this table
+        setTableGraph({ tableName, show: true });
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState, setTableGraph]);
+
     return {
         chartSpec,
         showGraph,
         toggleGraphVisibility,
+        updateChartFromAI,
     };
 }

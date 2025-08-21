@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import type { VegaChartSpec } from '../../types/chart';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
@@ -60,7 +61,6 @@ const renderContentBlock = (
     index: number,
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
-    hideToolDetails: boolean = false,
     onPromptClick?: (promptText: string) => void
 ): React.ReactNode => {
     switch (block.type) {
@@ -156,6 +156,20 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'update_vega_chart_spec_for_table') {
+                const input = block.input as { table_name: string; vega_spec: Partial<VegaChartSpec> };
+                return (
+                    <CollapsibleSection 
+                        key={index} 
+                        title={`📊 **グラフ設定を更新中: ${input.table_name}**`}
+                        defaultOpen={false}
+                    >
+                        <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
+                            <code className="language-json text-xs">{JSON.stringify(input.vega_spec, null, 2)}</code>
+                        </pre>
+                    </CollapsibleSection>
+                );
+            }
             return null;
         }
             
@@ -185,23 +199,63 @@ const renderContentBlock = (
                 return null;
             }
             
+            // Handle update_vega_chart_spec_for_table tool results
+            if (block.name === 'update_vega_chart_spec_for_table') {
+                const result = block.result as { success: boolean; message: string; tableName?: string };
+                if (result?.success) {
+                    const title = `✅ **${result.message}**`;
+                    return (
+                        <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                            <div className="p-2 text-xs text-gray-600">
+                                グラフの設定が正常に更新されました。
+                            </div>
+                        </CollapsibleSection>
+                    );
+                } else {
+                    return (
+                        <div key={index} className="my-1 text-red-600">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {`❌ **エラー:** ${result?.message || 'グラフの更新に失敗しました'}`}
+                            </ReactMarkdown>
+                        </div>
+                    );
+                }
+            }
+            
             if (block.name === 'duckdb_query') {
                 const result = block.result as DuckDBToolResult;
                 
                 // Check if this created a table from the result
                 const tableCreated = result?.createdTable || null;
                 
-                // When hideToolDetails is true and table was created, only show the table creation message
-                if (hideToolDetails && tableCreated) {
-                    return (
-                        <div key={index}>
-                            <TableCreatedMessage
-                                tableName={tableCreated}
-                                isSelected={selectedTable === tableCreated}
-                                onClick={() => onTableSelect?.(tableCreated)}
-                            />
-                        </div>
-                    );
+                // When a table was created, abbreviate the result display
+                if (tableCreated) {
+                    // If there's no data or empty data, just show the table creation message
+                    if (!result?.data || (Array.isArray(result.data) && result.data.length === 0)) {
+                        return (
+                            <div key={index}>
+                                <TableCreatedMessage
+                                    tableName={tableCreated}
+                                    isSelected={selectedTable === tableCreated}
+                                    onClick={() => onTableSelect?.(tableCreated)}
+                                />
+                            </div>
+                        );
+                    }
+                    
+                    // If it's just a single row with Count or similar, just show table created message
+                    const data = Array.isArray(result.data) ? result.data : [result.data];
+                    if (data.length === 1 && data[0] && typeof data[0] === 'object' && Object.keys(data[0]).length === 1) {
+                        return (
+                            <div key={index}>
+                                <TableCreatedMessage
+                                    tableName={tableCreated}
+                                    isSelected={selectedTable === tableCreated}
+                                    onClick={() => onTableSelect?.(tableCreated)}
+                                />
+                            </div>
+                        );
+                    }
                 }
                 
                 if (result?.error) {
@@ -217,36 +271,6 @@ const renderContentBlock = (
                     );
                 }
                 
-                // If a table was created but there's no data to show (or data is empty), show the table created message
-                if (tableCreated && (!result?.data || (Array.isArray(result.data) && result.data.length === 0))) {
-                    return (
-                        <div key={index}>
-                            <TableCreatedMessage
-                                tableName={tableCreated}
-                                isSelected={selectedTable === tableCreated}
-                                onClick={() => onTableSelect?.(tableCreated)}
-                            />
-                        </div>
-                    );
-                }
-                
-                // For CREATE TABLE AS SELECT, show both the result and table created message
-                if (tableCreated && result?.data) {
-                    const data = Array.isArray(result.data) ? result.data : [result.data];
-                    
-                    // If it's just a single row with Count or similar, just show table created message
-                    if (data.length === 1 && data[0] && typeof data[0] === 'object' && Object.keys(data[0]).length === 1) {
-                        return (
-                            <div key={index}>
-                                <TableCreatedMessage
-                                    tableName={tableCreated}
-                                    isSelected={selectedTable === tableCreated}
-                                    onClick={() => onTableSelect?.(tableCreated)}
-                                />
-                            </div>
-                        );
-                    }
-                }
                 
                 if (result?.data) {
                     const data = Array.isArray(result.data) ? result.data : [result.data];
@@ -334,20 +358,27 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             
             // Filter to keep only:
             // 1. Table creation messages (tool_result with createdTable) - ALWAYS show
-            // 2. The last text message (only when not streaming)
-            // 3. Text blocks with TABLE_CREATED markers - ALWAYS show
-            // 4. Completion tool results (suggested prompts) - ALWAYS show
+            // 2. Completion tool results (suggested prompts) - ALWAYS show
+            // 3. The last text message (only when not streaming)
+            // 4. Text blocks with TABLE_CREATED markers - ALWAYS show
+            // Note: SQL results and chart update results are hidden when collapsed
             filteredContent = message.content.filter((block, index) => {
                 // Always keep completion tool results (suggested prompts)
                 if (block.type === 'tool_result' && block.name === 'completion') {
                     return true;
                 }
                 
-                // Always keep table creation tool results
+                // Only keep table creation tool results, not all SQL results
                 if (block.type === 'tool_result' && block.name === 'duckdb_query') {
                     const result = block.result as DuckDBToolResult;
+                    // Only show if it created a table
                     if (result?.createdTable) return true;
+                    // Hide regular SQL results when collapsed
+                    return false;
                 }
+                
+                // Hide chart update tool results when collapsed
+                // (Don't include update_vega_chart_spec_for_table here)
                 
                 // Keep text blocks based on conditions
                 if (block.type === 'text') {
@@ -366,7 +397,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     }
                 }
                 
-                // Hide everything else
+                // Hide everything else (tool_use blocks)
                 return false;
             });
         }
@@ -375,7 +406,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             <div className={className}>
                 {/* Render existing structured content blocks */}
                 {filteredContent.map((block, index) => 
-                    renderContentBlock(block, index, selectedTable, onTableSelect, hideToolCalls, onPromptClick)
+                    renderContentBlock(block, index, selectedTable, onTableSelect, onPromptClick)
                 )}
                 
                 {/* Render streaming text if present */}

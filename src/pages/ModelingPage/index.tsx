@@ -78,7 +78,7 @@ function ModelingPage() {
     } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
     
     // Chart visualization
-    const { chartSpec, showGraph, toggleGraphVisibility } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
+    const { chartSpec, showGraph, toggleGraphVisibility, updateChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
     
     // Get chat type with fallback to 'graph'
     const chatType = currentChat?.type || 'graph';
@@ -162,6 +162,7 @@ function ModelingPage() {
                             onSendMessageReady={handleSendMessageReady}
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelection}
+                            onChartUpdate={updateChartFromAI}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple
                                     dbContext={dbContext}

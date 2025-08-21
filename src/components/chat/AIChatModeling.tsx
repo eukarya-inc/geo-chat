@@ -7,6 +7,7 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { generatePromptSuggestions } from '../../lib/modelingai/promptSuggestionService';
+import type { VegaChartSpec } from '../../types/chart';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -18,6 +19,7 @@ interface AIChatProps {
     onSendMessageReady?: (sendMessage: (message: string) => void) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
+    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
 }
 
@@ -31,6 +33,7 @@ export default function AIChat({
     onSendMessageReady,
     selectedTable,
     onTableSelect,
+    onChartUpdate,
     remoteFileComponent
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,7 +75,8 @@ export default function AIChat({
         schema: schemaName,
         dbContext,
         apiKey,
-        onMessagesChange: handleMessagesChange
+        onMessagesChange: handleMessagesChange,
+        onChartUpdate
     });
 
     const messageGroups = useMemo(() => {

@@ -2,6 +2,7 @@ import { useSyncExternalStore, useCallback, useState, useEffect } from 'react';
 import { aiStore } from './AIStore';
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
+import type { VegaChartSpec } from '../../types/chart';
 
 interface UseAIOptions {
   chatId: string;
@@ -9,6 +10,7 @@ interface UseAIOptions {
   dbContext?: DBContext | null;
   apiKey?: string;
   onMessagesChange?: (messages: StructuredMessage[]) => void;
+  onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
 }
 
 export function useAI({
@@ -16,7 +18,8 @@ export function useAI({
   schema,
   dbContext,
   apiKey,
-  onMessagesChange
+  onMessagesChange,
+  onChartUpdate
 }: UseAIOptions) {
   const [input, setInput] = useState('');
   const resolvedApiKey = apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -48,9 +51,10 @@ export function useAI({
       apiKey: resolvedApiKey,
       dbContext: dbContext || undefined,
       schema,
-      onMessagesChange
+      onMessagesChange,
+      onChartUpdate
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, onMessagesChange]);
+  }, [chatId, resolvedApiKey, dbContext, schema, onMessagesChange, onChartUpdate]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

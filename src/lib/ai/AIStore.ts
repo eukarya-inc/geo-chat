@@ -1,5 +1,6 @@
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
+import type { VegaChartSpec } from '../../types/chart';
 import { createAIStreamGenerator, type StreamPart } from '../modelingai/streamGenerator';
 import { messageConverter } from '../modelingai/messageConverter';
 
@@ -96,6 +97,7 @@ export class AIStore {
       dbContext?: DBContext;
       schema?: string | null;
       onMessagesChange?: (messages: StructuredMessage[]) => void;
+      onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
     }
   ): Promise<void> {
     const session = this.getOrCreateSession(chatId, options.schema || null);
@@ -144,7 +146,8 @@ export class AIStore {
         apiKey: options.apiKey,
         dbContext: options.dbContext,
         schema: options.schema,
-        abortSignal: controller.signal
+        abortSignal: controller.signal,
+        onChartUpdate: options.onChartUpdate
       });
 
       const assistantMessage: StructuredMessage = { 
