@@ -11,6 +11,7 @@ export function useChartVisualization(
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
+    const [tableGraphVisibility, setTableGraphVisibility] = useState<Record<string, boolean>>({});
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -72,7 +73,22 @@ export function useChartVisualization(
         generateChart();
     }, [selectedTable, dbContext, schemaName, connection]);
 
+    // Get current table's graph visibility state
+    const showGraph = selectedTable ? (tableGraphVisibility[selectedTable] ?? false) : false;
+    
+    // Function to toggle graph visibility for current table
+    const toggleGraphVisibility = () => {
+        if (selectedTable) {
+            setTableGraphVisibility(prev => ({
+                ...prev,
+                [selectedTable]: !prev[selectedTable]
+            }));
+        }
+    };
+    
     return {
         chartSpec,
+        showGraph,
+        toggleGraphVisibility,
     };
 }

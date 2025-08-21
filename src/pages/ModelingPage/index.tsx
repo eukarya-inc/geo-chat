@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AIChat from '../../components/chat/AIChatModeling';
 import { Table } from '../../components/table/TableList/Table';
 import RemoteFileSimple from '../../components/remote-file/RemoteFileSimple';
@@ -24,6 +24,7 @@ import {
 
 function ModelingPage() {
     const { dbContext } = useDuckDB();
+    const [showSQL, setShowSQL] = useState(false);
     
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -72,7 +73,7 @@ function ModelingPage() {
     } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
     
     // Chart visualization
-    const { chartSpec } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
+    const { chartSpec, showGraph, toggleGraphVisibility } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
     
     // Get chat type with fallback to 'graph'
     const chatType = currentChat?.type || 'graph';
@@ -198,29 +199,38 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
                                             schema={schemaName}
+                                            showSQL={showSQL}
+                                            onToggleSQL={() => setShowSQL(!showSQL)}
+                                            showGraph={showGraph}
+                                            onToggleGraph={toggleGraphVisibility}
+                                            chatType={chatType}
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             {/* SQL Section */}
-                            <div
-                                className="flex-shrink-0 bg-white border-b border-gray-200 overflow-hidden"
-                                style={{ height: `${sqlAreaHeight}px` }}
-                            >
-                                <div className="h-full p-2.5 overflow-auto">
-                                    <TableSQLDisplay
-                                        tableName={selectedTable}
-                                        dbContext={dbContext}
+                            {showSQL && (
+                                <>
+                                    <div
+                                        className="flex-shrink-0 bg-white border-b border-gray-200 overflow-hidden"
+                                        style={{ height: `${sqlAreaHeight}px` }}
+                                    >
+                                        <div className="h-full p-2.5 overflow-auto">
+                                            <TableSQLDisplay
+                                                tableName={selectedTable}
+                                                dbContext={dbContext}
+                                            />
+                                        </div>
+                                    </div>
+                                    <ResizableDivider
+                                        onResize={setSqlAreaHeight}
+                                        minHeight={100}
+                                        maxHeight={500}
+                                        direction="top"
                                     />
-                                </div>
-                            </div>
-                            <ResizableDivider
-                                onResize={setSqlAreaHeight}
-                                minHeight={100}
-                                maxHeight={500}
-                                direction="top"
-                            />
+                                </>
+                            )}
                             <div className="flex-1 overflow-hidden flex flex-col">
                                 {/* Table Section */}
                                 <div
@@ -236,7 +246,7 @@ function ModelingPage() {
                                 </div>
 
                                 {/* Resizable divider between table and graph/map */}
-                                {(chatType === 'graph' || chatType === 'map') && (
+                                {((chatType === 'graph' && showGraph) || chatType === 'map') && (
                                     <ResizableDivider
                                         onResize={setTableAreaHeight}
                                         minHeight={100}
@@ -246,7 +256,7 @@ function ModelingPage() {
                                 )}
 
                                 {/* Graph Section (for graph chats) */}
-                                {chatType === 'graph' && chartSpec && connection && selectedChatId && (
+                                {chatType === 'graph' && showGraph && chartSpec && connection && selectedChatId && (
                                     <div className="flex-1 overflow-auto p-4">
                                         <VegaLiteChart
                                             key={`${schemaName}-${chartSpec.id}`}
