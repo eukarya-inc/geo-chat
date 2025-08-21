@@ -55,25 +55,41 @@ export function useChartVisualization(
         }
     }, [currentChat?.type, currentChatState?.chartSpecs, updateChatState]);
 
-    // Generate preview chart when table is selected and connection is ready
+    // Load existing chart spec or clear when table changes
     useEffect(() => {
-        const generateChart = async () => {
-            if (!selectedTable || !dbContext || !connection || !schemaName) {
-                setChartSpec(null);
-                lastUpdatedTableRef.current = null;
+        if (!selectedTable) {
+            setChartSpec(null);
+            lastUpdatedTableRef.current = null;
+            return;
+        }
+
+        // Check if we already have a chart spec for this table
+        const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
+        if (existingSpec) {
+            setChartSpec({
+                id: existingSpec.id,
+                spec: existingSpec.spec,
+                timestamp: existingSpec.timestamp,
+                title: `Chart for ${selectedTable}`
+            });
+        } else {
+            // Don't generate chart automatically, wait for user to turn on graph
+            setChartSpec(null);
+        }
+    }, [selectedTable, currentChatState?.chartSpecs]);
+
+    // Generate chart when graph is turned on for the first time
+    useEffect(() => {
+        const generateChartIfNeeded = async () => {
+            // Only generate if graph is shown, table is selected, and no chart exists
+            if (!showGraph || !selectedTable || !dbContext || !connection || !schemaName) {
                 return;
             }
 
             // Check if we already have a chart spec for this table
             const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
             if (existingSpec) {
-                setChartSpec({
-                    id: existingSpec.id,
-                    spec: existingSpec.spec, // Type from storage
-                    timestamp: existingSpec.timestamp,
-                    title: `Chart for ${selectedTable}`
-                });
-                return;
+                return; // Already have a chart
             }
 
             // Add a small delay to ensure schema is fully switched
@@ -83,13 +99,11 @@ export function useChartVisualization(
             try {
                 const isValid = await dbContext.validateTable(selectedTable, schemaName);
                 if (!isValid) {
-                    // Table doesn't exist in this schema, clear chart spec silently
-                    setChartSpec(null);
+                    // Table doesn't exist in this schema
                     return;
                 }
             } catch {
-                // Validation failed, clear chart spec silently
-                setChartSpec(null);
+                // Validation failed
                 return;
             }
 
@@ -106,19 +120,16 @@ export function useChartVisualization(
                     };
                     setChartSpec(newChartSpec);
 
-                    // Update chartSpecs in remote state only if it's a new chart
+                    // Update chartSpecs in remote state
                     updateChartSpecInState(selectedTable, newChartSpec);
-                } else {
-                    setChartSpec(null);
                 }
             } catch (error) {
                 console.error('Error generating preview chart:', error);
-                setChartSpec(null);
             }
         };
 
-        generateChart();
-    }, [selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
+        generateChartIfNeeded();
+    }, [showGraph, selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
 
     // Function to toggle graph visibility for current table
     const toggleGraphVisibility = () => {
