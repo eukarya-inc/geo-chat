@@ -30,7 +30,7 @@ export const currentTableShowGraphAtom = atom((get) => {
     return false;
   }
   
-  return chatState.showGraph?.[selectedTable] ?? true;  // デフォルトは表示
+  return chatState.showGraph?.[selectedTable] ?? false;  // デフォルトは非表示
 });
 
 // ===== 便利な操作用Atoms（両方の状態を使用） =====
@@ -129,7 +129,7 @@ export const toggleTableGraphAtom = atom(
     const chatState = remoteState.chatStates[chatId];
     if (!chatState) return;
     
-    const currentShow = chatState.showGraph?.[tableName] ?? true;
+    const currentShow = chatState.showGraph?.[tableName] ?? false;
     
     set(remoteStateAtom, {
       ...remoteState,
