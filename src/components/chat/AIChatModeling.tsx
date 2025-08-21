@@ -205,7 +205,7 @@ export default function AIChat({
                 }, 100);
             }
         }
-    }, [messages, isLoading]);
+    }, [messages, isLoading, scrollToBottom]);
 
 
     useEffect(() => {

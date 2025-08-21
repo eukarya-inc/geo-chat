@@ -122,17 +122,19 @@ export function processAIChartSpec(
     aiSpec: Partial<VegaChartSpec>
 ): VegaChartSpec {
     // Helper function to ensure field type is set
-    const ensureFieldType = (field: any): any => {
+    const ensureFieldType = (field: unknown): unknown => {
         if (!field || typeof field !== 'object') return field;
         
+        const fieldObj = field as Record<string, unknown>;
+        
         // If type is already set and valid, keep it
-        if (field.type && ['quantitative', 'nominal', 'ordinal', 'temporal'].includes(field.type)) {
+        if (fieldObj.type && ['quantitative', 'nominal', 'ordinal', 'temporal'].includes(fieldObj.type as string)) {
             return field;
         }
         
         // Try to infer type from field name
-        if (field.field) {
-            const fieldName = field.field.toLowerCase();
+        if (fieldObj.field && typeof fieldObj.field === 'string') {
+            const fieldName = fieldObj.field.toLowerCase();
             let inferredType = 'nominal';
             
             // Check for quantitative fields
@@ -165,11 +167,12 @@ export function processAIChartSpec(
             }
             
             // If there's an aggregate function, it's likely quantitative
-            if (field.aggregate && ['sum', 'mean', 'average', 'min', 'max', 'count', 'distinct'].includes(field.aggregate)) {
+            if (fieldObj.aggregate && typeof fieldObj.aggregate === 'string' && 
+                ['sum', 'mean', 'average', 'min', 'max', 'count', 'distinct'].includes(fieldObj.aggregate)) {
                 inferredType = 'quantitative';
             }
             
-            return { ...field, type: inferredType };
+            return { ...fieldObj, type: inferredType };
         }
         
         return field;
@@ -194,7 +197,7 @@ export function processAIChartSpec(
     // Fix encoding fields - ensure they have proper types
     // Check if this is a single view spec (which has encoding)
     if ('encoding' in processedSpec && processedSpec.encoding) {
-        const encoding = processedSpec.encoding as Record<string, any>;
+        const encoding = processedSpec.encoding as Record<string, unknown>;
         
         // Process main encoding channels
         ['x', 'y', 'color', 'size', 'shape', 'opacity', 'theta', 'radius'].forEach(channel => {
