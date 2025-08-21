@@ -29,7 +29,7 @@ function ModelingPage() {
     const [showSQL, setShowSQL] = useState(false);
     
     // Enable state synchronization
-    useSyncBridge();
+    const { syncImmediately } = useSyncBridge();
     
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -165,6 +165,7 @@ function ModelingPage() {
                             onTableSelect={handleTableSelection}
                             onChartUpdate={updateChartFromAI}
                             getCurrentChatState={getCurrentChatState}
+                            onConversationCompleted={syncImmediately}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple
                                     dbContext={dbContext}

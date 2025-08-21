@@ -14,6 +14,7 @@ interface UseAIOptions {
   onMessagesChange?: (messages: StructuredMessage[]) => void;
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
+  onConversationCompleted?: () => void;
 }
 
 export function useAI({
@@ -24,7 +25,8 @@ export function useAI({
   selectedTable,
   onMessagesChange,
   onChartUpdate,
-  getCurrentChatState
+  getCurrentChatState,
+  onConversationCompleted
 }: UseAIOptions) {
   const [input, setInput] = useState('');
   const resolvedApiKey = apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -59,9 +61,10 @@ export function useAI({
       selectedTable,
       onMessagesChange,
       onChartUpdate,
-      getCurrentChatState
+      getCurrentChatState,
+      onMessageComplete: onConversationCompleted
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, getCurrentChatState]);
+  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, getCurrentChatState, onConversationCompleted]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

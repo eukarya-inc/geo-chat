@@ -102,6 +102,7 @@ export class AIStore {
       onMessagesChange?: (messages: StructuredMessage[]) => void;
       onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
       getCurrentChatState?: () => ChatState | null;
+      onMessageComplete?: () => void;
     }
   ): Promise<void> {
     const session = this.getOrCreateSession(chatId, options.schema || null);
@@ -145,9 +146,6 @@ export class AIStore {
     try {
       const contextMessage = await generateContextMessage(options.dbContext || null, options.schema || null, options.selectedTable || null);
       if (contextMessage) {
-        // Log context message for debugging
-        console.log(`[AI Context Generated for message #${coreMessages.filter(m => m.role === 'user').length}]`);
-        
         // Add context as the FIRST system message
         // This avoids the "multiple system messages separated by user/assistant" error
         coreMessages = [
@@ -198,6 +196,9 @@ export class AIStore {
         this.notifyListeners();
       }
       options.onMessagesChange?.(currentMessages);
+      
+      // チャット完了時のコールバックを呼び出す
+      options.onMessageComplete?.();
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
@@ -211,6 +212,9 @@ export class AIStore {
       session.messages = currentMessages;
       options.onMessagesChange?.(currentMessages);
       this.notifyListeners();
+      
+      // エラー時もチャット完了として扱う
+      options.onMessageComplete?.();
     } finally {
       this.setLoading(chatId, false, null);
     }

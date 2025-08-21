@@ -23,6 +23,7 @@ interface AIChatProps {
     onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
     getCurrentChatState?: () => ChatState | null;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    onConversationCompleted?: () => void;
 }
 
 export default function AIChat({
@@ -37,12 +38,14 @@ export default function AIChat({
     onTableSelect,
     onChartUpdate,
     getCurrentChatState,
-    remoteFileComponent
+    remoteFileComponent,
+    onConversationCompleted
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
     const userHasScrolledRef = useRef<boolean>(false);
+    const isProgrammaticScrollRef = useRef<boolean>(false);
     const [showPopup, setShowPopup] = useState(false);
     const popupRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -63,6 +66,15 @@ export default function AIChat({
         onMessagesChange(messages);
     }, [effectiveChatId, chatId, updateChatMessages, onMessagesChange]);
 
+    const scrollToBottom = useCallback(() => {
+        isProgrammaticScrollRef.current = true;
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Reset the flag after scrolling
+        setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+        }, 500);
+    }, []);
+
     const {
         messages,
         isLoading,
@@ -81,7 +93,8 @@ export default function AIChat({
         selectedTable,
         onMessagesChange: handleMessagesChange,
         onChartUpdate,
-        getCurrentChatState
+        getCurrentChatState,
+        onConversationCompleted
     });
 
     const messageGroups = useMemo(() => {
@@ -142,10 +155,6 @@ export default function AIChat({
         }
     }, [messageGroups, collapsedGroups, manuallyToggledGroups]);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
     const isNearBottom = () => {
         const container = scrollContainerRef.current;
         if (!container) return true;
@@ -159,40 +168,45 @@ export default function AIChat({
         const container = scrollContainerRef.current;
         if (!container) return;
 
-        userHasScrolledRef.current = !isNearBottom();
+        // Ignore programmatic scrolls
+        if (isProgrammaticScrollRef.current) {
+            return;
+        }
+
+        const threshold = 100;
+        const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        
+        // Mark as user-scrolled if they're away from bottom
+        if (scrollBottom > threshold) {
+            userHasScrolledRef.current = true;
+        } else {
+            // Reset if they scroll back to bottom
+            userHasScrolledRef.current = false;
+        }
     };
 
     useEffect(() => {
+        // Don't auto-scroll if user has manually scrolled
         if (userHasScrolledRef.current) {
             return;
         }
 
-        if (messages.length <= 2 || isNearBottom()) {
+        if (messages.length <= 2 || isNearBottom() || isLoading) {
             const now = Date.now();
             const timeSinceLastScroll = now - lastScrollTimeRef.current;
 
-            if (timeSinceLastScroll >= 1000 || messages.length <= 2) {
+            // More frequent scrolling during streaming
+            const scrollInterval = isLoading ? 500 : 1000;
+            
+            if (timeSinceLastScroll >= scrollInterval || messages.length <= 2) {
                 lastScrollTimeRef.current = now;
                 setTimeout(() => {
                     scrollToBottom();
                 }, 100);
             }
         }
-    }, [messages]);
+    }, [messages, isLoading]);
 
-    useEffect(() => {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && Array.isArray(lastMessage.content)) {
-            const hasCompletionResult = lastMessage.content.some(
-                block => block.type === 'tool_result' && block.name === 'completion'
-            );
-            if (hasCompletionResult) {
-                setTimeout(() => {
-                    scrollToBottom();
-                }, 200);
-            }
-        }
-    }, [messages]);
 
     useEffect(() => {
         if (!isLoading && isNearBottom()) {
@@ -223,14 +237,21 @@ export default function AIChat({
             const content = tableCreatedMessage.content as string;
             
             // Check if we already have prompt suggestions for this table
+            // Table creation suggestions are in tool_result, completion suggestions are in tool_use (for memory efficiency)
             const hasPromptSuggestions = messages.some(msg => 
                 msg.role === 'assistant' && 
                 Array.isArray(msg.content) &&
                 msg.content.some(block => 
-                    block.type === 'tool_result' && 
-                    block.name === 'completion' &&
-                    block.result && typeof block.result === 'object' &&
-                    'suggestedPrompts' in block.result
+                    // Check for table creation suggestions (tool_result)
+                    (block.type === 'tool_result' && 
+                     block.name === 'completion' &&
+                     block.result && typeof block.result === 'object' &&
+                     'suggestedPrompts' in block.result) ||
+                    // Check for completion suggestions (tool_use)
+                    (block.type === 'tool_use' && 
+                     block.name === 'completion' &&
+                     block.input && typeof block.input === 'object' &&
+                     'suggestedPrompts' in block.input)
                 )
             );
             
@@ -386,7 +407,13 @@ export default function AIChat({
                 target: { value: '' }
             } as React.ChangeEvent<HTMLTextAreaElement>;
             handleInputChange(changeEvent);
+            // Reset scroll tracking when sending a new message
+            userHasScrolledRef.current = false;
             sendMessage(promptText);
+            // Scroll to bottom with delay when sending message from prompt
+            setTimeout(() => {
+                scrollToBottom();
+            }, 300);
         } else {
             const changeEvent = {
                 target: { value: promptText }
@@ -622,7 +649,11 @@ export default function AIChat({
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2 flex-shrink-0">
+            <form onSubmit={(e) => {
+                // Reset scroll tracking when sending a new message
+                userHasScrolledRef.current = false;
+                handleSubmit(e);
+            }} className="flex flex-col gap-2 flex-shrink-0">
                 <ChatInput
                     value={input}
                     onChange={handleInputChange}
