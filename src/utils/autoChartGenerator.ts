@@ -1,9 +1,8 @@
-import type { VegaLiteSpec } from '../types/vega';
 import type { DBContext } from '../lib/duckdb/dbContext';
-
+import type { VegaChartSpec } from '../types/chart';
 
 interface ChartGenerationResult {
-  spec: VegaLiteSpec;
+  spec: VegaChartSpec;
   title: string;
 }
 
@@ -17,7 +16,7 @@ export async function generateDefaultCharts(
     if (!columns || columns.length === 0) {
       return [];
     }
-    
+
     // Categorize columns by type
     const numericColumns = columns.filter(col => isNumericType(col.type));
     const categoricalColumns = columns.filter(col => isCategoricalType(col.type));
@@ -25,7 +24,7 @@ export async function generateDefaultCharts(
 
     // Select all columns for the query
     const columnNames = columns.map(col => col.name).join(', ');
-    
+
     // Don't use schema-qualified table name in SQL - let dbContext handle schema context
     const qualifiedTableName = tableName;
 
@@ -36,14 +35,15 @@ export async function generateDefaultCharts(
     if (temporalColumns.length > 0 && numericColumns.length > 0) {
       const timeColumn = temporalColumns[0];
       const valueColumn = numericColumns[0];
-      
+
       chart = {
         title: `${tableName} - Time Series`,
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${valueColumn.name} over time`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
+            values: []
           },
           mark: {
             type: 'line',
@@ -69,14 +69,15 @@ export async function generateDefaultCharts(
     else if (categoricalColumns.length > 0 && numericColumns.length > 0) {
       const categoryColumn = categoricalColumns[0];
       const valueColumn = numericColumns[0];
-      
+
       chart = {
         title: `${tableName} - Bar Chart`,
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${valueColumn.name} by ${categoryColumn.name}`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
+            values: []
           },
           mark: 'bar',
           encoding: {
@@ -99,14 +100,15 @@ export async function generateDefaultCharts(
     else if (numericColumns.length >= 2) {
       const xColumn = numericColumns[0];
       const yColumn = numericColumns[1];
-      
+
       chart = {
         title: `${tableName} - Scatter Plot`,
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: `${xColumn.name} vs ${yColumn.name}`,
           data: {
-            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
+            values: []
           },
           mark: {
             type: 'circle',
@@ -136,21 +138,22 @@ export async function generateDefaultCharts(
     // 4. If we have only numeric columns, create bar chart of first column
     else if (numericColumns.length > 0) {
       const column = numericColumns[0];
-      
+
       // Try to find an index-like column for x-axis
-      const indexColumn = columns.find(col => 
-        col.name.toLowerCase().includes('index') || 
+      const indexColumn = columns.find(col =>
+        col.name.toLowerCase().includes('index') ||
         col.name.toLowerCase().includes('id') ||
         col.name.toLowerCase() === 'rowid'
       );
-      
+
       chart = {
         title: `${tableName} - Values`,
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: column.name,
           data: {
-            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
+            values: []
           },
           mark: 'bar',
           encoding: {
@@ -176,14 +179,15 @@ export async function generateDefaultCharts(
     // 5. If only categorical, show as horizontal bar chart
     else if (categoricalColumns.length > 0) {
       const column = categoricalColumns[0];
-      
+
       chart = {
         title: `${tableName} - Categories`,
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           title: column.name,
           data: {
-            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`
+            sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
+            values: []
           },
           mark: 'bar',
           encoding: {

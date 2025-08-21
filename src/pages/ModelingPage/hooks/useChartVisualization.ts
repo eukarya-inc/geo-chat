@@ -1,8 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
 import type { ChartSpec } from '../../../types/chart';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
+import {
+    toggleTableGraphAtom,
+    updateChatStateAtom,
+    currentChatAtom,
+    currentChatStateAtom,
+    currentTableShowGraphAtom
+} from '../../../store/modelingAtoms';
 
 export function useChartVisualization(
     selectedTable: string | null,
@@ -11,7 +19,12 @@ export function useChartVisualization(
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
-    const [tableGraphVisibility, setTableGraphVisibility] = useState<Record<string, boolean>>({});
+    const toggleTableGraph = useSetAtom(toggleTableGraphAtom);
+    const updateChatState = useSetAtom(updateChatStateAtom);
+    const currentChat = useAtomValue(currentChatAtom);
+    const currentChatState = useAtomValue(currentChatStateAtom);
+    const showGraph = useAtomValue(currentTableShowGraphAtom);
+    const lastUpdatedTableRef = useRef<string | null>(null);
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -25,11 +38,41 @@ export function useChartVisualization(
         }
     }, [selectedTable]);
 
+    // Update chart spec in remote state when it changes
+    const updateChartSpecInState = useCallback((table: string, spec: ChartSpec) => {
+        if (currentChat?.type === 'graph' && lastUpdatedTableRef.current !== table) {
+            lastUpdatedTableRef.current = table;
+            updateChatState({
+                chartSpecs: {
+                    ...(currentChatState?.chartSpecs || {}),
+                    [table]: {
+                        id: spec.id,
+                        spec: spec.spec,
+                        timestamp: spec.timestamp
+                    }
+                }
+            });
+        }
+    }, [currentChat?.type, currentChatState?.chartSpecs, updateChatState]);
+
     // Generate preview chart when table is selected and connection is ready
     useEffect(() => {
         const generateChart = async () => {
             if (!selectedTable || !dbContext || !connection || !schemaName) {
                 setChartSpec(null);
+                lastUpdatedTableRef.current = null;
+                return;
+            }
+
+            // Check if we already have a chart spec for this table
+            const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
+            if (existingSpec) {
+                setChartSpec({
+                    id: existingSpec.id,
+                    spec: existingSpec.spec, // Type from storage
+                    timestamp: existingSpec.timestamp,
+                    title: `Chart for ${selectedTable}`
+                });
                 return;
             }
 
@@ -55,12 +98,16 @@ export function useChartVisualization(
 
                 if (defaultCharts.length > 0) {
                     const result = defaultCharts[0];
-                    setChartSpec({
+                    const newChartSpec: ChartSpec = {
                         id: `preview-${selectedTable}-${schemaName}`,
                         spec: result.spec,
                         timestamp: new Date(),
                         title: result.title
-                    });
+                    };
+                    setChartSpec(newChartSpec);
+
+                    // Update chartSpecs in remote state only if it's a new chart
+                    updateChartSpecInState(selectedTable, newChartSpec);
                 } else {
                     setChartSpec(null);
                 }
@@ -71,21 +118,15 @@ export function useChartVisualization(
         };
 
         generateChart();
-    }, [selectedTable, dbContext, schemaName, connection]);
+    }, [selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
 
-    // Get current table's graph visibility state
-    const showGraph = selectedTable ? (tableGraphVisibility[selectedTable] ?? false) : false;
-    
     // Function to toggle graph visibility for current table
     const toggleGraphVisibility = () => {
         if (selectedTable) {
-            setTableGraphVisibility(prev => ({
-                ...prev,
-                [selectedTable]: !prev[selectedTable]
-            }));
+            toggleTableGraph(selectedTable);
         }
     };
-    
+
     return {
         chartSpec,
         showGraph,

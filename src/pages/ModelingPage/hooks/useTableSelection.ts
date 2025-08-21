@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { Chat } from '../../../components/chat/ChatList';
+import { selectTableAtom, currentChatAtom } from '../../../store/modelingAtoms';
 
 export function useTableSelection(
     dbContext: DBContext | null,
     schemaName: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
-    updateChatState: (updates: Partial<Chat>) => void,
-    currentChat: Chat | undefined
+    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [prevSchemaName, setPrevSchemaName] = useState<string | null>(null);
+    const setTableInAtom = useSetAtom(selectTableAtom);
+    const currentChat = useAtomValue(currentChatAtom);
 
     // Clear selected table immediately when schema changes
     useEffect(() => {
@@ -22,15 +23,15 @@ export function useTableSelection(
         setPrevSchemaName(schemaName);
     }, [schemaName, prevSchemaName]);
 
-    // Handle table selection and update chat state
+    // Handle table selection and update both local state and Jotai atom
     const handleTableSelection = useCallback((tableName: string | null) => {
         setSelectedTable(tableName);
         
-        // Update the selected table in the current chat
-        if (schemaName && tableName !== undefined) {
-            updateChatState({ selectedTable: tableName });
+        // Update the selected table in Jotai atom
+        if (schemaName) {
+            setTableInAtom(tableName);
         }
-    }, [schemaName, updateChatState]);
+    }, [schemaName, setTableInAtom]);
 
     // Subscribe to table changes from dbContext
     useEffect(() => {
@@ -78,12 +79,12 @@ export function useTableSelection(
                         } else {
                             // Table doesn't exist in this schema, clear selection
                             setSelectedTable(null);
-                            updateChatState({ selectedTable: null });
+                            setTableInAtom(null);
                         }
                     } catch (error) {
                         console.log('Error validating table during restoration:', error);
                         setSelectedTable(null);
-                        updateChatState({ selectedTable: null });
+                        setTableInAtom(null);
                     }
                 } else {
                     // No saved table for this chat
@@ -93,7 +94,7 @@ export function useTableSelection(
         };
 
         restoreTableSelection();
-    }, [connection, currentChat, dbContext, schemaName, updateChatState]);
+    }, [connection, currentChat, dbContext, schemaName, setTableInAtom]);
 
     return {
         selectedTable,

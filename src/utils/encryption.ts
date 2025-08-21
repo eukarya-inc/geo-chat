@@ -108,9 +108,16 @@ export async function decryptApiKey(encryptedData: string): Promise<string> {
 
 /**
  * Safely stores an encrypted API key in localStorage
+ * If apiKey is empty, removes the key from localStorage
  */
 export async function storeEncryptedApiKey(apiKey: string): Promise<void> {
   try {
+    if (!apiKey) {
+      // Empty string means remove the key
+      localStorage.removeItem('anthropic_api_key_encrypted');
+      localStorage.removeItem('anthropic_api_key'); // Also clear old unencrypted key if it exists
+      return;
+    }
     const encrypted = await encryptApiKey(apiKey);
     localStorage.setItem('anthropic_api_key_encrypted', encrypted);
   } catch (error) {
