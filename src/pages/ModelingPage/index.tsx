@@ -11,6 +11,7 @@ import Map from '../../components/map';
 import { chatIdToSchemaName } from './utils/schemaUtils';
 import { ChatList } from '../../components/chat/ChatList';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
+import { useSyncBridge } from '../../hooks/useSyncBridge';
 import {
     useApiKeyManagement,
     useResizableAreas,
@@ -19,12 +20,16 @@ import {
     useTableSelection,
     useMapVisualization,
     useChartVisualization,
-    useMessageHandling
+    useMessageHandling,
+    useTableHistorySync
 } from './hooks';
 
 function ModelingPage() {
     const { dbContext } = useDuckDB();
     const [showSQL, setShowSQL] = useState(false);
+    
+    // Enable state synchronization
+    useSyncBridge();
     
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -32,7 +37,7 @@ function ModelingPage() {
     // Resizable areas
     const { sqlAreaHeight, setSqlAreaHeight, tableAreaHeight, setTableAreaHeight } = useResizableAreas();
     
-    // Chat management (needs to be first for chats state)
+    // Chat management with Jotai (needs to be first for chats state)
     const {
         chats,
         selectedChatId,
@@ -58,7 +63,7 @@ function ModelingPage() {
     const {
         selectedTable,
         handleTableSelection,
-    } = useTableSelection(dbContext, schemaName, connection, updateChatState, currentChat);
+    } = useTableSelection(dbContext, schemaName, connection);
     
     // Map visualization
     const {
@@ -84,9 +89,13 @@ function ModelingPage() {
         handleSendMessageReady,
         handleMessagesChange,
     } = useMessageHandling(selectedChatId, updateChatMessages);
+    
+    // Sync table creation history to remote state
+    useTableHistorySync(dbContext, selectedChatId);
 
     return (
-        <div className="flex h-full w-full overflow-hidden">
+        <>
+            <div className="flex h-full w-full overflow-hidden">
             {/* Sidebar with Chat List */}
             <div className="w-64 h-full border-r border-gray-300 bg-gray-50 flex-shrink-0">
                 <ChatList
@@ -299,6 +308,7 @@ function ModelingPage() {
                 </div>
             </div>
         </div>
+        </>
     );
 }
 
