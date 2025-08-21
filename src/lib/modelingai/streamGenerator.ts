@@ -45,7 +45,6 @@ export async function* createAIStreamGenerator({
         'anthropic-dangerous-direct-browser-access': 'true',
       },
     });
-
     const result = await streamText({
       model: anthropicClient('claude-3-5-sonnet-20241022'),
       system: generateSystemPrompt(),
@@ -75,6 +74,18 @@ export async function* createAIStreamGenerator({
           yield {
             type: 'text-delta',
             textDelta: part.textDelta
+          };
+          break;
+          
+        case 'error':
+          // Pass through API errors to be displayed in chat
+          const errorMessage = typeof part.error === 'string' 
+            ? part.error 
+            : (part.error instanceof Error ? part.error.message : 'Unknown error occurred');
+          console.error('[Stream Generator] API Error:', errorMessage);
+          yield {
+            type: 'error',
+            error: errorMessage
           };
           break;
           

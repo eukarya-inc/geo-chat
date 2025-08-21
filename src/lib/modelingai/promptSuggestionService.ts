@@ -60,20 +60,29 @@ Categories to consider:
 - geographic: Map-based analysis (only if geometry/location data exists)
 
 Requirements:
-1. Prompts should be specific to this data, not generic
-2. Use natural Japanese language that non-technical users understand
-3. Each prompt should be a complete question or request
-4. Prioritize the most valuable analyses for this specific dataset
-5. If the table has time-based columns, include temporal analysis
-6. If the table has categorical columns, include grouping/comparison
-7. If the table has numeric columns, include statistical summaries
-8. Avoid technical jargon - write as if explaining to a business user
+1. ALL prompts MUST use the "〜したい" pattern (want to...)
+   Examples:
+   - "国別の顧客数を見たい"
+   - "上位10件のデータを表示したい"
+   - "平均値を計算したい"
+2. Prompts should be specific to THIS data - look at actual column names and values
+3. DO NOT suggest analysis for data that doesn't exist (e.g., don't suggest sales analysis if there's no sales column)
+4. Use natural Japanese language that non-technical users understand
+5. Each prompt should express what the user wants to do/see
+6. Base suggestions on ACTUAL columns present in the table:
+   - For numeric columns like balances/amounts: suggest statistical analysis
+   - For categorical columns: suggest grouping/comparison
+   - For date/time columns: suggest temporal analysis
+   - For geographic columns: suggest spatial analysis
+7. Avoid technical jargon - write as if explaining to a business user
 
-Examples of good prompts:
-- "月別の売上推移を見せてください"
-- "都道府県別のランキングを作成してください"
-- "カテゴリごとの平均値を計算してください"
-- "上位10件のデータを表示してください"
+IMPORTANT: 
+- Only suggest analyses that can be done with the columns that actually exist
+- ALWAYS use "〜したい" ending for consistency
+For example:
+- If you see 'balance' or 'acctbal' columns → "残高の分析をしたい", NOT "売上を分析したい"
+- If you see 'customer' data → "顧客の分布を見たい", NOT "売上推移を見たい"
+- If you see 'order' data → then you can suggest "注文の分析をしたい"
 `;
 
     const { object } = await generateObject({
