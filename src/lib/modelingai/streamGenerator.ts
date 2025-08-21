@@ -4,8 +4,9 @@ import type { DBContext } from '../duckdb/dbContext';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool } from './tools/completionTool';
-import { createChartUpdateTool } from './tools/chartTool';
+import { createChartUpdateTool, createChartGetTool } from './tools/chartTool';
 import type { VegaChartSpec } from '../../types/chart';
+import type { ChatState } from '../../store/modelingRemoteAtoms';
 
 export interface StreamGeneratorOptions {
   messages: CoreMessage[];
@@ -14,6 +15,7 @@ export interface StreamGeneratorOptions {
   schema?: string | null;
   abortSignal?: AbortSignal;
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+  getCurrentChatState?: () => ChatState | null;
 }
 
 export type StreamPart = 
@@ -33,7 +35,8 @@ export async function* createAIStreamGenerator({
   dbContext,
   schema = null,
   abortSignal,
-  onChartUpdate
+  onChartUpdate,
+  getCurrentChatState
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
     const anthropicClient = createAnthropic({
@@ -53,6 +56,9 @@ export async function* createAIStreamGenerator({
         }),
         ...(onChartUpdate && createChartUpdateTool(onChartUpdate) ? {
           update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,
+        } : {}),
+        ...(getCurrentChatState ? {
+          get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
         } : {}),
         completion: completionTool,
       },

@@ -3,6 +3,7 @@ import { aiStore } from './AIStore';
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
+import type { ChatState } from '../../store/modelingRemoteAtoms';
 
 interface UseAIOptions {
   chatId: string;
@@ -11,6 +12,7 @@ interface UseAIOptions {
   apiKey?: string;
   onMessagesChange?: (messages: StructuredMessage[]) => void;
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+  getCurrentChatState?: () => ChatState | null;
 }
 
 export function useAI({
@@ -19,7 +21,8 @@ export function useAI({
   dbContext,
   apiKey,
   onMessagesChange,
-  onChartUpdate
+  onChartUpdate,
+  getCurrentChatState
 }: UseAIOptions) {
   const [input, setInput] = useState('');
   const resolvedApiKey = apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -52,9 +55,10 @@ export function useAI({
       dbContext: dbContext || undefined,
       schema,
       onMessagesChange,
-      onChartUpdate
+      onChartUpdate,
+      getCurrentChatState
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, onMessagesChange, onChartUpdate]);
+  }, [chatId, resolvedApiKey, dbContext, schema, onMessagesChange, onChartUpdate, getCurrentChatState]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

@@ -108,6 +108,11 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
           // Add createdTable if a table was created
           if (createdTableName) {
             metadata.createdTable = createdTableName;
+            // Add note about Vega spec not being created yet
+            if (!metadata.suggestions) {
+              metadata.suggestions = [];
+            }
+            metadata.suggestions.unshift(`テーブル「${createdTableName}」が作成されました。このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
           }
 
           // Add column info for better understanding

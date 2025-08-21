@@ -217,5 +217,11 @@ export function useChatManagement(
     selectChat: selectChatHandler,
     updateChatMessages,
     updateChatState: updateChatStateWrapper,
+    getCurrentChatState: useCallback(() => {
+      // Get the current state from remote state atom
+      const remoteState = chatStates;
+      const currentId = localState.selectedChatId;
+      return currentId ? remoteState[currentId] : null;
+    }, [chatStates, localState.selectedChatId]),
   };
 }

@@ -47,6 +47,7 @@ function ModelingPage() {
         selectChat,
         updateChatMessages,
         updateChatState,
+        getCurrentChatState,
     } = useChatManagement(dbContext);
     
     // Convert chatId to schemaName at the top level
@@ -163,6 +164,7 @@ function ModelingPage() {
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelection}
                             onChartUpdate={updateChartFromAI}
+                            getCurrentChatState={getCurrentChatState}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple
                                     dbContext={dbContext}
