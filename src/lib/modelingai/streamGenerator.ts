@@ -4,6 +4,8 @@ import type { DBContext } from '../duckdb/dbContext';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool } from './tools/completionTool';
+import { createChartUpdateTool } from './tools/chartTool';
+import type { VegaChartSpec } from '../../types/chart';
 
 export interface StreamGeneratorOptions {
   messages: CoreMessage[];
@@ -11,6 +13,7 @@ export interface StreamGeneratorOptions {
   dbContext?: DBContext | null;
   schema?: string | null;
   abortSignal?: AbortSignal;
+  onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
 }
 
 export type StreamPart = 
@@ -29,7 +32,8 @@ export async function* createAIStreamGenerator({
   apiKey,
   dbContext,
   schema = null,
-  abortSignal
+  abortSignal,
+  onChartUpdate
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
     const anthropicClient = createAnthropic({
@@ -47,6 +51,9 @@ export async function* createAIStreamGenerator({
         ...(dbContext && {
           duckdb_query: createDuckDBTool(dbContext, schema, apiKey),
         }),
+        ...(onChartUpdate && createChartUpdateTool(onChartUpdate) ? {
+          update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,
+        } : {}),
         completion: completionTool,
       },
       maxSteps: 50,

@@ -147,6 +147,35 @@ export const toggleTableGraphAtom = atom(
   }
 );
 
+// グラフ表示を明示的に設定
+export const setTableGraphAtom = atom(
+  null,
+  (get, set, { tableName, show }: { tableName: string; show: boolean }) => {
+    const remoteState = get(remoteStateAtom);
+    const localState = get(localStateAtom);
+    const chatId = localState.selectedChatId;
+    
+    if (!chatId) return;
+    
+    const chatState = remoteState.chatStates[chatId];
+    if (!chatState) return;
+    
+    set(remoteStateAtom, {
+      ...remoteState,
+      chatStates: {
+        ...remoteState.chatStates,
+        [chatId]: {
+          ...chatState,
+          showGraph: {
+            ...chatState.showGraph,
+            [tableName]: show
+          }
+        }
+      }
+    });
+  }
+);
+
 // テーブル選択（現在のチャットを更新）
 export const selectTableAtom = atom(
   null,
