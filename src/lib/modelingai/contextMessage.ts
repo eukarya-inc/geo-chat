@@ -13,35 +13,42 @@ export async function generateContextMessage(
   }
 
   try {
+    // Get current date and timezone information
+    const now = new Date();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const isoString = now.toISOString();
+    
     // Get all tables in the current schema
     const tables = await dbContext.getTables(schemaName);
     
-    if (!tables || tables.length === 0) {
-      return null;
-    }
-
     // Build context message without HTML comments
-    let contextMessage = `現在のデータベースコンテキスト:\n`;
-    contextMessage += `スキーマ: ${schemaName}\n`;
-    contextMessage += `\n利用可能なテーブル:\n`;
+    let contextMessage = `Current database context:\n`;
+    contextMessage += `Current Date and Time (actual user's current time): ${isoString}\n`;
+    contextMessage += `Timezone: ${timezone}\n`;
+    contextMessage += `Schema: ${schemaName}\n`;
+    contextMessage += `\nAvailable tables:\n`;
     
-    for (const table of tables) {
-      contextMessage += `- ${table}`;
-      if (table === selectedTable) {
-        contextMessage += ` (現在選択中)`;
+    if (!tables || tables.length === 0) {
+      contextMessage += `No tables are currently available in the database.\n`;
+    } else {
+      for (const table of tables) {
+        contextMessage += `- ${table}`;
+        if (table === selectedTable) {
+          contextMessage += ` (currently selected)`;
+        }
+        contextMessage += '\n';
       }
-      contextMessage += '\n';
     }
     
     // Add detailed info about selected table
     if (selectedTable && tables.some(t => t === selectedTable)) {
-      contextMessage += `\n現在選択中のテーブル: ${selectedTable}\n`;
+      contextMessage += `\nCurrently selected table: ${selectedTable}\n`;
       
       try {
         // Get table schema
         const columns = await dbContext.getTableColumns(selectedTable, schemaName);
         if (columns && columns.length > 0) {
-          contextMessage += `\nテーブルスキーマ:\n`;
+          contextMessage += `\nTable schema:\n`;
           for (const column of columns) {
             contextMessage += `- ${column.name}: ${column.type}\n`;
           }
@@ -52,7 +59,7 @@ export async function generateContextMessage(
         const result = await dbContext.executeQuery(sampleQuery, schemaName);
         
         if (result && result.length > 0) {
-          contextMessage += `\nサンプルデータ (先頭5件):\n`;
+          contextMessage += `\nSample data (first 5 rows):\n`;
           contextMessage += '```json\n';
           contextMessage += JSON.stringify(result, null, 2);
           contextMessage += '\n```\n';
@@ -75,7 +82,7 @@ export async function generateContextMessage(
  */
 export function isContextMessage(message: string): boolean {
   // Since we no longer use markers, check for the context header
-  return message.includes('現在のデータベースコンテキスト:');
+  return message.includes('Current database context:');
 }
 
 /**
