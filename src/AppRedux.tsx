@@ -7,7 +7,6 @@ import TableList from './components/table/TableList';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { setSelectedTable, setSelectedColumns } from './store/slices/dataSlice';
-import { setStyleManager } from './store/slices/mapSlice';
 import { setApiKey, setShowApiKeyInput } from './store/slices/uiSlice';
 import { storeEncryptedApiKey } from './utils/encryption';
 
@@ -16,7 +15,6 @@ function AppRedux() {
     const dispatch = useAppDispatch();
     const { connection: db, dbContext } = useAppSelector(state => state.duckdb);
     const { selectedTable, selectedColumns } = useAppSelector(state => state.data);
-    const { styleManager: mapStyleManager } = useAppSelector(state => state.map);
     const { apiKey, showApiKeyInput, isLoadingApiKey } = useAppSelector(state => state.ui);
 
     console.log('AppRedux: Render with database:', !!db, 'dbContext:', !!dbContext);
@@ -26,10 +24,6 @@ function AppRedux() {
         dispatch(setSelectedColumns({ table: tableName, columns }));
     };
 
-    const handleMapReady = (styleManager: import('./utils/mapStyleManager').MapStyleManager) => {
-        console.log('AppRedux: Map ready, style manager initialized');
-        dispatch(setStyleManager(styleManager));
-    };
 
     const handleTableSelect = (tableName: string) => {
         const actualTable = tableName === '' ? null : tableName;
@@ -126,7 +120,7 @@ function AppRedux() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} apiKey={apiKey} />}
             </div>
 
             {/* Right Half - DuckDB and Map */}
@@ -172,8 +166,6 @@ function AppRedux() {
                             dbContext={dbContext}
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
-                            onMapReady={handleMapReady}
-                            mapStyleManager={mapStyleManager || undefined}
                         />
                     )}
                 </div>

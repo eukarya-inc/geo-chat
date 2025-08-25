@@ -6,14 +6,12 @@ import RemoteFile from './components/remote-file';
 import TableList from './components/table/TableList';
 import { useDuckDB } from './lib/duckdb/useDuckDB';
 import { terminateGlobalDB } from './lib/duckdb/globalDB';
-import type { MapStyleManager } from './utils/mapStyleManager';
 import { storeEncryptedApiKey, retrieveEncryptedApiKey } from './utils/encryption';
 
 function App() {
     const { dbContext } = useDuckDB();
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({});
-    const [mapStyleManager, setMapStyleManager] = useState<MapStyleManager | null>(null);
     const [apiKey, setApiKey] = useState<string>('');
     const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
     const [isLoadingApiKey, setIsLoadingApiKey] = useState<boolean>(true);
@@ -28,10 +26,6 @@ function App() {
         }));
     };
 
-    const handleMapReady = (styleManager: MapStyleManager) => {
-        console.log('App: Map ready, style manager initialized');
-        setMapStyleManager(styleManager);
-    };
 
     const handleTableSelect = (tableName: string) => {
         const actualTable = tableName === '' ? null : tableName;
@@ -168,7 +162,7 @@ function App() {
                         APIキーを読み込み中...
                     </div>
                 )}
-                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} mapStyleManager={mapStyleManager || undefined} apiKey={apiKey} />}
+                {!isLoadingApiKey && dbContext && <AIChat dbContext={dbContext} apiKey={apiKey} />}
             </div>
             
             {/* Right Half - DuckDB and Map */}
@@ -214,8 +208,6 @@ function App() {
                             dbContext={dbContext}
                             selectedTable={selectedTable}
                             selectedColumns={selectedColumns[selectedTable || ''] || []}
-                            onMapReady={handleMapReady}
-                            mapStyleManager={mapStyleManager || undefined}
                         />
                     )}
                 </div>

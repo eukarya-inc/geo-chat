@@ -1,27 +1,31 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import type { StyleSpecification } from 'maplibre-gl';
 import { checkTableGeometry } from '../../../utils/duckdbGeometryHelpers';
-import type { TableStyle, ExtraStyle } from '../../../components/map';
-import type { Chat } from '../../../components/chat/ChatList';
+import type { TableStyle } from '../../../components/map';
+import { updateChatStateAtom, currentChatStateAtom } from '../../../store/modelingAtoms';
 
-interface MapViewState {
-    center?: [number, number];
-    zoom?: number;
-    bearing?: number;
-    pitch?: number;
-}
 
 export function useMapVisualization(
     selectedTable: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
-    schemaName: string | null,
-    updateChatState: (updates: Partial<Chat>) => void
+    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geometry');
-    const [tableStyles, setTableStyles] = useState<Record<string, TableStyle>>({});
-    const [extraMapStyle, setExtraMapStyle] = useState<ExtraStyle | undefined>(undefined);
+    const currentChatState = useAtomValue(currentChatStateAtom);
+    const updateChatStateAtomSet = useSetAtom(updateChatStateAtom);
+
+    // Get current table's map spec
+    const currentMapSpec = selectedTable ? currentChatState?.mapSpecs?.[selectedTable] : undefined;
+    
+    // Memoize tableStyles and style to prevent unnecessary re-renders
+    const tableStyles = useMemo(() => {
+        return currentMapSpec?.tableStyles || {};
+    }, [currentMapSpec?.tableStyles]);
+    
+    const mapStyle = useMemo(() => {
+        return currentMapSpec?.style;
+    }, [currentMapSpec?.style]);
 
     // Check for geom column and available columns when table is selected
     useEffect(() => {
@@ -41,71 +45,34 @@ export function useMapVisualization(
         checkGeomColumn();
     }, [selectedTable, connection]);
 
-    // Update table styles in chat
+    // Update table styles for current table
     const updateTableStyle = useCallback((tableName: string, style: TableStyle) => {
-        // Update local state
-        setTableStyles(prev => ({
-            ...prev,
-            [tableName]: style
-        }));
+        if (!selectedTable) return;
         
-        // Save to chat
-        if (schemaName) {
-            updateChatState({
-                tableStyles: {
-                    ...tableStyles,
-                    [tableName]: style
-                }
-            });
-        }
-    }, [schemaName, tableStyles, updateChatState]);
-
-    // Update extra map style in chat
-    const updateExtraMapStyle = useCallback((style: ExtraStyle | undefined) => {
-        // Update local state
-        setExtraMapStyle(style);
+        const currentSpecs = currentChatState?.mapSpecs || {};
+        const currentSpec = currentSpecs[selectedTable] || {};
         
-        // Save to chat
-        if (schemaName) {
-            updateChatState({ extraMapStyle: style });
-        }
-    }, [schemaName, updateChatState]);
-
-    // Update map view state in chat
-    const updateMapViewState = useCallback((viewState: MapViewState) => {
-        // Save map state to chat
-        if (schemaName) {
-            updateChatState({
-                mapState: {
-                    center: viewState.center,
-                    zoom: viewState.zoom,
-                    bearing: viewState.bearing,
-                    pitch: viewState.pitch
+        updateChatStateAtomSet({
+            mapSpecs: {
+                ...currentSpecs,
+                [selectedTable]: {
+                    ...currentSpec,
+                    tableStyles: {
+                        ...(currentSpec.tableStyles || {}),
+                        [tableName]: style
+                    }
                 }
-            });
-        }
-    }, [schemaName, updateChatState]);
+            }
+        });
+    }, [selectedTable, currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
-    // Update map style in chat
-    const updateMapStyle = useCallback((style: StyleSpecification) => {
-        // Save style to chat
-        if (schemaName) {
-            updateChatState({
-                mapState: {
-                    style
-                }
-            });
-        }
-    }, [schemaName, updateChatState]);
+
 
     return {
         mapSelectedColumns,
         selectedGeometryColumn,
         tableStyles,
-        extraMapStyle,
+        mapStyle,
         updateTableStyle,
-        updateExtraMapStyle,
-        updateMapViewState,
-        updateMapStyle,
     };
 }

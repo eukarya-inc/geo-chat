@@ -1,7 +1,8 @@
 import { atom } from 'jotai';
 import type { StructuredMessage } from '../types/message';
-import type { TableStyle, ExtraStyle } from '../components/map';
+import type { TableStyle } from '../components/map';
 import type { ChartSpec } from '../types/chart';
+import type { StyleSpecification } from 'maplibre-gl';
 
 // ===== リモート状態の型定義（サーバー同期対象） =====
 export interface Chat {
@@ -19,26 +20,23 @@ export interface TableCreationRecord {
   fileUrl?: string;  // ファイルアップロードの場合のURL
 }
 
+// Map specification per table
+export interface MapSpec {
+  style?: StyleSpecification;  // Base style (replaces extraStyle)
+  tableStyles?: Record<string, TableStyle>;  // Table-specific styles to be combined with base style
+}
+
 export interface ChatState {
   messages: StructuredMessage[];
 
   // テーブル作成履歴
   tableHistory: TableCreationRecord[];
 
-  // グラフチャット用（地図も含む）
+  // グラフチャット用
   chartSpecs?: Record<string, ChartSpec>;
-  showGraph?: Record<string, boolean>;  // テーブルごとのグラフ表示状態
 
-  // 地図設定（グラフの一種として統合）
-  mapConfig?: {
-    center: [number, number];
-    zoom: number;
-    bearing?: number;
-    pitch?: number;
-    style?: unknown;
-  };
-  tableStyles?: Record<string, TableStyle>;
-  extraMapStyle?: ExtraStyle;
+  // 地図設定（テーブルごとに保存）
+  mapSpecs?: Record<string, MapSpec>;
 }
 
 export interface RemoteState {

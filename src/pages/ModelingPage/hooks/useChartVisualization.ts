@@ -5,8 +5,6 @@ import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
 import type { ChartSpec, VegaChartSpec } from '../../../types/chart';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import {
-    toggleTableGraphAtom,
-    setTableGraphAtom,
     updateChatStateAtom,
     currentChatAtom,
     currentChatStateAtom,
@@ -20,8 +18,6 @@ export function useChartVisualization(
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
-    const toggleTableGraph = useSetAtom(toggleTableGraphAtom);
-    const setTableGraph = useSetAtom(setTableGraphAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
     const currentChat = useAtomValue(currentChatAtom);
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -134,10 +130,9 @@ export function useChartVisualization(
     }, [showGraph, selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
 
     // Function to toggle graph visibility for current table
+    // Note: Not needed anymore since visibility is determined by chartSpec existence
     const toggleGraphVisibility = () => {
-        if (selectedTable) {
-            toggleTableGraph(selectedTable);
-        }
+        console.warn('toggleGraphVisibility is deprecated - visibility is determined by chartSpec existence');
     };
 
     // Function to update chart spec from AI tool
@@ -177,9 +172,8 @@ export function useChartVisualization(
             }
         });
 
-        // Turn on graph display for this table
-        setTableGraph({ tableName, show: true });
-    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState, setTableGraph]);
+        // Graph display is automatically turned on when chartSpec exists
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState]);
 
     // Function to delete chart spec from AI tool
     const deleteChartFromAI = useCallback(async (tableName: string) => {
@@ -200,9 +194,8 @@ export function useChartVisualization(
             chartSpecs: updatedChartSpecs
         });
 
-        // Turn off graph display for this table
-        setTableGraph({ tableName, show: false });
-    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState, setTableGraph]);
+        // Graph display is automatically turned off when chartSpec is deleted
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState]);
 
     return {
         chartSpec,

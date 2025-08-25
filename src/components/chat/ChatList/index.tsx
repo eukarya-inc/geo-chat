@@ -1,18 +1,9 @@
 import { useState } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import type { StructuredMessage } from '../../../types/message';
-import type { StyleSpecification } from 'maplibre-gl';
-import type { TableStyle, ExtraStyle } from '../../map';
+import type { MapSpec } from '../../../store/modelingRemoteAtoms';
 
 export type ChatType = 'graph';
-
-export interface MapState {
-    center?: [number, number];
-    zoom?: number;
-    bearing?: number;
-    pitch?: number;
-    style?: StyleSpecification;
-}
 
 export interface Chat {
     id: string;
@@ -21,9 +12,7 @@ export interface Chat {
     messages: StructuredMessage[];
     schemaName?: string;
     selectedTable?: string | null;
-    mapState?: MapState;
-    tableStyles?: Record<string, TableStyle>;
-    extraMapStyle?: ExtraStyle;
+    mapSpecs?: Record<string, MapSpec>;
 }
 
 interface ChatListProps {

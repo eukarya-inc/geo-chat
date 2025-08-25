@@ -37,12 +37,10 @@ function ModelingPage() {
     const {
         chats,
         selectedChatId,
-        currentChat,
         createNewChat,
         deleteChat,
         selectChat,
         updateChatMessages,
-        updateChatState,
         getCurrentChatState,
     } = useChatManagement(dbContext);
     
@@ -67,12 +65,9 @@ function ModelingPage() {
         mapSelectedColumns,
         selectedGeometryColumn,
         tableStyles,
-        extraMapStyle,
+        mapStyle,
         updateTableStyle,
-        updateExtraMapStyle,
-        updateMapViewState,
-        updateMapStyle,
-    } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
+    } = useMapVisualization(selectedTable, connection);
     
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
@@ -317,7 +312,7 @@ function ModelingPage() {
                                 )}
 
                                 {/* Map Tab */}
-                                {activeTab === 'map' && connection && (
+                                {activeTab === 'map' && connection && selectedTable && (
                                     <div className="h-full overflow-hidden">
                                         <Map
                                             dbContext={dbContext}
@@ -325,14 +320,9 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             selectedColumns={mapSelectedColumns}
                                             geometryColumnName={selectedGeometryColumn}
-                                            tableStyles={currentChat?.tableStyles || tableStyles}
-                                            extraStyle={currentChat?.extraMapStyle || extraMapStyle}
+                                            tableStyles={tableStyles}
+                                            initialStyle={mapStyle}
                                             onTableStyleChanged={updateTableStyle}
-                                            onExtraStyleChange={updateExtraMapStyle}
-                                            onViewStateChange={updateMapViewState}
-                                            initialViewState={currentChat?.mapState}
-                                            initialStyle={currentChat?.mapState?.style}
-                                            onStyleUpdate={updateMapStyle}
                                         />
                                     </div>
                                 )}
