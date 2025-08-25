@@ -181,10 +181,34 @@ export function useChartVisualization(
         setTableGraph({ tableName, show: true });
     }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState, setTableGraph]);
 
+    // Function to delete chart spec from AI tool
+    const deleteChartFromAI = useCallback(async (tableName: string) => {
+        if (!dbContext || !schemaName) {
+            throw new Error('Database context or schema not available');
+        }
+
+        // Clear local state if this is the currently selected table
+        if (tableName === selectedTable) {
+            setChartSpec(null);
+        }
+
+        // Update remote state to remove the chart spec
+        const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
+        delete updatedChartSpecs[tableName];
+        
+        updateChatState({
+            chartSpecs: updatedChartSpecs
+        });
+
+        // Turn off graph display for this table
+        setTableGraph({ tableName, show: false });
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState, setTableGraph]);
+
     return {
         chartSpec,
         showGraph,
         toggleGraphVisibility,
         updateChartFromAI,
+        deleteChartFromAI,
     };
 }

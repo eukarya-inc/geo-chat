@@ -4,7 +4,6 @@ import { Table } from '../../components/table/TableList/Table';
 import RemoteFileSimple from '../../components/remote-file/RemoteFileSimple';
 import TableSQLDisplay from '../../components/table/TableSQLDisplay';
 import TableSelector from '../../components/table/TableSelector';
-import { ResizableDivider } from '../../components/common/ResizableDivider';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
 import Map from '../../components/map';
@@ -14,7 +13,6 @@ import { TableCellsIcon } from '@heroicons/react/24/outline';
 import { useSyncBridge } from '../../hooks/useSyncBridge';
 import {
     useApiKeyManagement,
-    useResizableAreas,
     useChatManagement,
     useSchemaManagement,
     useTableSelection,
@@ -26,7 +24,7 @@ import {
 
 function ModelingPage() {
     const { dbContext } = useDuckDB();
-    const [showSQL, setShowSQL] = useState(false);
+    const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'visualization'>('table');
     
     // Enable state synchronization
     const { syncImmediately } = useSyncBridge();
@@ -34,8 +32,6 @@ function ModelingPage() {
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
     
-    // Resizable areas
-    const { sqlAreaHeight, setSqlAreaHeight, tableAreaHeight, setTableAreaHeight } = useResizableAreas();
     
     // Chat management with Jotai (needs to be first for chats state)
     const {
@@ -79,7 +75,7 @@ function ModelingPage() {
     } = useMapVisualization(selectedTable, connection, schemaName, updateChatState);
     
     // Chart visualization
-    const { chartSpec, showGraph, toggleGraphVisibility, updateChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
+    const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
     
     // Get chat type with fallback to 'graph'
     const chatType = currentChat?.type || 'graph';
@@ -164,6 +160,7 @@ function ModelingPage() {
                             selectedTable={selectedTable}
                             onTableSelect={handleTableSelection}
                             onChartUpdate={updateChartFromAI}
+                            onChartDelete={deleteChartFromAI}
                             getCurrentChatState={getCurrentChatState}
                             onConversationCompleted={syncImmediately}
                             remoteFileComponent={(onClose) => (
@@ -202,7 +199,7 @@ function ModelingPage() {
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {dbContext && selectedTable && connection && (
                         <>
-                            {/* Table Selector Header - moved to top */}
+                            {/* Table Selector Header */}
                             <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
                                 <div className="flex items-center gap-2">
                                     <TableCellsIcon className="w-4 h-4 text-gray-600" />
@@ -212,95 +209,129 @@ function ModelingPage() {
                                             selectedTable={selectedTable}
                                             onTableSelect={handleTableSelection}
                                             schema={schemaName}
-                                            showSQL={showSQL}
-                                            onToggleSQL={() => setShowSQL(!showSQL)}
-                                            showGraph={showGraph}
-                                            onToggleGraph={toggleGraphVisibility}
-                                            chatType={chatType}
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* SQL Section */}
-                            {showSQL && (
-                                <>
-                                    <div
-                                        className="flex-shrink-0 bg-white border-b border-gray-200 overflow-hidden"
-                                        style={{ height: `${sqlAreaHeight}px` }}
+                            {/* Tab Navigation */}
+                            <div className="flex-shrink-0 border-b border-gray-200 bg-white">
+                                <div className="flex">
+                                    <button
+                                        onClick={() => setActiveTab('table')}
+                                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                            activeTab === 'table'
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
                                     >
-                                        <div className="h-full p-2.5 overflow-auto">
-                                            <TableSQLDisplay
-                                                tableName={selectedTable}
-                                                dbContext={dbContext}
-                                            />
-                                        </div>
-                                    </div>
-                                    <ResizableDivider
-                                        onResize={setSqlAreaHeight}
-                                        minHeight={100}
-                                        maxHeight={500}
-                                        direction="top"
-                                    />
-                                </>
-                            )}
-                            <div className="flex-1 overflow-hidden flex flex-col">
-                                {/* Table Section */}
-                                <div
-                                    className="flex-shrink-0 overflow-hidden border-b border-gray-200"
-                                    style={{ height: `${tableAreaHeight}px` }}
-                                >
-                                    <Table
-                                        key={`${selectedChatId}-${selectedTable}`}
-                                        connection={connection}
-                                        tableName={selectedTable}
-                                        dbContext={dbContext}
-                                    />
+                                        テーブル
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('sql')}
+                                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                            activeTab === 'sql'
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        SQL
+                                    </button>
+                                    {(chatType === 'graph' || chatType === 'map') && (
+                                        <button
+                                            onClick={() => setActiveTab('visualization')}
+                                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                activeTab === 'visualization'
+                                                    ? 'border-blue-500 text-blue-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {chatType === 'graph' ? 'グラフ' : '地図'}
+                                        </button>
+                                    )}
                                 </div>
+                            </div>
 
-                                {/* Resizable divider between table and graph/map */}
-                                {((chatType === 'graph' && showGraph) || chatType === 'map') && (
-                                    <ResizableDivider
-                                        onResize={setTableAreaHeight}
-                                        minHeight={100}
-                                        maxHeight={600}
-                                        direction="top"
-                                    />
-                                )}
-
-                                {/* Graph Section (for graph chats) */}
-                                {chatType === 'graph' && showGraph && chartSpec && connection && selectedChatId && (
-                                    <div className="flex-1 overflow-auto p-4">
-                                        <VegaLiteChart
-                                            key={`${schemaName}-${chartSpec.id}`}
-                                            spec={chartSpec.spec}
+                            {/* Tab Content */}
+                            <div className="flex-1 overflow-hidden">
+                                {/* Table Tab */}
+                                {activeTab === 'table' && (
+                                    <div className="h-full overflow-hidden">
+                                        <Table
+                                            key={`${selectedChatId}-${selectedTable}`}
+                                            connection={connection}
+                                            tableName={selectedTable}
                                             dbContext={dbContext}
-                                            schema={schemaName}
                                         />
                                     </div>
                                 )}
 
-                                {/* Map Section (for map chats) */}
-                                {chatType === 'map' && connection && (
-                                    <div className="flex-1 overflow-hidden">
-                                        <Map
+                                {/* SQL Tab */}
+                                {activeTab === 'sql' && (
+                                    <div className="h-full p-4 overflow-auto">
+                                        <TableSQLDisplay
+                                            tableName={selectedTable}
                                             dbContext={dbContext}
-                                            schema={schemaName}
-                                            selectedTable={selectedTable}
-                                            selectedColumns={mapSelectedColumns}
-                                            geometryColumnName={selectedGeometryColumn}
-                                            tableStyles={currentChat?.tableStyles || tableStyles}
-                                            extraStyle={currentChat?.extraMapStyle || extraMapStyle}
-                                            onTableStyleChanged={updateTableStyle}
-                                            onExtraStyleChange={updateExtraMapStyle}
-                                            onViewStateChange={updateMapViewState}
-                                            initialViewState={currentChat?.mapState}
-                                            initialStyle={currentChat?.mapState?.style}
-                                            onStyleUpdate={updateMapStyle}
                                         />
                                     </div>
                                 )}
 
+                                {/* Visualization Tab (Graph or Map) */}
+                                {activeTab === 'visualization' && (
+                                    <>
+                                        {chatType === 'graph' && (
+                                            chartSpec && connection && selectedChatId ? (
+                                                <div className="h-full overflow-auto p-4">
+                                                    <VegaLiteChart
+                                                        key={`${schemaName}-${chartSpec.id}`}
+                                                        spec={chartSpec.spec}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center">
+                                                    <div className="text-center">
+                                                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                        </svg>
+                                                        <h3 className="text-lg font-medium text-gray-900 mb-2">グラフがまだありません</h3>
+                                                        <p className="text-sm text-gray-500 mb-4">このテーブルのデータを可視化するグラフを作成しましょう</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (sendMessageRef.current) {
+                                                                    sendMessageRef.current(`${selectedTable}テーブルのデータを分析して、適切なグラフを作成してください`);
+                                                                }
+                                                            }}
+                                                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                                        >
+                                                            グラフを作成
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )
+                                        )}
+                                        {chatType === 'map' && connection && (
+                                            <div className="h-full overflow-hidden">
+                                                <Map
+                                                    dbContext={dbContext}
+                                                    schema={schemaName}
+                                                    selectedTable={selectedTable}
+                                                    selectedColumns={mapSelectedColumns}
+                                                    geometryColumnName={selectedGeometryColumn}
+                                                    tableStyles={currentChat?.tableStyles || tableStyles}
+                                                    extraStyle={currentChat?.extraMapStyle || extraMapStyle}
+                                                    onTableStyleChanged={updateTableStyle}
+                                                    onExtraStyleChange={updateExtraMapStyle}
+                                                    onViewStateChange={updateMapViewState}
+                                                    initialViewState={currentChat?.mapState}
+                                                    initialStyle={currentChat?.mapState?.style}
+                                                    onStyleUpdate={updateMapStyle}
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </>
                     )}
