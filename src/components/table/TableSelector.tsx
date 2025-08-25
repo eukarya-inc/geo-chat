@@ -25,7 +25,32 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
 
     try {
       const tableNames = await dbContext.getTables(schema);
-      setTables(tableNames);
+      
+      // Get SQL history to sort by creation time
+      const sqlHistory = dbContext.getSQLHistory();
+      const allHistory = sqlHistory.getAllHistory();
+      
+      // Create a map of table names to timestamps
+      const tableTimestamps = new Map<string, number>();
+      allHistory.forEach(entry => {
+        // Check if this entry is for our schema
+        if (entry.schema === schema || (!entry.schema && !schema)) {
+          const tableName = entry.tableName.toLowerCase();
+          // Only keep the earliest timestamp for each table
+          if (!tableTimestamps.has(tableName) || entry.timestamp < tableTimestamps.get(tableName)!) {
+            tableTimestamps.set(tableName, entry.timestamp);
+          }
+        }
+      });
+      
+      // Sort tables by creation time (newest first)
+      const sortedTables = [...tableNames].sort((a, b) => {
+        const timeA = tableTimestamps.get(a.toLowerCase()) || 0;
+        const timeB = tableTimestamps.get(b.toLowerCase()) || 0;
+        return timeB - timeA; // Descending order (newest first)
+      });
+      
+      setTables(sortedTables);
     } catch {
       setTables([]);
     } finally {
