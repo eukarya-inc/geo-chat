@@ -21,6 +21,7 @@ export const currentChatStateAtom = atom((get) => {
 });
 
 // 現在のテーブルのグラフ表示状態
+// chartSpecが存在するかどうかで判断
 export const currentTableShowGraphAtom = atom((get) => {
   const chat = get(currentChatAtom);
   const chatState = get(currentChatStateAtom);
@@ -30,7 +31,8 @@ export const currentTableShowGraphAtom = atom((get) => {
     return false;
   }
   
-  return chatState.showGraph?.[selectedTable] ?? false;  // デフォルトは非表示
+  // chartSpecが存在すればグラフを表示
+  return !!chatState.chartSpecs?.[selectedTable];
 });
 
 // ===== 便利な操作用Atoms（両方の状態を使用） =====
@@ -51,7 +53,6 @@ export const createChatAtom = atom(
     const newChatState = {
       messages: [],
       tableHistory: [],
-      showGraph: {},
     };
     
     // リモート状態更新
@@ -115,65 +116,7 @@ export const deleteChatAtom = atom(
   }
 );
 
-// グラフ表示切り替え（現在の選択を使用）
-export const toggleTableGraphAtom = atom(
-  null,
-  (get, set, tableName: string) => {
-    const remoteState = get(remoteStateAtom);
-    const localState = get(localStateAtom);
-    const chatId = localState.selectedChatId;
-    
-    if (!chatId) return;
-    
-    const chatState = remoteState.chatStates[chatId];
-    if (!chatState) return;
-    
-    const currentShow = chatState.showGraph?.[tableName] ?? false;
-    
-    set(remoteStateAtom, {
-      ...remoteState,
-      chatStates: {
-        ...remoteState.chatStates,
-        [chatId]: {
-          ...chatState,
-          showGraph: {
-            ...chatState.showGraph,
-            [tableName]: !currentShow
-          }
-        }
-      }
-    });
-  }
-);
 
-// グラフ表示を明示的に設定
-export const setTableGraphAtom = atom(
-  null,
-  (get, set, { tableName, show }: { tableName: string; show: boolean }) => {
-    const remoteState = get(remoteStateAtom);
-    const localState = get(localStateAtom);
-    const chatId = localState.selectedChatId;
-    
-    if (!chatId) return;
-    
-    const chatState = remoteState.chatStates[chatId];
-    if (!chatState) return;
-    
-    set(remoteStateAtom, {
-      ...remoteState,
-      chatStates: {
-        ...remoteState.chatStates,
-        [chatId]: {
-          ...chatState,
-          showGraph: {
-            ...chatState.showGraph,
-            [tableName]: show
-          }
-        }
-      }
-    });
-  }
-);
 
 // テーブル選択（現在のチャットを更新）
 export const selectTableAtom = atom(

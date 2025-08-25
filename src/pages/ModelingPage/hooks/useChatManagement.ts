@@ -18,7 +18,6 @@ import type { StructuredMessage } from '../../../types/message';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { chatIdToSchemaName } from '../utils/schemaUtils';
 import type { Chat as ChatListChat } from '../../../components/chat/ChatList';
-import type { StyleSpecification } from 'maplibre-gl';
 
 export function useChatManagement(
   dbContext: DBContext | null
@@ -43,15 +42,7 @@ export function useChatManagement(
       ...chat,
       messages: chatStates[chat.id]?.messages || [],
       selectedTable: chat.selectedTable,
-      mapState: chatStates[chat.id]?.mapConfig ? {
-        center: chatStates[chat.id].mapConfig?.center,
-        zoom: chatStates[chat.id].mapConfig?.zoom,
-        bearing: chatStates[chat.id].mapConfig?.bearing,
-        pitch: chatStates[chat.id].mapConfig?.pitch,
-        style: chatStates[chat.id].mapConfig?.style as StyleSpecification | undefined,
-      } : undefined,
-      tableStyles: chatStates[chat.id]?.tableStyles,
-      extraMapStyle: chatStates[chat.id]?.extraMapStyle,
+      mapSpecs: chatStates[chat.id]?.mapSpecs,
     }));
   }, [chats, chatStates]);
 
@@ -62,15 +53,7 @@ export function useChatManagement(
       ...currentChat,
       messages: currentChatState.messages,
       selectedTable: currentChat.selectedTable,
-      mapState: currentChatState.mapConfig ? {
-        center: currentChatState.mapConfig.center,
-        zoom: currentChatState.mapConfig.zoom,
-        bearing: currentChatState.mapConfig.bearing,
-        pitch: currentChatState.mapConfig.pitch,
-        style: currentChatState.mapConfig.style as StyleSpecification | undefined,
-      } : undefined,
-      tableStyles: currentChatState.tableStyles,
-      extraMapStyle: currentChatState.extraMapStyle,
+      mapSpecs: currentChatState.mapSpecs,
     };
   }, [currentChat, currentChatState]);
 
@@ -185,16 +168,7 @@ export function useChatManagement(
         newChatStates[chat.id] = {
           messages: chat.messages,
           tableHistory: [], // Initialize empty table history
-          mapConfig: chat.mapState ? {
-            center: chat.mapState.center || [139.7, 35.7],
-            zoom: chat.mapState.zoom || 10,
-            bearing: chat.mapState.bearing,
-            pitch: chat.mapState.pitch,
-            style: chat.mapState.style,
-          } : undefined,
-          tableStyles: chat.tableStyles,
-          extraMapStyle: chat.extraMapStyle,
-          showGraph: {},
+          mapSpecs: chat.mapSpecs,
         };
       });
       
