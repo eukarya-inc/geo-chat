@@ -9,6 +9,7 @@ import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24
 import { generatePromptSuggestions } from '../../lib/modelingai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { TableStyle } from '../map';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -23,6 +24,7 @@ interface AIChatProps {
     onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
     onChartDelete?: (tableName: string) => Promise<void>;
     getCurrentChatState?: () => ChatState | null;
+    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
 }
@@ -40,6 +42,7 @@ export default function AIChat({
     onChartUpdate,
     onChartDelete,
     getCurrentChatState,
+    onMapStyleUpdate,
     remoteFileComponent,
     onConversationCompleted
 }: AIChatProps) {
@@ -97,6 +100,7 @@ export default function AIChat({
         onChartUpdate,
         onChartDelete,
         getCurrentChatState,
+        onMapStyleUpdate,
         onConversationCompleted
     });
 

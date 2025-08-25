@@ -5,6 +5,8 @@ import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool } from './tools/completionTool';
 import { createChartUpdateTool, createChartGetTool, createChartDeleteTool } from './tools/chartTool';
+import { createMapStyleTool } from './tools/mapStyleTool';
+import { createMapStyleGetTool } from './tools/mapStyleGetTool';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 
@@ -17,6 +19,7 @@ export interface StreamGeneratorOptions {
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
   onChartDelete?: (tableName: string) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
+  onMapStyleUpdate?: (tableName: string, style: import('../../components/map').TableStyle) => Promise<void>;
 }
 
 export type StreamPart = 
@@ -38,7 +41,8 @@ export async function* createAIStreamGenerator({
   abortSignal,
   onChartUpdate,
   onChartDelete,
-  getCurrentChatState
+  getCurrentChatState,
+  onMapStyleUpdate
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
     const anthropicClient = createAnthropic({
@@ -63,6 +67,10 @@ export async function* createAIStreamGenerator({
         } : {}),
         ...(getCurrentChatState ? {
           get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
+          get_map_style_for_table: createMapStyleGetTool(getCurrentChatState),
+        } : {}),
+        ...(getCurrentChatState && onMapStyleUpdate && createMapStyleTool(getCurrentChatState, onMapStyleUpdate) ? {
+          update_map_style_for_table: createMapStyleTool(getCurrentChatState, onMapStyleUpdate)!,
         } : {}),
         completion: completionTool,
       },

@@ -154,6 +154,9 @@ function ModelingPage() {
                             onChartUpdate={updateChartFromAI}
                             onChartDelete={deleteChartFromAI}
                             getCurrentChatState={getCurrentChatState}
+                            onMapStyleUpdate={async (tableName: string, style: import('../../components/map').TableStyle) => {
+                                updateTableStyle(tableName, style);
+                            }}
                             onConversationCompleted={syncImmediately}
                             remoteFileComponent={(onClose) => (
                                 <RemoteFileSimple

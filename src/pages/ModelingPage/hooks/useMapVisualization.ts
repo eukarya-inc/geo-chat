@@ -47,24 +47,33 @@ export function useMapVisualization(
 
     // Update table styles for current table
     const updateTableStyle = useCallback((tableName: string, style: TableStyle) => {
-        if (!selectedTable) return;
+        if (!tableName) {
+            console.warn('No table name provided for style update');
+            return;
+        }
         
         const currentSpecs = currentChatState?.mapSpecs || {};
-        const currentSpec = currentSpecs[selectedTable] || {};
         
-        updateChatStateAtomSet({
-            mapSpecs: {
-                ...currentSpecs,
-                [selectedTable]: {
-                    ...currentSpec,
-                    tableStyles: {
-                        ...(currentSpec.tableStyles || {}),
-                        [tableName]: style
-                    }
+        // The tableName passed here should be the table we're updating styles for
+        // We need to ensure the mapSpec exists for this table
+        const currentSpec = currentSpecs[tableName] || {};
+        
+        // Update the mapSpec for the specific table
+        const updatedMapSpecs = {
+            ...currentSpecs,
+            [tableName]: {
+                ...currentSpec,
+                tableStyles: {
+                    ...(currentSpec.tableStyles || {}),
+                    [tableName]: style  // The table's own styles are stored under its name
                 }
             }
+        };
+        
+        updateChatStateAtomSet({
+            mapSpecs: updatedMapSpecs
         });
-    }, [selectedTable, currentChatState?.mapSpecs, updateChatStateAtomSet]);
+    }, [currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
 
 

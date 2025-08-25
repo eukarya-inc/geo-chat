@@ -4,6 +4,7 @@ import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { TableStyle } from '../../components/map';
 
 interface UseAIOptions {
   chatId: string;
@@ -15,6 +16,7 @@ interface UseAIOptions {
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
   onChartDelete?: (tableName: string) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
+  onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
   onConversationCompleted?: () => void;
 }
 
@@ -28,6 +30,7 @@ export function useAI({
   onChartUpdate,
   onChartDelete,
   getCurrentChatState,
+  onMapStyleUpdate,
   onConversationCompleted
 }: UseAIOptions) {
   const [input, setInput] = useState('');
@@ -65,9 +68,10 @@ export function useAI({
       onChartUpdate,
       onChartDelete,
       getCurrentChatState,
+      onMapStyleUpdate,
       onMessageComplete: onConversationCompleted
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, onChartDelete, getCurrentChatState, onConversationCompleted]);
+  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, onChartDelete, getCurrentChatState, onMapStyleUpdate, onConversationCompleted]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

@@ -471,19 +471,36 @@ const MapComponent: React.FC<MapProps> = ({
         }
 
         // Remove all existing DuckDB layers and sources
-        // First remove layers
-        const allLayers = map.getStyle().layers || [];
-        allLayers.forEach(layer => {
-            if (layer.id.startsWith('duckdb-')) {
-                map.removeLayer(layer.id);
-            }
+        // First, we need to remove ALL layers that use duckdb sources
+        // This includes custom-named layers that might not start with 'duckdb-'
+        const allSources = Object.keys(map.getStyle().sources || {});
+        const duckdbSources = allSources.filter(sourceId => sourceId.startsWith('duckdb-'));
+        
+        // For each duckdb source, remove all layers that use it
+        duckdbSources.forEach(sourceId => {
+            const allLayers = map.getStyle().layers || [];
+            allLayers.forEach(layer => {
+                // Check if this layer uses the current duckdb source
+                if ('source' in layer && layer.source === sourceId) {
+                    try {
+                        // Remove click event handler if it exists
+                        map.off('click', layer.id, handleFeatureClick);
+                        
+                        // Remove the layer (this will also clean up its mouseenter/mouseleave handlers)
+                        map.removeLayer(layer.id);
+                    } catch (e) {
+                        console.warn(`Failed to remove layer ${layer.id}:`, e);
+                    }
+                }
+            });
         });
         
-        // Then remove sources
-        const allSources = Object.keys(map.getStyle().sources || {});
-        allSources.forEach(sourceId => {
-            if (sourceId.startsWith('duckdb-')) {
+        // Now remove the sources themselves
+        duckdbSources.forEach(sourceId => {
+            try {
                 map.removeSource(sourceId);
+            } catch (e) {
+                console.warn(`Failed to remove source ${sourceId}:`, e);
             }
         });
         
