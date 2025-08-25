@@ -91,11 +91,40 @@ export async function* createAIStreamGenerator({
           break;
           
         case 'error': {
-          // Pass through API errors to be displayed in chat
-          const errorMessage = typeof part.error === 'string' 
-            ? part.error 
-            : (part.error instanceof Error ? part.error.message : 'Unknown error occurred');
-          console.error('[Stream Generator] API Error:', errorMessage);
+          // Extract detailed error message from API errors
+          let errorMessage = 'Unknown error occurred';
+          
+          if (typeof part.error === 'string') {
+            errorMessage = part.error;
+          } else if (part.error instanceof Error) {
+            errorMessage = part.error.message;
+            
+            // Try to extract more details
+            if ('cause' in part.error && part.error.cause) {
+              if (typeof part.error.cause === 'object' && 'message' in part.error.cause) {
+                errorMessage = String(part.error.cause.message);
+              }
+            }
+          } else if (part.error && typeof part.error === 'object' && 'message' in part.error) {
+            errorMessage = String(part.error.message);
+          }
+          
+          // Check for specific error patterns and provide user-friendly messages
+          if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit')) {
+            errorMessage = 'API rate limit exceeded. Please wait a moment before trying again.';
+          } else if (errorMessage.toLowerCase().includes('overloaded') || errorMessage.toLowerCase().includes('request_overloaded')) {
+            errorMessage = 'The API server is currently overloaded. Please try again in a few moments.';
+          } else if (errorMessage.includes('503')) {
+            errorMessage = 'The API service is temporarily unavailable. Please try again later.';
+          } else if (errorMessage.includes('500')) {
+            errorMessage = 'An internal server error occurred. Please try again.';
+          } else if (errorMessage.includes('402')) {
+            errorMessage = 'API quota exceeded or payment required. Please check your API account.';
+          } else if (errorMessage.includes('401')) {
+            errorMessage = 'Invalid API key. Please check your API key configuration.';
+          }
+          
+          console.error('[Stream Generator] API Error:', part.error, 'Extracted message:', errorMessage);
           yield {
             type: 'error',
             error: errorMessage
@@ -131,8 +160,38 @@ export async function* createAIStreamGenerator({
       return;
     }
     
-    // Handle other errors
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    // Extract detailed error message
+    let errorMessage = 'Unknown error occurred';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // Try to extract more details from the error
+      if ('cause' in error && error.cause) {
+        if (typeof error.cause === 'object' && 'message' in error.cause) {
+          errorMessage = String(error.cause.message);
+        }
+      }
+      
+      // Check for specific error patterns
+      if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit')) {
+        errorMessage = 'API rate limit exceeded. Please wait a moment before trying again.';
+      } else if (errorMessage.toLowerCase().includes('overloaded')) {
+        errorMessage = 'The API server is currently overloaded. Please try again in a few moments.';
+      } else if (errorMessage.includes('503')) {
+        errorMessage = 'The API service is temporarily unavailable. Please try again later.';
+      } else if (errorMessage.includes('500')) {
+        errorMessage = 'An internal server error occurred. Please try again.';
+      } else if (errorMessage.includes('402')) {
+        errorMessage = 'API quota exceeded or payment required. Please check your API account.';
+      } else if (errorMessage.includes('401')) {
+        errorMessage = 'Invalid API key. Please check your API key configuration.';
+      }
+      
+      // Log the full error for debugging
+      console.error('[Stream Generator] Full error details:', error);
+    }
+    
     yield { type: 'error', error: errorMessage };
   }
 }

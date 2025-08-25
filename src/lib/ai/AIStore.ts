@@ -294,9 +294,31 @@ export class AIStore {
       }
 
       case 'error': {
-        const errorText = part.error === 'aborted' 
-          ? '⏹️ **処理が停止されました**'
-          : `❌ **エラーが発生しました:** ${part.error}`;
+        let errorText: string;
+        
+        if (part.error === 'aborted') {
+          errorText = '⏹️ **処理が停止されました**';
+        } else {
+          // Provide more specific error messages based on error content
+          const errorMessage = part.error.toLowerCase();
+          
+          if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+            errorText = '❌ **APIレート制限に達しました:** しばらく待ってから再度お試しください。';
+          } else if (errorMessage.includes('overloaded') || errorMessage.includes('request_overloaded')) {
+            errorText = '❌ **APIサーバーが過負荷状態です:** 少し時間をおいてから再度お試しください。';
+          } else if (errorMessage.includes('503') || errorMessage.includes('unavailable')) {
+            errorText = '❌ **APIサービスが一時的に利用できません:** 後ほど再度お試しください。';
+          } else if (errorMessage.includes('500') || errorMessage.includes('internal')) {
+            errorText = '❌ **サーバー内部エラーが発生しました:** 再度お試しください。';
+          } else if (errorMessage.includes('402') || errorMessage.includes('quota')) {
+            errorText = '❌ **APIクォータを超過しました:** APIアカウントの状態を確認してください。';
+          } else if (errorMessage.includes('401') || errorMessage.includes('invalid') && errorMessage.includes('key')) {
+            errorText = '❌ **無効なAPIキーです:** APIキーの設定を確認してください。';
+          } else {
+            // For other errors, show the original message
+            errorText = `❌ **エラーが発生しました:** ${part.error}`;
+          }
+        }
         
         const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
         if (streamingText) {
