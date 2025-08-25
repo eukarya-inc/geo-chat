@@ -39,7 +39,7 @@ describe('createMapStyleGetTool', () => {
   it('should return error when mapSpec does not exist for table', async () => {
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'other_table': {
           tableStyles: {}
@@ -66,7 +66,7 @@ describe('createMapStyleGetTool', () => {
   it('should return empty styles when no custom styles are configured', async () => {
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'test_table': {
           // mapSpec exists but no styles configured
@@ -105,7 +105,7 @@ describe('createMapStyleGetTool', () => {
 
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'test_table': {
           tableStyles: {
@@ -152,7 +152,7 @@ describe('createMapStyleGetTool', () => {
 
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'test_table': {
           tableStyles: {

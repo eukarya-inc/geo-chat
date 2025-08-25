@@ -50,7 +50,7 @@ describe('createMapStyleTool', () => {
   it('should add new layer successfully', async () => {
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'test_table': {
           tableStyles: {
@@ -96,7 +96,7 @@ describe('createMapStyleTool', () => {
 
     const mockChatState: ChatState = {
       messages: [],
-      tableHistory: [],
+      tables: {},
       mapSpecs: {
         'test_table': {
           tableStyles: {
