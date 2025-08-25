@@ -58,18 +58,6 @@ export function useApiKeyManagement() {
     };
 }
 
-// Hook for resizable areas
-export function useResizableAreas() {
-    const [sqlAreaHeight, setSqlAreaHeight] = useState(200);
-    const [tableAreaHeight, setTableAreaHeight] = useState(300);
-
-    return {
-        sqlAreaHeight,
-        setSqlAreaHeight,
-        tableAreaHeight,
-        setTableAreaHeight,
-    };
-}
 
 // Re-export the split hooks for direct use if needed
 export { useChatManagement } from './useChatManagement';

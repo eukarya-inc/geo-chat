@@ -4,7 +4,7 @@ import type { DBContext } from '../duckdb/dbContext';
 import { generateSystemPrompt } from './systemPrompt';
 import { createDuckDBTool } from './tools/duckdbTool';
 import { completionTool } from './tools/completionTool';
-import { createChartUpdateTool, createChartGetTool } from './tools/chartTool';
+import { createChartUpdateTool, createChartGetTool, createChartDeleteTool } from './tools/chartTool';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 
@@ -15,6 +15,7 @@ export interface StreamGeneratorOptions {
   schema?: string | null;
   abortSignal?: AbortSignal;
   onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+  onChartDelete?: (tableName: string) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
 }
 
@@ -36,6 +37,7 @@ export async function* createAIStreamGenerator({
   schema = null,
   abortSignal,
   onChartUpdate,
+  onChartDelete,
   getCurrentChatState
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
@@ -55,6 +57,9 @@ export async function* createAIStreamGenerator({
         }),
         ...(onChartUpdate && createChartUpdateTool(onChartUpdate) ? {
           update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,
+        } : {}),
+        ...(onChartDelete && createChartDeleteTool(onChartDelete) ? {
+          delete_vega_chart_spec_for_table: createChartDeleteTool(onChartDelete)!,
         } : {}),
         ...(getCurrentChatState ? {
           get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),

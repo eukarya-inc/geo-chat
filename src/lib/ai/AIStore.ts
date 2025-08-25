@@ -101,6 +101,7 @@ export class AIStore {
       selectedTable?: string | null;
       onMessagesChange?: (messages: StructuredMessage[]) => void;
       onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+      onChartDelete?: (tableName: string) => Promise<void>;
       getCurrentChatState?: () => ChatState | null;
       onMessageComplete?: () => void;
     }
@@ -172,6 +173,7 @@ export class AIStore {
         schema: options.schema,
         abortSignal: controller.signal,
         onChartUpdate: options.onChartUpdate,
+        onChartDelete: options.onChartDelete,
         getCurrentChatState: options.getCurrentChatState
       });
 

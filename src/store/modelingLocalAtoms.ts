@@ -17,13 +17,6 @@ export interface LocalState {
     input: string;
     streamingText: string;
   }>;
-  
-  // UI表示設定（ユーザー環境依存）
-  ui: {
-    showSQL: boolean;
-    sqlAreaHeight: number;
-    tableAreaHeight: number;
-  };
 }
 
 // ===== ローカル状態Atoms =====
@@ -33,12 +26,7 @@ export const localStateAtom = atom<LocalState>({
   selectedChatId: null,
   apiKey: '',
   showApiKeyInput: true,
-  sessions: {},
-  ui: {
-    showSQL: false,
-    sqlAreaHeight: 200,
-    tableAreaHeight: 300
-  }
+  sessions: {}
 });
 
 // APIキー専用atom（暗号化して別管理）
@@ -78,21 +66,6 @@ export const saveApiKeyAtom = atom(
 );
 
 // ===== ローカル状態操作用Atoms =====
-// UI状態更新（ローカル状態のみ）
-export const updateUIStateAtom = atom(
-  null,
-  (get, set, updates: Partial<LocalState['ui']>) => {
-    const localState = get(localStateAtom);
-    set(localStateAtom, {
-      ...localState,
-      ui: {
-        ...localState.ui,
-        ...updates
-      }
-    });
-  }
-);
-
 // セッション状態更新（ローカル状態のみ）
 export const updateSessionAtom = atom(
   null,

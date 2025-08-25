@@ -21,6 +21,7 @@ interface AIChatProps {
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+    onChartDelete?: (tableName: string) => Promise<void>;
     getCurrentChatState?: () => ChatState | null;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
@@ -37,6 +38,7 @@ export default function AIChat({
     selectedTable,
     onTableSelect,
     onChartUpdate,
+    onChartDelete,
     getCurrentChatState,
     remoteFileComponent,
     onConversationCompleted
@@ -93,6 +95,7 @@ export default function AIChat({
         selectedTable,
         onMessagesChange: handleMessagesChange,
         onChartUpdate,
+        onChartDelete,
         getCurrentChatState,
         onConversationCompleted
     });

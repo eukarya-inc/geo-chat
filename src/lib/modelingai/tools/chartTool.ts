@@ -218,3 +218,34 @@ export function processAIChartSpec(
 
     return processedSpec;
 }
+
+/**
+ * Creates a tool for deleting a Vega-Lite chart specification for a table
+ */
+export function createChartDeleteTool(
+    onChartDelete?: (tableName: string) => Promise<void>
+) {
+    if (!onChartDelete) return null;
+
+    return tool({
+        description: 'Delete the Vega-Lite chart specification for a specific table. Use this when you want to remove a chart completely.',
+        parameters: z.object({
+            table_name: z.string().describe('The name of the table to delete chart for'),
+        }),
+        execute: async ({ table_name }) => {
+            try {
+                await onChartDelete(table_name);
+
+                return {
+                    success: true,
+                    message: `テーブル「${table_name}」のグラフ設定を削除しました。`
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `Failed to delete chart: ${error instanceof Error ? error.message : 'Unknown error'}`
+                };
+            }
+        }
+    });
+}

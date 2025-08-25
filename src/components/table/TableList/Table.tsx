@@ -53,6 +53,51 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadingWindowsRef = useRef(new Set<string>());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+
+  // Track container width
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Update column widths when container width or columns change
+  useEffect(() => {
+    if (columns.length > 0 && containerWidth > 0) {
+      const minColumnWidth = 100;
+      const maxColumnWidth = 200;
+      // Calculate width but cap it at maxColumnWidth
+      const calculatedWidth = Math.min(
+        maxColumnWidth,
+        Math.max(minColumnWidth, Math.floor(containerWidth / columns.length))
+      );
+      
+      const updatedColumns = columns.map(col => ({
+        ...col,
+        width: calculatedWidth
+      }));
+      
+      // Only update if width actually changed to avoid infinite loop
+      const firstCol = columns[0];
+      const firstWidth = 'width' in firstCol ? firstCol.width : undefined;
+      if (firstWidth !== calculatedWidth) {
+        setColumns(updatedColumns);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerWidth, columns.length]); // Note: only depend on columns.length, not columns itself to avoid infinite loop
 
   useEffect(() => {
     const loadInitialData = async (retryCount = 0) => {
@@ -68,10 +113,19 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
       try {
         const initialData = await getTableData(conn, tableName, 0, 100);
         
+          // Calculate initial column width based on container width
+          const minColumnWidth = 100;
+          const maxColumnWidth = 200;
+          const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
+          const calculatedWidth = Math.min(
+            maxColumnWidth,
+            Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
+          );
+          
           const gridColumns: GridColumn[] = initialData.columns.map((col) => ({
             id: col.name,
             title: col.name,
-            width: 150,
+            width: calculatedWidth,
           }));
           
           // Store column types for later use
@@ -126,7 +180,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
     };
 
     loadInitialData();
-  }, [connection, tableName, arrowCache, dbContext]);
+  }, [connection, tableName, arrowCache, dbContext, containerWidth]);
 
   const loadDataWindow = useCallback(
     async (startRow: number) => {
@@ -248,7 +302,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
   }
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+    <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
       <DataEditor
         columns={columns}
         rows={totalRows}

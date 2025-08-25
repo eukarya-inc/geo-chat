@@ -56,8 +56,8 @@ export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDispla
   });
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm">
-      <div className="flex items-center justify-between mb-2">
+    <>
+      <div className="flex items-center justify-between mb-2 text-sm">
         <div className="flex items-center gap-2">
           <span className="text-gray-600">作成元:</span>
           <span className="font-medium text-gray-800">{sourceLabel}</span>
@@ -72,10 +72,7 @@ export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDispla
       </div>
       
       {!showVisualization ? (
-        <pre 
-          className="bg-white border border-gray-300 rounded p-2 overflow-y-auto whitespace-pre-wrap break-words text-left"
-          style={{ maxHeight: 'calc(1.2em * 5)' }}
-        >
+        <pre className="bg-white border border-gray-300 rounded p-2 whitespace-pre-wrap break-words text-left">
           <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
         </pre>
       ) : (
@@ -85,17 +82,15 @@ export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDispla
       )}
       
       {sqlEntry.explanation && (
-        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-          <div className="prose prose-sm max-w-none text-blue-800 text-xs leading-relaxed [&>h1]:text-blue-800 [&>h2]:text-blue-800 [&>h3]:text-blue-800 [&>h4]:text-blue-800 [&>h5]:text-blue-800 [&>h6]:text-blue-800 [&>p]:text-blue-800 [&>li]:text-blue-800 [&>code]:text-blue-800 [&>pre]:bg-blue-50 [&>pre]:border-blue-200">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {sqlEntry.explanation}
-            </ReactMarkdown>
-          </div>
+        <div className="mt-2 prose prose-sm max-w-none text-blue-800 text-xs leading-relaxed [&>h1]:text-blue-800 [&>h2]:text-blue-800 [&>h3]:text-blue-800 [&>h4]:text-blue-800 [&>h5]:text-blue-800 [&>h6]:text-blue-800 [&>p]:text-blue-800 [&>li]:text-blue-800 [&>code]:text-blue-800 [&>pre]:bg-blue-50 [&>pre]:border-blue-200">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+          >
+            {sqlEntry.explanation}
+          </ReactMarkdown>
         </div>
       )}
-    </div>
+    </>
   );
 }
