@@ -71,6 +71,12 @@ Requirements:
   - Do not repeat SQL statements like "CREATE TABLE", "SELECT", etc.
 - Write in Japanese
 - **IMPORTANT**: Output only the explanation
+- **CRITICAL**: Start directly with the content - NO introductory phrases like:
+  - "以下は、提示されたSQLクエリの説明です"
+  - "このSQLクエリは..."
+  - "提示されたクエリでは..."
+  - "以下の説明をします"
+  - Just start immediately with what the SQL does
 
 ---
 SQL:
