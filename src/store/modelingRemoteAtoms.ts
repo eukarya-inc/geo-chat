@@ -7,7 +7,6 @@ import type { ChartSpec } from '../types/chart';
 export interface Chat {
   id: string;
   title: string;
-  type: 'graph' | 'map';
   createdAt: Date;
   selectedTable: string | null;
 }
@@ -26,11 +25,11 @@ export interface ChatState {
   // テーブル作成履歴
   tableHistory: TableCreationRecord[];
 
-  // グラフチャット用
+  // グラフチャット用（地図も含む）
   chartSpecs?: Record<string, ChartSpec>;
   showGraph?: Record<string, boolean>;  // テーブルごとのグラフ表示状態
 
-  // 地図チャット用
+  // 地図設定（グラフの一種として統合）
   mapConfig?: {
     center: [number, number];
     zoom: number;

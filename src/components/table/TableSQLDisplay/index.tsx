@@ -9,9 +9,10 @@ import { SQLFlowVisualization } from './SQLFlowVisualization';
 interface TableSQLDisplayProps {
   tableName: string | null;
   dbContext: DBContext | null;
+  schema?: string | null;
 }
 
-export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDisplayProps) {
+export default function TableSQLDisplay({ tableName, dbContext, schema }: TableSQLDisplayProps) {
   const [sqlEntry, setSqlEntry] = useState<SQLHistoryEntry | undefined>(undefined);
   const [showVisualization, setShowVisualization] = useState(false);
 
@@ -22,19 +23,19 @@ export default function TableSQLDisplay({ tableName, dbContext }: TableSQLDispla
     }
 
     // Get the SQL for the current table
-    const entry = dbContext.getSQLHistory().getTableSQL(tableName);
+    const entry = dbContext.getSQLHistory().getTableSQL(tableName, schema);
     setSqlEntry(entry);
 
     // Subscribe to SQL history changes
     const unsubscribe = dbContext.getSQLHistory().subscribe(() => {
-      const updatedEntry = dbContext.getSQLHistory().getTableSQL(tableName);
+      const updatedEntry = dbContext.getSQLHistory().getTableSQL(tableName, schema);
       setSqlEntry(updatedEntry);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [tableName, dbContext]);
+  }, [tableName, dbContext, schema]);
 
   if (!sqlEntry || !tableName) {
     return null;

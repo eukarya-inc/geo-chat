@@ -79,7 +79,7 @@ export function useChatManagement(
     if (dbContext && chats.length === 0) {
       const initializeFirstChat = async () => {
         try {
-          const firstChat = await createChat('graph');
+          const firstChat = await createChat();
           
           const schemaName = chatIdToSchemaName(firstChat.id);
           if (schemaName) {
@@ -106,14 +106,14 @@ export function useChatManagement(
   }, [updateMessages]);
 
   // Chat management functions
-  const createNewChat = async (type: 'graph' | 'map') => {
+  const createNewChat = async () => {
     if (!dbContext) {
       console.error('DBContext is not initialized');
       return;
     }
 
     try {
-      const newChat = await createChat(type);
+      const newChat = await createChat();
 
       // Create schema for the new chat
       const schemaName = chatIdToSchemaName(newChat.id);
@@ -176,7 +176,6 @@ export function useChatManagement(
       const baseChatData = newChats.map((chat) => ({
         id: chat.id,
         title: chat.title,
-        type: chat.type,
         createdAt: chat.createdAt,
         selectedTable: chat.selectedTable || null,
       }));

@@ -24,7 +24,7 @@ import {
 
 function ModelingPage() {
     const { dbContext } = useDuckDB();
-    const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'visualization'>('table');
+    const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
     
     // Enable state synchronization
     const { syncImmediately } = useSyncBridge();
@@ -76,9 +76,6 @@ function ModelingPage() {
     
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
-    
-    // Get chat type with fallback to 'graph'
-    const chatType = currentChat?.type || 'graph';
     
     // Message handling
     const {
@@ -184,10 +181,10 @@ function ModelingPage() {
                         <div className="text-center">
                             <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
                             <button
-                                onClick={() => createNewChat('graph')}
+                                onClick={() => createNewChat()}
                                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                             >
-                                新しいグラフチャットを作成
+                                新しいチャットを作成
                             </button>
                         </div>
                     </div>
@@ -218,6 +215,16 @@ function ModelingPage() {
                             <div className="flex-shrink-0 border-b border-gray-200 bg-white">
                                 <div className="flex">
                                     <button
+                                        onClick={() => setActiveTab('sql')}
+                                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                            activeTab === 'sql'
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        SQL
+                                    </button>
+                                    <button
                                         onClick={() => setActiveTab('table')}
                                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                                             activeTab === 'table'
@@ -228,32 +235,41 @@ function ModelingPage() {
                                         テーブル
                                     </button>
                                     <button
-                                        onClick={() => setActiveTab('sql')}
+                                        onClick={() => setActiveTab('chart')}
                                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                            activeTab === 'sql'
+                                            activeTab === 'chart'
                                                 ? 'border-blue-500 text-blue-600'
                                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                     >
-                                        SQL
+                                        グラフ
                                     </button>
-                                    {(chatType === 'graph' || chatType === 'map') && (
-                                        <button
-                                            onClick={() => setActiveTab('visualization')}
-                                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                activeTab === 'visualization'
-                                                    ? 'border-blue-500 text-blue-600'
-                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            {chatType === 'graph' ? 'グラフ' : '地図'}
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={() => setActiveTab('map')}
+                                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                            activeTab === 'map'
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        地図
+                                    </button>
                                 </div>
                             </div>
 
                             {/* Tab Content */}
                             <div className="flex-1 overflow-hidden">
+                                {/* SQL Tab */}
+                                {activeTab === 'sql' && (
+                                    <div className="h-full p-4 overflow-auto">
+                                        <TableSQLDisplay
+                                            tableName={selectedTable}
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                        />
+                                    </div>
+                                )}
+
                                 {/* Table Tab */}
                                 {activeTab === 'table' && (
                                     <div className="h-full overflow-hidden">
@@ -266,71 +282,59 @@ function ModelingPage() {
                                     </div>
                                 )}
 
-                                {/* SQL Tab */}
-                                {activeTab === 'sql' && (
-                                    <div className="h-full p-4 overflow-auto">
-                                        <TableSQLDisplay
-                                            tableName={selectedTable}
-                                            dbContext={dbContext}
-                                        />
-                                    </div>
+                                {/* Chart Tab */}
+                                {activeTab === 'chart' && (
+                                    chartSpec && connection && selectedChatId ? (
+                                        <div className="h-full overflow-auto p-4">
+                                            <VegaLiteChart
+                                                key={`${schemaName}-${chartSpec.id}`}
+                                                spec={chartSpec.spec}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center">
+                                            <div className="text-center">
+                                                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                </svg>
+                                                <h3 className="text-lg font-medium text-gray-900 mb-2">グラフがまだありません</h3>
+                                                <p className="text-sm text-gray-500 mb-4">このテーブルのデータを可視化するグラフを作成しましょう</p>
+                                                <button
+                                                    onClick={() => {
+                                                        if (sendMessageRef.current) {
+                                                            sendMessageRef.current(`${selectedTable}テーブルのデータを分析して、適切なグラフを作成してください`);
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                                >
+                                                    グラフを作成
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
                                 )}
 
-                                {/* Visualization Tab (Graph or Map) */}
-                                {activeTab === 'visualization' && (
-                                    <>
-                                        {chatType === 'graph' && (
-                                            chartSpec && connection && selectedChatId ? (
-                                                <div className="h-full overflow-auto p-4">
-                                                    <VegaLiteChart
-                                                        key={`${schemaName}-${chartSpec.id}`}
-                                                        spec={chartSpec.spec}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="h-full flex items-center justify-center">
-                                                    <div className="text-center">
-                                                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                                        </svg>
-                                                        <h3 className="text-lg font-medium text-gray-900 mb-2">グラフがまだありません</h3>
-                                                        <p className="text-sm text-gray-500 mb-4">このテーブルのデータを可視化するグラフを作成しましょう</p>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (sendMessageRef.current) {
-                                                                    sendMessageRef.current(`${selectedTable}テーブルのデータを分析して、適切なグラフを作成してください`);
-                                                                }
-                                                            }}
-                                                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                                        >
-                                                            グラフを作成
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )
-                                        )}
-                                        {chatType === 'map' && connection && (
-                                            <div className="h-full overflow-hidden">
-                                                <Map
-                                                    dbContext={dbContext}
-                                                    schema={schemaName}
-                                                    selectedTable={selectedTable}
-                                                    selectedColumns={mapSelectedColumns}
-                                                    geometryColumnName={selectedGeometryColumn}
-                                                    tableStyles={currentChat?.tableStyles || tableStyles}
-                                                    extraStyle={currentChat?.extraMapStyle || extraMapStyle}
-                                                    onTableStyleChanged={updateTableStyle}
-                                                    onExtraStyleChange={updateExtraMapStyle}
-                                                    onViewStateChange={updateMapViewState}
-                                                    initialViewState={currentChat?.mapState}
-                                                    initialStyle={currentChat?.mapState?.style}
-                                                    onStyleUpdate={updateMapStyle}
-                                                />
-                                            </div>
-                                        )}
-                                    </>
+                                {/* Map Tab */}
+                                {activeTab === 'map' && connection && (
+                                    <div className="h-full overflow-hidden">
+                                        <Map
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                            selectedTable={selectedTable}
+                                            selectedColumns={mapSelectedColumns}
+                                            geometryColumnName={selectedGeometryColumn}
+                                            tableStyles={currentChat?.tableStyles || tableStyles}
+                                            extraStyle={currentChat?.extraMapStyle || extraMapStyle}
+                                            onTableStyleChanged={updateTableStyle}
+                                            onExtraStyleChange={updateExtraMapStyle}
+                                            onViewStateChange={updateMapViewState}
+                                            initialViewState={currentChat?.mapState}
+                                            initialStyle={currentChat?.mapState?.style}
+                                            onStyleUpdate={updateMapStyle}
+                                        />
+                                    </div>
                                 )}
                             </div>
                         </>

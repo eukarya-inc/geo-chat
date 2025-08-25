@@ -1,11 +1,10 @@
-import { useState, useRef } from 'react';
-import { PlusIcon, TrashIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
+import { useState } from 'react';
+import { PlusIcon, TrashIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import type { StructuredMessage } from '../../../types/message';
 import type { StyleSpecification } from 'maplibre-gl';
-import { ChatTypeMenu } from './ChatTypeMenu';
 import type { TableStyle, ExtraStyle } from '../../map';
 
-export type ChatType = 'graph' | 'map';
+export type ChatType = 'graph';
 
 export interface MapState {
     center?: [number, number];
@@ -18,7 +17,6 @@ export interface MapState {
 export interface Chat {
     id: string;
     title: string;
-    type: ChatType;
     createdAt: Date;
     messages: StructuredMessage[];
     schemaName?: string;
@@ -32,7 +30,7 @@ interface ChatListProps {
     chats: Chat[];
     selectedChatId: string | null;
     onSelectChat: (chatId: string) => void;
-    onCreateChat: (type: ChatType) => void | Promise<void>;
+    onCreateChat: () => void | Promise<void>;
     onDeleteChat: (chatId: string) => void | Promise<void>;
     isInitialized?: boolean;
 }
@@ -46,26 +44,12 @@ export function ChatList({
     isInitialized = false
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
-    const [showTypeMenu, setShowTypeMenu] = useState(false);
-    const buttonRef = useRef<HTMLButtonElement>(null);
-
-    const getChatIcon = (type: ChatType) => {
-        switch (type) {
-            case 'graph':
-                return ChartBarIcon;
-            case 'map':
-                return MapIcon;
-            default:
-                return ChartBarIcon;
-        }
-    };
 
     return (
         <div className="h-full flex flex-col">
             <div className="p-4 border-b border-gray-200">
                 <button
-                    ref={buttonRef}
-                    onClick={() => setShowTypeMenu(true)}
+                    onClick={() => onCreateChat()}
                     disabled={!isInitialized}
                     className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded transition-colors ${
                         isInitialized 
@@ -78,12 +62,6 @@ export function ChatList({
                         {isInitialized ? '新しいチャット' : '初期化中...'}
                     </span>
                 </button>
-                <ChatTypeMenu
-                    isOpen={showTypeMenu}
-                    onClose={() => setShowTypeMenu(false)}
-                    onSelectType={onCreateChat}
-                    anchorRef={buttonRef}
-                />
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -105,10 +83,7 @@ export function ChatList({
                                 onMouseEnter={() => setHoveredChatId(chat.id)}
                                 onMouseLeave={() => setHoveredChatId(null)}
                             >
-                                {(() => {
-                                    const Icon = getChatIcon(chat.type);
-                                    return <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />;
-                                })()}
+                                <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="text-sm font-medium truncate">
                                         {chat.title}
