@@ -10,8 +10,8 @@ import {
   updateMessagesAtom,
   updateChatStateAtom,
   remoteStateAtom,
-  chatStatesAtom,
   currentChatStateAtom,
+  type Chat,
   type ChatState
 } from '../../../store/modelingAtoms';
 import type { StructuredMessage } from '../../../types/message';
@@ -22,8 +22,7 @@ import type { Chat as ChatListChat } from '../../../components/chat/ChatList';
 export function useChatManagement(
   dbContext: DBContext | null
 ) {
-  const chats = useAtomValue(chatsAtom);
-  const chatStates = useAtomValue(chatStatesAtom);
+  const chatsRecord = useAtomValue(chatsAtom);  // Now a Record<string, Chat>
   const [localState, setLocalState] = useAtom(localStateAtom);
   const currentChat = useAtomValue(currentChatAtom);
   const currentChatState = useAtomValue(currentChatStateAtom);
@@ -36,15 +35,19 @@ export function useChatManagement(
 
   const selectedChatId = localState.selectedChatId;
 
-  // Convert to ChatList format
+  // Convert Record to array and sort by createdAt for ChatList format
   const chatsWithMessages = useMemo((): ChatListChat[] => {
-    return chats.map(chat => ({
-      ...chat,
-      messages: chatStates[chat.id]?.messages || [],
-      selectedTable: chat.selectedTable,
-      mapSpecs: chatStates[chat.id]?.mapSpecs,
-    }));
-  }, [chats, chatStates]);
+    return Object.values(chatsRecord)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(chat => ({
+        id: chat.id,
+        title: chat.title,
+        createdAt: chat.createdAt,
+        messages: chat.messages,
+        selectedTable: chat.selectedTable,
+        mapSpecs: chat.mapSpecs,
+      }));
+  }, [chatsRecord]);
 
   // Current chat with full state
   const currentChatWithState = useMemo((): ChatListChat | undefined => {
@@ -59,7 +62,7 @@ export function useChatManagement(
 
   // Initialize first chat if no chats exist
   useEffect(() => {
-    if (dbContext && chats.length === 0) {
+    if (dbContext && Object.keys(chatsRecord).length === 0) {
       const initializeFirstChat = async () => {
         try {
           const firstChat = await createChat();
@@ -124,10 +127,10 @@ export function useChatManagement(
 
     // If this was the selected chat, notify about the new selection
     if (selectedChatId === chatId) {
-      const remainingChats = chats.filter(chat => chat.id !== chatId);
-      if (remainingChats.length > 0) {
-        const nextChat = remainingChats[0];
-        const nextSchemaName = chatIdToSchemaName(nextChat.id);
+      const remainingChatIds = Object.keys(chatsRecord).filter(id => id !== chatId);
+      if (remainingChatIds.length > 0) {
+        const nextChatId = remainingChatIds[0];
+        const nextSchemaName = chatIdToSchemaName(nextChatId);
         // Notify table change
         dbContext.notifyTableChange(undefined, nextSchemaName);
       }
@@ -139,7 +142,7 @@ export function useChatManagement(
     if (!dbContext) return;
 
     // Find the chat being selected
-    const targetChat = chats.find(chat => chat.id === chatId);
+    const targetChat = chatsRecord[chatId];
     if (!targetChat) return;
 
     // Set the selected chat ID
@@ -155,26 +158,23 @@ export function useChatManagement(
     chats: chatsWithMessages,
     setChats: (newChats: ChatListChat[]) => {
       // For compatibility - update remote state directly
-      // Extract base chat data and chat states
-      const baseChatData = newChats.map((chat) => ({
-        id: chat.id,
-        title: chat.title,
-        createdAt: chat.createdAt,
-        selectedTable: chat.selectedTable || null,
-      }));
-      const newChatStates: Record<string, ChatState> = {};
+      const newChatsRecord: Record<string, Chat> = {};
       
       newChats.forEach(chat => {
-        newChatStates[chat.id] = {
+        newChatsRecord[chat.id] = {
+          id: chat.id,
+          title: chat.title,
+          createdAt: chat.createdAt,
+          selectedTable: chat.selectedTable || null,
           messages: chat.messages,
-          tableHistory: [], // Initialize empty table history
+          tables: {}, // Initialize empty tables record
+          chartSpecs: undefined,
           mapSpecs: chat.mapSpecs,
         };
       });
       
       setRemoteState({
-        chats: baseChatData,
-        chatStates: newChatStates
+        chats: newChatsRecord
       });
     },
     selectedChatId,
@@ -191,10 +191,17 @@ export function useChatManagement(
     updateChatMessages,
     updateChatState: updateChatStateWrapper,
     getCurrentChatState: useCallback(() => {
-      // Get the current state from remote state atom
-      const remoteState = chatStates;
+      // Get the current chat and extract its state
       const currentId = localState.selectedChatId;
-      return currentId ? remoteState[currentId] : null;
-    }, [chatStates, localState.selectedChatId]),
+      const chat = currentId ? chatsRecord[currentId] : null;
+      if (!chat) return null;
+      
+      return {
+        messages: chat.messages,
+        tables: chat.tables,
+        chartSpecs: chat.chartSpecs,
+        mapSpecs: chat.mapSpecs
+      } as ChatState;
+    }, [chatsRecord, localState.selectedChatId]),
   };
 }

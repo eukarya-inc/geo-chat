@@ -1,23 +1,27 @@
 import { atom } from 'jotai';
 import { remoteStateAtom } from './modelingRemoteAtoms';
 import { localStateAtom } from './modelingLocalAtoms';
-import type { ChatState } from './modelingRemoteAtoms';
+import type { Chat, ChatState } from './modelingRemoteAtoms';
 
 // ===== 統合ビューAtoms（リモート状態とローカル状態を結合） =====
 // 現在のチャット（リモート状態から取得）
 export const currentChatAtom = atom((get) => {
   const remoteState = get(remoteStateAtom);
   const localState = get(localStateAtom);
-  return remoteState.chats.find(c => c.id === localState.selectedChatId);
+  return localState.selectedChatId ? remoteState.chats[localState.selectedChatId] : undefined;
 });
 
-// 現在のチャット状態
+// 現在のチャット状態（互換性のため残す - チャットそのものから状態部分を抽出）
 export const currentChatStateAtom = atom((get) => {
-  const remoteState = get(remoteStateAtom);
-  const localState = get(localStateAtom);
-  return localState.selectedChatId 
-    ? remoteState.chatStates[localState.selectedChatId]
-    : null;
+  const chat = get(currentChatAtom);
+  if (!chat) return null;
+  
+  return {
+    messages: chat.messages,
+    tables: chat.tables,
+    chartSpecs: chat.chartSpecs,
+    mapSpecs: chat.mapSpecs
+  } as ChatState;
 });
 
 // 現在のテーブルのグラフ表示状態
@@ -43,25 +47,22 @@ export const createChatAtom = atom(
     const remoteState = get(remoteStateAtom);
     const localState = get(localStateAtom);
     
-    const newChat = {
+    const chatCount = Object.keys(remoteState.chats).length;
+    const newChat: Chat = {
       id: `chat-${Date.now()}`,
-      title: `チャット ${remoteState.chats.length + 1}`,
+      title: `チャット ${chatCount + 1}`,
       createdAt: new Date(),
-      selectedTable: null
-    };
-    
-    const newChatState = {
+      selectedTable: null,
       messages: [],
-      tableHistory: [],
+      tables: {},
     };
     
     // リモート状態更新
     set(remoteStateAtom, {
       ...remoteState,
-      chats: [...remoteState.chats, newChat],
-      chatStates: {
-        ...remoteState.chatStates,
-        [newChat.id]: newChatState
+      chats: {
+        ...remoteState.chats,
+        [newChat.id]: newChat
       }
     });
     
@@ -91,25 +92,26 @@ export const deleteChatAtom = atom(
     const remoteState = get(remoteStateAtom);
     const localState = get(localStateAtom);
     
-    const remainingChats = remoteState.chats.filter(chat => chat.id !== chatId);
-    const remainingChatStates = Object.fromEntries(
-      Object.entries(remoteState.chatStates).filter(([id]) => id !== chatId)
+    const remainingChats = Object.fromEntries(
+      Object.entries(remoteState.chats).filter(([id]) => id !== chatId)
     );
     const remainingSessions = Object.fromEntries(
       Object.entries(localState.sessions).filter(([id]) => id !== chatId)
     );
     
+    const remainingChatIds = Object.keys(remainingChats);
+    const firstRemainingId = remainingChatIds[0] || null;
+    
     // リモート状態更新
     set(remoteStateAtom, {
-      chats: remainingChats,
-      chatStates: remainingChatStates
+      chats: remainingChats
     });
     
     // ローカル状態更新
     set(localStateAtom, {
       ...localState,
       selectedChatId: localState.selectedChatId === chatId
-        ? (remainingChats[0]?.id || null)
+        ? firstRemainingId
         : localState.selectedChatId,
       sessions: remainingSessions
     });
@@ -126,15 +128,17 @@ export const selectTableAtom = atom(
     const localState = get(localStateAtom);
     const chatId = localState.selectedChatId;
     
-    if (!chatId) return;
+    if (!chatId || !remoteState.chats[chatId]) return;
     
     set(remoteStateAtom, {
       ...remoteState,
-      chats: remoteState.chats.map(chat =>
-        chat.id === chatId
-          ? { ...chat, selectedTable: tableName }
-          : chat
-      )
+      chats: {
+        ...remoteState.chats,
+        [chatId]: {
+          ...remoteState.chats[chatId],
+          selectedTable: tableName
+        }
+      }
     });
   }
 );
@@ -147,17 +151,14 @@ export const updateChatStateAtom = atom(
     const localState = get(localStateAtom);
     const chatId = localState.selectedChatId;
     
-    if (!chatId) return;
-    
-    const currentChatState = remoteState.chatStates[chatId];
-    if (!currentChatState) return;
+    if (!chatId || !remoteState.chats[chatId]) return;
     
     set(remoteStateAtom, {
       ...remoteState,
-      chatStates: {
-        ...remoteState.chatStates,
+      chats: {
+        ...remoteState.chats,
         [chatId]: {
-          ...currentChatState,
+          ...remoteState.chats[chatId],
           ...updates
         }
       }
@@ -170,16 +171,16 @@ export const updateMessagesAtom = atom(
   null,
   (get, set, { chatId, messages }: { chatId: string; messages: import('../types/message').StructuredMessage[] }) => {
     const remoteState = get(remoteStateAtom);
-    const chatState = remoteState.chatStates[chatId];
+    const chat = remoteState.chats[chatId];
     
-    if (!chatState) return;
+    if (!chat) return;
     
     set(remoteStateAtom, {
       ...remoteState,
-      chatStates: {
-        ...remoteState.chatStates,
+      chats: {
+        ...remoteState.chats,
         [chatId]: {
-          ...chatState,
+          ...chat,
           messages
         }
       }
@@ -202,19 +203,22 @@ export const selectChatAtom = atom(
 // テーブル作成履歴追加
 export const addTableHistoryAtom = atom(
   null,
-  (get, set, { chatId, record }: { chatId: string; record: import('./modelingRemoteAtoms').TableCreationRecord }) => {
+  (get, set, { chatId, record }: { chatId: string; record: import('./modelingRemoteAtoms').Table }) => {
     const remoteState = get(remoteStateAtom);
-    const chatState = remoteState.chatStates[chatId];
+    const chat = remoteState.chats[chatId];
     
-    if (!chatState) return;
+    if (!chat) return;
     
     set(remoteStateAtom, {
       ...remoteState,
-      chatStates: {
-        ...remoteState.chatStates,
+      chats: {
+        ...remoteState.chats,
         [chatId]: {
-          ...chatState,
-          tableHistory: [...(chatState.tableHistory || []), record]
+          ...chat,
+          tables: {
+            ...(chat.tables || {}),
+            [record.tableName]: record
+          }
         }
       }
     });

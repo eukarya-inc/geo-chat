@@ -60,7 +60,7 @@ export function ChatList({
                     </div>
                 ) : (
                     <div className="p-2">
-                        {[...chats].reverse().map((chat) => (
+                        {chats.map((chat) => (
                             <div
                                 key={chat.id}
                                 className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
