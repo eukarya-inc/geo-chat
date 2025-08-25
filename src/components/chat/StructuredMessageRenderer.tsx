@@ -205,6 +205,58 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'update_map_style_for_table') {
+                const input = block.input as { 
+                    table_name: string; 
+                    layer_type: string;
+                    layer_id: string;
+                    paint_properties?: Record<string, unknown>;
+                    layout_properties?: Record<string, unknown>;
+                    filter?: unknown;
+                    description: string;
+                };
+                return (
+                    <CollapsibleSection 
+                        key={index} 
+                        title={`🗺️ **地図スタイルを更新中: ${input.table_name} - ${input.layer_id}**`}
+                        defaultOpen={false}
+                    >
+                        <div className="p-2 text-xs space-y-1">
+                            <div className="text-gray-600">レイヤータイプ: {input.layer_type}</div>
+                            {input.paint_properties && (
+                                <div>
+                                    <div className="font-semibold text-gray-700">Paint プロパティ:</div>
+                                    <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
+                                        <code className="language-json text-xs">{JSON.stringify(input.paint_properties, null, 2)}</code>
+                                    </pre>
+                                </div>
+                            )}
+                            {input.layout_properties && (
+                                <div>
+                                    <div className="font-semibold text-gray-700">Layout プロパティ:</div>
+                                    <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
+                                        <code className="language-json text-xs">{JSON.stringify(input.layout_properties, null, 2)}</code>
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    </CollapsibleSection>
+                );
+            }
+            if (block.name === 'get_map_style_for_table') {
+                const input = block.input as { table_name: string };
+                return (
+                    <CollapsibleSection 
+                        key={index} 
+                        title={`🗺️ **地図スタイルを取得中: ${input.table_name}**`}
+                        defaultOpen={false}
+                    >
+                        <div className="p-2 text-xs text-gray-600">
+                            テーブル「{input.table_name}」の地図スタイル設定を取得しています...
+                        </div>
+                    </CollapsibleSection>
+                );
+            }
             if (block.name === 'completion') {
                 const input = block.input as {
                     suggestedPrompts?: Array<{
@@ -299,6 +351,100 @@ const renderContentBlock = (
                         <CollapsibleSection 
                             key={index} 
                             title={`❌ **エラー:** ${result?.message || 'グラフの更新に失敗しました'}`}
+                        />
+                    );
+                }
+            }
+            
+            // Handle update_map_style_for_table tool results
+            if (block.name === 'update_map_style_for_table') {
+                const result = block.result as { 
+                    success: boolean; 
+                    message: string; 
+                    error?: string;
+                    appliedUpdate?: {
+                        tableName: string;
+                        layerId: string;
+                        layerType: string;
+                    };
+                };
+                if (result?.success) {
+                    return (
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`✅ **${result.message}**`}
+                            defaultOpen={false}
+                        >
+                            {result.appliedUpdate && (
+                                <div className="p-2 text-xs text-gray-600">
+                                    <div>テーブル: {result.appliedUpdate.tableName}</div>
+                                    <div>レイヤー: {result.appliedUpdate.layerId} ({result.appliedUpdate.layerType})</div>
+                                </div>
+                            )}
+                        </CollapsibleSection>
+                    );
+                } else {
+                    return (
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`❌ **エラー:** ${result?.error || '地図スタイルの更新に失敗しました'}`}
+                        />
+                    );
+                }
+            }
+            
+            // Handle get_map_style_for_table tool results
+            if (block.name === 'get_map_style_for_table') {
+                const result = block.result as { 
+                    success: boolean; 
+                    message?: string;
+                    error?: string;
+                    tableStyles: unknown[] | null;
+                    extraStyle: unknown | null;
+                    metadata?: {
+                        hasTableStyles: boolean;
+                        hasExtraStyle: boolean;
+                        layerCount: number;
+                        note: string | null;
+                    };
+                };
+                if (result?.success) {
+                    const title = result.message ? `✅ **${result.message}**` : '✅ **地図スタイルを取得しました**';
+                    return (
+                        <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                            <div className="p-2 text-xs space-y-2">
+                                {result.metadata && (
+                                    <div className="text-gray-600">
+                                        <div>レイヤー数: {result.metadata.layerCount}</div>
+                                        {result.metadata.note && (
+                                            <div className="mt-1 text-amber-600">{result.metadata.note}</div>
+                                        )}
+                                    </div>
+                                )}
+                                {result.tableStyles && result.tableStyles.length > 0 ? (
+                                    <div>
+                                        <div className="font-semibold text-gray-700">テーブルスタイル:</div>
+                                        <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
+                                            <code className="language-json text-xs">{JSON.stringify(result.tableStyles, null, 2)}</code>
+                                        </pre>
+                                    </div>
+                                ) : null}
+                                {result.extraStyle ? (
+                                    <div>
+                                        <div className="font-semibold text-gray-700">ベーススタイル:</div>
+                                        <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
+                                            <code className="language-json text-xs">{JSON.stringify(result.extraStyle, null, 2)}</code>
+                                        </pre>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </CollapsibleSection>
+                    );
+                } else {
+                    return (
+                        <CollapsibleSection 
+                            key={index} 
+                            title={`❌ **エラー:** ${result?.error || '地図スタイルの取得に失敗しました'}`}
                         />
                     );
                 }

@@ -2,6 +2,7 @@ import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { TableStyle } from '../../components/map';
 import { createAIStreamGenerator, type StreamPart } from '../modelingai/streamGenerator';
 import { messageConverter } from '../modelingai/messageConverter';
 import { generateContextMessage } from '../modelingai/contextMessage';
@@ -103,6 +104,7 @@ export class AIStore {
       onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
       onChartDelete?: (tableName: string) => Promise<void>;
       getCurrentChatState?: () => ChatState | null;
+      onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
       onMessageComplete?: () => void;
     }
   ): Promise<void> {
@@ -174,7 +176,8 @@ export class AIStore {
         abortSignal: controller.signal,
         onChartUpdate: options.onChartUpdate,
         onChartDelete: options.onChartDelete,
-        getCurrentChatState: options.getCurrentChatState
+        getCurrentChatState: options.getCurrentChatState,
+        onMapStyleUpdate: options.onMapStyleUpdate
       });
 
       const assistantMessage: StructuredMessage = { 

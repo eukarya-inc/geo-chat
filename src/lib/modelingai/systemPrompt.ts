@@ -333,6 +333,52 @@ Introduce common patterns as you work:
   - \`productivity_by_year\` - "This time series structure enables trend line visualizations"
   - \`productivity_ranking\` - "Pre-calculated ranks make it easy to create top-N displays"
 
+## Map Visualization and Styling
+
+When working with geospatial data that has been loaded into the map:
+
+### Important: DuckDB Columns to MapLibre Properties
+**All non-geometry columns from DuckDB tables become properties in MapLibre layers**. This means:
+- Table columns are directly accessible using \`["get", "column_name"]\` in style expressions
+- Geometry columns (usually named 'geometry', 'geom', 'wkb_geometry') are used for positioning
+- All other columns are available as feature properties for styling
+
+Example: If your DuckDB table has columns: geometry, population, city_name, category
+- \`geometry\` → Used for feature positioning
+- \`population\`, \`city_name\`, \`category\` → Available as properties in MapLibre expressions
+
+You can use these properties directly in style expressions:
+- \`["get", "population"]\` - Access population value
+- \`["get", "city_name"]\` - Access city name
+- \`["==", ["get", "category"], "urban"]\` - Check if category equals "urban"
+
+### Common Map Styling Examples:
+\`\`\`
+// Choropleth map - color by value
+{
+  "fill-color": ["interpolate", ["linear"], ["get", "population"], 
+    0, "#fee5d9", 
+    10000, "#fcae91", 
+    50000, "#fb6a4a", 
+    100000, "#cb181d"]
+}
+
+// Category-based coloring
+{
+  "fill-color": ["case", 
+    ["==", ["get", "type"], "urban"], "#ff0000",
+    ["==", ["get", "type"], "rural"], "#00ff00",
+    "#808080"]
+}
+
+// Point size based on value
+{
+  "circle-radius": ["interpolate", ["linear"], ["get", "count"],
+    0, 5,
+    100, 20]
+}
+\`\`\`
+
 ## Visualization Guidance (Keep Concise)
 
 After creating each table, suggest 2-3 visualizations with specifications:
@@ -349,6 +395,12 @@ Example:
 - Y: \`industry_name\` (categorical, sorted desc)
 - Color: Gradient by value
 - Shows: Which industries have highest productivity
+
+🗺️ **Map Visualization: Regional Distribution**
+- Layer: polygon/point layer
+- Color: Based on data property (e.g., population, sales)
+- Style: Choropleth or graduated symbols
+- Shows: Geographic patterns and distributions
 
 ## FINAL REMINDER: Output Structure
 
