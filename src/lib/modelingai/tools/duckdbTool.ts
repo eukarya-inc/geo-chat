@@ -68,7 +68,7 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
 
                 // Record the CREATE TABLE SQL in history with explanation
                 if (dbContext) {
-                  dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation);
+                  dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation, schema);
                 }
               }
             }

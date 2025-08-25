@@ -26,7 +26,7 @@ export const currentTableShowGraphAtom = atom((get) => {
   const chatState = get(currentChatStateAtom);
   const selectedTable = chat?.selectedTable;
   
-  if (!chat || !chatState || !selectedTable || chat.type !== 'graph') {
+  if (!chat || !chatState || !selectedTable) {
     return false;
   }
   
@@ -37,14 +37,13 @@ export const currentTableShowGraphAtom = atom((get) => {
 // チャット作成（リモートとローカル両方を更新）
 export const createChatAtom = atom(
   null,
-  async (get, set, type: 'graph' | 'map') => {
+  async (get, set) => {
     const remoteState = get(remoteStateAtom);
     const localState = get(localStateAtom);
     
     const newChat = {
       id: `chat-${Date.now()}`,
-      title: `${type === 'graph' ? 'グラフ' : '地図'}チャット ${remoteState.chats.length + 1}`,
-      type,
+      title: `チャット ${remoteState.chats.length + 1}`,
       createdAt: new Date(),
       selectedTable: null
     };

@@ -87,7 +87,7 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
             // Record the CREATE TABLE SQL in history
             if (dbContext) {
                 const formattedSQL = formatSQL(createTableSQL);
-                dbContext.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file');
+                dbContext.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file', undefined, schema);
             }
 
             setError(null);

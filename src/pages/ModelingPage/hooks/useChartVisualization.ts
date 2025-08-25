@@ -42,7 +42,7 @@ export function useChartVisualization(
 
     // Update chart spec in remote state when it changes
     const updateChartSpecInState = useCallback((table: string, spec: ChartSpec) => {
-        if (currentChat?.type === 'graph' && lastUpdatedTableRef.current !== table) {
+        if (currentChat && lastUpdatedTableRef.current !== table) {
             lastUpdatedTableRef.current = table;
             updateChatState({
                 chartSpecs: {
@@ -55,7 +55,7 @@ export function useChartVisualization(
                 }
             });
         }
-    }, [currentChat?.type, currentChatState?.chartSpecs, updateChatState]);
+    }, [currentChat, currentChatState?.chartSpecs, updateChatState]);
 
     // Load existing chart spec or clear when table changes
     useEffect(() => {

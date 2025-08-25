@@ -4,6 +4,7 @@ export interface SQLHistoryEntry {
   explanation?: string;
   timestamp: number;
   source: 'remote-file' | 'ai-chat' | 'manual' | 'unknown';
+  schema?: string | null;
 }
 
 export class SQLHistoryManager {
@@ -13,28 +14,32 @@ export class SQLHistoryManager {
   /**
    * Record a CREATE TABLE SQL statement
    */
-  recordCreateTable(tableName: string, sql: string, source: SQLHistoryEntry['source'] = 'unknown', explanation?: string): void {
+  recordCreateTable(tableName: string, sql: string, source: SQLHistoryEntry['source'] = 'unknown', explanation?: string, schema?: string | null): void {
     // Normalize table name to lowercase for consistent lookup
     const normalizedName = tableName.toLowerCase();
+    // Create a key that includes schema if provided
+    const key = schema ? `${schema}.${normalizedName}` : normalizedName;
     
     const entry: SQLHistoryEntry = {
       tableName: normalizedName,
       sql: sql.trim(),
       explanation,
       timestamp: Date.now(),
-      source
+      source,
+      schema
     };
     
-    this.history.set(normalizedName, entry);
+    this.history.set(key, entry);
     this.notifyListeners();
   }
 
   /**
    * Update explanation for existing table
    */
-  updateExplanation(tableName: string, explanation: string): void {
+  updateExplanation(tableName: string, explanation: string, schema?: string | null): void {
     const normalizedName = tableName.toLowerCase();
-    const existing = this.history.get(normalizedName);
+    const key = schema ? `${schema}.${normalizedName}` : normalizedName;
+    const existing = this.history.get(key);
     if (existing) {
       existing.explanation = explanation;
       this.notifyListeners();
@@ -44,8 +49,10 @@ export class SQLHistoryManager {
   /**
    * Get SQL history for a specific table
    */
-  getTableSQL(tableName: string): SQLHistoryEntry | undefined {
-    return this.history.get(tableName.toLowerCase());
+  getTableSQL(tableName: string, schema?: string | null): SQLHistoryEntry | undefined {
+    const normalizedName = tableName.toLowerCase();
+    const key = schema ? `${schema}.${normalizedName}` : normalizedName;
+    return this.history.get(key);
   }
 
   /**
@@ -58,9 +65,10 @@ export class SQLHistoryManager {
   /**
    * Clear history for a specific table (e.g., when table is dropped)
    */
-  clearTableHistory(tableName: string): void {
+  clearTableHistory(tableName: string, schema?: string | null): void {
     const normalizedName = tableName.toLowerCase();
-    if (this.history.delete(normalizedName)) {
+    const key = schema ? `${schema}.${normalizedName}` : normalizedName;
+    if (this.history.delete(key)) {
       this.notifyListeners();
     }
   }
