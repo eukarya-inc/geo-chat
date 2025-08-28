@@ -1,12 +1,12 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { useAI } from '../../lib/ai/useAI';
+import { useAIChat } from '../../lib/ai/useAIChat';
 import { aiStore } from '../../lib/ai/AIStore';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import ChatInput from './ChatInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { generatePromptSuggestions } from '../../lib/modelingai/promptSuggestionService';
+import { generatePromptSuggestions } from '../../lib/ai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 import type { TableStyle } from '../map';
@@ -64,7 +64,7 @@ export default function AIChat({
     const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
         // Update AIStore's session messages
         aiStore.updateMessages(effectiveChatId, messages);
-        
+
         if (chatId && updateChatMessages) {
             updateChatMessages(chatId, messages);
         }
@@ -90,7 +90,7 @@ export default function AIChat({
         handleStop,
         sendMessage,
         isApiKeyConfigured,
-    } = useAI({
+    } = useAIChat({
         chatId: effectiveChatId,
         schema: schemaName,
         dbContext,
@@ -106,13 +106,13 @@ export default function AIChat({
 
     const messageGroups = useMemo(() => {
         const groups: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number }[] = [];
-        
+
         for (let i = 0; i < messages.length; i++) {
             const message = messages[i];
             if (message.role === 'user') {
-                const group: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number } = { 
-                    userMessage: message, 
-                    startIndex: i 
+                const group: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number } = {
+                    userMessage: message,
+                    startIndex: i
                 };
                 if (i + 1 < messages.length && messages[i + 1].role === 'assistant') {
                     group.assistantMessage = messages[i + 1];
@@ -123,7 +123,7 @@ export default function AIChat({
                 }
             }
         }
-        
+
         return groups;
     }, [messages]);
 
@@ -133,7 +133,7 @@ export default function AIChat({
             newSet.add(groupIndex);
             return newSet;
         });
-        
+
         setCollapsedGroups(prev => {
             const newSet = new Set(prev);
             if (newSet.has(groupIndex)) {
@@ -149,9 +149,9 @@ export default function AIChat({
         if (messageGroups.length > 0) {
             const lastGroup = messageGroups[messageGroups.length - 1];
             const lastIndex = messageGroups.length - 1;
-            
-            if (lastGroup.assistantMessage && 
-                !collapsedGroups.has(lastIndex) && 
+
+            if (lastGroup.assistantMessage &&
+                !collapsedGroups.has(lastIndex) &&
                 !manuallyToggledGroups.has(lastIndex)) {
                 setCollapsedGroups(prev => {
                     const newSet = new Set(prev);
@@ -182,7 +182,7 @@ export default function AIChat({
 
         const threshold = 100;
         const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        
+
         // Mark as user-scrolled if they're away from bottom
         if (scrollBottom > threshold) {
             userHasScrolledRef.current = true;
@@ -204,7 +204,7 @@ export default function AIChat({
 
             // More frequent scrolling during streaming
             const scrollInterval = isLoading ? 500 : 1000;
-            
+
             if (timeSinceLastScroll >= scrollInterval || messages.length <= 2) {
                 lastScrollTimeRef.current = now;
                 setTimeout(() => {
@@ -238,50 +238,50 @@ export default function AIChat({
                     break;
                 }
             }
-            
+
             if (!tableCreatedMessage) return;
-            
+
             const content = tableCreatedMessage.content as string;
-            
+
             // Check if we already have prompt suggestions for this table
             // Table creation suggestions are in tool_result, completion suggestions are in tool_use (for memory efficiency)
-            const hasPromptSuggestions = messages.some(msg => 
-                msg.role === 'assistant' && 
+            const hasPromptSuggestions = messages.some(msg =>
+                msg.role === 'assistant' &&
                 Array.isArray(msg.content) &&
-                msg.content.some(block => 
+                msg.content.some(block =>
                     // Check for table creation suggestions (tool_result)
-                    (block.type === 'tool_result' && 
+                    (block.type === 'tool_result' &&
                      block.name === 'completion' &&
                      block.result && typeof block.result === 'object' &&
                      'suggestedPrompts' in block.result) ||
                     // Check for completion suggestions (tool_use)
-                    (block.type === 'tool_use' && 
+                    (block.type === 'tool_use' &&
                      block.name === 'completion' &&
                      block.input && typeof block.input === 'object' &&
                      'suggestedPrompts' in block.input)
                 )
             );
-            
+
             if (hasPromptSuggestions) {
                 return;
             }
-            
+
             // Extract table name from the marker
             const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
             const tableName = match?.[1] || selectedTable || null;
-            
+
             if (!tableName || !dbContext || !apiKey) return;
-            
+
             // Check if we already have the loading message
-            const hasLoadingMessage = messages.some(msg => 
-                msg.role === 'assistant' && 
+            const hasLoadingMessage = messages.some(msg =>
+                msg.role === 'assistant' &&
                 Array.isArray(msg.content) &&
-                msg.content.some(block => 
-                    block.type === 'text' && 
+                msg.content.some(block =>
+                    block.type === 'text' &&
                     block.text.includes('を分析中... おすすめの分析を生成しています...')
                 )
             );
-            
+
             if (!hasLoadingMessage) {
                 const loadingMessage: StructuredMessage = {
                     role: 'assistant',
@@ -292,18 +292,18 @@ export default function AIChat({
                         }
                     ]
                 };
-                
+
                 const messagesWithLoading = [...messages, loadingMessage];
                 handleMessagesChange(messagesWithLoading);
             }
-            
+
             try {
                 if (abortSignal.aborted) {
                     // Remove loading message if aborted
                     const cleanMessages = messages.filter(msg => {
                         if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-                            return !msg.content.some(block => 
-                                block.type === 'text' && 
+                            return !msg.content.some(block =>
+                                block.type === 'text' &&
                                 block.text.includes('を分析中... おすすめの分析を生成しています...')
                             );
                         }
@@ -312,18 +312,18 @@ export default function AIChat({
                     handleMessagesChange(cleanMessages);
                     return;
                 }
-                
+
                 const prompts = await generatePromptSuggestions(
                     tableName,
                     dbContext,
                     schemaName || null,
                     apiKey || ''
                 );
-                
+
                 if (abortSignal.aborted) {
                     return;
                 }
-                
+
                 if (prompts.length > 0) {
                     const promptMessage: StructuredMessage = {
                         role: 'assistant',
@@ -345,26 +345,26 @@ export default function AIChat({
                             }
                         ]
                     };
-                    
+
                     // Remove loading message and add prompt message
                     const updatedMessages = messages.filter(msg => {
                         if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-                            return !msg.content.some(block => 
-                                block.type === 'text' && 
+                            return !msg.content.some(block =>
+                                block.type === 'text' &&
                                 block.text.includes('を分析中... おすすめの分析を生成しています...')
                             );
                         }
                         return true;
                     });
-                    
+
                     updatedMessages.push(promptMessage);
                     handleMessagesChange(updatedMessages);
                 } else {
                     // Remove loading message
                     const updatedMessages = messages.filter(msg => {
                         if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-                            return !msg.content.some(block => 
-                                block.type === 'text' && 
+                            return !msg.content.some(block =>
+                                block.type === 'text' &&
                                 block.text.includes('を分析中... おすすめの分析を生成しています...')
                             );
                         }
@@ -380,8 +380,8 @@ export default function AIChat({
                 // Remove loading message on error
                 const updatedMessages = messages.filter(msg => {
                     if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-                        return !msg.content.some(block => 
-                            block.type === 'text' && 
+                        return !msg.content.some(block =>
+                            block.type === 'text' &&
                             block.text.includes('を分析中... おすすめの分析を生成しています...')
                         );
                     }
@@ -487,9 +487,9 @@ export default function AIChat({
                     const isLastGroup = groupIndex === messageGroups.length - 1;
                     const isCollapsed = collapsedGroups.has(groupIndex);
                     const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
-                    
+
                     const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
-                    const isTableOnlyMessage = userContent.includes('<!--TABLE_CREATED:') && 
+                    const isTableOnlyMessage = userContent.includes('<!--TABLE_CREATED:') &&
                                               userContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
 
                     return (
@@ -532,22 +532,22 @@ export default function AIChat({
                                 <div className="flex justify-start">
                                     <div className="w-full">
                                         {(() => {
-                                            const isPromptOnlyMessage = 
+                                            const isPromptOnlyMessage =
                                                 Array.isArray(group.assistantMessage.content) &&
                                                 group.assistantMessage.content.length === 1 &&
                                                 group.assistantMessage.content[0].type === 'tool_result' &&
                                                 group.assistantMessage.content[0].name === 'completion';
-                                            
-                                            const isLoadingMessage = 
+
+                                            const isLoadingMessage =
                                                 Array.isArray(group.assistantMessage.content) &&
                                                 group.assistantMessage.content.length === 1 &&
                                                 group.assistantMessage.content[0].type === 'text' &&
                                                 group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
-                                            
+
                                             if (isPromptOnlyMessage || isLoadingMessage) {
                                                 return null;
                                             }
-                                            
+
                                             return (
                                                 <button
                                                     onClick={() => toggleGroupCollapse(groupIndex)}
@@ -561,7 +561,7 @@ export default function AIChat({
                                                     <span className="relative">
                                                         {isCurrentlyLoading ? '思考中...' : (isCollapsed ? '思考過程を表示' : '思考過程を隠す')}
                                                         {isCurrentlyLoading && isCollapsed && (
-                                                            <span 
+                                                            <span
                                                                 className="absolute inset-0 animate-shimmer"
                                                                 style={{
                                                                     backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
@@ -575,18 +575,18 @@ export default function AIChat({
                                         })()}
 
                                         {(() => {
-                                            const isPromptOnlyMessage = 
+                                            const isPromptOnlyMessage =
                                                 Array.isArray(group.assistantMessage.content) &&
                                                 group.assistantMessage.content.length === 1 &&
                                                 group.assistantMessage.content[0].type === 'tool_result' &&
                                                 group.assistantMessage.content[0].name === 'completion';
-                                            
-                                            const isLoadingMessage = 
+
+                                            const isLoadingMessage =
                                                 Array.isArray(group.assistantMessage.content) &&
                                                 group.assistantMessage.content.length === 1 &&
                                                 group.assistantMessage.content[0].type === 'text' &&
                                                 group.assistantMessage.content[0].text.includes('を分析中... おすすめの分析を生成しています...');
-                                            
+
                                             if (isPromptOnlyMessage || isLoadingMessage) {
                                                 return (
                                                     <div className="break-words">
@@ -602,7 +602,7 @@ export default function AIChat({
                                                     </div>
                                                 );
                                             }
-                                            
+
                                             return (
                                                 <>
                                                     {!isCollapsed && (
@@ -645,7 +645,7 @@ export default function AIChat({
                         </div>
                     );
                 })}
-                
+
                 {isLoading && messages.length === 0 && (
                     <div className="flex justify-start mb-4">
                         <div className="italic text-gray-600 w-full">

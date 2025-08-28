@@ -22,17 +22,18 @@ import {
     useTableHistorySync
 } from './hooks';
 
-function ModelingPage() {
+function ChatPage() {
     const { dbContext } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
-    
+
     // Enable state synchronization
     const { syncImmediately } = useSyncBridge();
-    
+
+
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
-    
-    
+
+
     // Chat management with Jotai (needs to be first for chats state)
     const {
         chats,
@@ -43,23 +44,23 @@ function ModelingPage() {
         updateChatMessages,
         getCurrentChatState,
     } = useChatManagement(dbContext);
-    
+
     // Convert chatId to schemaName at the top level
     const schemaName = chatIdToSchemaName(selectedChatId);
-    
+
     // Schema management (uses chats state from above)
     const { connection } = useSchemaManagement(
         dbContext,
         schemaName,
         chats
     );
-    
+
     // Table selection
     const {
         selectedTable,
         handleTableSelection,
     } = useTableSelection(dbContext, schemaName, connection);
-    
+
     // Map visualization
     const {
         // mapSelectedColumns, // Unused but kept for API compatibility
@@ -68,17 +69,17 @@ function ModelingPage() {
         mapStyle,
         updateTableStyle,
     } = useMapVisualization(selectedTable, connection);
-    
+
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(selectedTable, dbContext, schemaName, connection);
-    
+
     // Message handling
     const {
         sendMessageRef,
         handleSendMessageReady,
         handleMessagesChange,
     } = useMessageHandling(selectedChatId, updateChatMessages);
-    
+
     // Sync table creation history to remote state
     useTableHistorySync(dbContext, selectedChatId);
 
@@ -162,7 +163,7 @@ function ModelingPage() {
                                 <RemoteFileSimple
                                     dbContext={dbContext}
                                     schema={schemaName}
-                                    onTableCreated={(tableName) => {
+                                    onTableCreated={(tableName: string) => {
                                         handleTableSelection(tableName);
                                         if (dbContext) {
                                             dbContext.notifyTableChange(tableName, schemaName);
@@ -344,4 +345,4 @@ function ModelingPage() {
     );
 }
 
-export default ModelingPage;
+export default ChatPage;

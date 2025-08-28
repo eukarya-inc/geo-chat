@@ -1,5 +1,5 @@
-import type { DBContext } from '../lib/duckdb/dbContext';
-import { geocodeMultipleAddresses, isLikelyAddress } from '../utils/geocoding';
+import type { DBContext } from '../../duckdb/dbContext';
+import { geocodeMultipleAddresses, isLikelyAddress } from '../../../utils/geocoding';
 
 export interface TableColumn {
   name: string;
