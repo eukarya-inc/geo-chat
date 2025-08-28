@@ -153,14 +153,38 @@ export const updateChatStateAtom = atom(
     
     if (!chatId || !remoteState.chats[chatId]) return;
     
+    // Deep merge for mapSpecs
+    let mergedMapSpecs = remoteState.chats[chatId].mapSpecs;
+    if (updates.mapSpecs) {
+      mergedMapSpecs = { ...remoteState.chats[chatId].mapSpecs };
+      
+      // Deep merge each table's mapSpec
+      for (const [tableName, newMapSpec] of Object.entries(updates.mapSpecs)) {
+        const existingMapSpec = mergedMapSpecs?.[tableName] || {};
+        mergedMapSpecs[tableName] = {
+          ...existingMapSpec,
+          ...newMapSpec,
+          // Deep merge tableStyles if present
+          tableStyles: newMapSpec.tableStyles ? {
+            ...existingMapSpec.tableStyles,
+            ...newMapSpec.tableStyles
+          } : existingMapSpec.tableStyles
+        };
+      }
+    }
+    
+    const updatedChat = {
+      ...remoteState.chats[chatId],
+      ...updates,
+      mapSpecs: mergedMapSpecs
+    };
+    
+    
     set(remoteStateAtom, {
       ...remoteState,
       chats: {
         ...remoteState.chats,
-        [chatId]: {
-          ...remoteState.chats[chatId],
-          ...updates
-        }
+        [chatId]: updatedChat
       }
     });
   }

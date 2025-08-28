@@ -2,7 +2,6 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { parse } from 'sqloflow';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 import { checkSQLType } from '../../../utils/sqlTypeChecker';
@@ -41,9 +40,38 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
           }
         }
 
+        // Add automatic LIMIT for SELECT queries to prevent huge results
+        let executeSql = sql;
+        const MAX_ROWS = 100; // Maximum rows to fetch from DB
+        
+        if (sqlType.isSelect && !sql.toUpperCase().includes('LIMIT')) {
+          // Check if it's a simple SELECT or has complex structure
+          const hasOrderBy = sql.toUpperCase().includes('ORDER BY');
+          if (hasOrderBy) {
+            // Insert LIMIT before the semicolon if present
+            executeSql = sql.replace(/;?\s*$/, ` LIMIT ${MAX_ROWS};`);
+          } else {
+            // Append LIMIT at the end
+            executeSql = sql.replace(/;?\s*$/, ` LIMIT ${MAX_ROWS};`);
+          }
+          console.log(`[DuckDB Tool] Auto-adding LIMIT ${MAX_ROWS} to prevent large result set`);
+        }
+
         // Execute query - executeQuery now handles DDL operations automatically
-        const result = await dbContext.executeQuery(sql, schema);
-        const data = convertBigIntToString(result) as Record<string, unknown>[];
+        const result = await dbContext.executeQuery(executeSql, schema);
+        // Data is already converted from Arrow format by executeQuery
+        let data = result as Record<string, unknown>[];
+        
+        // Hard limit on data returned to AI to prevent token limit issues
+        const AI_RETURN_LIMIT = 100; // Maximum rows to actually return to AI
+        let truncated = false;
+        const originalLength = data.length;
+        
+        if (data.length > AI_RETURN_LIMIT) {
+          console.log(`[DuckDB Tool] Truncating result from ${data.length} to ${AI_RETURN_LIMIT} rows for AI response`);
+          data = data.slice(0, AI_RETURN_LIMIT);
+          truncated = true;
+        }
 
           // Simple table refresh for DDL operations
           let sqlExplanation: string | undefined;
@@ -87,18 +115,35 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
             success: boolean;
             data: Record<string, unknown>[];
             rowCount: number;
+            totalRowCount?: number;
             sql: string;
             columns?: string[];
             columnCount?: number;
             suggestions?: string[];
             sqlExplanation?: string;
             createdTable?: string;
+            tableSchema?: Array<{name: string, type: string}>;
+            sampleData?: Record<string, unknown>[];
+            hasGeometry?: boolean;
+            limitApplied?: boolean;
+            dataTruncated?: boolean;
+            warning?: string;
           } = {
             success: true,
             data,
             rowCount: data.length,
             sql: sql
           };
+
+          // Add warnings for truncated data
+          if (truncated) {
+            metadata.dataTruncated = true;
+            metadata.totalRowCount = originalLength;
+            metadata.warning = `クエリ結果が${originalLength}行ありましたが、AIへの応答は${AI_RETURN_LIMIT}行に制限されました。すべてのデータが必要な場合は、CREATE TABLE AS SELECT文で新しいテーブルを作成してください。`;
+          } else if (executeSql !== sql && data.length === MAX_ROWS) {
+            metadata.limitApplied = true;
+            metadata.warning = `クエリに自動的にLIMIT ${MAX_ROWS}が追加されました。より多くの行が存在する可能性があります。`;
+          }
 
           // Add SQL explanation if available
           if (sqlExplanation) {
@@ -108,33 +153,99 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
           // Add createdTable if a table was created
           if (createdTableName) {
             metadata.createdTable = createdTableName;
-            // Add note about Vega spec not being created yet
-            if (!metadata.suggestions) {
-              metadata.suggestions = [];
+            
+            try {
+              // Get table schema
+              const schemaQuery = schema 
+                ? `DESCRIBE ${schema}.${createdTableName}`
+                : `DESCRIBE ${createdTableName}`;
+              const schemaResult = await dbContext.executeQuery(schemaQuery, schema);
+              // Data is already converted from Arrow format by executeQuery
+              const schemaData = schemaResult as Array<{column_name: string, column_type: string}>;
+              
+              metadata.tableSchema = schemaData.map(row => ({
+                name: row.column_name,
+                type: row.column_type
+              }));
+              
+              // Check for GEOMETRY type columns in DuckDB
+              const hasGeometryColumn = schemaData.some(row => 
+                row.column_type.toUpperCase() === 'GEOMETRY' ||
+                row.column_type.toUpperCase().startsWith('GEOMETRY(') // e.g., GEOMETRY(POINT), GEOMETRY(POLYGON)
+              );
+              metadata.hasGeometry = hasGeometryColumn;
+              
+              // Get sample data (first 5 rows)
+              const sampleQuery = schema 
+                ? `SELECT * FROM ${schema}.${createdTableName} LIMIT 5`
+                : `SELECT * FROM ${createdTableName} LIMIT 5`;
+              const sampleResult = await dbContext.executeQuery(sampleQuery, schema);
+              // Data is already converted from Arrow format by executeQuery
+              metadata.sampleData = sampleResult as Record<string, unknown>[];
+              
+              // Add appropriate suggestions based on geometry presence
+              if (!metadata.suggestions) {
+                metadata.suggestions = [];
+              }
+              
+              if (hasGeometryColumn) {
+                metadata.suggestions.unshift(
+                  `テーブル「${createdTableName}」が作成されました。ジオメトリフィールドが含まれているため、地図での可視化が可能です。`,
+                  `地図スタイルを設定するには update_map_style_for_table ツールを使用してください。`
+                );
+              } else {
+                metadata.suggestions.unshift(
+                  `テーブル「${createdTableName}」が作成されました。ジオメトリフィールドがないため、地図での可視化はできません。`,
+                  `グラフでの可視化は update_vega_chart_spec_for_table ツールを使用してください。`
+                );
+              }
+              
+              // Add chart suggestion for all tables
+              metadata.suggestions.push(`このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
+              
+            } catch (schemaError) {
+              console.error('Failed to get table schema:', schemaError);
+              // Continue without schema info if there's an error
+              if (!metadata.suggestions) {
+                metadata.suggestions = [];
+              }
+              metadata.suggestions.unshift(`テーブル「${createdTableName}」が作成されました。このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
             }
-            metadata.suggestions.unshift(`テーブル「${createdTableName}」が作成されました。このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
           }
 
           // Add column info for better understanding
           if (data.length > 0) {
             metadata.columns = Object.keys(data[0]);
             metadata.columnCount = metadata.columns.length;
+            
+            // For SELECT query results, we cannot reliably detect GEOMETRY type without schema info
+            // GEOMETRY type in DuckDB is stored as WKB internally but may be returned as various formats
+            // Since Map.tsx uses ST_AsGeoJSON for conversion, raw GEOMETRY detection is not reliable
+            // User should CREATE TABLE AS SELECT to properly store and use geometry data
           }
 
-          // Add suggestions for large datasets
-          if (data.length > 100) {
-            metadata.suggestions = [
-              'データが多いです。特定の条件でフィルタしてみませんか？',
-              'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
-              'LIMIT句を使って必要な行数のみを取得できます',
-              'GROUP BYを使ってカテゴリ別の集計ができます'
-            ];
-          } else if (data.length > 20) {
-            metadata.suggestions = [
-              'データをさらに絞り込みたい場合はWHERE句を使用してください',
-              'ORDER BYでデータを並び替えられます',
-              '集計関数でデータの概要を把握できます'
-            ];
+          // Add suggestions for large datasets (only if not already added by table creation)
+          if (!createdTableName) {
+            if (data.length > 100) {
+              if (!metadata.suggestions) {
+                metadata.suggestions = [];
+              }
+              metadata.suggestions.push(
+                'データが多いです。特定の条件でフィルタしてみませんか？',
+                'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
+                'LIMIT句を使って必要な行数のみを取得できます',
+                'GROUP BYを使ってカテゴリ別の集計ができます'
+              );
+            } else if (data.length > 20) {
+              if (!metadata.suggestions) {
+                metadata.suggestions = [];
+              }
+              metadata.suggestions.push(
+                'データをさらに絞り込みたい場合はWHERE句を使用してください',
+                'ORDER BYでデータを並び替えられます',
+                '集計関数でデータの概要を把握できます'
+              );
+            }
           }
 
           return metadata;
@@ -164,6 +275,14 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
 
 const description = `
 This tool allows you to execute SQL queries on a DuckDB database. Use it for data analysis, filtering, aggregation, and visualization of existing data.
+
+MAP VISUALIZATION REQUIREMENTS:
+- For a table to be displayed on a map, it MUST have a geometry column
+- Without geometry, data cannot be shown on a map - only in tables/charts
+- To add geometry to data without it:
+  * Use ST_Point(longitude, latitude) to create point geometry from coordinate columns
+  * Join with a table that has geometry
+  * Example: CREATE TABLE with_geom AS SELECT *, ST_Point(lon, lat) as geom FROM your_table
 
 IMPORTANT GUIDELINES:
 - ALWAYS use existing tables in the database - check with SHOW TABLES first

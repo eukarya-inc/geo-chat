@@ -1,5 +1,6 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
+import { convertArrowToJS } from '../../utils/arrowConverter';
 
 export interface DBContext {
   // For components that need long-lived connections (like Table component)
@@ -525,15 +526,10 @@ class DatabaseContext implements DBContext {
     const conn = await this.connect(sanitizedSchema);
     try {
       const result = await conn.query(sql);
+      // Convert Arrow format data to JavaScript objects
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = result.toArray().map((row: any) => {
-        const obj = Object.fromEntries(row);
-        return Object.fromEntries(
-          Object.entries(obj).map(([key, value]) => [
-            key,
-            typeof value === 'bigint' ? Number(value) : value
-          ])
-        );
+        return convertArrowToJS(row);
       });
       
       // For DDL operations, force checkpoint to ensure changes are persisted

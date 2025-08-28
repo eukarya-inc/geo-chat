@@ -1024,6 +1024,13 @@
   dependencies:
     undici-types "~6.19.2"
 
+"@types/node@^24.0.3":
+  version "24.3.0"
+  resolved "https://registry.npmjs.org/@types/node/-/node-24.3.0.tgz"
+  integrity sha512-aPTXCrfwnDLj4VvXrm+UUCQjNEvJgNA8s5F1cvwQU+3KNltTOkBm1j30uNLyqqPNe7gE3KFzImYoZEfLhp4Yow==
+  dependencies:
+    undici-types "~7.10.0"
+
 "@types/pbf@*", "@types/pbf@^3.0.5":
   version "3.0.5"
   resolved "https://registry.npmjs.org/@types/pbf/-/pbf-3.0.5.tgz"
@@ -1472,18 +1479,18 @@ apache-arrow@^17.0.0:
     json-bignum "^0.0.3"
     tslib "^2.6.2"
 
-apache-arrow@^19.0.1:
-  version "19.0.1"
-  resolved "https://registry.npmjs.org/apache-arrow/-/apache-arrow-19.0.1.tgz"
-  integrity sha512-APmMLzS4qbTivLrPdQXexGM4JRr+0g62QDaobzEvip/FdQIrv2qLy0mD5Qdmw4buydtVJgbFeKR8f59I6PPGDg==
+apache-arrow@^21.0.0:
+  version "21.0.0"
+  resolved "https://registry.npmjs.org/apache-arrow/-/apache-arrow-21.0.0.tgz"
+  integrity sha512-UueXr0y7S6SB6ToIEON0ZIwRln1EY05NIMXKfPu8fumASypkXXHEb6LRTZGh7vnYoQ9TgqNMNN1937wyY9lyFQ==
   dependencies:
     "@swc/helpers" "^0.5.11"
     "@types/command-line-args" "^5.2.3"
     "@types/command-line-usage" "^5.0.4"
-    "@types/node" "^20.13.0"
+    "@types/node" "^24.0.3"
     command-line-args "^6.0.1"
     command-line-usage "^7.0.1"
-    flatbuffers "^24.3.25"
+    flatbuffers "^25.1.24"
     json-bignum "^0.0.3"
     tslib "^2.6.2"
 
@@ -2699,6 +2706,11 @@ flatbuffers@^24.3.25:
   version "24.12.23"
   resolved "https://registry.npmjs.org/flatbuffers/-/flatbuffers-24.12.23.tgz"
   integrity sha512-dLVCAISd5mhls514keQzmEG6QHmUUsNuWsb4tFafIUwvvgDjXhtfAYSKOzt5SWOy+qByV5pbsDZ+Vb7HUOBEdA==
+
+flatbuffers@^25.1.24:
+  version "25.2.10"
+  resolved "https://registry.npmjs.org/flatbuffers/-/flatbuffers-25.2.10.tgz"
+  integrity sha512-7JlN9ZvLDG1McO3kbX0k4v+SUAg48L1rIwEvN6ZQl/eCtgJz9UylTMzE9wrmYrcorgxm3CX/3T/w5VAub99UUw==
 
 flatted@^3.2.9, flatted@^3.3.1:
   version "3.3.3"
@@ -5340,6 +5352,11 @@ undici-types@~6.19.2:
   version "6.19.8"
   resolved "https://registry.npmjs.org/undici-types/-/undici-types-6.19.8.tgz"
   integrity sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==
+
+undici-types@~7.10.0:
+  version "7.10.0"
+  resolved "https://registry.npmjs.org/undici-types/-/undici-types-7.10.0.tgz"
+  integrity sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag==
 
 undici@^6.21.3:
   version "6.21.3"

@@ -3,6 +3,7 @@ export interface SQLTypeInfo {
   isTableOperation: boolean;
   isDropTable: boolean;
   isDDL: boolean;
+  isSelect: boolean;
   hasMultipleStatements: boolean;
   statementCount: number;
 }
@@ -36,6 +37,11 @@ export function checkSQLType(sql: string): SQLTypeInfo {
   // Check for DROP TABLE
   const isDropTable = upperSql.includes('DROP TABLE');
   
+  // Check for SELECT statement
+  const isSelect = upperSql.startsWith('SELECT') || 
+                   upperSql.startsWith('WITH') || // CTEs often precede SELECT
+                   upperSql.includes('SELECT');
+  
   // Check for any table operation (CREATE, DROP)
   const isTableOperation = isCreateTable || isDropTable;
   
@@ -54,6 +60,7 @@ export function checkSQLType(sql: string): SQLTypeInfo {
     isTableOperation,
     isDropTable,
     isDDL,
+    isSelect,
     hasMultipleStatements,
     statementCount
   };

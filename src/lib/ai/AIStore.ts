@@ -200,6 +200,7 @@ export class AIStore {
         options.onMessagesChange?.(currentMessages);
         this.notifyListeners();
       }
+      
       options.onMessagesChange?.(currentMessages);
       
       // チャット完了時のコールバックを呼び出す
@@ -230,6 +231,11 @@ export class AIStore {
     currentMessages: StructuredMessage[],
     streamingText: string
   ): { messages: StructuredMessage[], streamingText: string } {
+    // Debug logging
+    if (part.type !== 'text-delta') {
+      console.log('[AIStore] Processing stream part:', part.type);
+    }
+    
     const lastMessage = currentMessages[currentMessages.length - 1];
     if (lastMessage.role !== 'assistant') {
       return { messages: currentMessages, streamingText };
@@ -294,6 +300,7 @@ export class AIStore {
       }
 
       case 'error': {
+        
         let errorText: string;
         
         if (part.error === 'aborted') {

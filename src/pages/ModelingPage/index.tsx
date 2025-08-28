@@ -62,7 +62,7 @@ function ModelingPage() {
     
     // Map visualization
     const {
-        mapSelectedColumns,
+        // mapSelectedColumns, // Unused but kept for API compatibility
         selectedGeometryColumn,
         tableStyles,
         mapStyle,
@@ -321,7 +321,7 @@ function ModelingPage() {
                                             dbContext={dbContext}
                                             schema={schemaName}
                                             selectedTable={selectedTable}
-                                            selectedColumns={mapSelectedColumns}
+                                            selectedColumns={undefined}
                                             geometryColumnName={selectedGeometryColumn}
                                             tableStyles={tableStyles}
                                             initialStyle={mapStyle}

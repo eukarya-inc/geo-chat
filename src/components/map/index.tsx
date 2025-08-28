@@ -15,6 +15,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTileEnvelope } from '../../utils/tileUtils';
 import { MapStyleManager } from '../../utils/mapStyleManager';
 import { geojsonToVectorTile } from '../../utils/vectorTileUtils';
+import { detectDisplayColumns, type ColumnInfo } from '../../utils/columnDetector';
+import { convertArrowToJS } from '../../utils/arrowConverter';
 import MapStyleEditor from './MapStyleEditor';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 
@@ -59,8 +61,7 @@ export interface MapProps {
     schema?: string | null;  // Current schema context
     selectedTable: string | null;  // For backward compatibility and primary table
     tables?: string[];  // New prop for multiple tables: ["schema.table1", "table2", ...]
-    selectedColumns: string[];
-    geojsonUrl?: string;
+    selectedColumns?: string[];
     onMapReady?: (styleManager: MapStyleManager) => void;
     onStyleChange?: (styleChanger: (style: maplibregl.StyleSpecification) => void) => void;
     mapStyleManager?: MapStyleManager;
@@ -116,15 +117,12 @@ const generateVectorTileQuery = (params: QueryParams): string => {
     // Don't use schema-qualified table name - connection already has schema context
     const qualifiedTableName = selectedTable;
 
-    // Build column selection - always convert to JSON for consistent handling
+    // Build column selection - just select columns directly
     let finalColumnSelection = '';
     if (selectedColumns.length > 0) {
-        finalColumnSelection = selectedColumns.map(col => {
-            // Convert all columns to JSON to handle any data type uniformly
-            // This ensures LIST<STRUCT>, STRUCT, and other complex types are properly serialized
-            // Quote column names to handle special characters
-            return `to_json("${col}")::VARCHAR as "${col}"`;
-        }).join(', ');
+        // Simply select the columns without any conversion
+        // BIGINT handling will be done in JavaScript
+        finalColumnSelection = selectedColumns.map(col => `"${col}"`).join(', ');
     } else {
         finalColumnSelection = '1 as dummy';
     }
@@ -160,7 +158,6 @@ const MapComponent: React.FC<MapProps> = ({
     selectedTable,
     tables, 
     selectedColumns, 
-    geojsonUrl, 
     onMapReady, 
     onStyleChange, 
     mapStyleManager, 
@@ -178,13 +175,17 @@ const MapComponent: React.FC<MapProps> = ({
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [showExportControls, setShowExportControls] = useState<boolean>(false);
     const [showStyleEditor, setShowStyleEditor] = useState<boolean>(false);
+    const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
     const connectionRef = useRef<DuckDBConnection | null>(null);
     const tileCache = useRef<Map<string, Uint8Array>>(new Map());
-    const initializedRef = useRef<boolean>(false);
     const selectedTableRef = useRef<string | null>(selectedTable);
-    const selectedColumnsRef = useRef<string[]>(selectedColumns);
+    const selectedColumnsRef = useRef<string[] | undefined>(selectedColumns);
+    const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+    
+    // Use provided columns or detected columns
+    const effectiveColumns = selectedColumns !== undefined ? selectedColumns : detectedColumns;
     const isApplyingCustomStyleRef = useRef<boolean>(false);
     const hasCustomStyleRef = useRef<boolean>(false);
     const customStyleRef = useRef<maplibregl.StyleSpecification | null>(null);
@@ -193,26 +194,58 @@ const MapComponent: React.FC<MapProps> = ({
     // Keep refs updated
     useEffect(() => {
         selectedTableRef.current = selectedTable;
-        selectedColumnsRef.current = selectedColumns;
+        selectedColumnsRef.current = effectiveColumns;
         initialStyleRef.current = initialStyle;
+    }, [selectedTable, effectiveColumns, initialStyle]);
+
+    // Update layers when effectiveColumns change AND map is initialized
+    useEffect(() => {
         
-        // Clear tile cache when table, columns, or geometry column change to force refresh
-        if (selectedTable) {
-            tileCache.current.clear();
-            
-            // Force map to re-render tiles if map is initialized
-            if (mapRef.current && initializedRef.current) {
-                mapRef.current.triggerRepaint();
-                
-                // Also try to reload the source to force tile refresh
-                const source = mapRef.current.getSource('duckdb-vector');
-                if (source && 'reload' in source && typeof source.reload === 'function') {
-                    source.reload();
+        // Only proceed if we have a table and map is initialized
+        if (!selectedTable || !mapRef.current || !isInitialized) {
+            return;
+        }
+        
+        // Clear tile cache to force refresh with new columns
+        tileCache.current.clear();
+        
+        // Re-register the protocol to ensure it uses the latest columns
+        registerDuckDBProtocol();
+        
+        // Remove all DuckDB sources and their layers to force complete refresh
+        const allLayers = mapRef.current.getStyle().layers || [];
+        const allSources = mapRef.current.getStyle().sources || {};
+        
+        // Clear handler tracking when removing layers
+        // No need to clear handlers as they're now global
+        
+        // Remove all layers that use duckdb sources
+        allLayers.forEach(layer => {
+            if ('source' in layer && layer.source && layer.source.startsWith('duckdb-')) {
+                if (mapRef.current?.getLayer(layer.id)) {
+                    mapRef.current.removeLayer(layer.id);
                 }
             }
-        }
+        });
+        
+        // Remove all duckdb sources
+        Object.keys(allSources).forEach(sourceId => {
+            if (sourceId.startsWith('duckdb-')) {
+                if (mapRef.current?.getSource(sourceId)) {
+                    mapRef.current.removeSource(sourceId);
+                }
+            }
+        });
+        
+        // Re-add source and layers after a brief delay
+        setTimeout(() => {
+            if (mapRef.current && isInitialized) {
+                updateMapLayers(mapRef.current);
+            }
+        }, 100);
+        
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, selectedColumns, geometryColumnName]);
+    }, [effectiveColumns, selectedTable, isInitialized, geometryColumnName]);
 
     // Export functions
     const exportMapAsPNG = useCallback(async () => {
@@ -263,12 +296,8 @@ const MapComponent: React.FC<MapProps> = ({
     }, []);
 
 
-    // Define popup inside the component
-    const popup = useRef(new maplibregl.Popup({
-        closeButton: true,
-        closeOnClick: true,
-        offset: 25,
-    }));
+    // Define popup ref inside the component
+    const popupRef = useRef<maplibregl.Popup | null>(null);
 
     const handleFeatureClick = useCallback((e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         if (!e.features?.[0]) return;
@@ -276,6 +305,7 @@ const MapComponent: React.FC<MapProps> = ({
         const feature = e.features[0];
         const geometry = feature.geometry as GeoJSON.Geometry;
         const properties = feature.properties;
+        
 
         // クリック位置の座標を取得
         const coordinates = e.lngLat;
@@ -308,34 +338,63 @@ const MapComponent: React.FC<MapProps> = ({
             `;
         }
 
-        // 選択されたカラムの情報を取得
+        // プロパティ情報を表示（MVT作成時点で既に絞られている）
         let columnInfo = '';
-        if (selectedColumns.length > 0) {
+        if (properties && Object.keys(properties).length > 0) {
             columnInfo = `
-                <div style="margin-top: 10px;">
-                    <h4>カラム情報</h4>
-                    ${selectedColumns
-                        .map(column => {
-                            const value = properties?.[column];
-                            return `<p>${column}: ${value !== undefined ? value : 'N/A'}</p>`;
-                        })
-                        .join('')}
+                <div class="mt-3 border-t pt-3">
+                    <h4 class="text-sm font-semibold mb-2">プロパティ情報</h4>
+                    <div class="space-y-1">
+                        ${Object.entries(properties)
+                            .map(([key, value]) => {
+                                // Format value for display
+                                let displayValue = value;
+                                if (typeof value === 'object' && value !== null) {
+                                    displayValue = `<pre class="text-xs bg-gray-100 p-1 rounded mt-1">${JSON.stringify(value, null, 2)}</pre>`;
+                                } else if (value === null) {
+                                    displayValue = '<span class="text-gray-400">null</span>';
+                                } else if (value === undefined) {
+                                    displayValue = '<span class="text-gray-400">N/A</span>';
+                                }
+                                return `
+                                    <div class="text-sm">
+                                        <span class="font-medium text-gray-700">${key}:</span>
+                                        <span class="text-gray-900 break-words">${displayValue}</span>
+                                    </div>
+                                `;
+                            })
+                            .join('')}
+                    </div>
                 </div>
             `;
         }
 
         // ポップアップの内容を設定
         const content = `
-            <div style="padding: 10px;">
-                <h3>${geometry.type} 情報</h3>
+            <div class="p-3 max-h-96 overflow-y-auto">
+                <h3 class="text-lg font-bold mb-2">${geometry.type} 情報</h3>
                 ${geometryInfo}
                 ${columnInfo}
             </div>
         `;
 
-        // ポップアップを表示
-        popup.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current!);
-    }, [selectedColumns]);
+        // Close existing popup if any
+        if (popupRef.current) {
+            popupRef.current.remove();
+            popupRef.current = null;
+        }
+        
+        // Create new popup and display
+        popupRef.current = new maplibregl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            offset: 25,
+            maxWidth: '400px',
+            className: 'max-h-96 overflow-y-auto'
+        });
+        
+        popupRef.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current!);
+    }, []);
 
     // Function to zoom map to data bounds
     const fitMapToData = useCallback(async (tableName: string, geomColumn: string) => {
@@ -381,9 +440,78 @@ const MapComponent: React.FC<MapProps> = ({
         }
     }, []);
 
+    // Auto-detect columns when table or selected columns change
+    useEffect(() => {
+        const detectColumns = async () => {
+            // Only detect if connection exists, table is selected, and no columns are explicitly selected
+            if (!connectionRef.current || !selectedTable || selectedColumns !== undefined) {
+                return;
+            }
+            
+            try {
+                // Get table schema
+                const schemaQuery = schema 
+                    ? `DESCRIBE ${schema}.${selectedTable}`
+                    : `DESCRIBE ${selectedTable}`;
+                const result = await connectionRef.current.query(schemaQuery);
+                const schemaData = result.toArray() as unknown as ColumnInfo[];
+                
+                // Use helper function to detect display columns
+                const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
+                
+                setDetectedColumns(filteredColumns);
+                
+                // Update the ref immediately for the protocol handler
+                selectedColumnsRef.current = filteredColumns;
+                
+                // Clear tile cache to force refresh with new columns
+                tileCache.current.clear();
+                
+                
+                // Force map to re-render tiles if map is ready
+                if (mapRef.current && isInitialized) {
+                    // Remove and re-add the source to force tile refresh
+                    const sourceId = `duckdb-${selectedTable}`;
+                    if (mapRef.current.getSource(sourceId)) {
+                        // Get existing layers that use this source
+                        const layers = mapRef.current.getStyle().layers?.filter(
+                            layer => 'source' in layer && layer.source === sourceId
+                        ) || [];
+                        
+                        // Remove layers
+                        layers.forEach(layer => {
+                            if (mapRef.current?.getLayer(layer.id)) {
+                                mapRef.current.removeLayer(layer.id);
+                            }
+                        });
+                        
+                        // Remove source
+                        if (mapRef.current.getSource(sourceId)) {
+                            mapRef.current.removeSource(sourceId);
+                        }
+                        
+                        // Re-add source and layers
+                        setTimeout(() => {
+                            if (mapRef.current) {
+                                // Trigger re-render by changing a style property
+                                mapRef.current.triggerRepaint();
+                            }
+                        }, 100);
+                    }
+                }
+            } catch (error) {
+                console.error('[Map] Failed to auto-detect columns:', error);
+                setDetectedColumns([]);
+                selectedColumnsRef.current = [];
+            }
+        };
+        
+        detectColumns();
+    }, [selectedTable, selectedColumns, schema, geometryColumnName, isInitialized]);
+
     // Re-fit bounds when geometry column changes
     useEffect(() => {
-        if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && initializedRef.current) {
+        if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && isInitialized) {
             fitMapToData(selectedTable, geometryColumnName);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -483,10 +611,7 @@ const MapComponent: React.FC<MapProps> = ({
                 // Check if this layer uses the current duckdb source
                 if ('source' in layer && layer.source === sourceId) {
                     try {
-                        // Remove click event handler if it exists
-                        map.off('click', layer.id, handleFeatureClick);
-                        
-                        // Remove the layer (this will also clean up its mouseenter/mouseleave handlers)
+                        // Remove the layer
                         map.removeLayer(layer.id);
                     } catch (e) {
                         console.warn(`Failed to remove layer ${layer.id}:`, e);
@@ -548,6 +673,22 @@ const MapComponent: React.FC<MapProps> = ({
                 }
             }
             
+            // Check if source already exists, if so remove it first
+            if (map.getSource(sourceId)) {
+                // Remove all layers using this source
+                const allLayers = map.getStyle().layers || [];
+                allLayers.forEach(layer => {
+                    if ('source' in layer && layer.source === sourceId) {
+                        if (map.getLayer(layer.id)) {
+                            map.removeLayer(layer.id);
+                        }
+                    }
+                });
+                // Remove the source
+                map.removeSource(sourceId);
+            }
+            
+            // Add the source
             try {
                 map.addSource(sourceId, {
                     type: 'vector',
@@ -578,6 +719,11 @@ const MapComponent: React.FC<MapProps> = ({
                         return;
                     }
                     
+                    // Remove existing layer with the same ID if it exists
+                    if (map.getLayer(layer.id)) {
+                        map.removeLayer(layer.id);
+                    }
+                    
                     map.addLayer(layer);
                 } catch (e) {
                     console.error(`Failed to add layer for ${tableSpec}:`, e, layerStyle);
@@ -591,87 +737,8 @@ const MapComponent: React.FC<MapProps> = ({
             (styleManagerRef.current as any).map = map;
         }
 
-        // Add event handlers for all DuckDB layers
-        tablesToAdd.forEach((tableSpec) => {
-            // Get the table style to know which layers exist
-            const tableStyle = tableStyles[tableSpec] || getDefaultTableStyle(tableSpec, tablesToAdd.indexOf(tableSpec));
-            
-            const handleMouseEnter = () => map.getCanvas().style.cursor = 'pointer';
-            const handleMouseLeave = () => map.getCanvas().style.cursor = '';
-            
-            // Add event handlers for each layer defined in the style
-            tableStyle.forEach((layerStyle: VectorTileLayer) => {
-                if (layerStyle.id) {
-                    // Add click handler
-                    map.on('click', layerStyle.id, handleFeatureClick);
-                    
-                    // Add hover handlers
-                    map.on('mouseenter', layerStyle.id, handleMouseEnter);
-                    map.on('mouseleave', layerStyle.id, handleMouseLeave);
-                }
-            });
-        });
-
-        // Add GeoJSON layers if URL is provided
-        if (geojsonUrl) {
-            map.addSource('geojson-source', {
-                type: 'geojson',
-                data: geojsonUrl,
-            });
-
-            map.addLayer({
-                id: 'geojson-polygons',
-                source: 'geojson-source',
-                type: 'fill',
-                paint: {
-                    'fill-color': '#0066cc',
-                    'fill-opacity': 0.6,
-                    'fill-outline-color': '#0066cc',
-                },
-                filter: ['==', '$type', 'Polygon'] as ['==', '$type', 'Polygon'],
-            });
-
-            map.addLayer({
-                id: 'geojson-lines',
-                source: 'geojson-source',
-                type: 'line',
-                paint: {
-                    'line-color': '#0066cc',
-                    'line-width': 3,
-                    'line-opacity': 0.8,
-                },
-                filter: ['==', '$type', 'LineString'] as ['==', '$type', 'LineString'],
-            });
-
-            map.addLayer({
-                id: 'geojson-points',
-                source: 'geojson-source',
-                type: 'circle',
-                paint: {
-                    'circle-radius': 8,
-                    'circle-color': '#0066cc',
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#ffffff',
-                },
-                filter: ['==', '$type', 'Point'] as ['==', '$type', 'Point'],
-            });
-
-            // Add event handlers for GeoJSON layers
-            map.on('click', 'geojson-points', handleFeatureClick);
-            map.on('click', 'geojson-lines', handleFeatureClick);
-            map.on('click', 'geojson-polygons', handleFeatureClick);
-
-            const handleMouseEnter = () => map.getCanvas().style.cursor = 'pointer';
-            const handleMouseLeave = () => map.getCanvas().style.cursor = '';
-
-            map.on('mouseenter', 'geojson-points', handleMouseEnter);
-            map.on('mouseenter', 'geojson-lines', handleMouseEnter);
-            map.on('mouseenter', 'geojson-polygons', handleMouseEnter);
-
-            map.on('mouseleave', 'geojson-points', handleMouseLeave);
-            map.on('mouseleave', 'geojson-lines', handleMouseLeave);
-            map.on('mouseleave', 'geojson-polygons', handleMouseLeave);
-        }
+        // Note: Event handlers are now registered globally in the map load event
+        // No need to register individual layer event handlers here
         
         // Apply extra style if provided
         if (extraStyle && map.getStyle()) {
@@ -736,7 +803,7 @@ const MapComponent: React.FC<MapProps> = ({
             }, 500); // Wait a bit for tiles to load
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, tables, geojsonUrl, handleFeatureClick, geometryColumnName, dbContext, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
+    }, [selectedTable, tables, handleFeatureClick, geometryColumnName, dbContext, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
@@ -781,7 +848,7 @@ const MapComponent: React.FC<MapProps> = ({
 
                     const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
 
-                    const currentColumns = selectedColumnsRef.current;
+                    const currentColumns = selectedColumnsRef.current || [];
 
                     if (!tableName) {
                         return { data: new Uint8Array() };
@@ -797,6 +864,7 @@ const MapComponent: React.FC<MapProps> = ({
                         geometryColumnName,
                         schema: null,  // Don't use URL-extracted schema
                     });
+                    
                     
                     let stmt;
                     let result;
@@ -816,13 +884,17 @@ const MapComponent: React.FC<MapProps> = ({
                         return { data: new Uint8Array() };
                     }
 
-                    const rows = result.toArray() as Array<{ geojson: string } & Record<string, string | number | null>>;
+                    // Convert Arrow Table rows to JSON to properly handle STRUCT and LIST types
+                    const arrowRows = result.toArray();
+                    const rows = arrowRows.map((row: unknown) => {
+                        // Convert all Arrow types (StructRow, Vector, etc.) and BigInts
+                        return convertArrowToJS(row);
+                    }) as Array<{ geojson: string } & Record<string, unknown>>;
 
-                    console.log(`Processing ${rows.length} rows for tile ${cacheKey}`);
-                    if (rows.length > 0 && zxy.z > 10) {  // Only log for higher zoom levels
-                        console.log('First row:', rows[0]);
-                        console.log('Selected columns:', currentColumns);
-                    }
+                    console.log(`[DuckDB Result] Tile ${cacheKey}: ${rows.length} rows, sample:`, rows[0] ? {
+                        ...rows[0],
+                        geojson: rows[0].geojson ? `${rows[0].geojson.substring(0, 50)}...` : null
+                    } : null);
                     const features = rows
                         .map((row) => {
                             try {
@@ -838,6 +910,9 @@ const MapComponent: React.FC<MapProps> = ({
                                 Object.keys(row).forEach(key => {
                                     if (key !== 'geojson') {
                                         const value = row[key];
+                                        
+                                        // Note: BigInt conversion is already handled at the row level
+                                        // after toJSON() conversion, so values here are already converted
                                         
                                         // Handle JSON strings
                                         if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
@@ -912,7 +987,6 @@ const MapComponent: React.FC<MapProps> = ({
                         })
                         .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
 
-                    console.log(`Created ${features.length} features for tile ${cacheKey}`);
                     
                     if (features.length === 0) {
                         tileCache.current.set(cacheKey, new Uint8Array());
@@ -1025,7 +1099,7 @@ const MapComponent: React.FC<MapProps> = ({
 
     // Function to handle style changes
     const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
-        if (!mapRef.current || !initializedRef.current) {
+        if (!mapRef.current || !isInitialized) {
             customStyleRef.current = newStyle;
             hasCustomStyleRef.current = true;
             return;
@@ -1083,19 +1157,19 @@ const MapComponent: React.FC<MapProps> = ({
             isApplyingCustomStyleRef.current = false;
             setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }, [fixStylePropertyReferences, updateMapLayers, onStyleUpdate]);
+    }, [fixStylePropertyReferences, updateMapLayers, onStyleUpdate, isInitialized]);
 
     // Expose style change handler
     useEffect(() => {
-        if (onStyleChange && initializedRef.current) {
+        if (onStyleChange && isInitialized) {
             onStyleChange(handleStyleChange);
         }
-    }, [onStyleChange, handleStyleChange]);
+    }, [onStyleChange, handleStyleChange, isInitialized]);
 
     useEffect(() => {
         
         // If map already exists, just update layers and re-register protocol
-        if (initializedRef.current && mapRef.current) {
+        if (isInitialized && mapRef.current) {
             // Re-register DuckDB protocol to pick up new geometryColumnName
             registerDuckDBProtocol();
             
@@ -1138,6 +1212,31 @@ const MapComponent: React.FC<MapProps> = ({
                 if (!connectionRef.current) {
                     setMapError('DuckDBへの接続に失敗しました');
                     return;
+                }
+                
+                // Auto-detect columns after connection is established
+                if (selectedTable && selectedColumns === undefined) {
+                    try {
+                        const schemaQuery = schema 
+                            ? `DESCRIBE ${schema}.${selectedTable}`
+                            : `DESCRIBE ${selectedTable}`;
+                        const result = await connectionRef.current.query(schemaQuery);
+                        const schemaData = result.toArray() as unknown as ColumnInfo[];
+                        
+                        const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
+                        setDetectedColumns(filteredColumns);
+                        
+                        // Update the ref immediately for the protocol handler
+                        selectedColumnsRef.current = filteredColumns;
+                        
+                        // Clear tile cache to force refresh with new columns
+                        tileCache.current.clear();
+                        
+                    } catch (error) {
+                        console.error('[Map] Failed to auto-detect columns:', error);
+                        setDetectedColumns([]);
+                        selectedColumnsRef.current = [];
+                    }
                 }
 
                 // Add vector protocol handler
@@ -1198,9 +1297,37 @@ const MapComponent: React.FC<MapProps> = ({
                     }
 
                     // Mark initialization as complete and update layers
-                    initializedRef.current = true;
+                    setIsInitialized(true);
                     updateMapLayers(mapInstance);
 
+                    // Register single global click handler for all features
+                    mapInstance.on('click', (e: maplibregl.MapMouseEvent) => {
+                        // Query all rendered features at the click point
+                        const features = mapInstance.queryRenderedFeatures(e.point);
+                        
+                        // Filter for DuckDB layers (layer IDs starting with 'duckdb-')
+                        const duckdbFeatures = features.filter(f => 
+                            f.layer?.id?.startsWith('duckdb-')
+                        );
+                        
+                        if (duckdbFeatures.length > 0) {
+                            // Use the first DuckDB feature found
+                            const event = {
+                                ...e,
+                                features: duckdbFeatures
+                            };
+                            handleFeatureClick(event as maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] });
+                        }
+                    });
+                    
+                    // Register hover handlers for cursor change
+                    mapInstance.on('mousemove', (e: maplibregl.MapMouseEvent) => {
+                        const features = mapInstance.queryRenderedFeatures(e.point);
+                        const hasDuckdbFeature = features.some(f => 
+                            f.layer?.id?.startsWith('duckdb-')
+                        );
+                        mapInstance.getCanvas().style.cursor = hasDuckdbFeature ? 'pointer' : '';
+                    });
                     
                     // Force map to render and potentially load tiles, then check layer detection after a delay
                     if (styleManagerRef.current) {
@@ -1261,18 +1388,18 @@ const MapComponent: React.FC<MapProps> = ({
     
     // Update layers when tables or selectedTable changes
     useEffect(() => {
-        if (mapRef.current && initializedRef.current) {
+        if (mapRef.current && isInitialized) {
             updateMapLayers(mapRef.current);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, tables, selectedColumns, geojsonUrl, tableStyles, extraStyle]);
+    }, [selectedTable, tables, effectiveColumns, tableStyles, extraStyle]);
     
     // Separate effect for onMapReady to avoid triggering re-initialization
     useEffect(() => {
-        if (onMapReady && styleManagerRef.current && initializedRef.current) {
+        if (onMapReady && styleManagerRef.current && isInitialized) {
             onMapReady(styleManagerRef.current);
         }
-    }, [onMapReady]);
+    }, [onMapReady, isInitialized]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100vh' }}>

@@ -52,6 +52,7 @@ export function useMapVisualization(
             return;
         }
         
+        
         const currentSpecs = currentChatState?.mapSpecs || {};
         
         // The tableName passed here should be the table we're updating styles for
@@ -69,6 +70,7 @@ export function useMapVisualization(
                 }
             }
         };
+        
         
         updateChatStateAtomSet({
             mapSpecs: updatedMapSpecs
