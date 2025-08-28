@@ -29,5 +29,5 @@ export function geojsonToVectorTile(
 
     // vt-pbfでベクトルタイルをバイナリに変換
     // source-layer名を"v"として設定
-    return vtpbf.fromGeojsonVt({ "v": tile });
+    return vtpbf.fromGeojsonVt({ "v": tile }, { version: 2 });
 }

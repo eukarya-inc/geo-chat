@@ -69,19 +69,21 @@ export async function* createAIStreamGenerator({
           get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
           get_map_style_for_table: createMapStyleGetTool(getCurrentChatState),
         } : {}),
-        ...(getCurrentChatState && onMapStyleUpdate && createMapStyleTool(getCurrentChatState, onMapStyleUpdate) ? {
-          update_map_style_for_table: createMapStyleTool(getCurrentChatState, onMapStyleUpdate)!,
+        ...(getCurrentChatState && onMapStyleUpdate && createMapStyleTool(getCurrentChatState, onMapStyleUpdate, dbContext, schema) ? {
+          update_map_style_for_table: createMapStyleTool(getCurrentChatState, onMapStyleUpdate, dbContext, schema)!,
         } : {}),
         completion: completionTool,
       },
       maxSteps: 50,
       maxTokens: 4000,
-      maxRetries: 30,
+      maxRetries: 3,
       abortSignal,
     });
 
+
     // Stream the full response including text and tool calls
     for await (const part of result.fullStream) {
+      
       switch (part.type) {
         case 'text-delta':
           yield {
@@ -105,8 +107,17 @@ export async function* createAIStreamGenerator({
                 errorMessage = String(part.error.cause.message);
               }
             }
-          } else if (part.error && typeof part.error === 'object' && 'message' in part.error) {
-            errorMessage = String(part.error.message);
+          } else if (part.error && typeof part.error === 'object') {
+            if ('message' in part.error) {
+              errorMessage = String(part.error.message);
+            }
+          }
+          
+          // Log validation errors to console
+          if (errorMessage.includes('Type validation failed') || 
+              errorMessage.includes('validation failed') ||
+              errorMessage.includes('Expected object, received string')) {
+            console.log('[Stream Generator] Validation error:', errorMessage);
           }
           
           // Check for specific error patterns and provide user-friendly messages
@@ -133,21 +144,34 @@ export async function* createAIStreamGenerator({
         }
           
         case 'tool-call':
-          yield {
-            type: 'tool-call',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            args: part.args
-          };
+          try {
+            yield {
+              type: 'tool-call',
+              toolCallId: part.toolCallId,
+              toolName: part.toolName,
+              args: part.args
+            };
+          } catch (error) {
+            console.warn('[Stream Generator] Tool call error (continuing):', error);
+            // Continue without yielding error to prevent dialogue termination
+          }
           break;
           
         case 'tool-result':
-          yield {
-            type: 'tool-result',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            result: part.result
-          };
+          try {
+            yield {
+              type: 'tool-result',
+              toolCallId: part.toolCallId,
+              toolName: part.toolName,
+              result: part.result
+            };
+          } catch (error) {
+            console.warn('[Stream Generator] Tool result error (continuing):', error);
+            // Continue without yielding error to prevent dialogue termination
+          }
+          break;
+          
+        default:
           break;
       }
     }

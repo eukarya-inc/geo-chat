@@ -1,7 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
 export function createDuckDBTool(dbContext: DBContext) {
   return tool({
@@ -18,10 +17,8 @@ export function createDuckDBTool(dbContext: DBContext) {
                                 upperSql.includes('DROP TABLE');
 
         // Use executeQuery which handles connections internally
-        const rawData = await dbContext.executeQuery(sql, null);
-        
-        // Convert BigInt values (already done by executeQuery, but ensure consistency)
-        const data = convertBigIntToString(rawData) as Record<string, unknown>[];
+        // Data is already converted from Arrow format by executeQuery
+        const data = await dbContext.executeQuery(sql, null) as Record<string, unknown>[];
 
           // Simple table refresh for DDL operations
           if (isTableOperation && dbContext) {

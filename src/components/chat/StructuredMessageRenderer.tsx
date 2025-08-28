@@ -208,37 +208,27 @@ const renderContentBlock = (
             if (block.name === 'update_map_style_for_table') {
                 const input = block.input as { 
                     table_name: string; 
-                    layer_type: string;
-                    layer_id: string;
-                    paint_properties?: Record<string, unknown>;
-                    layout_properties?: Record<string, unknown>;
-                    filter?: unknown;
+                    geometry_type: string;
+                    style_properties: Record<string, unknown>;
                     description: string;
                 };
                 return (
                     <CollapsibleSection 
                         key={index} 
-                        title={`🗺️ **地図スタイルを更新中: ${input.table_name} - ${input.layer_id}**`}
+                        title={`🗺️ **地図スタイルを更新中: ${input.table_name}**`}
                         defaultOpen={false}
                     >
-                        <div className="p-2 text-xs space-y-1">
-                            <div className="text-gray-600">レイヤータイプ: {input.layer_type}</div>
-                            {input.paint_properties && (
-                                <div>
-                                    <div className="font-semibold text-gray-700">Paint プロパティ:</div>
-                                    <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
-                                        <code className="language-json text-xs">{JSON.stringify(input.paint_properties, null, 2)}</code>
-                                    </pre>
-                                </div>
-                            )}
-                            {input.layout_properties && (
-                                <div>
-                                    <div className="font-semibold text-gray-700">Layout プロパティ:</div>
-                                    <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
-                                        <code className="language-json text-xs">{JSON.stringify(input.layout_properties, null, 2)}</code>
-                                    </pre>
-                                </div>
-                            )}
+                        <div className="p-2 text-xs space-y-2">
+                            <div className="text-gray-600">
+                                <div>ジオメトリタイプ: {input.geometry_type}</div>
+                                <div>説明: {input.description}</div>
+                            </div>
+                            <div>
+                                <div className="font-semibold text-gray-700">送信されたJSON:</div>
+                                <pre className="mt-1 p-2 bg-gray-100 rounded-md overflow-x-auto">
+                                    <code className="language-json text-xs">{JSON.stringify(input, null, 2)}</code>
+                                </pre>
+                            </div>
                         </div>
                     </CollapsibleSection>
                 );
@@ -296,6 +286,7 @@ const renderContentBlock = (
                 if (result?.suggestedPrompts && Array.isArray(result.suggestedPrompts)) {
                     return onPromptClick ? (
                         <PromptSuggestions 
+                            key={index}
                             prompts={result.suggestedPrompts}
                             onPromptClick={onPromptClick}
                         />
@@ -362,10 +353,15 @@ const renderContentBlock = (
                     success: boolean; 
                     message: string; 
                     error?: string;
+                    warnings?: string[];
                     appliedUpdate?: {
                         tableName: string;
-                        layerId: string;
-                        layerType: string;
+                        geometryType: string;
+                        layers: Array<{
+                            id: string;
+                            type: string;
+                            paint: Record<string, unknown>;
+                        }>;
                     };
                 };
                 if (result?.success) {
@@ -373,15 +369,7 @@ const renderContentBlock = (
                         <CollapsibleSection 
                             key={index} 
                             title={`✅ **${result.message}**`}
-                            defaultOpen={false}
-                        >
-                            {result.appliedUpdate && (
-                                <div className="p-2 text-xs text-gray-600">
-                                    <div>テーブル: {result.appliedUpdate.tableName}</div>
-                                    <div>レイヤー: {result.appliedUpdate.layerId} ({result.appliedUpdate.layerType})</div>
-                                </div>
-                            )}
-                        </CollapsibleSection>
+                        />
                     );
                 } else {
                     return (

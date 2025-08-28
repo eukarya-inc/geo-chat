@@ -1,7 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
-import { convertBigIntToString } from '../../../utils/bigIntSerializer';
 
 export function createDataAnalysisTool(dbContext: DBContext) {
   return tool({
@@ -39,7 +38,8 @@ Capabilities:
               ORDER BY ordinal_position
             `, null);
             
-            const columns = convertBigIntToString(schemaResult) as Array<{
+            // Data is already converted from Arrow format by executeQuery
+            const columns = schemaResult as Array<{
                 column_name: string;
                 data_type: string;
                 is_nullable: string;
@@ -47,7 +47,8 @@ Capabilities:
               
               // Get row count
               const countResult = await dbContext.executeQuery(`SELECT COUNT(*) as total_rows FROM "${table_name}"`, null);
-              const countArray = convertBigIntToString(countResult) as Array<{
+              // Data is already converted from Arrow format by executeQuery
+              const countArray = countResult as Array<{
                 total_rows: string | number;
               }>;
               const totalRows = countArray[0].total_rows;
@@ -77,7 +78,8 @@ Capabilities:
                 WHERE table_name = '${table_name}' AND column_name = '${column_name}'
               `, null);
               
-              const columnTypeResult = convertBigIntToString(typeResult) as Array<{
+              // Data is already converted from Arrow format by executeQuery
+              const columnTypeResult = typeResult as Array<{
                 data_type: string;
               }>;
               const columnType = columnTypeResult[0]?.data_type;
@@ -103,7 +105,8 @@ Capabilities:
                   FROM "${table_name}"
                 `, null);
                 
-                const stats = (convertBigIntToString(statsResult) as Array<Record<string, unknown>>)[0];
+                // Data is already converted from Arrow format by executeQuery
+                const stats = (statsResult as Array<Record<string, unknown>>)[0];
                 analysis = { ...analysis, ...stats };
               } else {
                 // For text/categorical columns, get unique values
@@ -118,7 +121,8 @@ Capabilities:
                   LIMIT 20
                 `, null);
                 
-                const uniqueValues = (convertBigIntToString(uniqueResult) as Array<{
+                // Data is already converted from Arrow format by executeQuery
+                const uniqueValues = (uniqueResult as Array<{
                   value: unknown;
                   count: string | number;
                 }>).map(row => ({
@@ -142,7 +146,8 @@ Capabilities:
                 LIMIT ${limit}
               `, null);
               
-              const sampleData = convertBigIntToString(sampleResult) as Array<Record<string, unknown>>;
+              // Data is already converted from Arrow format by executeQuery
+              const sampleData = sampleResult as Array<Record<string, unknown>>;
               
               return {
                 success: true,
