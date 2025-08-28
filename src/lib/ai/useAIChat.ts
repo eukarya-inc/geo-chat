@@ -1,582 +1,111 @@
-import { useState, useCallback } from 'react';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { CoreMessage, streamText } from 'ai';
-import { generateSystemPrompt } from './systemPrompt';
-import { createDuckDBTool } from './tools/duckdbTool';
-import { completionTool, type SuggestedPrompt } from './tools/completionTool';
-import { createVegaLiteTool } from './tools/vegaLiteTool';
-import { createMapStyleTool } from './tools/mapStyleTool';
-import { createListLayersTool } from './tools/listLayersTool';
-import { createDebugLayersTool } from './tools/debugLayersTool';
-import { createDataAnalysisTool } from './tools/dataAnalysisTool';
-import { createGeocodingTools } from './tools/geocodingTool';
-import { createAnalyzeLayerPropertiesTool } from './tools/analyzeLayerProperties';
-import type { MapStyleManager } from '../../utils/mapStyleManager';
+import { useSyncExternalStore, useCallback, useState, useEffect } from 'react';
+import { aiStore } from './AIStore';
+import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
+import type { VegaChartSpec } from '../../types/chart';
+import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { TableStyle } from '../../components/map';
 
-export function useAIChat(dbContext: DBContext | null, mapStyleManager?: MapStyleManager | null, customApiKey?: string) {
-  const apiKey = customApiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
-  const [messages, setMessages] = useState<CoreMessage[]>([]);
+interface UseAIChatOptions {
+  chatId: string;
+  schema?: string | null;
+  dbContext?: DBContext | null;
+  apiKey?: string;
+  selectedTable?: string | null;
+  onMessagesChange?: (messages: StructuredMessage[]) => void;
+  onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+  onChartDelete?: (tableName: string) => Promise<void>;
+  getCurrentChatState?: () => ChatState | null;
+  onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+  onConversationCompleted?: () => void;
+}
+
+export function useAIChat({
+  chatId,
+  schema,
+  dbContext,
+  apiKey,
+  selectedTable,
+  onMessagesChange,
+  onChartUpdate,
+  onChartDelete,
+  getCurrentChatState,
+  onMapStyleUpdate,
+  onConversationCompleted
+}: UseAIChatOptions) {
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [suggestedPrompts, setSuggestedPrompts] = useState<SuggestedPrompt[]>([]);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const resolvedApiKey = apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+  const session = useSyncExternalStore(
+    aiStore.subscribe.bind(aiStore),
+    () => aiStore.getChatSession(chatId),
+    () => aiStore.getChatSession(chatId)
+  );
+
+  const isAnyLoading = useSyncExternalStore(
+    aiStore.subscribe.bind(aiStore),
+    () => aiStore.isAnyLoading(),
+    () => aiStore.isAnyLoading()
+  );
+
+  useEffect(() => {
+    aiStore.getOrCreateSession(chatId, schema || null);
+  }, [chatId, schema]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
   }, []);
 
-  const handleStop = useCallback(() => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null);
-      setIsLoading(false);
-    }
-  }, [abortController]);
+  const sendMessage = useCallback(async (message: string) => {
+    if (!resolvedApiKey) return;
 
-  const handleTextDelta = useCallback((textDelta: string, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
-    const newContent = fullContent + textDelta;
-    setMessages(prev => {
-      const updated = [...prev];
-      updated[updated.length - 1] = { role: 'assistant', content: newContent };
-      return updated;
+    await aiStore.sendMessage(chatId, message, {
+      apiKey: resolvedApiKey,
+      dbContext: dbContext || undefined,
+      schema,
+      selectedTable,
+      onMessagesChange,
+      onChartUpdate,
+      onChartDelete,
+      getCurrentChatState,
+      onMapStyleUpdate,
+      onMessageComplete: onConversationCompleted
     });
-    return newContent;
-  }, []);
-
-  const handleToolCall = useCallback((part: { toolName: string; args: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>, setSuggestedPrompts: React.Dispatch<React.SetStateAction<SuggestedPrompt[]>>) => {
-    const args = part.args;
-    let newContent = fullContent;
-    
-    if (part.toolName === 'completion') {
-      // Handle completion tool call
-      if (args?.suggestedPrompts) {
-        setSuggestedPrompts(args.suggestedPrompts as SuggestedPrompt[]);
-      }
-      // Don't add completion message here to avoid duplicates
-    } else if (part.toolName === 'duckdb_query') {
-      // Handle DuckDB tool call
-      const toolCallText = `\n\n🔧 **SQL実行中:** \`${(args?.sql as string) || 'クエリ実行中'}\`\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'vega_lite_chart') {
-      // Handle VegaLite tool call
-      const toolCallText = `\n\n📊 **チャート作成中:** ${(args?.plotType as string) || 'プロット'}チャートを生成中...\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'update_map_style') {
-      // Handle map style tool call
-      const toolCallText = `\n\n🎨 **マップスタイル更新中:** ${(args?.description as string) || 'スタイルを変更中'}\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'list_map_layers') {
-      // Handle list layers tool call
-      const toolCallText = `\n\n🗺️ **レイヤー情報取得中...**\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'debug_layers') {
-      // Handle debug layers tool call
-      const toolCallText = `\n\n🔍 **レイヤーデバッグ情報取得中...**\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'debug_database') {
-      // Handle debug database tool call
-      const toolCallText = `\n\n🔧 **データベースデバッグ中:** ${(args?.action as string) || 'デバッグ実行中'}\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'analyze_data') {
-      // Handle data analysis tool call
-      const action = args?.action as string;
-      const tableName = args?.table_name as string;
-      const actionText = action === 'describe_table' ? 'テーブル構造分析中' :
-                         action === 'analyze_column' ? 'カラム分析中' :
-                         action === 'get_sample_data' ? 'サンプルデータ取得中' :
-                         'データ分析中';
-      const toolCallText = `\n\n📊 **${actionText}:** ${tableName || 'テーブル'}を分析中...\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'geocode_address') {
-      // Handle single address geocoding
-      const toolCallText = `\n\n🌍 **住所をジオコーディング中:** ${(args?.address as string) || 'アドレス処理中'}\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'geocode_multiple_addresses') {
-      // Handle batch geocoding
-      const count = (args?.addresses as string[])?.length || 0;
-      const toolCallText = `\n\n🌍 **複数住所をジオコーディング中:** ${count}件のアドレスを処理中...\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'analyze_table_for_geocoding') {
-      // Handle table analysis for geocoding
-      const toolCallText = `\n\n🔍 **テーブル分析中:** ${(args?.tableName as string) || 'テーブル'}のジオコーディング可能な列を検索中...\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'add_geocoded_columns_to_table') {
-      // Handle adding geocoded columns
-      const toolCallText = `\n\n🏗️ **テーブル拡張中:** ${(args?.tableName as string) || 'テーブル'}にジオコーディング列を追加中...\n`;
-      newContent += toolCallText;
-    } else if (part.toolName === 'analyze_layer_properties') {
-      // Handle layer properties analysis
-      const toolCallText = `\n\n🔍 **レイヤープロパティ分析中:** ${(args?.layer_id as string) || 'レイヤー'}の実際のプロパティを分析中...\n`;
-      newContent += toolCallText;
-    }
-    
-    setMessages(prev => {
-      const updated = [...prev];
-      updated[updated.length - 1] = { role: 'assistant', content: newContent };
-      return updated;
-    });
-    return newContent;
-  }, []);
-
-  const handleToolResult = useCallback((part: { toolName: string; result: Record<string, unknown> }, fullContent: string, setMessages: React.Dispatch<React.SetStateAction<CoreMessage[]>>) => {
-    let newContent = fullContent;
-    
-    if (part.toolName === 'vega_lite_chart') {
-      // Handle VegaLite chart results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **チャート作成エラー:** ${result.error}\n`;
-      } else if (result?.vegaSpec) {
-        // Add the chart using the special format that MessageRenderer looks for
-        const vegaSpecJson = JSON.stringify(result.vegaSpec, null, 2);
-        resultText = `\n📊 **チャート完成:**\n\n<!--VEGA_SPEC_START-->\n${vegaSpecJson}\n<!--VEGA_SPEC_END-->\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'duckdb_query') {
-      // Handle DuckDB query results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **エラー:** ${result.error}\n`;
-      } else if (result?.data) {
-        const data = Array.isArray(result.data) ? result.data : [result.data];
-        const rowCount = Array.isArray(result.data) ? result.data.length : 1;
-        
-        // Smart truncation based on data size and type
-        if (rowCount > 100) {
-          // For very large datasets, show summary + first few rows + last few rows
-          const firstRows = data.slice(0, 3);
-          const lastRows = data.slice(-2);
-          const sampleData = [...firstRows, { "...": `${rowCount - 5} more rows` }, ...lastRows];
-          const dataStr = JSON.stringify(sampleData, null, 2);
-          resultText = `\n✅ **結果:** (${rowCount}行 - 抜粋表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📊 **データサマリー:** 全${rowCount}行のうち最初の3行と最後の2行を表示。完全なデータを確認するには、LIMITクエリまたは集計クエリをお試しください。\n`;
-        } else if (rowCount > 20) {
-          // For medium datasets, show first 10 and indicate there are more
-          const firstRows = data.slice(0, 10);
-          const dataStr = JSON.stringify(firstRows, null, 2);
-          resultText = `\n✅ **結果:** (${rowCount}行 - 最初の10行を表示)\n\`\`\`json\n${dataStr}\n\`\`\`\n\n📋 残り${rowCount - 10}行があります。すべてを確認するには、データの絞り込みまたは集計をお試しください。\n`;
-        } else {
-          // For small datasets, show all data but with size limit
-          const dataStr = JSON.stringify(data, null, 2);
-          
-          if (dataStr.length > 8000) {
-            // Even small datasets can have very wide rows - truncate but show more than before
-            const truncated = dataStr.substring(0, 8000) + '...';
-            resultText = `\n✅ **結果:** (${rowCount}行 - 表示が切り詰められています)\n\`\`\`json\n${truncated}\n\`\`\`\n\n⚠️ データが長すぎるため一部が省略されました。特定の列のみを選択するか、データを集計してみてください。\n`;
-          } else {
-            resultText = `\n✅ **結果:** (${rowCount}行)\n\`\`\`json\n${dataStr}\n\`\`\`\n`;
-          }
-        }
-        
-        // Add column information if available
-        if ('columns' in result && Array.isArray(result.columns) && 'columnCount' in result) {
-          const columns = result.columns as string[];
-          const columnCount = result.columnCount as number;
-          resultText += `\n📋 **カラム情報:** ${columnCount}列 (${columns.slice(0, 5).join(', ')}${columns.length > 5 ? ', ...' : ''})\n`;
-        }
-        
-        // Add suggestions for working with the data
-        if ('suggestions' in result && Array.isArray(result.suggestions)) {
-          const suggestions = result.suggestions as string[];
-          if (suggestions.length > 0) {
-            resultText += `\n💡 **提案:**\n${suggestions.map((s: string) => `• ${s}`).join('\n')}\n`;
-          }
-        }
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'update_map_style') {
-      // Handle map style update results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **スタイル更新エラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        resultText = `\n✅ **スタイル更新完了:** ${result.message}\n`;
-      } else {
-        resultText = `\n⚠️ **スタイル更新:** 結果が不明です\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'list_map_layers') {
-      // Handle list layers results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **レイヤー取得エラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        resultText = `\n✅ **利用可能なレイヤー:** ${result.message}\n`;
-        if (result.layers && Array.isArray(result.layers)) {
-          resultText += `\`\`\`\n${result.layers.join('\n')}\n\`\`\`\n`;
-        }
-      } else {
-        resultText = `\n⚠️ **レイヤー情報:** 結果が不明です\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'debug_layers') {
-      // Handle debug layers results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **デバッグエラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        resultText = `\n🔍 **デバッグ情報:** ${result.message}\n`;
-        if (result.debug) {
-          resultText += `\`\`\`json\n${JSON.stringify(result.debug, null, 2)}\n\`\`\`\n`;
-        }
-      } else {
-        resultText = `\n⚠️ **デバッグ情報:** 結果が不明です\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'debug_database') {
-      // Handle debug database results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **デバッグエラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        resultText = `\n🔧 **デバッグ結果:** ${result.message || 'デバッグ完了'}\n`;
-        if (result.showTables || result.tests || result.data) {
-          resultText += `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`\n`;
-        }
-      } else {
-        resultText = `\n⚠️ **デバッグ情報:** 結果が不明です\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'analyze_data') {
-      // Handle data analysis results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **データ分析エラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        resultText = `\n✅ **${result.message}\n`;
-        
-        if (result.columns && Array.isArray(result.columns)) {
-          // Table description results
-          resultText += `\n📋 **カラム情報:**\n`;
-          (result.columns as Array<{ name: string; type: string; nullable: boolean }>).forEach((col) => {
-            resultText += `• ${col.name}: ${col.type}${col.nullable ? ' (nullable)' : ''}\n`;
-          });
-          resultText += `\n📊 **行数:** ${result.total_rows}行\n`;
-        } else if (result.analysis) {
-          // Column analysis results
-          const analysis = result.analysis as {
-            min_value?: number;
-            max_value?: number;
-            avg_value?: number;
-            unique_values?: number | Array<{ value: string; count: number }>;
-          };
-          resultText += `\n🔍 **カラム分析結果:**\n`;
-          if (analysis.min_value !== undefined) {
-            // Numeric column
-            resultText += `• 最小値: ${analysis.min_value}\n`;
-            resultText += `• 最大値: ${analysis.max_value}\n`;
-            resultText += `• 平均値: ${Math.round((analysis.avg_value || 0) * 100) / 100}\n`;
-            resultText += `• ユニーク値数: ${analysis.unique_values}\n`;
-          } else if (analysis.unique_values && Array.isArray(analysis.unique_values)) {
-            // Categorical column
-            resultText += `• トップ値:\n`;
-            analysis.unique_values.slice(0, 5).forEach((item: { value: string; count: number }) => {
-              resultText += `  - ${item.value}: ${item.count}件\n`;
-            });
-          }
-        } else if (result.sample_data && Array.isArray(result.sample_data)) {
-          // Sample data results
-          const sampleCount = result.sample_data.length;
-          resultText += `\n📝 **サンプルデータ:** ${sampleCount}行を表示\n`;
-          if (sampleCount > 0) {
-            const sample = result.sample_data[0] as Record<string, unknown>;
-            const columns = Object.keys(sample);
-            resultText += `\n**利用可能な列:** ${columns.join(', ')}\n`;
-          }
-        }
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'geocode_address') {
-      // Handle single address geocoding results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **ジオコーディングエラー:** ${result.error}\n`;
-      } else if (result?.success && result?.data) {
-        const data = result.data as { latitude: number; longitude: number; display_name: string };
-        resultText = `\n✅ **ジオコーディング完了:**\n📍 座標: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}\n📍 住所: ${data.display_name}\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'geocode_multiple_addresses') {
-      // Handle batch geocoding results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **バッチジオコーディングエラー:** ${result.error}\n`;
-      } else if (result?.success && result?.data) {
-        const data = result.data as { results: unknown[]; errors: unknown[] };
-        resultText = `\n✅ **バッチジオコーディング完了:** ${data.results.length}件成功, ${data.errors.length}件失敗\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'analyze_table_for_geocoding') {
-      // Handle table analysis results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **テーブル分析エラー:** ${result.error}\n`;
-      } else if (result?.success && result?.data) {
-        const data = result.data as { tableName: string; addressColumns: unknown[]; recommendations: string[] };
-        resultText = `\n✅ **テーブル分析完了:** "${data.tableName}"\n`;
-        resultText += `📋 住所列候補: ${(data.addressColumns as unknown[]).length}件\n`;
-        if (data.recommendations.length > 0) {
-          resultText += `💡 **推奨事項:**\n${data.recommendations.map(r => `• ${r}`).join('\n')}\n`;
-        }
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'add_geocoded_columns_to_table') {
-      // Handle table enhancement results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **テーブル拡張エラー:** ${result.error}\n`;
-      } else if (result?.success && result?.data) {
-        const data = result.data as { total: number; successful: number; failed: number };
-        resultText = `\n✅ **テーブル拡張完了:**\n📊 ${data.total}件中 ${data.successful}件成功, ${data.failed}件失敗\n`;
-        resultText += `✨ 新しい列が追加されました: geocoded_lat, geocoded_lng, geocoded_display_name\n`;
-      }
-      
-      newContent += resultText;
-    } else if (part.toolName === 'analyze_layer_properties') {
-      // Handle layer properties analysis results
-      const result = part.result;
-      let resultText = '';
-      
-      if (result?.error) {
-        resultText = `\n❌ **レイヤー分析エラー:** ${result.error}\n`;
-      } else if (result?.success) {
-        const layerId = result.layer_id as string;
-        const layerType = result.layer_type as string;
-        const geometryType = result.geometry_type as string;
-        const totalFeatures = result.total_features as number;
-        const sampleSize = result.sample_size as number;
-        const properties = result.properties as Array<{
-          property: string;
-          types: string;
-          examples: unknown[];
-          nullCount: number;
-          nonNullCount: number;
-        }>;
-        
-        resultText = `\n✅ **レイヤープロパティ分析完了**\n\n`;
-        resultText += `📍 **レイヤー情報:**\n`;
-        resultText += `• レイヤーID: ${layerId}\n`;
-        resultText += `• レイヤータイプ: ${layerType}\n`;
-        resultText += `• ジオメトリタイプ: ${geometryType}\n`;
-        resultText += `• 総フィーチャー数: ${totalFeatures}\n`;
-        resultText += `• 分析サンプル数: ${sampleSize}\n\n`;
-        
-        resultText += `📋 **利用可能なプロパティ:**\n`;
-        if (properties && properties.length > 0) {
-          properties.forEach(prop => {
-            resultText += `\n**${prop.property}**\n`;
-            resultText += `• タイプ: ${prop.types}\n`;
-            if (prop.examples.length > 0) {
-              resultText += `• 例: ${prop.examples.slice(0, 3).map(ex => JSON.stringify(ex)).join(', ')}\n`;
-            }
-            resultText += `• null値: ${prop.nullCount}/${sampleSize}\n`;
-          });
-        } else {
-          resultText += `• プロパティが見つかりませんでした\n`;
-        }
-        
-        if (result.style_examples) {
-          resultText += `\n💡 **スタイル式の例:**\n`;
-          resultText += `\`\`\`json\n${JSON.stringify(result.style_examples, null, 2)}\n\`\`\`\n`;
-        }
-      }
-      
-      newContent += resultText;
-    }
-    
-    setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: newContent };
-        return updated;
-      });
-    return newContent;
-  }, []);
+  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, onChartDelete, getCurrentChatState, onMapStyleUpdate, onConversationCompleted]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!input.trim()) return;
 
-    if (!input.trim() || !apiKey || isLoading) return;
-
-    const userMessage: CoreMessage = { role: 'user', content: input.trim() };
-    // const currentInput = input.trim();
-
-    setMessages(prev => [...prev, userMessage]);
+    const messageToSend = input.trim();
     setInput('');
-    setSuggestedPrompts([]);
-    setIsLoading(true);
-    setError(null);
+    await sendMessage(messageToSend);
+  }, [input, sendMessage]);
 
-    // Create abort controller for this request
-    const controller = new AbortController();
-    setAbortController(controller);
-
-    try {
-      const anthropicClient = createAnthropic({
-        apiKey: apiKey,
-        headers: {
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-      });
-
-      const allMessages = [...messages, userMessage];
-
-      const result = streamText({
-        model: anthropicClient('claude-3-5-sonnet-20241022'),
-        system: generateSystemPrompt(),
-        messages: allMessages,
-        tools: { 
-          ...(dbContext && { 
-            duckdb_query: createDuckDBTool(dbContext),
-            vega_lite_chart: createVegaLiteTool(dbContext),
-            analyze_data: createDataAnalysisTool(dbContext),
-            ...createGeocodingTools(dbContext),
-          }),
-          ...(mapStyleManager && {
-            update_map_style: createMapStyleTool(mapStyleManager),
-            list_map_layers: createListLayersTool(mapStyleManager),
-            debug_layers: createDebugLayersTool(mapStyleManager),
-            analyze_layer_properties: createAnalyzeLayerPropertiesTool(() => mapStyleManager.getMapInstance())
-          }),
-          completion: completionTool
-        },
-        maxSteps: 50,
-        maxTokens: 4000,
-        maxRetries: 30,
-        abortSignal: controller.signal,
-      });
-
-      let fullContent = '';
-      const assistantMessage: CoreMessage = { role: 'assistant', content: '' };
-
-      // Add placeholder for streaming message
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Use fullStream to handle both text and tool calls
-      for await (const part of result.fullStream) {
-        switch (part.type) {
-          case 'text-delta':
-            fullContent = handleTextDelta(part.textDelta, fullContent, setMessages);
-            break;
-
-          case 'tool-call':
-            fullContent = handleToolCall(part, fullContent, setMessages, setSuggestedPrompts);
-            break;
-
-          case 'tool-result':
-            fullContent = handleToolResult(part, fullContent, setMessages);
-            break;
-        }
-      }
-
-      // Ensure final content is set
-      if (!fullContent) {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'エラーが発生しました' };
-          return updated;
-        });
-      }
-
-    } catch (err) {
-      // Handle abort error specifically
-      if (err instanceof Error && err.name === 'AbortError') {
-        setMessages(prev => {
-          const updated = [...prev];
-          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
-            updated[updated.length - 1] = {
-              role: 'assistant',
-              content: updated[updated.length - 1].content + '\n\n⏹️ **処理が停止されました**'
-            };
-          }
-          return updated;
-        });
-        return;
-      }
-      
-      const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
-      setError(err instanceof Error ? err : new Error(errorMsg));
-
-      // Update the current assistant message with error info instead of adding new message
-      setMessages(prev => {
-        const updated = [...prev];
-        if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
-          const currentContent = updated[updated.length - 1].content;
-          updated[updated.length - 1] = {
-            role: 'assistant',
-            content: currentContent + `\n\n❌ **エラーが発生しました:** ${errorMsg}`
-          };
-        } else {
-          updated.push({
-            role: 'assistant',
-            content: `❌ **エラーが発生しました:** ${errorMsg}`
-          });
-        }
-        return updated;
-      });
-    } finally {
-      setIsLoading(false);
-      setAbortController(null);
-    }
-  }, [input, apiKey, isLoading, messages, dbContext, mapStyleManager, handleTextDelta, handleToolCall, handleToolResult]);
+  const handleStop = useCallback(() => {
+    aiStore.abort(chatId);
+  }, [chatId]);
 
   const handleSuggestedPromptClick = useCallback((promptText: string) => {
     if (input.trim() === promptText.trim()) {
-      // If the suggestion matches current input, submit directly
-      const syntheticEvent = {
-        preventDefault: () => {},
-      } as React.FormEvent;
+      const syntheticEvent = { preventDefault: () => {} } as React.FormEvent;
       handleSubmit(syntheticEvent);
     } else {
-      // Otherwise, just set the input
       setInput(promptText);
     }
   }, [input, handleSubmit]);
 
-  const isApiKeyConfigured = Boolean(apiKey);
-
   return {
-    messages,
+    messages: session?.messages || [],
+    isLoading: session?.isLoading || false,
+    error: session?.error || null,
+    isAnyLoading,
     input,
     handleInputChange,
     handleSubmit,
     handleStop,
-    isLoading,
-    error,
-    isApiKeyConfigured,
-    suggestedPrompts,
     handleSuggestedPromptClick,
+    sendMessage,
+    isApiKeyConfigured: Boolean(resolvedApiKey),
   };
 }

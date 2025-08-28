@@ -17,11 +17,12 @@ export const completionTool = tool({
     })).max(5).describe('Array of up to 5 suggested follow-up prompts'),
     completionMessage: z.string().optional().describe('Optional message to display when work is completed')
   }),
-  execute: async ({ suggestedPrompts, completionMessage }) => {
+  execute: async ({ completionMessage }) => {
+    // Return minimal result since the tool_use already contains the suggestions
+    // This saves memory by not duplicating the data
     return {
       success: true,
-      suggestedPrompts,
-      completionMessage: completionMessage || 'すべての作業が完了しました。',
+      message: completionMessage || 'すべての作業が完了しました。',
       timestamp: new Date().toISOString()
     };
   },

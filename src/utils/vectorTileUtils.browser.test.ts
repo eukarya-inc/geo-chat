@@ -103,21 +103,6 @@ describe('Vector Tile Numeric Properties', () => {
         `);
 
         // Query with TO_JSON wrapper (like the app might do)
-        const query = `
-            SELECT 
-                ST_AsGeoJSON(geometry) as geojson,
-                TO_JSON(id) as id,
-                TO_JSON(int_value) as int_value,
-                TO_JSON(float_value) as float_value,
-                TO_JSON(string_value) as string_value
-            FROM test_json
-        `;
-
-        const result = await connection.query(query);
-        const rows = result.toArray();
-        
-        const row = rows[0];
-
         // TO_JSON likely converts everything to strings
         // This is probably where the issue comes from
     });
@@ -178,45 +163,7 @@ describe('Vector Tile Numeric Properties', () => {
         expect(typeof features[0].properties?.name).toBe('string');
 
         // Now test with TO_JSON
-        const queryWithJson = `
-            SELECT 
-                ST_AsGeoJSON(geometry) as geojson,
-                TO_JSON(id) as id,
-                TO_JSON(value) as value,
-                TO_JSON(name) as name
-            FROM test_features
-        `;
-
-        const resultWithJson = await connection.query(queryWithJson);
-        const rowsWithJson = resultWithJson.toArray();
-
-        const featuresWithJson: Feature[] = rowsWithJson.map(row => {
-            const geojson = JSON.parse(row.geojson);
-            const properties: Record<string, unknown> = {};
-            
-            // Copy properties
-            for (const key in row) {
-                if (key !== 'geojson') {
-                    // If it's a JSON string, parse it
-                    if (typeof row[key] === 'string' && (row[key].startsWith('"') || !isNaN(Number(row[key])))) {
-                        try {
-                            properties[key] = JSON.parse(row[key]);
-                        } catch {
-                            properties[key] = row[key];
-                        }
-                    } else {
-                        properties[key] = row[key];
-                    }
-                }
-            }
-            
-            return {
-                type: 'Feature',
-                geometry: geojson,
-                properties
-            };
-        });
-
+        // TO_JSON would convert all values to strings
     });
 
     it('should test MVT generation with numeric properties', async () => {

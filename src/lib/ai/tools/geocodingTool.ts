@@ -2,7 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
 import { geocodeSingleAddress, geocodeMultipleAddresses } from '../../../utils/geocoding';
-import { analyzeTableForGeocoding, addGeocodedColumnsToTable } from '../../../tools/geocodingTools';
+import { analyzeTableForGeocoding, addGeocodedColumnsToTable } from './geocodingTools';
 
 export function createGeocodingTools(dbContext: DBContext) {
   return {

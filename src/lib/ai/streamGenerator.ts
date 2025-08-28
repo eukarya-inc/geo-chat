@@ -7,6 +7,7 @@ import { completionTool } from './tools/completionTool';
 import { createChartUpdateTool, createChartGetTool, createChartDeleteTool } from './tools/chartTool';
 import { createMapStyleTool } from './tools/mapStyleTool';
 import { createMapStyleGetTool } from './tools/mapStyleGetTool';
+import { createGeocodingTools } from './tools/geocodingTool';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 
@@ -58,6 +59,7 @@ export async function* createAIStreamGenerator({
       tools: {
         ...(dbContext && {
           duckdb_query: createDuckDBTool(dbContext, schema, apiKey),
+          ...createGeocodingTools(dbContext),
         }),
         ...(onChartUpdate && createChartUpdateTool(onChartUpdate) ? {
           update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,

@@ -3,9 +3,9 @@ import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/modelingRemoteAtoms';
 import type { TableStyle } from '../../components/map';
-import { createAIStreamGenerator, type StreamPart } from '../modelingai/streamGenerator';
-import { messageConverter } from '../modelingai/messageConverter';
-import { generateContextMessage } from '../modelingai/contextMessage';
+import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
+import { messageConverter } from './messageConverter';
+import { generateContextMessage } from './contextMessage';
 
 interface ChatSession {
   id: string;
