@@ -2,15 +2,15 @@ import { atom } from 'jotai';
 // import { atomWithStorage } from 'jotai/utils';
 import { retrieveEncryptedApiKey, storeEncryptedApiKey } from '../utils/encryption';
 
-// ===== ローカル状態の型定義（クライアント完結） =====
+// ===== Local state type definitions (client-side only) =====
 export interface LocalState {
   selectedChatId: string | null;
   
-  // APIキー（セキュリティのためローカル保存）
+  // API key (saved locally for security)
   apiKey: string;
   showApiKeyInput: boolean;
   
-  // AIセッション（一時的な実行状態）
+  // AI sessions (temporary execution state)
   sessions: Record<string, {
     isLoading: boolean;
     error: Error | null;
@@ -19,8 +19,8 @@ export interface LocalState {
   }>;
 }
 
-// ===== ローカル状態Atoms =====
-// ローカル永続化（localStorage使用）を一旦無効化
+// ===== Local State Atoms =====
+// Local persistence (localStorage) temporarily disabled
 // export const localStateAtom = atomWithStorage<LocalState>('links-bi-local-state', {
 export const localStateAtom = atom<LocalState>({
   selectedChatId: null,
@@ -29,11 +29,11 @@ export const localStateAtom = atom<LocalState>({
   sessions: {}
 });
 
-// APIキー専用atom（暗号化して別管理）
-// 注: Jotai v2では非同期ストレージはサポートされていないため、同期的にラップ
+// API key dedicated atom (encrypted and managed separately)
+// Note: Jotai v2 doesn't support async storage, so wrapped synchronously
 export const apiKeyAtom = atom<string>('');
 
-// APIキー初期化用のeffect atom
+// Effect atom for API key initialization
 export const initApiKeyAtom = atom(
   null,
   async (get, set) => {
@@ -51,7 +51,7 @@ export const initApiKeyAtom = atom(
   }
 );
 
-// APIキー保存用atom
+// Atom for saving API key
 export const saveApiKeyAtom = atom(
   null,
   async (get, set, value: string) => {
@@ -65,8 +65,8 @@ export const saveApiKeyAtom = atom(
   }
 );
 
-// ===== ローカル状態操作用Atoms =====
-// セッション状態更新（ローカル状態のみ）
+// ===== Local State Operation Atoms =====
+// Session state update (local state only)
 export const updateSessionAtom = atom(
   null,
   (get, set, { chatId, updates }: { chatId: string; updates: Partial<LocalState['sessions'][string]> }) => {

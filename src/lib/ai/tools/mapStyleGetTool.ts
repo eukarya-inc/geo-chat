@@ -1,12 +1,12 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { ChatState } from '../../../store/modelingRemoteAtoms';
+import type { MapSpec } from '../../../store/remoteAtoms';
 
 /**
  * Creates a tool for getting the current map style configuration for a table
  */
 export function createMapStyleGetTool(
-  getCurrentChatState: () => ChatState | null
+  getMapSpec: (tableName: string) => MapSpec | undefined
 ) {
   return tool({
     description: `Get the current map style configuration for a specific table, including table-specific styles and extra/base styles.
@@ -30,17 +30,7 @@ Use this tool to:
 
     execute: async ({ table_name }) => {
       try {
-        const chatState = getCurrentChatState();
-        if (!chatState) {
-          return {
-            success: false,
-            error: 'Chat state is not available',
-            tableStyles: null,
-            extraStyle: null
-          };
-        }
-
-        const mapSpec = chatState.mapSpecs?.[table_name];
+        const mapSpec = getMapSpec(table_name);
         if (!mapSpec) {
           return {
             success: false,

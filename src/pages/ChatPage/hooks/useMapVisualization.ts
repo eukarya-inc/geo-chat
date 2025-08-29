@@ -3,7 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { checkTableGeometry } from '../../../utils/duckdbGeometryHelpers';
 import type { TableStyle } from '../../../components/map';
-import { updateChatStateAtom, currentChatStateAtom } from '../../../store/modelingAtoms';
+import { updateChatStateAtom, currentChatStateAtom } from '../../../store/atoms';
 
 
 export function useMapVisualization(

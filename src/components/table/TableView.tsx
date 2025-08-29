@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
 import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
-import type { DBContext } from "../../../lib/duckdb/dbContext";
-import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../../../utils/duckdbTableUtils";
+import type { DBContext } from "../../lib/duckdb/dbContext";
+import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../../utils/duckdbTableUtils";
 import { Table as ArrowTable } from "apache-arrow";
-import { throttle } from "../../../utils/throttle";
+import { throttle } from "../../utils/throttle";
 import "@glideapps/glide-data-grid/dist/index.css";
 
 // CSS to ensure scrollbars are visible
@@ -29,13 +29,13 @@ const scrollbarStyles = `
   }
 `;
 
-interface TableProps {
+interface TableViewProps {
   connection: AsyncDuckDBConnection;
   tableName: string;
   dbContext?: DBContext;
 }
 
-export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }) => {
+export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbContext }) => {
   // Inject scrollbar styles
   useEffect(() => {
     const styleElement = document.createElement('style');
@@ -122,7 +122,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
             Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
           );
           
-          const gridColumns: GridColumn[] = initialData.columns.map((col) => ({
+          const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => ({
             id: col.name,
             title: col.name,
             width: calculatedWidth,
@@ -130,7 +130,7 @@ export const Table: React.FC<TableProps> = ({ connection, tableName, dbContext }
           
           // Store column types for later use
           const types: Record<string, string> = {};
-          initialData.columns.forEach((col) => {
+          initialData.columns.forEach((col: { name: string; type: string }) => {
             types[col.name] = col.type;
           });
           

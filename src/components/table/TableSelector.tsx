@@ -143,7 +143,6 @@ const TableSelector: React.FC<TableSelectorProps> = ({ dbContext, selectedTable,
           disabled={loading || !dbContext}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
         >
-          <option value="" className="text-gray-500">-- テーブルを選択 --</option>
           {tables.map(table => (
             <option key={table} value={table} className="text-gray-900">
               {table}

@@ -1,17 +1,17 @@
 import { atom } from 'jotai';
-import { remoteStateAtom } from './modelingRemoteAtoms';
-import { localStateAtom } from './modelingLocalAtoms';
-import type { Chat, ChatState } from './modelingRemoteAtoms';
+import { remoteStateAtom } from './remoteAtoms';
+import { localStateAtom } from './localAtoms';
+import type { Chat, ChatState } from './remoteAtoms';
 
-// ===== 統合ビューAtoms（リモート状態とローカル状態を結合） =====
-// 現在のチャット（リモート状態から取得）
+// ===== Integrated View Atoms (combining remote and local state) =====
+// Current chat (retrieved from remote state)
 export const currentChatAtom = atom((get) => {
   const remoteState = get(remoteStateAtom);
   const localState = get(localStateAtom);
   return localState.selectedChatId ? remoteState.chats[localState.selectedChatId] : undefined;
 });
 
-// 現在のチャット状態（互換性のため残す - チャットそのものから状態部分を抽出）
+// Current chat state (kept for compatibility - extracts state portion from chat itself)
 export const currentChatStateAtom = atom((get) => {
   const chat = get(currentChatAtom);
   if (!chat) return null;
@@ -24,8 +24,8 @@ export const currentChatStateAtom = atom((get) => {
   } as ChatState;
 });
 
-// 現在のテーブルのグラフ表示状態
-// chartSpecが存在するかどうかで判断
+// Current table graph display state
+// Determined by whether chartSpec exists
 export const currentTableShowGraphAtom = atom((get) => {
   const chat = get(currentChatAtom);
   const chatState = get(currentChatStateAtom);
@@ -35,12 +35,12 @@ export const currentTableShowGraphAtom = atom((get) => {
     return false;
   }
   
-  // chartSpecが存在すればグラフを表示
+  // Display graph if chartSpec exists
   return !!chatState.chartSpecs?.[selectedTable];
 });
 
-// ===== 便利な操作用Atoms（両方の状態を使用） =====
-// チャット作成（リモートとローカル両方を更新）
+// ===== Convenient Operation Atoms (using both states) =====
+// Create chat (updates both remote and local)
 export const createChatAtom = atom(
   null,
   async (get, set) => {
@@ -50,14 +50,14 @@ export const createChatAtom = atom(
     const chatCount = Object.keys(remoteState.chats).length;
     const newChat: Chat = {
       id: `chat-${Date.now()}`,
-      title: `チャット ${chatCount + 1}`,
+      title: `Chat ${chatCount + 1}`,
       createdAt: new Date(),
       selectedTable: null,
       messages: [],
       tables: {},
     };
     
-    // リモート状態更新
+    // Update remote state
     set(remoteStateAtom, {
       ...remoteState,
       chats: {
@@ -66,7 +66,7 @@ export const createChatAtom = atom(
       }
     });
     
-    // ローカル状態更新
+    // Update local state
     set(localStateAtom, {
       ...localState,
       selectedChatId: newChat.id,
@@ -85,7 +85,7 @@ export const createChatAtom = atom(
   }
 );
 
-// チャット削除（リモートとローカル両方を更新）
+// Delete chat (updates both remote and local)
 export const deleteChatAtom = atom(
   null,
   (get, set, chatId: string) => {
@@ -102,12 +102,12 @@ export const deleteChatAtom = atom(
     const remainingChatIds = Object.keys(remainingChats);
     const firstRemainingId = remainingChatIds[0] || null;
     
-    // リモート状態更新
+    // Update remote state
     set(remoteStateAtom, {
       chats: remainingChats
     });
     
-    // ローカル状態更新
+    // Update local state
     set(localStateAtom, {
       ...localState,
       selectedChatId: localState.selectedChatId === chatId
@@ -120,7 +120,7 @@ export const deleteChatAtom = atom(
 
 
 
-// テーブル選択（現在のチャットを更新）
+// Select table (updates current chat)
 export const selectTableAtom = atom(
   null,
   (get, set, tableName: string | null) => {
@@ -143,7 +143,7 @@ export const selectTableAtom = atom(
   }
 );
 
-// チャット状態更新（現在のチャットを更新）
+// Update chat state (updates current chat)
 export const updateChatStateAtom = atom(
   null,
   (get, set, updates: Partial<ChatState>) => {
@@ -190,7 +190,7 @@ export const updateChatStateAtom = atom(
   }
 );
 
-// メッセージ更新（ChatState更新）
+// Update messages (updates ChatState)
 export const updateMessagesAtom = atom(
   null,
   (get, set, { chatId, messages }: { chatId: string; messages: import('../types/message').StructuredMessage[] }) => {
@@ -212,7 +212,7 @@ export const updateMessagesAtom = atom(
   }
 );
 
-// チャット選択（ローカル状態のみ更新）
+// Select chat (updates local state only)
 export const selectChatAtom = atom(
   null,
   (get, set, chatId: string) => {
@@ -224,10 +224,10 @@ export const selectChatAtom = atom(
   }
 );
 
-// テーブル作成履歴追加
+// Add table creation history
 export const addTableHistoryAtom = atom(
   null,
-  (get, set, { chatId, record }: { chatId: string; record: import('./modelingRemoteAtoms').Table }) => {
+  (get, set, { chatId, record }: { chatId: string; record: import('./remoteAtoms').Table }) => {
     const remoteState = get(remoteStateAtom);
     const chat = remoteState.chats[chatId];
     

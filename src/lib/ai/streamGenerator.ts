@@ -9,7 +9,7 @@ import { createMapStyleTool } from './tools/mapStyleTool';
 import { createMapStyleGetTool } from './tools/mapStyleGetTool';
 import { createGeocodingTools } from './tools/geocodingTool';
 import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { ChatState } from '../../store/remoteAtoms';
 
 export interface StreamGeneratorOptions {
   messages: CoreMessage[];
@@ -69,10 +69,10 @@ export async function* createAIStreamGenerator({
         } : {}),
         ...(getCurrentChatState ? {
           get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
-          get_map_style_for_table: createMapStyleGetTool(getCurrentChatState),
+          get_map_style_for_table: createMapStyleGetTool((tableName) => getCurrentChatState()?.mapSpecs?.[tableName]),
         } : {}),
-        ...(getCurrentChatState && onMapStyleUpdate && createMapStyleTool(getCurrentChatState, onMapStyleUpdate, dbContext, schema) ? {
-          update_map_style_for_table: createMapStyleTool(getCurrentChatState, onMapStyleUpdate, dbContext, schema)!,
+        ...(getCurrentChatState && onMapStyleUpdate ? {
+          update_map_style_for_table: createMapStyleTool((tableName) => getCurrentChatState()?.mapSpecs?.[tableName], onMapStyleUpdate, dbContext, schema)!,
         } : {}),
         completion: completionTool,
       },

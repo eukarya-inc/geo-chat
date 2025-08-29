@@ -2,14 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { formatSQL } from '../../utils/sqlFormatter';
 
-interface RemoteFileSimpleProps {
+interface RemoteFileProps {
     dbContext: DBContext;
     schema?: string | null;
     onTableCreated?: (tableName: string) => void;
     onSendMessage?: (message: string) => void;
 }
 
-const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema = null, onTableCreated, onSendMessage }) => {
+const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTableCreated, onSendMessage }) => {
     const [url, setUrl] = useState<string>('');
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,7 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
     const createTableFromUrl = async (urlOverride?: string) => {
         const targetUrl = urlOverride || url;
         if (!dbContext || !targetUrl.trim()) {
-            console.log('RemoteFileSimple: missing dbContext or url');
+            console.log('RemoteFile: missing dbContext or url');
             return;
         }
         
@@ -171,4 +171,4 @@ const RemoteFileSimple: React.FC<RemoteFileSimpleProps> = ({ dbContext, schema =
     );
 };
 
-export default RemoteFileSimple;
+export default RemoteFile;

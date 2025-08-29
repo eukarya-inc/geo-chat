@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import { selectTableAtom, currentChatAtom } from '../../../store/modelingAtoms';
+import { selectTableAtom, currentChatAtom } from '../../../store/atoms';
 
 export function useTableSelection(
     dbContext: DBContext | null,

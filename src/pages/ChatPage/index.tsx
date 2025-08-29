@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import AIChat from '../../components/chat/AIChatModeling';
-import { Table } from '../../components/table/TableList/Table';
-import RemoteFileSimple from '../../components/remote-file/RemoteFileSimple';
-import TableSQLDisplay from '../../components/table/TableSQLDisplay';
+import { TableView } from '../../components/table/TableView';
+import RemoteFile from '../../components/remote-file';
+import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
 import Map from '../../components/map';
-import { chatIdToSchemaName } from './utils/schemaUtils';
 import { ChatList } from '../../components/chat/ChatList';
 import { TableCellsIcon } from '@heroicons/react/24/outline';
-import { useSyncBridge } from '../../hooks/useSyncBridge';
+import { useStoreSync } from '../../store/sync';
 import {
+    chatIdToSchemaName,
     useApiKeyManagement,
     useChatManagement,
     useSchemaManagement,
@@ -27,7 +27,7 @@ function ChatPage() {
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
 
     // Enable state synchronization
-    const { syncImmediately } = useSyncBridge();
+    const { syncImmediately } = useStoreSync();
 
 
     // API key management
@@ -160,7 +160,7 @@ function ChatPage() {
                             }}
                             onConversationCompleted={syncImmediately}
                             remoteFileComponent={(onClose) => (
-                                <RemoteFileSimple
+                                <RemoteFile
                                     dbContext={dbContext}
                                     schema={schemaName}
                                     onTableCreated={(tableName: string) => {
@@ -221,7 +221,7 @@ function ChatPage() {
                                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                     >
-                                        SQL
+                                        クエリ
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('table')}
@@ -272,7 +272,7 @@ function ChatPage() {
                                 {/* Table Tab */}
                                 {activeTab === 'table' && (
                                     <div className="h-full overflow-hidden">
-                                        <Table
+                                        <TableView
                                             key={`${selectedChatId}-${selectedTable}`}
                                             connection={connection}
                                             tableName={selectedTable}

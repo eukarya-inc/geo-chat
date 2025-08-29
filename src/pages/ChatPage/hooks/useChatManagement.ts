@@ -13,10 +13,9 @@ import {
   currentChatStateAtom,
   type Chat,
   type ChatState
-} from '../../../store/modelingAtoms';
+} from '../../../store/atoms';
 import type { StructuredMessage } from '../../../types/message';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import { chatIdToSchemaName } from '../utils/schemaUtils';
 import type { Chat as ChatListChat } from '../../../components/chat/ChatList';
 
 export function useChatManagement(
@@ -66,7 +65,7 @@ export function useChatManagement(
       const initializeFirstChat = async () => {
         try {
           const firstChat = await createChat();
-          
+
           const schemaName = chatIdToSchemaName(firstChat.id);
           if (schemaName) {
             await dbContext.createSchema(schemaName);
@@ -159,7 +158,7 @@ export function useChatManagement(
     setChats: (newChats: ChatListChat[]) => {
       // For compatibility - update remote state directly
       const newChatsRecord: Record<string, Chat> = {};
-      
+
       newChats.forEach(chat => {
         newChatsRecord[chat.id] = {
           id: chat.id,
@@ -172,7 +171,7 @@ export function useChatManagement(
           mapSpecs: chat.mapSpecs,
         };
       });
-      
+
       setRemoteState({
         chats: newChatsRecord
       });
@@ -195,7 +194,7 @@ export function useChatManagement(
       const currentId = localState.selectedChatId;
       const chat = currentId ? chatsRecord[currentId] : null;
       if (!chat) return null;
-      
+
       return {
         messages: chat.messages,
         tables: chat.tables,
@@ -204,4 +203,11 @@ export function useChatManagement(
       } as ChatState;
     }, [chatsRecord, localState.selectedChatId]),
   };
+}
+
+// Utility function to convert chatId to schema name
+// This maintains the naming convention for chat-based schemas
+export function chatIdToSchemaName(chatId: string | null | undefined): string | null {
+    if (!chatId) return null;
+    return `chat_${chatId.replace(/[^a-zA-Z0-9]/g, '_')}`;
 }

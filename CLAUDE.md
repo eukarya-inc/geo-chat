@@ -14,20 +14,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:unit` - Run unit tests
 - `npm run preview` - Preview built application
 
-## IMPORTANT: Always Run Build and Test After Changes
+## IMPORTANT: Always Run Lint, Build and Test After Changes
 
 After making any code changes, you MUST run:
 ```bash
-npm run build && npm test
+npm run lint && npm run build && npm test
 ```
 
 This ensures:
-1. TypeScript compilation succeeds
-2. The build process completes without errors
-3. All tests pass
-4. No regressions are introduced
+1. Code follows the project's style guidelines
+2. No ESLint errors or warnings
+3. TypeScript compilation succeeds
+4. The build process completes without errors
+5. All tests pass
+6. No regressions are introduced
 
-If the build or tests fail, fix the issues before considering the task complete.
+If lint, build or tests fail, fix the issues before considering the task complete.
 
 ## Critical Implementation Details
 
@@ -44,19 +46,6 @@ When generating styles for map visualization:
 2. **The system automatically extracts JSON properties** when the 'properties' column is selected in the table list
 
 3. **Column values ARE automatically converted to JSON** in the SQL query using `to_json()` to handle complex data types uniformly. The property extraction code handles unwrapping JSON-encoded strings.
-
-### Temporary Tables Management
-
-1. **Temporary tables are hidden from UI but accessible to queries**:
-   - Tables prefixed with: `temp_`, `tmp_`
-   - Tables suffixed with: `_timeline`, `_stats`, `_analysis`
-   - These remain fully accessible to SQL queries and Vega-Lite charts
-
-2. **Always verify table creation** before using in visualizations:
-   ```sql
-   CREATE TABLE temp_analysis AS SELECT ...;
-   SELECT COUNT(*) FROM temp_analysis; -- Verify success
-   ```
 
 ### Map Rendering Requirements
 
@@ -77,13 +66,17 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 
 - **App component** (`src/App.tsx`): Main application state management for table selection, column visibility, and data refresh coordination between components.
 
-- **RemoteFile component** (`src/components/RemoteFile.tsx`): Handles URL input and creates DuckDB tables from remote data sources.
+- **RemoteFile component** (`src/components/remote-file/index.tsx`): Handles URL input and creates DuckDB tables from remote data sources.
 
-- **TableList component** (`src/components/TableList.tsx`): Displays available tables and manages column selection for popup display. Automatically filters out temporary analysis tables (prefix: `temp_`, `tmp_`, suffix: `_timeline`, `_stats`, `_analysis`) from the UI while keeping them accessible for queries.
+- **TableView component** (`src/components/table/TableView.tsx`): Data grid component for displaying table contents with virtual scrolling.
+
+- **TableSelector component** (`src/components/table/TableSelector.tsx`): Simple table selection dropdown used in the chat interface.
+
+- **Query component** (`src/components/query/index.tsx`): SQL query display component showing table definitions and SQL flow visualization.
 
 - **Map component** (`src/components/Map.tsx`): MapLibre GL integration that renders selected table data and shows column information in popups. Handles JSON property extraction for all geometry types (points, lines, polygons).
 
-- **VegaLiteChart component** (`src/components/VegaLiteChart.tsx`): Interactive chart component that can access all tables including temporary ones hidden from the UI.
+- **VegaLiteChart component** (`src/components/VegaLiteChart.tsx`): Interactive chart component for data visualization.
 
 - **AI Chat components** (`src/components/chat/`): AI-powered SQL assistant with tools for map styling and data visualization. Uses Anthropic Claude with specialized tools for DuckDB queries and MapLibre style generation.
 
@@ -108,8 +101,10 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 ### State Management
 
 - **Jotai Atoms**: Used for global state management, organized in `src/store/`:
-  - `modelingRemoteAtoms.ts`: Chat state and AI-related atoms
-  - `atomFactories.ts`: Factory functions for creating atoms with persistence
+  - `remoteAtoms.ts`: Remote state (chats, messages, map specs, chart specs)
+  - `localAtoms.ts`: Local UI state (selected chat, visibility settings)
+  - `derivedAtoms.ts`: Computed atoms combining remote and local state
+  - `atoms.ts`: Re-exports all atoms for backward compatibility
 
 ### AI Tool Integration
 
@@ -119,20 +114,20 @@ The application includes comprehensive AI tools for data manipulation and visual
 - **chartTool** (`src/lib/ai/tools/chartTool.ts`): Creates and retrieves Vega-Lite chart specifications for data visualization
 - **mapStyleTool** (`src/lib/ai/tools/mapStyleTool.ts`): Updates map styles with extensive MapLibre GL expression support, geometry type validation, and nested property access
 - **mapStyleGetTool** (`src/lib/ai/tools/mapStyleGetTool.ts`): Retrieves current map styles for analysis
-- **geocodingTool** (`src/lib/ai/tools/geocodingTool.ts`): Geocodes addresses using OpenStreetMap Nominatim API, supports single and batch geocoding with rate limiting
-- **geocodingTools** (`src/lib/ai/tools/geocodingTools.ts`): Helper functions for analyzing tables for geocoding and adding geocoded columns
+- **geocodingTool** (`src/lib/ai/tools/geocodingTool.ts`): Geocodes addresses using OpenStreetMap Nominatim API, supports single and batch geocoding with rate limiting, analyzes tables for geocoding, and adds geocoded columns
 - **completionTool** (`src/lib/ai/tools/completionTool.ts`): Provides SQL query completion and suggestions
 
 ### Data Flow
 
 1. User inputs remote file URL
 2. RemoteFile component creates DuckDB table
-3. TableList refreshes and displays available tables (filtering temporary tables from UI)
-4. User selects table and columns for display
-5. Map component queries selected table and renders data
-6. Column data appears in map popups when features are clicked
-7. JSON properties are automatically extracted and made available for styling
-8. AI assistant can help with SQL queries and map styling through chat interface
+3. TableSelector shows available tables for selection
+4. User selects table to view
+5. TableView displays table data with virtual scrolling
+6. Map component queries selected table and renders data
+7. Column data appears in map popups when features are clicked
+8. JSON properties are automatically extracted and made available for styling
+9. AI assistant can help with SQL queries and map styling through chat interface
 
 ### Testing Approach
 

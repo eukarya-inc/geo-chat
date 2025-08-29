@@ -8,7 +8,7 @@ import type { StructuredMessage } from '../../types/message';
 import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { generatePromptSuggestions } from '../../lib/ai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../map';
 
 interface AIChatProps {
