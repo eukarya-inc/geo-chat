@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSetAtom } from 'jotai';
-import { addTableHistoryAtom } from '../../../store/modelingDerivedAtoms';
+import { addTableHistoryAtom } from '../../../store/derivedAtoms';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { SQLHistoryEntry } from '../../../lib/duckdb/sqlHistoryManager';
 

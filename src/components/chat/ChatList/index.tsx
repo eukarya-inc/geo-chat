@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import type { StructuredMessage } from '../../../types/message';
-import type { MapSpec } from '../../../store/modelingRemoteAtoms';
+import type { MapSpec } from '../../../store/remoteAtoms';
 
 export type ChatType = 'graph';
 

@@ -16,7 +16,7 @@
 
 ## 🎯 Overview
 
-LINKS BI Prototype is a modern browser-based Business Intelligence application that combines DuckDB-WASM's analytical capabilities with MapLibre GL's geospatial visualization. The platform enables users to load, analyze, and visualize large geospatial datasets directly in the browser without server-side processing.
+LINKS BI Prototype is a modern browser-based Business Intelligence application that combines DuckDB-WASM's analytical capabilities with powerful data visualization through MapLibre GL for geospatial data and Vega-Lite for charts and graphs. The platform enables users to load, analyze, and visualize large datasets directly in the browser without server-side processing.
 
 ### Key Technologies
 - **Frontend**: React 19 + TypeScript
@@ -51,10 +51,13 @@ src/
 │   ├── chart/
 │   │   └── VegaLiteChart.tsx
 │   ├── table/
-│   │   ├── TableList/    # Table selection UI
-│   │   └── TableSelector.tsx
+│   │   ├── TableView.tsx    # Data grid for table display
+│   │   └── TableSelector.tsx # Table selection dropdown
+│   ├── query/             # SQL query visualization
+│   │   ├── index.tsx      # Main query display component
+│   │   └── SQLFlowVisualization.tsx
 │   └── remote-file/
-│       └── RemoteFileSimple.tsx
+│       └── index.tsx
 ├── lib/
 │   ├── ai/                # AI integration
 │   │   ├── tools/         # AI tool definitions
@@ -63,8 +66,11 @@ src/
 │       ├── dbContext.ts   # DB context management
 │       └── useDuckDB.ts   # DuckDB hook
 ├── store/                 # Jotai state management
-│   ├── modelingAtoms.ts
-│   └── modelingRemoteAtoms.ts
+│   ├── atoms.ts           # Re-exports all atoms
+│   ├── remoteAtoms.ts     # Remote state
+│   ├── localAtoms.ts      # Local UI state
+│   ├── derivedAtoms.ts    # Computed atoms
+│   └── sync.ts            # State synchronization (useStoreSync)
 └── utils/                 # Utility functions
     ├── vectorTileUtils.ts
     ├── maplibreExpressionFixer.ts
@@ -79,11 +85,19 @@ src/
 - Automatic spatial extension loading
 - SQL history management with localStorage
 
-#### 2. **Vector Tile System** (`src/utils/vectorTileUtils.ts`)
+#### 2. **Visualization Systems**
+
+##### Map System (`src/utils/vectorTileUtils.ts`)
 - Custom protocol handler: `duckdb-vector://`
 - Real-time SQL to MVT conversion
 - Tile caching for performance
 - Automatic JSON property extraction
+
+##### Chart System (`src/components/chart/VegaLiteChart.tsx`)
+- Dynamic Vega-Lite spec rendering
+- SQL query integration
+- Responsive design
+- Interactive tooltips and selections
 
 #### 3. **State Management** (`src/store/`)
 - **Jotai atoms** for global state
@@ -117,11 +131,19 @@ src/
 - **JSON property extraction**: Nested field access
 - **Click interactions**: Feature popups
 
+### ✅ Chart Visualization
+- **Vega-Lite integration**: Declarative chart specifications
+- **Chart types**: Bar, line, scatter, heatmap, and more
+- **Interactive features**: Tooltips, zoom, pan
+- **Data transformations**: Aggregations, filters, calculations
+- **AI-powered generation**: Natural language to chart specs
+
 ### ✅ Data Analysis
 - **Full SQL support**: DuckDB with spatial extension
 - **AI-powered queries**: Natural language to SQL
-- **Chart generation**: Vega-Lite specifications
+- **Statistical functions**: Aggregations, window functions
 - **Geocoding**: Address to coordinates
+- **Cross-visualization**: Unified data source for maps and charts
 
 ### ✅ Performance Features
 - **Tile caching**: Reduces redundant queries
@@ -162,6 +184,32 @@ maplibregl.addProtocol('duckdb-vector', async (params) => {
   
   return { data: mvt };
 });
+```
+
+### Chart Generation
+
+```typescript
+// Vega-Lite spec generation
+export function createChartTool(dbContext: DBContext) {
+  return tool({
+    description: 'Create data visualizations',
+    parameters: z.object({
+      spec: z.object({
+        data: z.object({ sql: z.string() }),
+        mark: z.string(),
+        encoding: z.object({
+          x: z.object({ field: z.string(), type: z.string() }),
+          y: z.object({ field: z.string(), type: z.string() })
+        })
+      })
+    }),
+    execute: async ({ spec }) => {
+      // Execute SQL and embed results in Vega spec
+      const data = await dbContext.executeQuery(spec.data.sql);
+      return { success: true, spec: { ...spec, data: { values: data } } };
+    }
+  });
+}
 ```
 
 ### AI Tool Architecture
@@ -205,14 +253,19 @@ graph TD
     C --> D[Table List Update]
     D --> E[User Selection]
     E --> F[SQL Query Generation]
+    
     F --> G[Vector Tile Creation]
     G --> H[MapLibre Rendering]
+    
+    F --> N[Chart Data Query]
+    N --> O[Vega-Lite Rendering]
     
     I[AI Chat] --> J[Tool Selection]
     J --> K[SQL/Style/Chart Generation]
     K --> F
-    K --> L[Style Application]
-    K --> M[Chart Creation]
+    K --> L[Map Style Application]
+    K --> M[Chart Spec Creation]
+    M --> O
 ```
 
 ---
@@ -315,8 +368,9 @@ npm run build
 
 1. **AI Tools**: Add to `src/lib/ai/tools/`
 2. **Map Features**: Update `src/components/map/`
-3. **State**: Add atoms to `src/store/`
-4. **Utils**: Add to `src/utils/`
+3. **Chart Features**: Update `src/components/chart/`
+4. **State**: Add atoms to `src/store/`
+5. **Utils**: Add to `src/utils/`
 
 ### PR Checklist
 - [ ] Tests pass (`npm test`)

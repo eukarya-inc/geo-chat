@@ -3,7 +3,7 @@ import { aiStore } from './AIStore';
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../../components/map';
 
 interface UseAIChatOptions {

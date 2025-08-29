@@ -1,5 +1,7 @@
 import { Feature, GeoJsonProperties, Geometry, MultiPolygon, Polygon, Position } from 'geojson';
+import geojsonvt from 'geojson-vt';
 import Pbf from 'pbf';
+import vtpbf from 'vt-pbf';
 
 export interface TileBounds {
     minLng: number;
@@ -8,7 +10,7 @@ export interface TileBounds {
     maxLat: number;
 }
 
-// メモ化用のキャッシュ
+// Cache for memoization
 const tileEnvelopeCache = new Map<string, TileBounds>();
 
 export function getZxyFromUrl(url: string) {
@@ -414,4 +416,35 @@ function getMVTType(geojsonType: string): number {
         default:
             return 0;
     }
+}
+
+// Vector tile functions from vectorTileUtils.ts
+export function geojsonToVectorTile(
+    features: Feature<Geometry, GeoJsonProperties>[],
+    z: number,
+    x: number,
+    y: number
+): Uint8Array {
+    // Convert GeoJSON to vector tiles using geojson-vt
+    const tileIndex = geojsonvt({
+        type: 'FeatureCollection',
+        features: features
+    }, {
+        generateId: true,
+        indexMaxZoom: z,
+        maxZoom: z,
+        buffer: 0,
+        tolerance: 0,
+        extent: 4096
+    });
+
+    // Get the specified tile
+    const tile = tileIndex.getTile(z, x, y);
+    if (!tile) {
+        return new Uint8Array();
+    }
+
+    // Convert vector tile to binary using vt-pbf
+    // Set source-layer name as "v"
+    return vtpbf.fromGeojsonVt({ "v": tile }, { version: 2 });
 }

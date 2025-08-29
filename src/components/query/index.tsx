@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { SQLHistoryEntry } from '../../../lib/duckdb/sqlHistoryManager';
+import type { DBContext } from '../../lib/duckdb/dbContext';
+import type { SQLHistoryEntry } from '../../lib/duckdb/sqlHistoryManager';
 import { SQLFlowVisualization } from './SQLFlowVisualization';
 
 interface TableSQLDisplayProps {
@@ -71,7 +71,7 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
           {showVisualization ? 'SQLを表示' : '可視化'}
         </button>
       </div>
-      
+
       {!showVisualization ? (
         <pre className="bg-white border border-gray-300 rounded p-2 whitespace-pre-wrap break-words text-left">
           <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
@@ -81,7 +81,7 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
           <SQLFlowVisualization sql={sqlEntry.sql} />
         </div>
       )}
-      
+
       {sqlEntry.explanation && (
         <div className="mt-2 prose prose-sm max-w-none text-blue-800 text-xs leading-relaxed [&>h1]:text-blue-800 [&>h2]:text-blue-800 [&>h3]:text-blue-800 [&>h4]:text-blue-800 [&>h5]:text-blue-800 [&>h6]:text-blue-800 [&>p]:text-blue-800 [&>li]:text-blue-800 [&>code]:text-blue-800 [&>pre]:bg-blue-50 [&>pre]:border-blue-200">
           <ReactMarkdown

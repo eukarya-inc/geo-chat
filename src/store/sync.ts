@@ -1,9 +1,9 @@
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { remoteStateAtom, remoteStateForSyncAtom } from '../store/modelingRemoteAtoms';
+import { remoteStateAtom, remoteStateForSyncAtom } from './remoteAtoms';
 
-export function useSyncBridge() {
-  // リモート状態のみ監視
+export function useStoreSync() {
+  // Monitor remote state only
   const remoteState = useAtomValue(remoteStateForSyncAtom);
   const setRemoteState = useSetAtom(remoteStateAtom);
   const timer = useRef<number | null>(null);
@@ -11,13 +11,13 @@ export function useSyncBridge() {
   const [isDirty, setIsDirty] = useState(false);
   const currentPayloadRef = useRef<string>('');
 
-  // 同期処理の共通ロジック
+  // Common sync logic
   const performSync = useCallback(async (payload: string) => {
     try {
-      // 現在はモック実装（コンソールに出力）
-      console.log('[SyncBridge] Remote state synced:', JSON.parse(payload));
+      // Currently mock implementation (output to console)
+      console.log('[StoreSync] Remote state synced:', JSON.parse(payload));
       
-      // 将来的には以下のような実装に置き換え
+      // Replace with implementation like below in the future
       /*
       const res = await fetch('/api/modeling-state', {
         method: 'PUT',
@@ -28,17 +28,17 @@ export function useSyncBridge() {
       */
       
       lastSent.current = payload;
-      setIsDirty(false); // 同期完了後にdirty状態を解除
+      setIsDirty(false); // Clear dirty state after sync completes
     } catch (e) {
       console.error('[SyncBridge] Sync failed:', e);
-      // ここで再送戦略やトースト表示などを入れる
-      // エラー時はdirty状態を維持
+      // Add retry strategy or toast notifications here
+      // Maintain dirty state on error
     }
   }, []);
 
-  // 即座に同期を実行する関数（チャット完了時などに使用）
+  // Function to sync immediately (used when chat completes etc.)
   const syncImmediately = useCallback(async () => {
-    // タイマーをクリア
+    // Clear timer
     if (timer.current) {
       window.clearTimeout(timer.current);
       timer.current = null;
@@ -46,7 +46,7 @@ export function useSyncBridge() {
 
     const payload = currentPayloadRef.current || JSON.stringify(remoteState);
     
-    // 前回と同じなら送らない
+    // Don't send if same as last time
     if (payload === lastSent.current) {
       console.log('[SyncBridge] Immediate sync skipped - no changes');
       return;
@@ -56,17 +56,17 @@ export function useSyncBridge() {
     await performSync(payload);
   }, [remoteState, performSync]);
 
-  // 送信用デバウンス
+  // Debounce for sending
   useEffect(() => {
     const payload = JSON.stringify(remoteState);
     currentPayloadRef.current = payload;
     
-    if (payload === lastSent.current) return; // 前回と同じなら送らない（ループ防止）
+    if (payload === lastSent.current) return; // Don't send if same as last time (prevent loop)
 
-    // 変更があったらdirty状態にする
+    // Set dirty state when there are changes
     setIsDirty(true);
 
-    // デバウンス（3000ms = 3秒）
+    // Debounce (3000ms = 3 seconds)
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       performSync(payload);
@@ -77,11 +77,11 @@ export function useSyncBridge() {
     };
   }, [remoteState, performSync]);
 
-  // beforeunloadイベントでdirty状態を検知
+  // Detect dirty state with beforeunload event
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty) {
-        const message = '保存されていない変更があります。このページを離れてもよろしいですか？';
+        const message = 'You have unsaved changes. Are you sure you want to leave this page?';
         e.preventDefault();
         e.returnValue = message; // Chrome/Safari
         return message; // Firefox
@@ -94,12 +94,12 @@ export function useSyncBridge() {
     };
   }, [isDirty]);
 
-  // 受信用（将来的にWebSocket or Polling実装）
+  // For receiving (future WebSocket or Polling implementation)
   useEffect(() => {
-    // 現在はモック実装
+    // Currently mock implementation
     console.log('[SyncBridge] Ready for receiving updates');
     
-    // 将来的な実装例:
+    // Future implementation example:
     /*
     const ws = new WebSocket('/api/ws');
     ws.onmessage = (event) => {

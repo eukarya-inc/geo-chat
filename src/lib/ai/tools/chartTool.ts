@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { VegaChartSpec } from '../../../types/chart';
-import type { ChatState } from '../../../store/modelingRemoteAtoms';
+import type { ChatState } from '../../../store/remoteAtoms';
 
 /**
  * Creates a tool for getting the current Vega-Lite chart specification for a table

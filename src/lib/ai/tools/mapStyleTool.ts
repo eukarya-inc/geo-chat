@@ -2,12 +2,12 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { validateStyleMin, v8 } from '@maplibre/maplibre-gl-style-spec';
 import type { TableStyle, VectorTileLayer } from '../../../components/map';
-import type { ChatState } from '../../../store/modelingRemoteAtoms';
+import type { MapSpec } from '../../../store/remoteAtoms';
 import type { DBContext } from '../../duckdb/dbContext';
-import { fixMaplibreExpressionWithWarnings } from '../../../utils/maplibreExpressionFixer';
+import { fixMaplibreExpressionWithWarnings } from '../../../components/map/utils/maplibreExpressionFixer';
 
 export function createMapStyleTool(
-  getCurrentChatState: () => ChatState | null,
+  getMapSpec: (tableName: string) => MapSpec | undefined,
   onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
   dbContext?: DBContext | null,
   schema?: string | null
@@ -202,14 +202,8 @@ To show/hide layers, include a visibility property in the style.`,
 
     execute: async ({ table_name, geometry_type, style_properties, description }) => {
       try {
-        // Get current state to check existing styles
-        const chatState = getCurrentChatState();
-        if (!chatState) {
-          return {
-            success: false,
-            error: 'Chat state is not available'
-          };
-        }
+        // Get current map spec to check existing styles
+        const mapSpec = getMapSpec(table_name);
 
         // Check if table has geometry column using DESCRIBE
         if (dbContext) {
@@ -277,8 +271,7 @@ Available columns in '${table_name}': ${columnInfo}`
         };
         
         // Get current table styles (array of layers)
-        const currentMapSpec = chatState.mapSpecs?.[table_name];
-        const currentTableStyles = currentMapSpec?.tableStyles || {};
+        const currentTableStyles = mapSpec?.tableStyles || {};
         const currentLayers = currentTableStyles[table_name] || [];
         
 

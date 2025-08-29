@@ -9,7 +9,7 @@ import {
     currentChatAtom,
     currentChatStateAtom,
     currentTableShowGraphAtom
-} from '../../../store/modelingAtoms';
+} from '../../../store/atoms';
 
 export function useChartVisualization(
     selectedTable: string | null,

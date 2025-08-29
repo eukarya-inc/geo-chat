@@ -1,7 +1,7 @@
 import type { StructuredMessage } from '../../types/message';
 import type { DBContext } from '../duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/modelingRemoteAtoms';
+import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../../components/map';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
@@ -203,7 +203,7 @@ export class AIStore {
       
       options.onMessagesChange?.(currentMessages);
       
-      // チャット完了時のコールバックを呼び出す
+      // Call callback when chat completes
       options.onMessageComplete?.();
 
     } catch (err) {
@@ -219,7 +219,7 @@ export class AIStore {
       options.onMessagesChange?.(currentMessages);
       this.notifyListeners();
       
-      // エラー時もチャット完了として扱う
+      // Treat errors as chat completion too
       options.onMessageComplete?.();
     } finally {
       this.setLoading(chatId, false, null);

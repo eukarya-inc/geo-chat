@@ -4,13 +4,13 @@ import type { TableStyle } from '../components/map';
 import type { ChartSpec } from '../types/chart';
 import type { StyleSpecification } from 'maplibre-gl';
 
-// ===== リモート状態の型定義（サーバー同期対象） =====
+// ===== Remote state type definitions (server sync target) =====
 export interface Table {
   tableName: string;
   sql: string;
   createdAt: Date;
-  source: 'file' | 'sql' | 'ai';  // ファイルアップロード、SQL直接実行、AI生成
-  fileUrl?: string;  // ファイルアップロードの場合のURL
+  source: 'file' | 'sql' | 'ai';  // File upload, direct SQL execution, AI generated
+  fileUrl?: string;  // URL for file upload
 }
 
 // For backward compatibility
@@ -43,13 +43,13 @@ export interface RemoteState {
   chats: Record<string, Chat>;  // Changed from Chat[] to Record<string, Chat>
 }
 
-// ===== リモート状態Atoms =====
-// サーバー同期用（atomWithStorageは使わない）
+// ===== Remote State Atoms =====
+// For server sync (not using atomWithStorage)
 export const remoteStateAtom = atom<RemoteState>({
   chats: {}
 });
 
-// 派生atom（読み取り専用）
+// Derived atom (read-only)
 export const chatsAtom = atom((get) => get(remoteStateAtom).chats);
 
 // For backward compatibility - returns chat states keyed by ID
@@ -68,5 +68,5 @@ export const chatStatesAtom = atom((get) => {
 });
 
 
-// 同期用の監視atom（リモート状態のみ）
+// Monitoring atom for sync (remote state only)
 export const remoteStateForSyncAtom = atom((get) => get(remoteStateAtom));

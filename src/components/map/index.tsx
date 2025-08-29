@@ -12,9 +12,8 @@ import type {
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getTileEnvelope } from '../../utils/tileUtils';
-import { MapStyleManager } from '../../utils/mapStyleManager';
-import { geojsonToVectorTile } from '../../utils/vectorTileUtils';
+import { getTileEnvelope, geojsonToVectorTile } from './utils/tileUtils';
+import { MapStyleManager } from './mapStyleManager';
 import { detectDisplayColumns, type ColumnInfo } from '../../utils/columnDetector';
 import { convertArrowToJS } from '../../utils/arrowConverter';
 import MapStyleEditor from './MapStyleEditor';

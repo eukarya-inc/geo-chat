@@ -1,28 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMapStyleGetTool } from './mapStyleGetTool';
-import type { ChatState } from '../../../store/modelingRemoteAtoms';
+import type { MapSpec } from '../../../store/remoteAtoms';
 import type { VectorTileLayer } from '../../../components/map';
 
 describe('createMapStyleGetTool', () => {
-  let mockGetCurrentChatState: () => ChatState | null;
+  let mockGetMapSpec: (tableName: string) => MapSpec | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCurrentChatState = vi.fn();
+    mockGetMapSpec = vi.fn();
   });
 
   it('should create a tool with correct metadata', () => {
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     
     expect(tool).toBeDefined();
     expect(tool.description).toContain('Get the current map style configuration');
     expect(tool.parameters).toBeDefined();
   });
 
-  it('should handle chat state not available error', async () => {
-    mockGetCurrentChatState = vi.fn(() => null);
+  it('should handle map spec not available error', async () => {
+    mockGetMapSpec = vi.fn(() => undefined);
     
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     const result = await tool.execute({
       table_name: 'test_table'
     }, {
@@ -31,25 +31,15 @@ describe('createMapStyleGetTool', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Chat state is not available');
+    expect(result.error).toContain('No map specification found');
     expect(result.tableStyles).toBeNull();
     expect(result.extraStyle).toBeNull();
   });
 
   it('should return error when mapSpec does not exist for table', async () => {
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'other_table': {
-          tableStyles: {}
-        }
-      }
-    };
+    mockGetMapSpec = vi.fn(() => undefined);
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
-
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     const result = await tool.execute({
       table_name: 'test_table'
     }, {
@@ -64,19 +54,13 @@ describe('createMapStyleGetTool', () => {
   });
 
   it('should return empty styles when no custom styles are configured', async () => {
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          // mapSpec exists but no styles configured
-        }
-      }
+    const mockMapSpec: MapSpec = {
+      // mapSpec exists but no styles configured
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
 
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     const result = await tool.execute({
       table_name: 'test_table'
     }, {
@@ -103,22 +87,16 @@ describe('createMapStyleGetTool', () => {
       layers: []
     };
 
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          tableStyles: {
-            'test_table': [mockLayer]
-          },
-          style: mockExtraStyle
-        }
-      }
+    const mockMapSpec: MapSpec = {
+      tableStyles: {
+        'test_table': [mockLayer]
+      },
+      style: mockExtraStyle
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
 
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     const result = await tool.execute({
       table_name: 'test_table'
     }, {
@@ -150,22 +128,16 @@ describe('createMapStyleGetTool', () => {
       }
     ];
 
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          tableStyles: {
-            'test_table': mockLayers
-          }
-          // No extra style
-        }
+    const mockMapSpec: MapSpec = {
+      tableStyles: {
+        'test_table': mockLayers
       }
+      // No extra style
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
 
-    const tool = createMapStyleGetTool(mockGetCurrentChatState);
+    const tool = createMapStyleGetTool(mockGetMapSpec);
     const result = await tool.execute({
       table_name: 'test_table'
     }, {

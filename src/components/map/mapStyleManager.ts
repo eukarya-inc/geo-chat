@@ -1,5 +1,5 @@
 import maplibregl from 'maplibre-gl';
-import { validateAndFixStyleExpression, logStyleExpressionIssues } from './styleExpressionValidator';
+import { validateAndFixStyleExpression, logStyleExpressionIssues } from '../../utils/styleExpressionValidator';
 
 export interface MapStyleUpdate {
     type: 'layer-paint' | 'layer-layout' | 'layer-filter' | 'add-layer' | 'remove-layer' | 'add-source' | 'remove-source';

@@ -1,36 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMapStyleTool } from './mapStyleTool';
-import type { ChatState } from '../../../store/modelingRemoteAtoms';
+import type { MapSpec } from '../../../store/remoteAtoms';
 import type { TableStyle, VectorTileLayer } from '../../../components/map';
 
 describe('createMapStyleTool', () => {
-  let mockGetCurrentChatState: () => ChatState | null;
+  let mockGetMapSpec: (tableName: string) => MapSpec | undefined;
   let mockOnMapStyleUpdate: (tableName: string, style: TableStyle) => Promise<void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCurrentChatState = vi.fn();
+    mockGetMapSpec = vi.fn();
     mockOnMapStyleUpdate = vi.fn();
   });
 
   it('should return null if onMapStyleUpdate is not provided', () => {
-    const tool = createMapStyleTool(mockGetCurrentChatState, undefined, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, undefined, null, null);
     expect(tool).toBeNull();
   });
 
   it('should create a tool with correct metadata', () => {
-    const tool = createMapStyleTool(mockGetCurrentChatState, mockOnMapStyleUpdate, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
 
     expect(tool).toBeDefined();
     expect(tool?.description).toContain('Update map styles');
     expect(tool?.parameters).toBeDefined();
   });
 
-  it('should handle chat state not available error', async () => {
-    mockGetCurrentChatState = vi.fn(() => null);
+  it('should create new styles when map spec is not available', async () => {
+    mockGetMapSpec = vi.fn(() => undefined);
     mockOnMapStyleUpdate = vi.fn().mockResolvedValue(undefined);
 
-    const tool = createMapStyleTool(mockGetCurrentChatState, mockOnMapStyleUpdate, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
     if (!tool) throw new Error('Tool should be created');
     const result = await tool.execute({
       table_name: 'test_table',
@@ -42,8 +42,20 @@ describe('createMapStyleTool', () => {
       toolCallId: ""
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Chat state is not available');
+    expect(result.success).toBe(true);
+    expect(result.message).toContain('Test update');
+    expect(mockOnMapStyleUpdate).toHaveBeenCalledWith('test_table', [
+      {
+        id: 'duckdb-polygons-test_table',
+        type: 'fill',
+        paint: { 'fill-color': '#ff0000', 'fill-opacity': 0.3 }
+      },
+      {
+        id: 'duckdb-polygon-outlines-test_table',
+        type: 'line',
+        paint: { 'line-color': '#ff0000', 'line-width': 1, 'line-opacity': 0.8 }
+      }
+    ]);
   });
 
   it('should update polygon layers successfully', async () => {
@@ -59,22 +71,16 @@ describe('createMapStyleTool', () => {
       paint: { 'line-color': '#0000ff', 'line-width': 1 }
     };
 
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          tableStyles: {
-            'test_table': [existingFillLayer, existingOutlineLayer]
-          }
-        }
+    const mockMapSpec: MapSpec = {
+      tableStyles: {
+        'test_table': [existingFillLayer, existingOutlineLayer]
       }
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
     mockOnMapStyleUpdate = vi.fn().mockResolvedValue(undefined);
 
-    const tool = createMapStyleTool(mockGetCurrentChatState, mockOnMapStyleUpdate, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
     if (!tool) throw new Error('Tool should be created');
     const result = await tool.execute({
       table_name: 'test_table',
@@ -109,22 +115,16 @@ describe('createMapStyleTool', () => {
       paint: { 'circle-color': '#0000ff' }
     };
 
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          tableStyles: {
-            'test_table': [existingLayer]
-          }
-        }
+    const mockMapSpec: MapSpec = {
+      tableStyles: {
+        'test_table': [existingLayer]
       }
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
     mockOnMapStyleUpdate = vi.fn().mockResolvedValue(undefined);
 
-    const tool = createMapStyleTool(mockGetCurrentChatState, mockOnMapStyleUpdate, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
     if (!tool) throw new Error('Tool should be created');
     const result = await tool.execute({
       table_name: 'test_table',
@@ -154,22 +154,16 @@ describe('createMapStyleTool', () => {
       paint: { 'line-color': '#0000ff', 'line-width': 2 }
     };
 
-    const mockChatState: ChatState = {
-      messages: [],
-      tables: {},
-      mapSpecs: {
-        'test_table': {
-          tableStyles: {
-            'test_table': [existingLayer]
-          }
-        }
+    const mockMapSpec: MapSpec = {
+      tableStyles: {
+        'test_table': [existingLayer]
       }
     };
 
-    mockGetCurrentChatState = vi.fn(() => mockChatState);
+    mockGetMapSpec = vi.fn(() => mockMapSpec);
     mockOnMapStyleUpdate = vi.fn().mockResolvedValue(undefined);
 
-    const tool = createMapStyleTool(mockGetCurrentChatState, mockOnMapStyleUpdate, null, null);
+    const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
     if (!tool) throw new Error('Tool should be created');
     const result = await tool.execute({
       table_name: 'test_table',
