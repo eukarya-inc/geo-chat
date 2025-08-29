@@ -393,7 +393,6 @@ Available columns in '${table_name}': ${columnInfo}`
                 'line-width': fixedStyleProperties['line-width'] || 1,
                 'line-opacity': fixedStyleProperties['line-opacity'] || 0.8
               };
-              layerType = 'line';
             } else if (layerId.includes('polygons')) {
               // For polygon fills - only apply fill-specific properties
               const existingPaint = existingLayer.paint as Record<string, unknown>;
