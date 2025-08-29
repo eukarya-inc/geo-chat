@@ -1,5 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { validateStyleMin, v8 } from '@maplibre/maplibre-gl-style-spec';
 import type { TableStyle, VectorTileLayer } from '../../../components/map';
 import type { ChatState } from '../../../store/modelingRemoteAtoms';
 import type { DBContext } from '../../duckdb/dbContext';
@@ -310,6 +311,39 @@ Available columns in '${table_name}': ${columnInfo}`
         
         // Fix any malformed expressions in style_properties using the imported helper
         const allWarnings: string[] = [];
+        const syntaxErrors: string[] = [];
+        
+        // Validate each style property
+        const validateStyleProperty = (layerType: string, propName: string, propValue: unknown): void => {
+          try {
+            const errors = validateStyleMin.paintProperty(layerType, propName, propValue, v8);
+            if (errors && errors.length > 0) {
+              errors.forEach(error => {
+                // Check if this is a critical syntax error
+                const errorMessage = error.message.toLowerCase();
+                if (errorMessage.includes('unknown property') ||
+                    errorMessage.includes('invalid type') ||
+                    errorMessage.includes('expected') ||
+                    errorMessage.includes('must be') ||
+                    errorMessage.includes('cannot')) {
+                  syntaxErrors.push(`${propName}: ${error.message}`);
+                } else {
+                  allWarnings.push(`Style validation: ${propName}: ${error.message}`);
+                }
+              });
+            }
+          } catch (e) {
+            // If validation itself fails, it might be because the property doesn't apply to this layer type
+            // In that case, we'll let MapLibre handle it at runtime
+            console.warn(`Validation check skipped for ${propName}:`, e);
+          }
+        };
+        
+        // Map geometry type to MapLibre layer type for validation
+        const mapLibreLayerType = geometry_type === 'point' ? 'circle' : 
+                                  geometry_type === 'line' ? 'line' : 'fill';
+        
+        // Fix expressions and validate
         const fixedStyleProperties = Object.fromEntries(
           Object.entries(parsedStyleProperties).map(([key, value]) => {
             const result = fixMaplibreExpressionWithWarnings(value);
@@ -318,9 +352,22 @@ Available columns in '${table_name}': ${columnInfo}`
                 allWarnings.push(`${key}: ${warning}` as string);
               });
             }
+            
+            // Validate the fixed property
+            validateStyleProperty(mapLibreLayerType, key, result.fixed);
+            
             return [key, result.fixed];
           })
         );
+        
+        // If there are syntax errors, return error immediately
+        if (syntaxErrors.length > 0) {
+          return {
+            success: false,
+            error: `Style validation failed:\n${syntaxErrors.join('\n')}`,
+            warnings: allWarnings.length > 0 ? allWarnings : undefined
+          };
+        }
 
         const targetLayerIds = layerIds[geometry_type];
         
@@ -336,6 +383,7 @@ Available columns in '${table_name}': ${columnInfo}`
             
             // Determine the layer type and appropriate properties
             let paint: Record<string, unknown> = {};
+            
             if (layerId.includes('polygon-outlines')) {
               // For polygon outlines, derive line properties from fill properties safely
               const existingPaint = existingLayer.paint as Record<string, unknown>;
@@ -345,6 +393,7 @@ Available columns in '${table_name}': ${columnInfo}`
                 'line-width': fixedStyleProperties['line-width'] || 1,
                 'line-opacity': fixedStyleProperties['line-opacity'] || 0.8
               };
+              layerType = 'line';
             } else if (layerId.includes('polygons')) {
               // For polygon fills - only apply fill-specific properties
               const existingPaint = existingLayer.paint as Record<string, unknown>;
@@ -367,10 +416,46 @@ Available columns in '${table_name}': ${columnInfo}`
               paint = fixedStyleProperties;
             }
             
-            updatedLayers[existingLayerIndex] = {
+            // Validate the complete layer before updating
+            const updatedLayer = {
               ...existingLayer,
               paint: { ...existingLayer.paint, ...paint }
             };
+            
+            // Validate the layer structure
+            try {
+              const layerErrors = validateStyleMin.layer(updatedLayer as unknown, v8);
+              if (layerErrors && layerErrors.length > 0) {
+                const criticalErrors: string[] = [];
+                layerErrors.forEach(error => {
+                  const errorMessage = error.message.toLowerCase();
+                  if (errorMessage.includes('unknown') ||
+                      errorMessage.includes('invalid') ||
+                      errorMessage.includes('required')) {
+                    criticalErrors.push(error.message);
+                  } else {
+                    allWarnings.push(`Layer validation: ${error.message}`);
+                  }
+                });
+                
+                if (criticalErrors.length > 0) {
+                  return {
+                    success: false,
+                    error: `Layer validation failed:\n${criticalErrors.join('\n')}`,
+                    warnings: allWarnings.length > 0 ? allWarnings : undefined
+                  };
+                }
+              }
+            } catch (e) {
+              console.error('Layer validation failed:', e);
+              return {
+                success: false,
+                error: `Layer validation failed: Invalid layer structure`,
+                warnings: allWarnings.length > 0 ? allWarnings : undefined
+              };
+            }
+            
+            updatedLayers[existingLayerIndex] = updatedLayer;
           } else {
             // Create new layer if it doesn't exist
             let newLayer: VectorTileLayer | undefined;
@@ -414,6 +499,39 @@ Available columns in '${table_name}': ${columnInfo}`
             }
             
             if (newLayer) {
+              // Validate the new layer before adding
+              try {
+                const layerErrors = validateStyleMin.layer(newLayer as unknown, v8);
+                if (layerErrors && layerErrors.length > 0) {
+                  const criticalErrors: string[] = [];
+                  layerErrors.forEach(error => {
+                    const errorMessage = error.message.toLowerCase();
+                    if (errorMessage.includes('unknown') ||
+                        errorMessage.includes('invalid') ||
+                        errorMessage.includes('required')) {
+                      criticalErrors.push(error.message);
+                    } else {
+                      allWarnings.push(`New layer validation: ${error.message}`);
+                    }
+                  });
+                  
+                  if (criticalErrors.length > 0) {
+                    return {
+                      success: false,
+                      error: `New layer validation failed:\n${criticalErrors.join('\n')}`,
+                      warnings: allWarnings.length > 0 ? allWarnings : undefined
+                    };
+                  }
+                }
+              } catch (e) {
+                console.error('New layer validation failed:', e);
+                return {
+                  success: false,
+                  error: `New layer validation failed: Invalid layer structure`,
+                  warnings: allWarnings.length > 0 ? allWarnings : undefined
+                };
+              }
+              
               updatedLayers.push(newLayer);
             }
           }
