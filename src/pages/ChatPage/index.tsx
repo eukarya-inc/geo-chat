@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import AIChat from '../../components/chat/AIChatModeling';
+import AIChat from '../../components/chat';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';

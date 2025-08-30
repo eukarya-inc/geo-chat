@@ -8,6 +8,7 @@ import type { VegaChartSpec } from '../../types/chart';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
+import { isTableCreatedOnlyMessage, removeMetadataMarkers } from './utils';
 
 interface StructuredMessageRendererProps {
     message: StructuredMessage;
@@ -662,11 +663,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     }
     
     // Handle plain string content (for user messages)
-    // Remove context markers, TABLE_INFO markers, and check for table created markers
-    const stringContent = (message.content as string)
-        .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
-        .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
-        .trim();
+    // Remove metadata markers for display
+    const stringContent = removeMetadataMarkers(message.content as string);
     const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
     const tableMatches = Array.from(stringContent.matchAll(tableCreatedRegex));
     
@@ -719,10 +717,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             );
         }
         
-        // Check if this message only contains TABLE_CREATED markers
-        const textWithoutTableMarkers = stringContent.replace(/<!--TABLE_CREATED:[^>]+-->/g, '').trim();
-        
-        if (tableMatches.length > 0 && !textWithoutTableMarkers) {
+        // Check if this message only contains TABLE_CREATED markers using shared utility
+        if (isTableCreatedOnlyMessage(message.content as string)) {
             // This message ONLY contains TABLE_CREATED markers, no other text
             // Render without bubble styling
             return <div className="space-y-1">{parts}</div>;
