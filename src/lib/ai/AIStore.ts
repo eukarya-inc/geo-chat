@@ -105,6 +105,7 @@ export class AIStore {
       onChartDelete?: (tableName: string) => Promise<void>;
       getCurrentChatState?: () => ChatState | null;
       onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+      onMapStyleDelete?: (tableName: string) => Promise<void>;
       onMessageComplete?: () => void;
     }
   ): Promise<void> {
@@ -177,7 +178,8 @@ export class AIStore {
         onChartUpdate: options.onChartUpdate,
         onChartDelete: options.onChartDelete,
         getCurrentChatState: options.getCurrentChatState,
-        onMapStyleUpdate: options.onMapStyleUpdate
+        onMapStyleUpdate: options.onMapStyleUpdate,
+        onMapStyleDelete: options.onMapStyleDelete
       });
 
       const assistantMessage: StructuredMessage = { 
