@@ -10,6 +10,7 @@ import { generatePromptSuggestions } from '../../lib/ai/promptSuggestionService'
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../map';
+import { isTableCreatedOnlyMessage } from './utils';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -478,14 +479,12 @@ export default function AIChat({
                     const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
 
                     const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
-                    // Check if this is only a TABLE_CREATED message (with or without TABLE_INFO)
-                    const contentWithoutTableInfo = userContent.replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '');
-                    const isTableOnlyMessage = contentWithoutTableInfo.includes('<!--TABLE_CREATED:') &&
-                                              contentWithoutTableInfo.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
+                    // Check if this is only a TABLE_CREATED message using shared utility
+                    const isTableOnly = isTableCreatedOnlyMessage(userContent);
 
                     return (
                         <div key={groupIndex} className="mb-4">
-                            {isTableOnlyMessage ? (
+                            {isTableOnly ? (
                                 <div className="mb-2 w-full">
                                     <StructuredMessageRenderer
                                         message={group.userMessage}
