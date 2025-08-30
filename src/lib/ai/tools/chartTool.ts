@@ -63,7 +63,7 @@ export function createChartUpdateTool(
         
         When columnStatistics is available from duckdb_query:
         
-        For NUMERIC columns (with min, max, avg, median, p50, p90):
+        For NUMERIC columns (with min, max, avg, median, p50, p75, p90, p95):
         - Wide range (max - min > 1000): Consider log scale {"scale": {"type": "log"}}
         - High variance (stddev/avg > 0.5): Use box plot or violin plot to show distribution
         - Skewed data (median << avg): Highlight outliers or use percentile bands
