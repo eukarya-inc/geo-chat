@@ -77,7 +77,25 @@ export function useMapVisualization(
         });
     }, [currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
-
+    // Delete table styles for a dropped table
+    const deleteTableStyle = useCallback((tableName: string) => {
+        if (!tableName) {
+            console.warn('No table name provided for style deletion');
+            return;
+        }
+        
+        const currentSpecs = currentChatState?.mapSpecs || {};
+        
+        // Remove the mapSpec for the dropped table
+        const updatedMapSpecs = { ...currentSpecs };
+        delete updatedMapSpecs[tableName];
+        
+        updateChatStateAtomSet({
+            mapSpecs: updatedMapSpecs
+        });
+        
+        console.log(`[Map Visualization] Deleted map spec for table: ${tableName}`);
+    }, [currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
     return {
         mapSelectedColumns,
@@ -85,5 +103,6 @@ export function useMapVisualization(
         tableStyles,
         mapStyle,
         updateTableStyle,
+        deleteTableStyle,
     };
 }

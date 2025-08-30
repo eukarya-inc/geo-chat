@@ -68,6 +68,7 @@ function ChatPage() {
         tableStyles,
         mapStyle,
         updateTableStyle,
+        deleteTableStyle,
     } = useMapVisualization(selectedTable, connection);
 
     // Chart visualization
@@ -157,6 +158,9 @@ function ChatPage() {
                             getCurrentChatState={getCurrentChatState}
                             onMapStyleUpdate={async (tableName: string, style: import('../../components/map').TableStyle) => {
                                 updateTableStyle(tableName, style);
+                            }}
+                            onMapStyleDelete={async (tableName: string) => {
+                                deleteTableStyle(tableName);
                             }}
                             onConversationCompleted={syncImmediately}
                             remoteFileComponent={(onClose) => (

@@ -21,6 +21,7 @@ export interface StreamGeneratorOptions {
   onChartDelete?: (tableName: string) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
   onMapStyleUpdate?: (tableName: string, style: import('../../components/map').TableStyle) => Promise<void>;
+  onMapStyleDelete?: (tableName: string) => Promise<void>;
 }
 
 export type StreamPart = 
@@ -43,7 +44,8 @@ export async function* createAIStreamGenerator({
   onChartUpdate,
   onChartDelete,
   getCurrentChatState,
-  onMapStyleUpdate
+  onMapStyleUpdate,
+  onMapStyleDelete
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
   try {
     const anthropicClient = createAnthropic({
@@ -58,7 +60,7 @@ export async function* createAIStreamGenerator({
       messages,
       tools: {
         ...(dbContext && {
-          duckdb_query: createDuckDBTool(dbContext, schema, apiKey),
+          duckdb_query: createDuckDBTool(dbContext, schema, apiKey, onChartDelete, onMapStyleDelete),
           ...createGeocodingTools(dbContext),
         }),
         ...(onChartUpdate && createChartUpdateTool(onChartUpdate) ? {

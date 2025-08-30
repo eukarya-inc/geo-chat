@@ -31,7 +31,13 @@ export type Result = {
   warning?: string;
 };
 
-export function createDuckDBTool(dbContext: DBContext, schema: string | null, apiKey?: string) {
+export function createDuckDBTool(
+  dbContext: DBContext, 
+  schema: string | null, 
+  apiKey?: string,
+  onChartDelete?: (tableName: string) => Promise<void>,
+  onMapStyleDelete?: (tableName: string) => Promise<void>
+) {
   return tool({
     description,
     parameters: z.object({
@@ -119,6 +125,33 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
                 // Record the CREATE TABLE SQL in history with explanation
                 if (dbContext) {
                   dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation, schema);
+                }
+              }
+            }
+            
+            // Handle DROP TABLE statements
+            if (sqlType.isDropTable) {
+              const dropTableNameMatch = sql.match(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+              if (dropTableNameMatch) {
+                const droppedTableName = dropTableNameMatch[1];
+                
+                // Delete associated chart and map specs
+                if (onChartDelete) {
+                  try {
+                    await onChartDelete(droppedTableName);
+                    console.log(`[DuckDB Tool] Deleted chart spec for dropped table: ${droppedTableName}`);
+                  } catch (error) {
+                    console.error(`Failed to delete chart spec for table ${droppedTableName}:`, error);
+                  }
+                }
+                
+                if (onMapStyleDelete) {
+                  try {
+                    await onMapStyleDelete(droppedTableName);
+                    console.log(`[DuckDB Tool] Deleted map style for dropped table: ${droppedTableName}`);
+                  } catch (error) {
+                    console.error(`Failed to delete map style for table ${droppedTableName}:`, error);
+                  }
                 }
               }
             }

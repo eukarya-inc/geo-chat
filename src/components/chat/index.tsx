@@ -26,6 +26,7 @@ interface AIChatProps {
     onChartDelete?: (tableName: string) => Promise<void>;
     getCurrentChatState?: () => ChatState | null;
     onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+    onMapStyleDelete?: (tableName: string) => Promise<void>;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
 }
@@ -44,6 +45,7 @@ export default function AIChat({
     onChartDelete,
     getCurrentChatState,
     onMapStyleUpdate,
+    onMapStyleDelete,
     remoteFileComponent,
     onConversationCompleted
 }: AIChatProps) {
@@ -101,6 +103,7 @@ export default function AIChat({
         onChartDelete,
         getCurrentChatState,
         onMapStyleUpdate,
+        onMapStyleDelete,
         onConversationCompleted
     });
 

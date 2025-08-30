@@ -17,6 +17,7 @@ interface UseAIChatOptions {
   onChartDelete?: (tableName: string) => Promise<void>;
   getCurrentChatState?: () => ChatState | null;
   onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+  onMapStyleDelete?: (tableName: string) => Promise<void>;
   onConversationCompleted?: () => void;
 }
 
@@ -31,6 +32,7 @@ export function useAIChat({
   onChartDelete,
   getCurrentChatState,
   onMapStyleUpdate,
+  onMapStyleDelete,
   onConversationCompleted
 }: UseAIChatOptions) {
   const [input, setInput] = useState('');
@@ -69,9 +71,10 @@ export function useAIChat({
       onChartDelete,
       getCurrentChatState,
       onMapStyleUpdate,
+      onMapStyleDelete,
       onMessageComplete: onConversationCompleted
     });
-  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, onChartDelete, getCurrentChatState, onMapStyleUpdate, onConversationCompleted]);
+  }, [chatId, resolvedApiKey, dbContext, schema, selectedTable, onMessagesChange, onChartUpdate, onChartDelete, getCurrentChatState, onMapStyleUpdate, onMapStyleDelete, onConversationCompleted]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
