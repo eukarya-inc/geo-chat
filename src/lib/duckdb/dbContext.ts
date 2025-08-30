@@ -510,7 +510,7 @@ class DatabaseContext implements DBContext {
            upperSql.includes('CREATE INDEX') ||
            upperSql.includes('DROP INDEX');
   }
-  
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async executeQuery(sql: string, schema: string | null = null): Promise<any[]> {
     const sanitizedSchema = this.sanitizeSchemaName(schema);
@@ -564,13 +564,27 @@ class DatabaseContext implements DBContext {
 
   async dropTable(tableName: string, schema: string | null = null): Promise<void> {
     const sanitizedSchema = this.sanitizeSchemaName(schema);
+    console.log(`[DBContext] Dropping table: ${sanitizedSchema ? `${sanitizedSchema}.` : ''}${tableName}`);
+    
     const conn = await this.connect(sanitizedSchema);
     try {
       await conn.query(`DROP TABLE IF EXISTS "${tableName}"`);
-      this.notifyTableChange(undefined, schema);
-    } finally {
-      await conn.close();
+      
+      // Force checkpoint to ensure changes are persisted
+      await conn.query('CHECKPOINT;');
+      try {
+        await conn.query('PRAGMA force_checkpoint;');
+      } catch {
+        // force_checkpoint might not be available in all versions
+      }
+      
+      // Notify listeners that the table was dropped
+      this.notifyTableChange(tableName, schema);
+    } catch (error) {
+      console.error(`[DBContext] Failed to drop table ${tableName}:`, error);
+      throw new Error(`Failed to drop table ${tableName}: ${error instanceof Error ? error.message : error}`);
     }
+    // DO NOT close the connection - it's returned to the pool automatically
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

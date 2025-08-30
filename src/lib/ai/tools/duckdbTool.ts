@@ -42,8 +42,10 @@ export function createDuckDBTool(
     description,
     parameters: z.object({
       sql: z.string().describe('SQL query to execute'),
+      purpose: z.enum(['chart', 'map', 'both', 'analysis', 'none']).optional()
+        .describe('Purpose of the table being created: chart (for chart visualization), map (for map visualization), both (for both chart and map), analysis (for data analysis only), none (no specific visualization purpose)'),
     }),
-    execute: async ({ sql }): Promise<Result> => {
+    execute: async ({ sql, purpose }): Promise<Result> => {
       try {
         // Check SQL statement type and multiple statements
         const sqlType = checkSQLType(sql);
@@ -209,6 +211,56 @@ export function createDuckDBTool(
                 toolResult.suggestions.push(...suggestions);
               }
 
+              // Validate based on purpose
+              if (purpose && purpose !== 'none' && purpose !== 'analysis') {
+                // Check for 0 records - drop table if empty
+                if (tableInfo.rowCount === 0) {
+                  console.log(`[DuckDB Tool] Dropping table ${createdTableName} - 0 records found`);
+                  try {
+                    await dbContext.dropTable(createdTableName, schema);
+                  } catch (dropError) {
+                    console.error('Failed to drop table:', dropError);
+                  }
+                  
+                  return {
+                    error: `テーブル「${createdTableName}」は作成されましたが、レコードが0件でした。テーブルは削除されました。条件を見直してデータが取得できるようにしてください。`,
+                    suggestion: 'Check your WHERE conditions, JOIN clauses, or source data to ensure records are returned. You may need to adjust filters or date ranges.',
+                    sql: sql
+                  };
+                }
+
+                // Check for geometry columns if purpose includes map
+                if ((purpose === 'map' || purpose === 'both') && !tableInfo.hasGeometry) {
+                  // Drop the table since it doesn't meet requirements
+                  console.log(`[DuckDB Tool] Dropping table ${createdTableName} - no geometry column found for map visualization`);
+                  try {
+                    await dbContext.dropTable(createdTableName, schema);
+                  } catch (dropError) {
+                    console.error('Failed to drop table:', dropError);
+                  }
+                  
+                  return {
+                    error: `テーブル「${createdTableName}」は地図表示用に作成されましたが、ジオメトリカラムが含まれていません。テーブルは削除されました。ST_Point()やST_Read()を使用してジオメトリカラムを追加してください。`,
+                    suggestion: 'For map visualization, ensure your table includes a geometry column. Example: CREATE TABLE with_geom AS SELECT *, ST_Point(longitude, latitude) as geometry FROM your_table',
+                    sql: sql
+                  };
+                }
+
+                // Check for single record warning
+                if ((purpose === 'chart' || purpose === 'map' || purpose === 'both') && tableInfo.rowCount === 1) {
+                  if (!toolResult.warning) {
+                    toolResult.warning = `⚠️ テーブル「${createdTableName}」には1件のレコードしかありません。可視化には複数のデータポイントが推奨されます。`;
+                  }
+                  if (!toolResult.suggestions) {
+                    toolResult.suggestions = [];
+                  }
+                  toolResult.suggestions.unshift(
+                    '単一レコードのため、グラフや地図での可視化効果が限定的です。',
+                    'より多くのデータを取得するか、集計条件を見直すことをお勧めします。'
+                  );
+                }
+              }
+
             } catch (schemaError) {
               console.error('Failed to get table schema:', schemaError);
               // Continue without schema info if there's an error
@@ -270,6 +322,19 @@ export function createDuckDBTool(
 
 const description = `
 This tool allows you to execute SQL queries on a DuckDB database. Use it for data analysis, filtering, aggregation, and visualization of existing data.
+
+PURPOSE PARAMETER:
+- **ONLY for CREATE TABLE statements**: ALWAYS specify the 'purpose' parameter when creating tables
+  * 'chart': Table will be used for chart visualization only
+  * 'map': Table will be used for map visualization (REQUIRES geometry column - table will be dropped if missing)
+  * 'both': Table will be used for both chart and map (REQUIRES geometry column)
+  * 'analysis': Table is for data analysis only, not for visualization
+- **For ALL other queries (SELECT, UPDATE, etc.)**: Use 'none' or omit the parameter entirely
+
+VALIDATION RULES (only apply to CREATE TABLE):
+- If table has 0 records, it will be AUTOMATICALLY DROPPED
+- If purpose is 'map' or 'both' and no geometry column exists, the table will be AUTOMATICALLY DROPPED
+- If purpose is 'chart', 'map', or 'both' and only 1 record exists, a warning will be shown
 
 MAP VISUALIZATION REQUIREMENTS:
 - For a table to be displayed on a map, it MUST have a geometry column
