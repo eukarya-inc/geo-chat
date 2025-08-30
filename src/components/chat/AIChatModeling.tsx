@@ -89,7 +89,6 @@ export default function AIChat({
         handleSubmit,
         handleStop,
         sendMessage,
-        isApiKeyConfigured,
     } = useAIChat({
         chatId: effectiveChatId,
         schema: schemaName,
@@ -464,16 +463,6 @@ export default function AIChat({
         }
     };
 
-    if (!isApiKeyConfigured) {
-        return (
-            <div className="p-5 bg-gray-100 rounded-lg m-5 text-gray-800 text-left">
-                <h3 className="text-gray-800 mb-4 font-semibold text-lg">AI Chat</h3>
-                <p className="text-gray-600">
-                    AIチャット機能を使用するには、.envファイルにVITE_ANTHROPIC_API_KEYを設定してください。
-                </p>
-            </div>
-        );
-    }
 
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
