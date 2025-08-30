@@ -1,12 +1,28 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
-import { 
-  geocodeSingleAddress, 
+import {
+  geocodeSingleAddress,
   geocodeMultipleAddresses,
   analyzeTableForGeocoding,
-  addGeocodedColumnsToTable
+  addGeocodedColumnsToTable,
+  type GeocodeResult
 } from '../../../utils/geocoding';
+
+export type Result = {
+  error: string;
+  suggestions?: string[];
+} | {
+  success: boolean;
+  data: GeocodeResult;
+  message?: string;
+  geometryInfo?: {
+    columnName: string;
+    geometryType: string;
+    message: string;
+  };
+  suggestions?: string[];
+};
 
 export function createGeocodingTools(dbContext: DBContext) {
   return {
@@ -15,7 +31,7 @@ export function createGeocodingTools(dbContext: DBContext) {
       parameters: z.object({
         address: z.string().describe('The address to geocode (e.g., "1600 Pennsylvania Avenue, Washington, DC")')
       }),
-      execute: async ({ address }) => {
+      execute: async ({ address }): Promise<Result> => {
         try {
           const result = await geocodeSingleAddress(address);
           return {
@@ -91,10 +107,32 @@ export function createGeocodingTools(dbContext: DBContext) {
       execute: async ({ tableName, addressColumn, batchSize = 10, rateLimitMs = 1000 }) => {
         try {
           const result = await addGeocodedColumnsToTable(dbContext, tableName, addressColumn, batchSize, rateLimitMs);
+
+          if (!result.success || result.stats.successful < 0) {
+            throw new Error(result.message);
+          }
+
+          await dbContext.executeQuery(
+            `ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS geocoded_geometry GEOMETRY;`,
+            null
+          );
+          await dbContext.executeQuery(
+            `UPDATE ${tableName} SET geocoded_geometry = ST_Point(geocoded_lng, geocoded_lat) WHERE geocoded_lat IS NOT NULL AND geocoded_lng IS NOT NULL;`,
+            null
+          );
+
           return {
             success: result.success,
             data: result.stats,
-            message: result.message
+            message: result.message,
+            geometryInfo: {
+              columnName: 'geocoded_geometry',
+              geometryType: 'GEOMETRY(POINT)',
+              message: 'ジオメトリカラム「geocoded_geometry」が追加されました。このテーブルは地図での可視化が可能です。'
+            },
+            suggestions: [
+              '地図スタイルを設定するには update_map_style_for_table ツールを使用してください。'
+            ]
           };
         } catch (error) {
           return {
