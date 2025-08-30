@@ -5,7 +5,7 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 import { checkSQLType } from '../../../utils/sqlTypeChecker';
-import { analyzeTableGeometry, formatGeometryInfo } from './geometryDetector';
+import { getTableInfo } from '../../../utils/tableInfoUtils';
 
 export type Result = {
   error: string;
@@ -158,54 +158,22 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
             toolResult.createdTable = createdTableName;
 
             try {
-              // Get table schema
-              const schemaQuery = schema
-                ? `DESCRIBE ${schema}.${createdTableName}`
-                : `DESCRIBE ${createdTableName}`;
-              const schemaResult = await dbContext.executeQuery(schemaQuery, schema);
-              // Data is already converted from Arrow format by executeQuery
-              const schemaData = schemaResult as Array<{column_name: string, column_type: string}>;
-
-              toolResult.tableSchema = schemaData.map(row => ({
-                name: row.column_name,
-                type: row.column_type
-              }));
-
-              // Analyze geometry columns using the new detector
-              const geometryAnalysis = await analyzeTableGeometry(dbContext, createdTableName, schema);
-              toolResult.hasGeometry = geometryAnalysis.hasGeometry;
-              toolResult.geometryInfo = geometryAnalysis.geometryInfo;
-
-              // Get sample data (first 5 rows)
-              const sampleQuery = schema
-                ? `SELECT * FROM ${schema}.${createdTableName} LIMIT 5`
-                : `SELECT * FROM ${createdTableName} LIMIT 5`;
-              const sampleResult = await dbContext.executeQuery(sampleQuery, schema);
-              // Data is already converted from Arrow format by executeQuery
-              toolResult.sampleData = sampleResult as Record<string, unknown>[];
-
-              // Add appropriate suggestions based on geometry presence
+              // Get comprehensive table information using the shared utility
+              const tableInfo = await getTableInfo(dbContext, createdTableName, schema);
+              
+              // Map the information to the existing tool result structure
+              toolResult.tableSchema = tableInfo.tableSchema;
+              toolResult.hasGeometry = tableInfo.hasGeometry;
+              toolResult.geometryInfo = tableInfo.geometryInfo;
+              toolResult.sampleData = tableInfo.sampleData;
+              
+              // Use suggestions from tableInfo
               if (!toolResult.suggestions) {
                 toolResult.suggestions = [];
               }
-
-              if (toolResult.hasGeometry && toolResult.geometryInfo) {
-                const geometryInfoStr = formatGeometryInfo(toolResult.geometryInfo);
-
-                toolResult.suggestions.unshift(
-                  `テーブル「${createdTableName}」が作成されました。`,
-                  `ジオメトリカラムが検出されました: ${geometryInfoStr}`,
-                  `このテーブルは地図での可視化が可能です。地図スタイルを設定するには update_map_style_for_table ツールを使用してください。`
-                );
-              } else {
-                toolResult.suggestions.unshift(
-                  `テーブル「${createdTableName}」が作成されました。ジオメトリフィールドがないため、地図での可視化はできません。`,
-                  `グラフでの可視化は update_vega_chart_spec_for_table ツールを使用してください。`
-                );
+              if (tableInfo.suggestions) {
+                toolResult.suggestions.push(...tableInfo.suggestions);
               }
-
-              // Add chart suggestion for all tables
-              toolResult.suggestions.push(`このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
 
             } catch (schemaError) {
               console.error('Failed to get table schema:', schemaError);

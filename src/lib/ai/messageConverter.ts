@@ -16,10 +16,33 @@ export const messageConverter = {
       let content = '';
       
       if (typeof msg.content === 'string') {
-        // Remove ALL HTML comments including CONTEXT markers
+        // First check if this is ONLY a TABLE_CREATED message with TABLE_INFO
+        const hasTableCreated = msg.content.includes('<!--TABLE_CREATED:');
+        const hasTableInfo = msg.content.includes('<!--TABLE_INFO_START-->');
+        
+        // Remove specific markers while preserving message intent
         content = msg.content
-          .replace(/<!--[^>]*-->/g, '')
+          // Remove TABLE_INFO blocks
+          .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
+          // Remove CONTEXT blocks
+          .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
+          // Remove FINAL_MESSAGE marker
+          .replace(/<!--FINAL_MESSAGE-->/g, '')
           .trim();
+        
+        // If this was ONLY TABLE_CREATED + TABLE_INFO, skip it entirely
+        if (hasTableCreated && hasTableInfo) {
+          const remainingAfterRemoval = content
+            .replace(/<!--TABLE_CREATED:[^>]+-->/g, '')
+            .trim();
+          if (!remainingAfterRemoval) {
+            // This message only contained TABLE_CREATED and TABLE_INFO, skip it
+            continue;
+          }
+        }
+        
+        // Now remove ALL remaining HTML comments for the AI
+        content = content.replace(/<!--[^>]*-->/g, '').trim();
       } else if (Array.isArray(msg.content)) {
         // Convert structured content to text
         const textParts = msg.content
