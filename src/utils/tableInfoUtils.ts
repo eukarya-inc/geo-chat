@@ -287,10 +287,73 @@ export async function getTableInfo(
       );
     }
 
-    // Add chart suggestion for all tables
+    // Add chart suggestion for all tables with statistics-based recommendations
     info.suggestions.push(
       `このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`
     );
+
+    // Add visualization suggestions based on column statistics
+    if (info.columnStatistics) {
+      const numericColumns = Object.entries(info.columnStatistics)
+        .filter(([, stats]) => stats.min !== undefined && stats.max !== undefined)
+        .map(([name, stats]) => ({ name, stats }));
+      
+      const categoricalColumns = Object.entries(info.columnStatistics)
+        .filter(([, stats]) => stats.distinctCount !== undefined && stats.distinctCount < 20)
+        .map(([name, stats]) => ({ name, stats }));
+      
+      const dateColumns = Object.entries(info.columnStatistics)
+        .filter(([, stats]) => stats.minDate !== undefined)
+        .map(([name, stats]) => ({ name, stats }));
+
+      if (numericColumns.length > 0) {
+        const suggestions: string[] = [];
+        
+        // Suggest histogram for columns with wide ranges
+        numericColumns.forEach(({ name, stats }) => {
+          const range = (stats.max || 0) - (stats.min || 0);
+          const cv = stats.stddev && stats.avg ? (stats.stddev / Math.abs(stats.avg)) : 0;
+          
+          if (range > 0) {
+            suggestions.push(`「${name}」列は数値データ（範囲: ${stats.min?.toFixed(2)} - ${stats.max?.toFixed(2)}）です。ヒストグラムや散布図での可視化が適しています。`);
+          }
+          
+          if (cv > 0.5) {
+            suggestions.push(`「${name}」列は変動が大きい（標準偏差: ${stats.stddev?.toFixed(2)}）ため、箱ひげ図での外れ値確認をお勧めします。`);
+          }
+        });
+        
+        if (suggestions.length > 0) {
+          info.suggestions.push(...suggestions.slice(0, 2)); // Limit to 2 suggestions
+        }
+      }
+
+      if (categoricalColumns.length > 0 && info.suggestions) {
+        const suggestions = info.suggestions;
+        categoricalColumns.slice(0, 2).forEach(({ name, stats }) => {
+          suggestions.push(
+            `「${name}」列はカテゴリカルデータ（${stats.distinctCount}個のユニーク値）です。棒グラフや円グラフでの可視化が適しています。`
+          );
+        });
+      }
+
+      if (dateColumns.length > 0 && info.suggestions) {
+        const suggestions = info.suggestions;
+        dateColumns.slice(0, 1).forEach(({ name, stats }) => {
+          suggestions.push(
+            `「${name}」列は時系列データ（${stats.minDate} 〜 ${stats.maxDate}）です。折れ線グラフでの時系列分析が適しています。`
+          );
+        });
+      }
+
+      // Add suggestions for map visualization based on statistics
+      if (info.hasGeometry && numericColumns.length > 0 && info.suggestions) {
+        const bestNumericCol = numericColumns[0];
+        info.suggestions.push(
+          `地図の色分けには「${bestNumericCol.name}」列（範囲: ${bestNumericCol.stats.min?.toFixed(2)} - ${bestNumericCol.stats.max?.toFixed(2)}）を使用すると良いでしょう。分位数（P50: ${bestNumericCol.stats.p50?.toFixed(2)}, P90: ${bestNumericCol.stats.p90?.toFixed(2)}）を考慮した段階的な色分けをお勧めします。`
+        );
+      }
+    }
 
     // Add data analysis suggestions based on row count
     if (info.rowCount) {
