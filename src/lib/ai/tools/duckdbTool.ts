@@ -6,6 +6,7 @@ import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 import { checkSQLType } from '../../../utils/sqlTypeChecker';
 import { getTableInfo } from '../../../utils/tableInfoUtils';
+import type { ColumnStatistics } from '../../../utils/tableInfoUtils';
 
 export type Result = {
   error: string;
@@ -22,6 +23,7 @@ export type Result = {
   createdTable?: string;
   tableSchema?: {name: string, type: string}[];
   sampleData?: Record<string, unknown>[];
+  columnStatistics?: Record<string, ColumnStatistics>;
   hasGeometry?: boolean;
   geometryInfo?: {columnName: string, geometryType: string}[];
   limitApplied?: boolean;
@@ -161,18 +163,17 @@ export function createDuckDBTool(dbContext: DBContext, schema: string | null, ap
               // Get comprehensive table information using the shared utility
               const tableInfo = await getTableInfo(dbContext, createdTableName, schema);
               
-              // Map the information to the existing tool result structure
-              toolResult.tableSchema = tableInfo.tableSchema;
-              toolResult.hasGeometry = tableInfo.hasGeometry;
-              toolResult.geometryInfo = tableInfo.geometryInfo;
-              toolResult.sampleData = tableInfo.sampleData;
+              // Merge tableInfo into toolResult (excluding tableName and suggestions which need special handling)
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { tableName, suggestions, ...tableInfoToMerge } = tableInfo;
+              Object.assign(toolResult, tableInfoToMerge);
               
-              // Use suggestions from tableInfo
+              // Merge suggestions
               if (!toolResult.suggestions) {
                 toolResult.suggestions = [];
               }
-              if (tableInfo.suggestions) {
-                toolResult.suggestions.push(...tableInfo.suggestions);
+              if (suggestions) {
+                toolResult.suggestions.push(...suggestions);
               }
 
             } catch (schemaError) {
