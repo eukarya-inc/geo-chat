@@ -90,3 +90,50 @@ describe('AIChatModeling TABLE_CREATED extraction', () => {
         expect(extractTableName('<!--TABLE_CREATED:test_table-->')).toBe('test_table');
     });
 });
+
+describe('TABLE_INFO marker removal', () => {
+    // Test that TABLE_INFO content is properly removed from display
+    function cleanTableInfo(content: string): string {
+        return content
+            .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
+            .trim();
+    }
+
+    it('should remove TABLE_INFO content from text', () => {
+        const content = `<!--TABLE_CREATED:customer-->
+<!--TABLE_INFO_START-->
+Table: customer
+Size: 100 rows × 5 columns
+Schema:
+  - id: BIGINT
+  - name: VARCHAR
+Sample data (first 5 rows):
+[{"id": 1, "name": "John"}]
+<!--TABLE_INFO_END-->`;
+        
+        const cleaned = cleanTableInfo(content);
+        expect(cleaned).toBe('<!--TABLE_CREATED:customer-->');
+    });
+
+    it('should preserve text before and after TABLE_INFO markers', () => {
+        const content = `Some text before
+<!--TABLE_INFO_START-->
+Table info here
+<!--TABLE_INFO_END-->
+Some text after`;
+        
+        const cleaned = cleanTableInfo(content);
+        expect(cleaned).toBe('Some text before\n\nSome text after');
+    });
+
+    it('should handle multiple TABLE_INFO blocks', () => {
+        const content = `Text 1
+<!--TABLE_INFO_START-->Info 1<!--TABLE_INFO_END-->
+Text 2
+<!--TABLE_INFO_START-->Info 2<!--TABLE_INFO_END-->
+Text 3`;
+        
+        const cleaned = cleanTableInfo(content);
+        expect(cleaned).toBe('Text 1\n\nText 2\n\nText 3');
+    });
+});

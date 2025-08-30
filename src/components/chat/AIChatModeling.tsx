@@ -478,8 +478,10 @@ export default function AIChat({
                     const isCurrentlyLoading = isLastGroup && isLoading && group.assistantMessage;
 
                     const userContent = typeof group.userMessage.content === 'string' ? group.userMessage.content : '';
-                    const isTableOnlyMessage = userContent.includes('<!--TABLE_CREATED:') &&
-                                              userContent.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
+                    // Check if this is only a TABLE_CREATED message (with or without TABLE_INFO)
+                    const contentWithoutTableInfo = userContent.replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '');
+                    const isTableOnlyMessage = contentWithoutTableInfo.includes('<!--TABLE_CREATED:') &&
+                                              contentWithoutTableInfo.replace(/<!--TABLE_CREATED:.*?-->/g, '').trim() === '';
 
                     return (
                         <div key={groupIndex} className="mb-4">

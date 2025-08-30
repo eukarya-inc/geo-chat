@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { formatSQL } from '../../utils/sqlFormatter';
+import { getTableInfo, formatTableInfoForAI } from '../../utils/tableInfoUtils';
 
 interface RemoteFileProps {
     dbContext: DBContext;
@@ -109,8 +110,13 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
             // Notify about table change with schema
             dbContext.notifyTableChange(tableName, schema);
 
-            // Send a simple table creation message
-            const tableMessage = `<!--TABLE_CREATED:${tableName}-->`;
+            // Get detailed table information for AI context
+            const tableInfo = await getTableInfo(dbContext, tableName, schema);
+            const tableInfoText = formatTableInfoForAI(tableInfo);
+            
+            // Create message with both marker and detailed info
+            // The marker is for backward compatibility and the info is for AI context
+            const tableMessage = `<!--TABLE_CREATED:${tableName}--><!--TABLE_INFO_START-->\n${tableInfoText}\n<!--TABLE_INFO_END-->`;
             
             if (onSendMessage) {
                 // Send the table message for all cases (both Example and regular Create Table)
