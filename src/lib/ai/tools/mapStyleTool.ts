@@ -111,12 +111,14 @@ IMPORTANT LIMITATIONS WITH ARRAYS:
 USING COLUMN STATISTICS FOR OPTIMAL STYLING:
 **CRITICAL**: Always check columnStatistics from duckdb_query result to create better visualizations:
 
-For numeric columns with statistics (min, max, p50, p90):
+For numeric columns with statistics (min, max, p50, p75, p90, p95):
 - Use percentile values for balanced color breaks:
   ["interpolate", ["linear"], ["get", "property_name"], 
     min_value, "#fee5d9",    // Light color for minimum
     p50_value, "#fcae91",    // Medium color at median (50% of data below)
+    p75_value, "#fc9272",    // Medium-dark at 75th percentile
     p90_value, "#fb6a4a",    // Darker color at 90th percentile
+    p95_value, "#de2d26",    // Very dark at 95th percentile
     max_value, "#cb181d"]    // Darkest for maximum values
 
 - For wide ranges (max >> min), consider logarithmic interpolation:
@@ -128,9 +130,9 @@ For categorical columns (check distinctCount):
 - Many categories (>10): Group into broader categories or use graduated colors
 
 Example with statistics:
-If columnStatistics shows: population: {min: 1000, max: 500000, p50: 25000, p90: 100000}
+If columnStatistics shows: population: {min: 1000, max: 500000, p50: 25000, p75: 50000, p90: 100000, p95: 200000}
 Use: ["interpolate", ["linear"], ["get", "population"], 
-       1000, "#ffffcc", 25000, "#feb24c", 100000, "#fd8d3c", 500000, "#e31a1c"]
+       1000, "#ffffcc", 25000, "#feb24c", 50000, "#fd8d3c", 100000, "#f03b20", 200000, "#bd0026", 500000, "#7f0000"]
 
 COMMON GEOMETRY TYPE SCENARIOS:
 

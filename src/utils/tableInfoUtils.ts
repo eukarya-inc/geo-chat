@@ -9,7 +9,9 @@ export interface ColumnStatistics {
   avg?: number;
   median?: number;
   p50?: number;
+  p75?: number;
   p90?: number;
+  p95?: number;
   stddev?: number;
   nullCount?: number;
   // For string columns
@@ -121,7 +123,9 @@ async function getColumnStatistics(
           AVG("${columnName}") as avg_val,
           MEDIAN("${columnName}") as median_val,
           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "${columnName}") as p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY "${columnName}") as p75,
           PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY "${columnName}") as p90,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "${columnName}") as p95,
           STDDEV("${columnName}") as stddev_val
         FROM ${tableRef}
         WHERE "${columnName}" IS NOT NULL
@@ -134,7 +138,9 @@ async function getColumnStatistics(
         stats.avg = row.avg_val ?? undefined;
         stats.median = row.median_val ?? undefined;
         stats.p50 = row.p50 ?? undefined;
+        stats.p75 = row.p75 ?? undefined;
         stats.p90 = row.p90 ?? undefined;
+        stats.p95 = row.p95 ?? undefined;
         stats.stddev = row.stddev_val ?? undefined;
       }
     } else if (isDateTimeType(columnType)) {
@@ -350,7 +356,7 @@ export async function getTableInfo(
       if (info.hasGeometry && numericColumns.length > 0 && info.suggestions) {
         const bestNumericCol = numericColumns[0];
         info.suggestions.push(
-          `地図の色分けには「${bestNumericCol.name}」列（範囲: ${bestNumericCol.stats.min?.toFixed(2)} - ${bestNumericCol.stats.max?.toFixed(2)}）を使用すると良いでしょう。分位数（P50: ${bestNumericCol.stats.p50?.toFixed(2)}, P90: ${bestNumericCol.stats.p90?.toFixed(2)}）を考慮した段階的な色分けをお勧めします。`
+          `地図の色分けには「${bestNumericCol.name}」列（範囲: ${bestNumericCol.stats.min?.toFixed(2)} - ${bestNumericCol.stats.max?.toFixed(2)}）を使用すると良いでしょう。分位数（P50: ${bestNumericCol.stats.p50?.toFixed(2)}, P75: ${bestNumericCol.stats.p75?.toFixed(2)}, P90: ${bestNumericCol.stats.p90?.toFixed(2)}, P95: ${bestNumericCol.stats.p95?.toFixed(2)}）を考慮した段階的な色分けをお勧めします。`
         );
       }
     }
@@ -397,8 +403,14 @@ function formatColumnStatistics(stats: ColumnStatistics): string {
       if (stats.median !== undefined && stats.median !== null) {
         parts.push(`median: ${stats.median}`);
       }
+      if (stats.p75 !== undefined && stats.p75 !== null) {
+        parts.push(`p75: ${stats.p75}`);
+      }
       if (stats.p90 !== undefined && stats.p90 !== null) {
         parts.push(`p90: ${stats.p90}`);
+      }
+      if (stats.p95 !== undefined && stats.p95 !== null) {
+        parts.push(`p95: ${stats.p95}`);
       }
       if (stats.stddev !== undefined && stats.stddev !== null) {
         parts.push(`stddev: ${typeof stats.stddev === 'number' ? stats.stddev.toFixed(2) : stats.stddev}`);
