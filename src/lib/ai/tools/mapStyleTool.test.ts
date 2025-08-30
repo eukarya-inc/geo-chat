@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMapStyleTool } from './mapStyleTool';
 import type { MapSpec } from '../../../store/remoteAtoms';
 import type { TableStyle, VectorTileLayer } from '../../../components/map';
@@ -6,11 +6,21 @@ import type { TableStyle, VectorTileLayer } from '../../../components/map';
 describe('createMapStyleTool', () => {
   let mockGetMapSpec: (tableName: string) => MapSpec | undefined;
   let mockOnMapStyleUpdate: (tableName: string, style: TableStyle) => Promise<void>;
+  let originalConsoleWarn: typeof console.warn;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetMapSpec = vi.fn();
     mockOnMapStyleUpdate = vi.fn();
+    
+    // Suppress console.warn during tests
+    originalConsoleWarn = console.warn;
+    console.warn = vi.fn();
+  });
+
+  afterEach(() => {
+    // Restore original console.warn
+    console.warn = originalConsoleWarn;
   });
 
   it('should return null if onMapStyleUpdate is not provided', () => {

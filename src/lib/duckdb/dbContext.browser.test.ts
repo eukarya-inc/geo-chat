@@ -7,8 +7,22 @@ import { createDBContext, type DBContext } from './dbContext';
 describe('DBContext Browser Integration', () => {
   let db: AsyncDuckDB;
   let dbContext: DBContext;
+  let originalConsole: {
+    log: typeof console.log;
+    warn: typeof console.warn;
+    error: typeof console.error;
+  };
 
   beforeAll(async () => {
+    // Suppress console output during tests
+    originalConsole = {
+      log: console.log,
+      warn: console.warn,
+      error: console.error
+    };
+    console.log = vi.fn();
+    console.warn = vi.fn();
+    console.error = vi.fn();
     // Initialize real DuckDB-WASM instance
     const MANUAL_BUNDLES = {
       mvp: {
@@ -45,17 +59,24 @@ describe('DBContext Browser Integration', () => {
     if (db) {
       await db.terminate();
     }
+    
+    // Restore original console functions
+    if (originalConsole) {
+      console.log = originalConsole.log;
+      console.warn = originalConsole.warn;
+      console.error = originalConsole.error;
+    }
   });
 
-  describe('executeQuery', () => {
-    it('should execute DDL statements (CREATE TABLE)', async () => {
+  describe.concurrent('executeQuery', () => {
+    it.concurrent('should execute DDL statements (CREATE TABLE)', async () => {
       await dbContext.executeQuery('CREATE TABLE test_ddl (id INTEGER, name VARCHAR)');
       const tables = await dbContext.getTables();
       expect(tables).toContain('test_ddl');
       await dbContext.dropTable('test_ddl');
     });
 
-    it('should execute DML statements (INSERT, SELECT)', async () => {
+    it.concurrent('should execute DML statements (INSERT, SELECT)', async () => {
       await dbContext.executeQuery('CREATE TABLE test_dml (id INTEGER, name VARCHAR)');
       await dbContext.executeQuery("INSERT INTO test_dml VALUES (1, 'Alice'), (2, 'Bob')");
       
@@ -68,7 +89,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('test_dml');
     });
 
-    it('should handle SHOW TABLES command', async () => {
+    it.concurrent('should handle SHOW TABLES command', async () => {
       await dbContext.executeQuery('CREATE TABLE table_a (id INTEGER)');
       await dbContext.executeQuery('CREATE TABLE table_b (id INTEGER)');
       
@@ -82,7 +103,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('table_b');
     });
 
-    it('should handle BigInt values correctly', async () => {
+    it.concurrent('should handle BigInt values correctly', async () => {
       await dbContext.executeQuery('CREATE TABLE big_numbers (id BIGINT)');
       await dbContext.executeQuery('INSERT INTO big_numbers VALUES (9007199254740992)');
       
@@ -93,7 +114,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('big_numbers');
     });
 
-    it('should work with schemas', async () => {
+    it.concurrent('should work with schemas', async () => {
       const schemaName = `schema_${Date.now()}`;
       
       await dbContext.executeQuery('CREATE TABLE products (id INTEGER, name VARCHAR)', schemaName);
@@ -105,7 +126,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('products', schemaName);
     });
 
-    it('should handle geospatial queries', async () => {
+    it.concurrent('should handle geospatial queries', async () => {
       await dbContext.executeQuery(`
         CREATE TABLE locations (
           id INTEGER,
@@ -135,8 +156,8 @@ describe('DBContext Browser Integration', () => {
     });
   });
 
-  describe('getTables', () => {
-    it('should return list of tables in main schema', async () => {
+  describe.concurrent('getTables', () => {
+    it.concurrent('should return list of tables in main schema', async () => {
       await dbContext.executeQuery('CREATE TABLE table1 (id INTEGER)');
       await dbContext.executeQuery('CREATE TABLE table2 (id INTEGER)');
       
@@ -149,7 +170,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('table2');
     });
 
-    it('should return tables from specific schema', async () => {
+    it.concurrent('should return tables from specific schema', async () => {
       const schemaName = `test_schema_${Date.now()}`;
       
       await dbContext.executeQuery('CREATE TABLE schema_table (id INTEGER)', schemaName);
@@ -164,8 +185,8 @@ describe('DBContext Browser Integration', () => {
     });
   });
 
-  describe('getTableColumns', () => {
-    it('should return column information', async () => {
+  describe.concurrent('getTableColumns', () => {
+    it.concurrent('should return column information', async () => {
       await dbContext.executeQuery(`
         CREATE TABLE test_columns (
           id INTEGER PRIMARY KEY,
@@ -187,7 +208,7 @@ describe('DBContext Browser Integration', () => {
       await dbContext.dropTable('test_columns');
     });
 
-    it('should throw error for non-existent table', async () => {
+    it.concurrent('should throw error for non-existent table', async () => {
       await expect(dbContext.getTableColumns('non_existent_table')).rejects.toThrow(
         "Table 'non_existent_table' does not exist or is not accessible"
       );
@@ -392,15 +413,22 @@ describe('DBContext Browser Integration', () => {
 
   describe('getPoolStats', () => {
     it('should return connection pool statistics', async () => {
+      // Get initial stats to track baseline
+      const statsBefore = dbContext.getPoolStats();
+      const nullSchemaStatsBefore = statsBefore.find(s => s.schema === null);
+      const initialNullInUse = nullSchemaStatsBefore?.inUse ?? 0;
+      
       const conn1 = await dbContext.createManagedConnection(null);
       const conn2 = await dbContext.createManagedConnection('schema1');
       
       const stats = dbContext.getPoolStats();
       
-      expect(stats).toContainEqual(expect.objectContaining({ 
-        schema: null, 
-        inUse: expect.any(Number) 
-      }));
+      // Check that null schema exists and has increased by 1
+      const nullSchemaStats = stats.find(s => s.schema === null);
+      expect(nullSchemaStats).toBeDefined();
+      expect(nullSchemaStats!.inUse).toBe(initialNullInUse + 1);
+      
+      // Check that schema1 was created with 1 connection in use
       expect(stats).toContainEqual(expect.objectContaining({ 
         schema: 'schema1', 
         total: 1,
@@ -412,10 +440,12 @@ describe('DBContext Browser Integration', () => {
       
       const statsAfter = dbContext.getPoolStats();
       
-      expect(statsAfter).toContainEqual(expect.objectContaining({ 
-        schema: null, 
-        inUse: 0 
-      }));
+      // Check that null schema connections returned to baseline
+      const nullSchemaStatsAfter = statsAfter.find(s => s.schema === null);
+      expect(nullSchemaStatsAfter).toBeDefined();
+      expect(nullSchemaStatsAfter!.inUse).toBe(initialNullInUse);
+      
+      // Check that schema1 has no connections in use
       expect(statsAfter).toContainEqual(expect.objectContaining({ 
         schema: 'schema1', 
         inUse: 0 
@@ -445,8 +475,8 @@ describe('DBContext Browser Integration', () => {
     });
   });
 
-  describe('getSQLHistory', () => {
-    it('should return SQL history manager instance', () => {
+  describe.concurrent('getSQLHistory', () => {
+    it.concurrent('should return SQL history manager instance', () => {
       const history = dbContext.getSQLHistory();
       
       expect(history).toBeDefined();
