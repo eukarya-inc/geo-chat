@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   detectGeometryColumns,
   getGeometryTypes,
@@ -8,6 +8,22 @@ import {
 import type { DBContext } from '../../duckdb/dbContext';
 
 describe('geometryDetector', () => {
+  let originalConsoleWarn: typeof console.warn;
+  let originalConsoleError: typeof console.error;
+
+  beforeEach(() => {
+    // Suppress console output during tests
+    originalConsoleWarn = console.warn;
+    originalConsoleError = console.error;
+    console.warn = vi.fn();
+    console.error = vi.fn();
+  });
+
+  afterEach(() => {
+    // Restore original console functions
+    console.warn = originalConsoleWarn;
+    console.error = originalConsoleError;
+  });
   describe('detectGeometryColumns', () => {
     it('should detect GEOMETRY columns', () => {
       const schema = [

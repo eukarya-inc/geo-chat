@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from '../../duckdb/dbContext';
@@ -7,8 +7,22 @@ import { createDuckDBTool } from './duckdbTool';
 describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
   let db: AsyncDuckDB;
   let dbContext: DBContext;
+  let originalConsole: {
+    log: typeof console.log;
+    warn: typeof console.warn;
+    error: typeof console.error;
+  };
 
   beforeAll(async () => {
+    // Suppress console output during tests
+    originalConsole = {
+      log: console.log,
+      warn: console.warn,
+      error: console.error
+    };
+    console.log = vi.fn();
+    console.warn = vi.fn();
+    console.error = vi.fn();
     // Initialize real DuckDB-WASM instance (browser)
     const MANUAL_BUNDLES = {
       mvp: {
@@ -23,7 +37,7 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
     const worker = new Worker(bundle.mainWorker!);
-    const logger = new duckdb.ConsoleLogger();
+    const logger = new duckdb.VoidLogger();
     db = new duckdb.AsyncDuckDB(logger, worker);
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
@@ -35,6 +49,20 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     // Create DB context for tests
     dbContext = createDBContext(db);
+  });
+
+  afterAll(async () => {
+    // Cleanup
+    if (db) {
+      await db.terminate();
+    }
+    
+    // Restore original console functions
+    if (originalConsole) {
+      console.log = originalConsole.log;
+      console.warn = originalConsole.warn;
+      console.error = originalConsole.error;
+    }
   });
 
   it('returns error for multiple SQL statements', async () => {
