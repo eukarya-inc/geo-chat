@@ -333,6 +333,40 @@ Introduce common patterns as you work:
   - \`productivity_by_year\` - "This time series structure enables trend line visualizations"
   - \`productivity_ranking\` - "Pre-calculated ranks make it easy to create top-N displays"
 
+## CRITICAL: Using Column Statistics for Visualizations
+
+**ALWAYS examine columnStatistics in the duckdb_query tool result** to make informed visualization decisions:
+
+### For Numeric Columns (min, max, avg, median, p50, p90, stddev):
+- **Wide range (max - min is large)**: Use histogram or binned visualizations
+- **High standard deviation**: Consider box plots to show outliers
+- **Percentiles available**: Use P50/P90 values for creating meaningful color breaks in maps:
+  - Break points at min, P50, P90, max create balanced visual distributions
+  - Example: For map coloring with values 0-1000 (P50=200, P90=800):
+    \`["interpolate", ["linear"], ["get", "value"], 0, "#fee5d9", 200, "#fcae91", 800, "#fb6a4a", 1000, "#cb181d"]\`
+
+### For Categorical Columns (distinctCount):
+- **Few unique values (<10)**: Perfect for color-coded categories, bar charts
+- **Many unique values (>20)**: Consider grouping or top-N filtering
+- **Medium unique values (10-20)**: Use graduated colors or patterns
+
+### For Date/Time Columns (minDate, maxDate):
+- **Long time range**: Aggregate by month/year for cleaner trends
+- **Short time range**: Daily data might be appropriate
+- **Gap detection**: Check if date range is continuous
+
+### For String Columns (minLength, maxLength, avgLength):
+- **Short strings (avg < 10)**: Likely categories, good for grouping
+- **Long strings (avg > 30)**: Might be descriptions, consider truncation
+- **Consistent length**: Could be codes or IDs
+
+### Example Usage:
+When columnStatistics shows:
+\`\`\`
+"population": { min: 1000, max: 1000000, p50: 50000, p90: 200000 }
+\`\`\`
+Recommendation: "Use logarithmic scale or percentile-based breaks for map coloring since population has a wide range with most values concentrated below 200,000 (P90)."
+
 ## Map Visualization and Styling
 
 When working with geospatial data that has been loaded into the map:

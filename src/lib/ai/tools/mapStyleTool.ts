@@ -108,11 +108,29 @@ IMPORTANT LIMITATIONS WITH ARRAYS:
 - Arrays of objects are NOT fully supported for property styling
 - Consider flattening your data structure in SQL if you need to style based on array element properties
 
-For choropleth maps, use expressions like:
-["interpolate", ["linear"], ["get", "property_name"], min_value, "light_color", max_value, "dark_color"]
+USING COLUMN STATISTICS FOR OPTIMAL STYLING:
+**CRITICAL**: Always check columnStatistics from duckdb_query result to create better visualizations:
 
-For categorical styling:
-["case", ["==", ["get", "category"], "A"], "red", ["==", ["get", "category"], "B"], "blue", "gray"]
+For numeric columns with statistics (min, max, p50, p90):
+- Use percentile values for balanced color breaks:
+  ["interpolate", ["linear"], ["get", "property_name"], 
+    min_value, "#fee5d9",    // Light color for minimum
+    p50_value, "#fcae91",    // Medium color at median (50% of data below)
+    p90_value, "#fb6a4a",    // Darker color at 90th percentile
+    max_value, "#cb181d"]    // Darkest for maximum values
+
+- For wide ranges (max >> min), consider logarithmic interpolation:
+  ["interpolate", ["exponential", 2], ["get", "property_name"], min, "light", max, "dark"]
+
+For categorical columns (check distinctCount):
+- Few categories (<10): Use distinct colors
+  ["case", ["==", ["get", "category"], "A"], "red", ["==", ["get", "category"], "B"], "blue", "gray"]
+- Many categories (>10): Group into broader categories or use graduated colors
+
+Example with statistics:
+If columnStatistics shows: population: {min: 1000, max: 500000, p50: 25000, p90: 100000}
+Use: ["interpolate", ["linear"], ["get", "population"], 
+       1000, "#ffffcc", 25000, "#feb24c", 100000, "#fd8d3c", 500000, "#e31a1c"]
 
 COMMON GEOMETRY TYPE SCENARIOS:
 

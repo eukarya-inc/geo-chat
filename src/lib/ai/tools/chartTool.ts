@@ -59,7 +59,31 @@ export function createChartUpdateTool(
     return tool({
         description: `Update or create a Vega-Lite chart specification for a specific table.
         
-        IMPORTANT:
+        IMPORTANT: USE COLUMN STATISTICS FOR OPTIMAL CHART CONFIGURATION
+        
+        When columnStatistics is available from duckdb_query:
+        
+        For NUMERIC columns (with min, max, avg, median, p50, p90):
+        - Wide range (max - min > 1000): Consider log scale {"scale": {"type": "log"}}
+        - High variance (stddev/avg > 0.5): Use box plot or violin plot to show distribution
+        - Skewed data (median << avg): Highlight outliers or use percentile bands
+        
+        For CATEGORICAL columns (with distinctCount):
+        - Few categories (<10): Use bar chart with distinct colors
+        - Many categories (>20): Consider top-N filtering or grouping
+        - Medium (10-20): Use horizontal bar chart for better label readability
+        
+        For TEMPORAL columns (with minDate, maxDate):
+        - Long range (>1 year): Aggregate by month/quarter
+        - Short range (<1 month): Show daily values
+        - Multi-year: Consider year-over-year comparison
+        
+        AXIS CONFIGURATION BASED ON STATISTICS:
+        - Set domain based on actual data range: "scale": {"domain": [min, max]}
+        - For percentile data, show reference lines at P50, P90
+        - Use nice round numbers for axis ticks based on data magnitude
+        
+        TYPE SPECIFICATION:
         - ALWAYS specify the "type" field explicitly for each encoding channel
         - Common types: "quantitative" (numbers), "nominal" (categories), "temporal" (dates), "ordinal" (ordered categories)
         - The type determines how the data is interpreted and scaled
