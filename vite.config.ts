@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
-    base: '/duckdb-wasm-prototype/',
+    base: '/links-bi-prototype/',
     plugins: [react(), tailwindcss()],
     optimizeDeps: {
         exclude: ["@duckdb/duckdb-wasm"],
