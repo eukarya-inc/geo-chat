@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { SQLHistoryEntry } from '../../lib/duckdb/sqlHistoryManager';
 import { SQLFlowVisualization } from './SQLFlowVisualization';
+import { useAtomValue } from 'jotai';
+import { currentChatStateAtom } from '../../store/derivedAtoms';
+import { formatSQL } from '../../utils/sqlFormatter';
 
 interface TableSQLDisplayProps {
   tableName: string | null;
@@ -15,6 +18,19 @@ interface TableSQLDisplayProps {
 export default function TableSQLDisplay({ tableName, dbContext, schema }: TableSQLDisplayProps) {
   const [sqlEntry, setSqlEntry] = useState<SQLHistoryEntry | undefined>(undefined);
   const [showVisualization, setShowVisualization] = useState(false);
+  const [showMerged, setShowMerged] = useState(false);
+
+  const chatState = useAtomValue(currentChatStateAtom);
+  const mergedSql = useMemo(() => {
+    if (!tableName || !chatState?.tables) return undefined;
+    const rec = chatState.tables[tableName];
+    return rec?.mergedSql || undefined;
+  }, [chatState, tableName]);
+
+  const formattedMergedSql = useMemo(() => {
+    if (!mergedSql) return undefined;
+    return formatSQL(mergedSql);
+  }, [mergedSql]);
 
   useEffect(() => {
     if (!tableName || !dbContext) {
@@ -64,17 +80,28 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
           <span className="font-medium text-gray-800">{sourceLabel}</span>
           <span className="text-gray-500">({timestamp})</span>
         </div>
-        <button
-          onClick={() => setShowVisualization(!showVisualization)}
-          className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-        >
-          {showVisualization ? 'SQLを表示' : '可視化'}
-        </button>
+        <div className="flex items-center gap-2">
+          {mergedSql && (
+            <button
+              onClick={() => setShowMerged(!showMerged)}
+              className={`px-3 py-1 text-xs rounded transition-colors ${showMerged ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
+              title="中間テーブルを含まないマージ済みSQLを表示"
+            >
+              {showMerged ? '通常SQL' : 'マージSQL'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowVisualization(!showVisualization)}
+            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            {showVisualization ? 'SQLを表示' : '可視化'}
+          </button>
+        </div>
       </div>
 
       {!showVisualization ? (
         <pre className="bg-white border border-gray-300 rounded p-2 whitespace-pre-wrap break-words text-left">
-          <code className="text-xs text-gray-800 leading-normal text-left">{sqlEntry.sql}</code>
+          <code className="text-xs text-gray-800 leading-normal text-left">{showMerged && formattedMergedSql ? formattedMergedSql : sqlEntry.sql}</code>
         </pre>
       ) : (
         <div className="bg-white border border-gray-300 rounded" style={{ height: '300px', overflow: 'hidden' }}>

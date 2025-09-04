@@ -110,13 +110,13 @@ export class AIStore {
     }
   ): Promise<void> {
     const session = this.getOrCreateSession(chatId, options.schema || null);
-    
+
     if (!message.trim() || session.isLoading) return;
 
     const cleanedMessages = session.messages.filter(msg => {
       if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-        const hasLoadingText = msg.content.some(block => 
-          block.type === 'text' && 
+        const hasLoadingText = msg.content.some(block =>
+          block.type === 'text' &&
           block.text.includes('を分析中... おすすめの分析を生成しています...')
         );
         return !hasLoadingText;
@@ -182,12 +182,12 @@ export class AIStore {
         onMapStyleDelete: options.onMapStyleDelete
       });
 
-      const assistantMessage: StructuredMessage = { 
-        role: 'assistant', 
-        content: [], 
-        streaming: '' 
+      const assistantMessage: StructuredMessage = {
+        role: 'assistant',
+        content: [],
+        streaming: ''
       };
-      
+
       let currentMessages = [...newMessages, assistantMessage];
       session.messages = currentMessages;
       session.streamingText = '';
@@ -202,16 +202,16 @@ export class AIStore {
         options.onMessagesChange?.(currentMessages);
         this.notifyListeners();
       }
-      
+
       options.onMessagesChange?.(currentMessages);
-      
+
       // Call callback when chat completes
       options.onMessageComplete?.();
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
       this.setError(chatId, err instanceof Error ? err : new Error(errorMsg));
-      
+
       const errorContent = `❌ **エラーが発生しました:** ${errorMsg}`;
       const currentMessages: StructuredMessage[] = [...newMessages, {
         role: 'assistant',
@@ -220,7 +220,7 @@ export class AIStore {
       session.messages = currentMessages;
       options.onMessagesChange?.(currentMessages);
       this.notifyListeners();
-      
+
       // Treat errors as chat completion too
       options.onMessageComplete?.();
     } finally {
@@ -233,11 +233,6 @@ export class AIStore {
     currentMessages: StructuredMessage[],
     streamingText: string
   ): { messages: StructuredMessage[], streamingText: string } {
-    // Debug logging
-    if (part.type !== 'text-delta') {
-      console.log('[AIStore] Processing stream part:', part.type);
-    }
-    
     const lastMessage = currentMessages[currentMessages.length - 1];
     if (lastMessage.role !== 'assistant') {
       return { messages: currentMessages, streamingText };
@@ -257,11 +252,11 @@ export class AIStore {
 
       case 'tool-call': {
         const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
-        
+
         if (streamingText) {
           existingContent.push({ type: 'text' as const, text: streamingText });
         }
-        
+
         existingContent.push({
           type: 'tool_use' as const,
           id: part.toolCallId,
@@ -280,7 +275,7 @@ export class AIStore {
 
       case 'tool-result': {
         const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
-        
+
         if (streamingText) {
           existingContent.push({ type: 'text' as const, text: streamingText });
         }
@@ -302,15 +297,15 @@ export class AIStore {
       }
 
       case 'error': {
-        
+
         let errorText: string;
-        
+
         if (part.error === 'aborted') {
           errorText = '⏹️ **処理が停止されました**';
         } else {
           // Provide more specific error messages based on error content
           const errorMessage = part.error.toLowerCase();
-          
+
           if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
             errorText = '❌ **APIレート制限に達しました:** しばらく待ってから再度お試しください。';
           } else if (errorMessage.includes('overloaded') || errorMessage.includes('request_overloaded')) {
@@ -328,13 +323,13 @@ export class AIStore {
             errorText = `❌ **エラーが発生しました:** ${part.error}`;
           }
         }
-        
+
         const existingContent = Array.isArray(lastMessage.content) ? [...lastMessage.content] : [];
         if (streamingText) {
           existingContent.push({ type: 'text' as const, text: streamingText });
         }
         existingContent.push({ type: 'text' as const, text: errorText });
-        
+
         updatedMessages[updatedMessages.length - 1] = {
           ...lastMessage,
           content: existingContent,
