@@ -260,6 +260,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     [arrowCache, throttledLoadDataWindow, columns, columnTypes]
   );
 
+
   const onVisibleRegionChanged = useCallback(
     (range: {
       x: number;
@@ -281,6 +282,21 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     },
     [loadDataWindow, throttledLoadDataWindow, totalRows]
   );
+
+  // Handle column resize
+  const handleColumnResize = useCallback(
+    (column: GridColumn, newSize: number) => {
+      setColumns(prevColumns => 
+        prevColumns.map(col => 
+          col.id === column.id 
+            ? { ...col, width: newSize }
+            : col
+        )
+      );
+    },
+    []
+  );
+
 
   if (loading) {
     return <div style={{ padding: "20px" }}>Loading table...</div>;
@@ -312,6 +328,13 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         rowHeight={36}
         headerHeight={36}
         onVisibleRegionChanged={onVisibleRegionChanged}
+        // Enable column resize
+        onColumnResize={handleColumnResize}
+        // Make grid read-only but allow overlay for viewing
+        onCellEdited={() => {
+          // Do nothing - prevents actual editing
+          return undefined;
+        }}
         theme={{
           bgCell: "#fff",
           bgCellMedium: "#fafafa",
