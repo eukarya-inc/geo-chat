@@ -55,6 +55,8 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   const loadingWindowsRef = useRef(new Set<string>());
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
 
   // Track container width
   useEffect(() => {
@@ -99,6 +101,12 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerWidth, columns.length]); // Note: only depend on columns.length, not columns itself to avoid infinite loop
 
+  // Reset cache when sort changes
+  useEffect(() => {
+    arrowCache.clear();
+    loadingWindowsRef.current.clear();
+  }, [sortColumn, sortDirection, arrowCache]);
+
   useEffect(() => {
     const loadInitialData = async (retryCount = 0) => {
       setLoading(true);
@@ -111,7 +119,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       const conn = connection;
       
       try {
-        const initialData = await getTableData(conn, tableName, 0, 100);
+        const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
         
           // Calculate initial column width based on container width
           const minColumnWidth = 100;
@@ -124,7 +132,9 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
           
           const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => ({
             id: col.name,
-            title: col.name,
+            title: sortColumn === col.name 
+              ? `${col.name} ${sortDirection === 'ASC' ? '↑' : '↓'}`
+              : col.name,
             width: calculatedWidth,
           }));
           
@@ -180,7 +190,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     };
 
     loadInitialData();
-  }, [connection, tableName, arrowCache, dbContext, containerWidth]);
+  }, [connection, tableName, arrowCache, dbContext, containerWidth, sortColumn, sortDirection]);
 
   const loadDataWindow = useCallback(
     async (startRow: number) => {
@@ -202,7 +212,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       const conn = connection;
       
       try {
-        const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd);
+        const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd, sortColumn || undefined, sortDirection);
         arrowCache.set(cacheKey, arrowTable);
       } catch (error) {
         console.error("Error loading data window:", error);
@@ -211,7 +221,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         loadingWindowsRef.current.delete(cacheKey);
       }
     },
-    [connection, tableName, arrowCache]
+    [connection, tableName, arrowCache, sortColumn, sortDirection]
   );
 
   // Create a throttled version of loadDataWindow
@@ -297,6 +307,55 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     []
   );
 
+  // Handle header click for sorting
+  const handleHeaderClicked = useCallback(
+    (colIndex: number) => {
+      const column = columns[colIndex];
+      if (!column) return;
+      
+      const columnId = column.id;
+      if (!columnId) return;
+      
+      if (sortColumn === columnId) {
+        if (sortDirection === 'ASC') {
+          // First click: ASC -> DESC
+          setSortDirection('DESC');
+        } else {
+          // Second click: DESC -> Remove sort (back to default)
+          setSortColumn(null);
+          setSortDirection('ASC');
+        }
+      } else {
+        // New column: start with ASC
+        setSortColumn(columnId);
+        setSortDirection('ASC');
+      }
+    },
+    [columns, sortColumn, sortDirection]
+  );
+
+  // Update column titles when sort changes
+  useEffect(() => {
+    setColumns(prevColumns => 
+      prevColumns.map(col => {
+        let title = col.id || col.title || '';
+        
+        // Add sort indicator if this column is sorted
+        if (col.id && sortColumn === col.id) {
+          title = `${col.id} ${sortDirection === 'ASC' ? '↑' : '↓'}`;
+        }
+        // Add a subtle indicator for sortable columns when not sorted
+        else if (col.id && sortColumn !== col.id) {
+          // Optional: show that column is sortable with a subtle indicator
+          // title = `${col.id} ⇅`;  // Uncomment if you want to show sortable indicator
+          title = col.id;
+        }
+        
+        return { ...col, title };
+      })
+    );
+  }, [sortColumn, sortDirection]);
+
 
   if (loading) {
     return <div style={{ padding: "20px" }}>Loading table...</div>;
@@ -330,6 +389,8 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         onVisibleRegionChanged={onVisibleRegionChanged}
         // Enable column resize
         onColumnResize={handleColumnResize}
+        // Enable column sorting
+        onHeaderClicked={handleHeaderClicked}
         // Make grid read-only but allow overlay for viewing
         onCellEdited={() => {
           // Do nothing - prevents actual editing

@@ -223,7 +223,9 @@ export async function getTableData(
   connection: AsyncDuckDBConnection,
   tableName: string,
   offset: number = 0,
-  limit: number = 100
+  limit: number = 100,
+  sortColumn?: string,
+  sortDirection: 'ASC' | 'DESC' = 'ASC'
 ): Promise<TableDataResult> {
   const [columns, totalRows] = await Promise.all([
     getTableSchema(connection, tableName),
@@ -236,9 +238,11 @@ export async function getTableData(
   }
 
   const columnNames = buildColumnNamesString(columns);
+  // Build ORDER BY clause if sorting is requested
+  const orderByClause = sortColumn ? ` ORDER BY "${sortColumn}" ${sortDirection}` : '';
   // Use the table name as-is (it might already include schema prefix)
   const result = await connection.query(
-    `SELECT ${columnNames} FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
+    `SELECT ${columnNames} FROM ${tableName}${orderByClause} LIMIT ${limit} OFFSET ${offset}`
   );
 
   const data = result.toArray();
@@ -255,7 +259,9 @@ export async function getTableDataByWindow(
   connection: AsyncDuckDBConnection,
   tableName: string,
   startRow: number,
-  endRow: number
+  endRow: number,
+  sortColumn?: string,
+  sortDirection: 'ASC' | 'DESC' = 'ASC'
 ): Promise<ArrowTable> {
   const columns = await getTableSchema(connection, tableName);
   
@@ -268,9 +274,11 @@ export async function getTableDataByWindow(
   const offset = startRow;
 
   const columnNames = buildColumnNamesString(columns);
+  // Build ORDER BY clause if sorting is requested
+  const orderByClause = sortColumn ? ` ORDER BY "${sortColumn}" ${sortDirection}` : '';
   // Use the table name as-is (it might already include schema prefix)
   const result = await connection.query(
-    `SELECT ${columnNames} FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
+    `SELECT ${columnNames} FROM ${tableName}${orderByClause} LIMIT ${limit} OFFSET ${offset}`
   );
 
   const data = result.toArray();
