@@ -8,9 +8,12 @@ import type { StyleSpecification } from 'maplibre-gl';
 export interface Table {
   tableName: string;
   sql: string;
+  mergedSql: string; // SQL to reproduce the table without intermediate tables
   createdAt: Date;
   source: 'file' | 'sql' | 'ai';  // File upload, direct SQL execution, AI generated
   fileUrl?: string;  // URL for file upload
+  schema?: string | null; // Schema where the table resides
+  dependencies: string[]; // Dependent table names (normalized, same schema)
 }
 
 // For backward compatibility
