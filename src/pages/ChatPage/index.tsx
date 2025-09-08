@@ -161,14 +161,6 @@ function ChatPage() {
             createdAt: new Date()
         };
         
-        console.log('Creating visualization with data:', {
-            id: newVisualization.id,
-            title: newVisualization.title,
-            type: newVisualization.type,
-            hasChartSpec: !!newVisualization.chartSpec,
-            sql: newVisualization.sql,
-            chartSpecData: chart.spec?.data
-        });
 
         const newLayout = {
             i: newVisualization.id,
@@ -189,26 +181,10 @@ function ChatPage() {
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboardId);
         
-        console.log('ChatPage: Before dashboard update - remote state dashboards:', Object.keys(remoteState.dashboards));
-        console.log('ChatPage: Before dashboard update - current dashboard:', remoteState.dashboards[dashboardId]);
         
         // Update the dashboard
         updateDashboard(updatedDashboard);
         
-        console.log('Chart exported successfully to dashboard:', dashboard.title);
-        console.log('Updated dashboard:', updatedDashboard);
-        
-        // Wait a bit and then check if the update worked
-        setTimeout(() => {
-            const currentRemoteState = remoteState; // This might be stale, let's see
-            const updatedDashboardFromState = getDashboard(dashboardId);
-            const directDashboardFromAtom = currentRemoteState.dashboards[dashboardId];
-            
-            console.log('ChatPage: Dashboard after state update (hook):', updatedDashboardFromState);
-            console.log('ChatPage: Dashboard after state update (direct atom):', directDashboardFromAtom);
-            console.log('ChatPage: Visualizations after state update (hook):', updatedDashboardFromState?.visualizations.length || 0);
-            console.log('ChatPage: Visualizations after state update (direct atom):', directDashboardFromAtom?.visualizations.length || 0);
-        }, 200);
         
         // Automatically switch to the dashboard view to show the newly added chart
         handleSelectDashboard(dashboardId);
@@ -239,12 +215,6 @@ function ChatPage() {
                 <div className="flex-1 h-full flex flex-col overflow-hidden">
                     {(() => {
                         const dashboard = remoteState.dashboards[selectedDashboardId];
-                        console.log('ChatPage: Rendering dashboard from direct atom access:', {
-                            dashboardId: selectedDashboardId,
-                            dashboardFound: !!dashboard,
-                            visualizationsCount: dashboard?.visualizations.length || 0,
-                            dashboardTitle: dashboard?.title
-                        });
                         
                         if (!dashboard) return null;
                         

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
 import { ChartBarIcon, CogIcon, PuzzlePieceIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
@@ -44,27 +44,6 @@ export function Dashboard({
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
 
-    // Debug: Log when dashboard prop changes
-    useEffect(() => {
-        console.log('Dashboard component received updated dashboard:', dashboard.title);
-        console.log('Dashboard visualizations count:', dashboard.visualizations.length);
-        console.log('Dashboard layout items count:', dashboard.layout.length);
-        
-        dashboard.visualizations.forEach((viz, index) => {
-            console.log(`Visualization ${index + 1}:`, {
-                id: viz.id,
-                title: viz.title,
-                type: viz.type,
-                hasChartSpec: !!viz.chartSpec,
-                sql: viz.sql,
-                createdAt: viz.createdAt
-            });
-        });
-        
-        dashboard.layout.forEach((layoutItem, index) => {
-            console.log(`Layout ${index + 1}:`, layoutItem);
-        });
-    }, [dashboard]);
 
     const handleLayoutChange = useCallback((layout: Layout[]) => {
         onLayoutChange(layout);
@@ -254,14 +233,6 @@ export function Dashboard({
                                         <div className="flex-1 p-2 overflow-hidden">
                                             {viz.type === 'chart' && viz.chartSpec ? (
                                                 <div className="h-full">
-                                                    {(() => {
-                                                        console.log(`Rendering chart for viz ${viz.id}:`, {
-                                                            hasSpec: !!viz.chartSpec.spec,
-                                                            specType: typeof viz.chartSpec.spec,
-                                                            specData: viz.chartSpec.spec?.data
-                                                        });
-                                                        return null;
-                                                    })()}
                                                     <VegaLiteChart
                                                         spec={viz.chartSpec.spec}
                                                         dbContext={dbContext}

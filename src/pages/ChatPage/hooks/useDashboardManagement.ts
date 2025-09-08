@@ -6,8 +6,6 @@ import { remoteStateAtom, Dashboard, DashboardVisualization } from '../../../sto
 export function useDashboardManagement() {
     const [remoteState, setRemoteState] = useAtom(remoteStateAtom);
     
-    // Debug: Log the current state whenever it changes
-    console.log('useDashboardManagement: remoteState changed, dashboard count:', Object.keys(remoteState.dashboards).length);
 
     const createDashboard = useCallback((title?: string): Dashboard => {
         const newDashboard: Dashboard = {
@@ -30,10 +28,6 @@ export function useDashboardManagement() {
     }, [remoteState.dashboards, setRemoteState]);
 
     const updateDashboard = useCallback((dashboard: Dashboard) => {
-        console.log('useDashboardManagement: updateDashboard called with:', dashboard.title);
-        console.log('useDashboardManagement: dashboard visualizations:', dashboard.visualizations.length);
-        console.log('useDashboardManagement: dashboard ID:', dashboard.id);
-        console.log('useDashboardManagement: dashboard object:', dashboard);
         
         // Ensure the dashboard object is properly structured
         const sanitizedDashboard: Dashboard = {
@@ -44,11 +38,8 @@ export function useDashboardManagement() {
             layout: [...dashboard.layout] // Create a new array
         };
         
-        console.log('useDashboardManagement: sanitized dashboard:', sanitizedDashboard);
         
         setRemoteState(prev => {
-            console.log('useDashboardManagement: Previous state dashboards:', Object.keys(prev.dashboards));
-            console.log('useDashboardManagement: Previous dashboard visualizations:', prev.dashboards[dashboard.id]?.visualizations.length || 0);
             
             // Create completely new state object
             const newState: typeof prev = {
@@ -59,9 +50,6 @@ export function useDashboardManagement() {
                 }
             };
             
-            console.log('useDashboardManagement: New state dashboards:', Object.keys(newState.dashboards));
-            console.log('useDashboardManagement: Updated dashboard in state:', newState.dashboards[sanitizedDashboard.id]);
-            console.log('useDashboardManagement: Updated dashboard visualizations:', newState.dashboards[sanitizedDashboard.id].visualizations.length);
             
             return newState;
         });
@@ -138,12 +126,6 @@ export function useDashboardManagement() {
 
     const getDashboard = useCallback((dashboardId: string): Dashboard | undefined => {
         const dashboard = remoteState.dashboards[dashboardId];
-        if (dashboard) {
-            console.log('useDashboardManagement: getDashboard found dashboard:', dashboard.title);
-            console.log('useDashboardManagement: dashboard visualizations:', dashboard.visualizations.length);
-        } else {
-            console.log('useDashboardManagement: getDashboard - dashboard not found:', dashboardId);
-        }
         return dashboard;
     }, [remoteState.dashboards]);
 
