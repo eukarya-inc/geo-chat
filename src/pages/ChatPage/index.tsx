@@ -131,6 +131,7 @@ function ChatPage() {
 
     // Chart export to dashboard functionality
     const handleExportChartToDashboard = (dashboardId: string) => {
+        
         if (!selectedChatId || !chartSpec) {
             console.warn('Cannot export chart: missing selectedChatId or chartSpec');
             return;
@@ -138,6 +139,7 @@ function ChatPage() {
 
         const dashboard = getDashboard(dashboardId);
         const chartSpecs = getCurrentChatState()?.chartSpecs;
+        
         
         if (!dashboard) {
             console.error('Dashboard not found:', dashboardId);
@@ -150,6 +152,7 @@ function ChatPage() {
         }
 
         const chart = chartSpecs[chartSpec.id];
+        
         
         // Extract SQL from chart spec
         const chartSql = chart.spec?.data?.sql;
@@ -179,6 +182,7 @@ function ChatPage() {
             visualizations: [...dashboard.visualizations, newVisualization],
             layout: [...dashboard.layout, newLayout]
         };
+        
         
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboardId);
