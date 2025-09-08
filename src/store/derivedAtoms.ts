@@ -11,6 +11,13 @@ export const currentChatAtom = atom((get) => {
   return localState.selectedChatId ? remoteState.chats[localState.selectedChatId] : undefined;
 });
 
+// Current dashboard (retrieved from remote state)
+export const currentDashboardAtom = atom((get) => {
+  const remoteState = get(remoteStateAtom);
+  const localState = get(localStateAtom);
+  return localState.selectedDashboardId ? remoteState.dashboards[localState.selectedDashboardId] : undefined;
+});
+
 // Current chat state (kept for compatibility - extracts state portion from chat itself)
 export const currentChatStateAtom = atom((get) => {
   const chat = get(currentChatAtom);
@@ -221,6 +228,18 @@ export const selectChatAtom = atom(
     set(localStateAtom, {
       ...localState,
       selectedChatId: chatId
+    });
+  }
+);
+
+// Select dashboard (updates local state only)
+export const selectDashboardAtom = atom(
+  null,
+  (get, set, dashboardId: string | null) => {
+    const localState = get(localStateAtom);
+    set(localStateAtom, {
+      ...localState,
+      selectedDashboardId: dashboardId
     });
   }
 );

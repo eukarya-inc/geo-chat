@@ -5,6 +5,7 @@ import { retrieveEncryptedApiKey, storeEncryptedApiKey } from '../utils/encrypti
 // ===== Local state type definitions (client-side only) =====
 export interface LocalState {
   selectedChatId: string | null;
+  selectedDashboardId: string | null;
   
   // API key (saved locally for security)
   apiKey: string;
@@ -24,6 +25,7 @@ export interface LocalState {
 // export const localStateAtom = atomWithStorage<LocalState>('links-bi-local-state', {
 export const localStateAtom = atom<LocalState>({
   selectedChatId: null,
+  selectedDashboardId: null,
   apiKey: '',
   showApiKeyInput: true,
   sessions: {}

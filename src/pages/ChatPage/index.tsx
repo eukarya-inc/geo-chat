@@ -11,8 +11,9 @@ import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
 import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { useStoreSync } from '../../store/sync';
-import { useAtomValue } from 'jotai';
-import { remoteStateAtom } from '../../store/remoteAtoms';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
+import { localStateAtom } from '../../store/localAtoms';
 import {
     chatIdToSchemaName,
     useApiKeyManagement,
@@ -29,13 +30,17 @@ import {
 function ChatPage() {
     const { dbContext } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
-    const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
     const [showExportModal, setShowExportModal] = useState(false);
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
 
+    // Dashboard state management with atoms
+    const currentDashboard = useAtomValue(currentDashboardAtom);
+    const localState = useAtomValue(localStateAtom);
+    const selectedDashboardId = localState.selectedDashboardId;
+    const setSelectedDashboard = useSetAtom(selectDashboardAtom);
 
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -99,14 +104,11 @@ function ChatPage() {
         getAllDashboards,
         updateDashboardLayout
     } = useDashboardManagement();
-    
-    // Direct atom access for debugging dashboard state updates
-    const remoteState = useAtomValue(remoteStateAtom);
 
     // Dashboard handlers
     const handleCreateDashboard = () => {
         const newDashboard = createDashboard();
-        setSelectedDashboardId(newDashboard.id);
+        setSelectedDashboard(newDashboard.id);
         // Clear chat selection when dashboard is selected
         if (selectedChatId) {
             selectChat('');
@@ -114,7 +116,7 @@ function ChatPage() {
     };
 
     const handleSelectDashboard = (dashboardId: string) => {
-        setSelectedDashboardId(dashboardId);
+        setSelectedDashboard(dashboardId);
         // Clear chat selection when dashboard is selected
         if (selectedChatId) {
             selectChat('');
@@ -124,7 +126,7 @@ function ChatPage() {
     const handleSelectChat = (chatId: string) => {
         selectChat(chatId);
         // Clear dashboard selection when chat is selected
-        setSelectedDashboardId(null);
+        setSelectedDashboard(null);
     };
 
     // Chart export to dashboard functionality
@@ -214,14 +216,12 @@ function ChatPage() {
                 /* Dashboard Mode - Full Width */
                 <div className="flex-1 h-full flex flex-col overflow-hidden">
                     {(() => {
-                        const dashboard = remoteState.dashboards[selectedDashboardId];
-                        
-                        if (!dashboard) return null;
+                        if (!currentDashboard || !selectedDashboardId) return null;
                         
                         return (
                             <Dashboard
                                 key={selectedDashboardId} // Force re-render when dashboard changes
-                                dashboard={dashboard}
+                                dashboard={currentDashboard}
                                 dbContext={dbContext!}
                                 schemaName={schemaName || 'main'}
                                 availableCharts={getCurrentChatState()?.chartSpecs || {}}
