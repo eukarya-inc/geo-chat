@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { PlusIcon, TrashIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, ChartBarIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
 import type { StructuredMessage } from '../../../types/message';
-import type { MapSpec } from '../../../store/remoteAtoms';
+import type { MapSpec, Dashboard } from '../../../store/remoteAtoms';
 
 export type ChatType = 'graph';
 
@@ -22,6 +22,10 @@ interface ChatListProps {
     onCreateChat: () => void | Promise<void>;
     onDeleteChat: (chatId: string) => void | Promise<void>;
     isInitialized?: boolean;
+    dashboards?: Dashboard[];
+    onCreateDashboard?: () => void;
+    onSelectDashboard?: (dashboardId: string) => void;
+    selectedDashboardId?: string | null;
 }
 
 export function ChatList({
@@ -30,13 +34,17 @@ export function ChatList({
     onSelectChat,
     onCreateChat,
     onDeleteChat,
-    isInitialized = false
+    isInitialized = false,
+    dashboards = [],
+    onCreateDashboard,
+    onSelectDashboard,
+    selectedDashboardId
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
 
     return (
         <div className="h-full flex flex-col">
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-gray-200 space-y-2">
                 <button
                     onClick={() => onCreateChat()}
                     disabled={!isInitialized}
@@ -51,49 +59,110 @@ export function ChatList({
                         {isInitialized ? '新しいチャット' : '初期化中...'}
                     </span>
                 </button>
+                
+                {onCreateDashboard && (
+                    <button
+                        onClick={() => onCreateDashboard()}
+                        disabled={!isInitialized}
+                        className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded transition-colors ${
+                            isInitialized 
+                                ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer' 
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                    >
+                        <PresentationChartBarIcon className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                            {isInitialized ? '新しいダッシュボード' : '初期化中...'}
+                        </span>
+                    </button>
+                )}
             </div>
             
             <div className="flex-1 overflow-y-auto">
-                {chats.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">
-                        チャットがありません
+                {/* Chats Section */}
+                <div className="border-b border-gray-200">
+                    <div className="p-2 bg-gray-100">
+                        <h3 className="text-xs font-semibold text-gray-600 uppercase">チャット</h3>
                     </div>
-                ) : (
-                    <div className="p-2">
-                        {chats.map((chat) => (
-                            <div
-                                key={chat.id}
-                                className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
-                                    selectedChatId === chat.id
-                                        ? 'bg-blue-50 border border-blue-200'
-                                        : 'hover:bg-gray-100'
-                                }`}
-                                onClick={() => onSelectChat(chat.id)}
-                                onMouseEnter={() => setHoveredChatId(chat.id)}
-                                onMouseLeave={() => setHoveredChatId(null)}
-                            >
-                                <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium truncate">
-                                        {chat.title}
+                    {chats.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                            チャットがありません
+                        </div>
+                    ) : (
+                        <div className="p-2">
+                            {chats.map((chat) => (
+                                <div
+                                    key={chat.id}
+                                    className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
+                                        selectedChatId === chat.id && !selectedDashboardId
+                                            ? 'bg-blue-50 border border-blue-200'
+                                            : 'hover:bg-gray-100'
+                                    }`}
+                                    onClick={() => onSelectChat(chat.id)}
+                                    onMouseEnter={() => setHoveredChatId(chat.id)}
+                                    onMouseLeave={() => setHoveredChatId(null)}
+                                >
+                                    <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium truncate">
+                                            {chat.title}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            {chat.createdAt.toLocaleDateString('ja-JP')}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-gray-500">
-                                        {chat.createdAt.toLocaleDateString('ja-JP')}
-                                    </div>
+                                    {hoveredChatId === chat.id && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteChat(chat.id);
+                                            }}
+                                            className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
-                                {hoveredChatId === chat.id && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDeleteChat(chat.id);
-                                        }}
-                                        className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                    >
-                                        <TrashIcon className="w-4 h-4" />
-                                    </button>
-                                )}
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Dashboards Section */}
+                {onSelectDashboard && (
+                    <div>
+                        <div className="p-2 bg-gray-100">
+                            <h3 className="text-xs font-semibold text-gray-600 uppercase">ダッシュボード</h3>
+                        </div>
+                        {dashboards.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                                ダッシュボードがありません
                             </div>
-                        ))}
+                        ) : (
+                            <div className="p-2">
+                                {dashboards.map((dashboard) => (
+                                    <div
+                                        key={dashboard.id}
+                                        className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
+                                            selectedDashboardId === dashboard.id
+                                                ? 'bg-green-50 border border-green-200'
+                                                : 'hover:bg-gray-100'
+                                        }`}
+                                        onClick={() => onSelectDashboard(dashboard.id)}
+                                    >
+                                        <PresentationChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium truncate">
+                                                {dashboard.title}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                {dashboard.createdAt.toLocaleDateString('ja-JP')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

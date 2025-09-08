@@ -103,9 +103,10 @@ export const deleteChatAtom = atom(
     const firstRemainingId = remainingChatIds[0] || null;
     
     // Update remote state
-    set(remoteStateAtom, {
+    set(remoteStateAtom, prev => ({
+      ...prev,
       chats: remainingChats
-    });
+    }));
     
     // Update local state
     set(localStateAtom, {

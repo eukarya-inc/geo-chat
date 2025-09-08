@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AIChat from '../../components/chat';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
@@ -8,8 +8,11 @@ import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
-import { TableCellsIcon } from '@heroicons/react/24/outline';
+import { Dashboard, ChartExportModal } from '../../components/dashboard';
+import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { useStoreSync } from '../../store/sync';
+import { useAtomValue } from 'jotai';
+import { remoteStateAtom } from '../../store/remoteAtoms';
 import {
     chatIdToSchemaName,
     useApiKeyManagement,
@@ -19,12 +22,16 @@ import {
     useMapVisualization,
     useChartVisualization,
     useMessageHandling,
-    useTableHistorySync
+    useTableHistorySync,
+    useDashboardManagement
 } from './hooks';
 
 function ChatPage() {
     const { dbContext } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
+    const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -84,6 +91,129 @@ function ChatPage() {
     // Sync table creation history to remote state
     useTableHistorySync(dbContext, selectedChatId);
 
+    // Dashboard management
+    const {
+        createDashboard,
+        updateDashboard,
+        getDashboard,
+        getAllDashboards,
+        updateDashboardLayout
+    } = useDashboardManagement();
+    
+    // Direct atom access for debugging dashboard state updates
+    const remoteState = useAtomValue(remoteStateAtom);
+
+    // Dashboard handlers
+    const handleCreateDashboard = () => {
+        const newDashboard = createDashboard();
+        setSelectedDashboardId(newDashboard.id);
+        // Clear chat selection when dashboard is selected
+        if (selectedChatId) {
+            selectChat('');
+        }
+    };
+
+    const handleSelectDashboard = (dashboardId: string) => {
+        setSelectedDashboardId(dashboardId);
+        // Clear chat selection when dashboard is selected
+        if (selectedChatId) {
+            selectChat('');
+        }
+    };
+
+    const handleSelectChat = (chatId: string) => {
+        selectChat(chatId);
+        // Clear dashboard selection when chat is selected
+        setSelectedDashboardId(null);
+    };
+
+    // Chart export to dashboard functionality
+    const handleExportChartToDashboard = (dashboardId: string) => {
+        if (!selectedChatId || !chartSpec) {
+            console.warn('Cannot export chart: missing selectedChatId or chartSpec');
+            return;
+        }
+
+        const dashboard = getDashboard(dashboardId);
+        const chartSpecs = getCurrentChatState()?.chartSpecs;
+        
+        if (!dashboard) {
+            console.error('Dashboard not found:', dashboardId);
+            return;
+        }
+        
+        if (!chartSpecs || !chartSpecs[chartSpec.id]) {
+            console.error('Chart specs not found for chart:', chartSpec.id);
+            return;
+        }
+
+        const chart = chartSpecs[chartSpec.id];
+        
+        // Extract SQL from chart spec
+        const chartSql = chart.spec?.data?.sql;
+        
+        const newVisualization = {
+            id: `viz-${Date.now()}`,
+            type: 'chart' as const,
+            title: chart.title || chartSpec.title || 'Chart',
+            chartSpec: chart,
+            sql: chartSql,
+            createdAt: new Date()
+        };
+        
+        console.log('Creating visualization with data:', {
+            id: newVisualization.id,
+            title: newVisualization.title,
+            type: newVisualization.type,
+            hasChartSpec: !!newVisualization.chartSpec,
+            sql: newVisualization.sql,
+            chartSpecData: chart.spec?.data
+        });
+
+        const newLayout = {
+            i: newVisualization.id,
+            x: 0,
+            y: 0,
+            w: 6,
+            h: 4,
+            minW: 3,
+            minH: 2
+        };
+
+        const updatedDashboard = {
+            ...dashboard,
+            visualizations: [...dashboard.visualizations, newVisualization],
+            layout: [...dashboard.layout, newLayout]
+        };
+        
+        // Remember the selected dashboard for next time
+        setLastSelectedExportDashboard(dashboardId);
+        
+        console.log('ChatPage: Before dashboard update - remote state dashboards:', Object.keys(remoteState.dashboards));
+        console.log('ChatPage: Before dashboard update - current dashboard:', remoteState.dashboards[dashboardId]);
+        
+        // Update the dashboard
+        updateDashboard(updatedDashboard);
+        
+        console.log('Chart exported successfully to dashboard:', dashboard.title);
+        console.log('Updated dashboard:', updatedDashboard);
+        
+        // Wait a bit and then check if the update worked
+        setTimeout(() => {
+            const currentRemoteState = remoteState; // This might be stale, let's see
+            const updatedDashboardFromState = getDashboard(dashboardId);
+            const directDashboardFromAtom = currentRemoteState.dashboards[dashboardId];
+            
+            console.log('ChatPage: Dashboard after state update (hook):', updatedDashboardFromState);
+            console.log('ChatPage: Dashboard after state update (direct atom):', directDashboardFromAtom);
+            console.log('ChatPage: Visualizations after state update (hook):', updatedDashboardFromState?.visualizations.length || 0);
+            console.log('ChatPage: Visualizations after state update (direct atom):', directDashboardFromAtom?.visualizations.length || 0);
+        }, 200);
+        
+        // Automatically switch to the dashboard view to show the newly added chart
+        handleSelectDashboard(dashboardId);
+    };
+
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
@@ -92,15 +222,56 @@ function ChatPage() {
                 <ChatList
                     chats={chats}
                     selectedChatId={selectedChatId}
-                    onSelectChat={selectChat}
+                    onSelectChat={handleSelectChat}
                     onCreateChat={createNewChat}
                     onDeleteChat={deleteChat}
                     isInitialized={!!dbContext}
+                    dashboards={getAllDashboards()}
+                    onCreateDashboard={handleCreateDashboard}
+                    onSelectDashboard={handleSelectDashboard}
+                    selectedDashboardId={selectedDashboardId}
                 />
             </div>
 
-            {/* Left Half - AI Chat (Modeling Tools) */}
-            <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
+            {/* Main Content Area */}
+            {selectedDashboardId ? (
+                /* Dashboard Mode - Full Width */
+                <div className="flex-1 h-full flex flex-col overflow-hidden">
+                    {(() => {
+                        const dashboard = remoteState.dashboards[selectedDashboardId];
+                        console.log('ChatPage: Rendering dashboard from direct atom access:', {
+                            dashboardId: selectedDashboardId,
+                            dashboardFound: !!dashboard,
+                            visualizationsCount: dashboard?.visualizations.length || 0,
+                            dashboardTitle: dashboard?.title
+                        });
+                        
+                        if (!dashboard) return null;
+                        
+                        return (
+                            <Dashboard
+                                key={selectedDashboardId} // Force re-render when dashboard changes
+                                dashboard={dashboard}
+                                dbContext={dbContext!}
+                                schemaName={schemaName || 'main'}
+                                availableCharts={getCurrentChatState()?.chartSpecs || {}}
+                                onLayoutChange={(layout) => updateDashboardLayout(selectedDashboardId, layout)}
+                                onAddVisualization={() => {
+                                    // This will be handled by the chart export functionality
+                                }}
+                                onRemoveVisualization={() => {
+                                    // Handle visualization removal
+                                }}
+                                onUpdateDashboard={updateDashboard}
+                            />
+                        );
+                    })()}
+                </div>
+            ) : (
+                /* Chat Mode - Split View */
+                <>
+                    {/* Left Half - AI Chat (Modeling Tools) */}
+                    <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
                 {(showApiKeyInput && !isLoadingApiKey) && (
                     <div className="p-4 bg-gray-50 border-b border-gray-300 flex-shrink-0">
                         <div className="mb-2.5 text-sm font-bold">
@@ -193,6 +364,7 @@ function ChatPage() {
                     </div>
                 ) : null}
             </div>
+
 
             {/* Right Half - DuckDB and Table */}
             <div className="w-1/2 h-full flex flex-col overflow-hidden">
@@ -288,13 +460,26 @@ function ChatPage() {
                                 {/* Chart Tab */}
                                 {activeTab === 'chart' && (
                                     chartSpec && connection && selectedChatId ? (
-                                        <div className="h-full overflow-auto p-4">
-                                            <VegaLiteChart
-                                                key={`${schemaName}-${chartSpec.id}`}
-                                                spec={chartSpec.spec}
-                                                dbContext={dbContext}
-                                                schema={schemaName}
-                                            />
+                                        <div className="h-full overflow-hidden flex flex-col p-4">
+                                            <div className="flex-1 overflow-auto">
+                                                <VegaLiteChart
+                                                    key={`${schemaName}-${chartSpec.id}`}
+                                                    spec={chartSpec.spec}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName}
+                                                />
+                                            </div>
+                                            {getAllDashboards().length > 0 && (
+                                                <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
+                                                    <button
+                                                        onClick={() => setShowExportModal(true)}
+                                                        className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors shadow-lg"
+                                                        title="Export chart to dashboard"
+                                                    >
+                                                        <ArrowUpTrayIcon className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="h-full flex items-center justify-center">
@@ -342,9 +527,23 @@ function ChatPage() {
                             テーブルを選択してください
                         </div>
                     )}
+                    </div>
                 </div>
-            </div>
+                {/* End of Right Half */}
+                </>
+            )}
+            {/* End of Main Content Area */}
         </div>
+
+        {/* Chart Export Modal */}
+        <ChartExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            dashboards={getAllDashboards()}
+            onExport={handleExportChartToDashboard}
+            chartTitle={chartSpec?.title || 'Chart'}
+            lastSelectedDashboard={lastSelectedExportDashboard}
+        />
         </>
     );
 }
