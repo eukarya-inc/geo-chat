@@ -469,17 +469,24 @@ function ChatPage() {
                                                     schema={schemaName}
                                                 />
                                             </div>
-                                            {getAllDashboards().length > 0 && (
-                                                <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
-                                                    <button
-                                                        onClick={() => setShowExportModal(true)}
-                                                        className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors shadow-lg"
-                                                        title="Export chart to dashboard"
-                                                    >
-                                                        <ArrowUpTrayIcon className="w-5 h-5" />
-                                                    </button>
-                                                </div>
-                                            )}
+                                            <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
+                                                <button
+                                                    onClick={() => getAllDashboards().length > 0 && setShowExportModal(true)}
+                                                    disabled={getAllDashboards().length === 0}
+                                                    className={`p-2 rounded-full transition-colors shadow-lg ${
+                                                        getAllDashboards().length > 0
+                                                            ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    }`}
+                                                    title={
+                                                        getAllDashboards().length > 0
+                                                            ? "Export visualization"
+                                                            : "Create a dashboard first to export visualizations"
+                                                    }
+                                                >
+                                                    <ArrowUpTrayIcon className="w-5 h-5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="h-full flex items-center justify-center">
