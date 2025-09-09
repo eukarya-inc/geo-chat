@@ -213,7 +213,7 @@ export function processAIChartSpec(
         }
     } as VegaChartSpec;
 
-    // Ensure title exists
+    // Ensure title exists - prefer user-provided title over generated one
     if (!processedSpec.title) {
         processedSpec.title = `Chart for ${tableName}`;
     }
