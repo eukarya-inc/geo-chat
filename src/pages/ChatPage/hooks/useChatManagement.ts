@@ -172,9 +172,10 @@ export function useChatManagement(
         };
       });
 
-      setRemoteState({
+      setRemoteState(prev => ({
+        ...prev,
         chats: newChatsRecord
-      });
+      }));
     },
     selectedChatId,
     setSelectedChatId: (chatId: string | null) => {

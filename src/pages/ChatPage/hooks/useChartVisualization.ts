@@ -46,7 +46,8 @@ export function useChartVisualization(
                     [table]: {
                         id: spec.id,
                         spec: spec.spec,
-                        timestamp: spec.timestamp
+                        timestamp: spec.timestamp,
+                        title: spec.title
                     }
                 }
             });
@@ -68,7 +69,7 @@ export function useChartVisualization(
                 id: existingSpec.id,
                 spec: existingSpec.spec,
                 timestamp: existingSpec.timestamp,
-                title: `Chart for ${selectedTable}`
+                title: existingSpec.title || `Chart for ${selectedTable}`
             });
         } else {
             // Don't generate chart automatically, wait for user to turn on graph
@@ -167,7 +168,8 @@ export function useChartVisualization(
                 [tableName]: {
                     id: newChartSpec.id,
                     spec: newChartSpec.spec,
-                    timestamp: newChartSpec.timestamp
+                    timestamp: newChartSpec.timestamp,
+                    title: newChartSpec.title
                 }
             }
         });
