@@ -133,6 +133,18 @@ export function useDashboardManagement() {
         return Object.values(remoteState.dashboards);
     }, [remoteState.dashboards]);
 
+    const renameDashboard = useCallback((dashboardId: string, newTitle: string) => {
+        const dashboard = remoteState.dashboards[dashboardId];
+        if (!dashboard) return;
+
+        const updatedDashboard: Dashboard = {
+            ...dashboard,
+            title: newTitle.trim() || dashboard.title // Fallback to original title if empty
+        };
+
+        updateDashboard(updatedDashboard);
+    }, [remoteState.dashboards, updateDashboard]);
+
     return {
         dashboards: remoteState.dashboards,
         createDashboard,
@@ -142,6 +154,7 @@ export function useDashboardManagement() {
         removeVisualizationFromDashboard,
         updateDashboardLayout,
         getDashboard,
-        getAllDashboards
+        getAllDashboards,
+        renameDashboard
     };
 }

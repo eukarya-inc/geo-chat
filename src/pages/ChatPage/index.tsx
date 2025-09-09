@@ -102,7 +102,8 @@ function ChatPage() {
         updateDashboard,
         getDashboard,
         getAllDashboards,
-        updateDashboardLayout
+        updateDashboardLayout,
+        renameDashboard
     } = useDashboardManagement();
 
     // Dashboard handlers
@@ -131,27 +132,25 @@ function ChatPage() {
 
     // Chart export to dashboard functionality
     const handleExportChartToDashboard = (dashboardId: string) => {
-        
-        if (!selectedChatId || !chartSpec) {
-            console.warn('Cannot export chart: missing selectedChatId or chartSpec');
+        if (!selectedChatId || !chartSpec || !selectedTable) {
+            console.warn('Cannot export chart: missing selectedChatId, chartSpec, or selectedTable');
             return;
         }
 
         const dashboard = getDashboard(dashboardId);
         const chartSpecs = getCurrentChatState()?.chartSpecs;
         
-        
         if (!dashboard) {
             console.error('Dashboard not found:', dashboardId);
             return;
         }
         
-        if (!chartSpecs || !chartSpecs[chartSpec.id]) {
-            console.error('Chart specs not found for chart:', chartSpec.id);
+        if (!chartSpecs || !chartSpecs[selectedTable]) {
+            console.error('Chart specs not found for table:', selectedTable);
             return;
         }
 
-        const chart = chartSpecs[chartSpec.id];
+        const chart = chartSpecs[selectedTable];
         
         
         // Extract SQL from chart spec
@@ -182,8 +181,6 @@ function ChatPage() {
             visualizations: [...dashboard.visualizations, newVisualization],
             layout: [...dashboard.layout, newLayout]
         };
-        
-        
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboardId);
         
@@ -211,6 +208,7 @@ function ChatPage() {
                     dashboards={getAllDashboards()}
                     onCreateDashboard={handleCreateDashboard}
                     onSelectDashboard={handleSelectDashboard}
+                    onRenameDashboard={renameDashboard}
                     selectedDashboardId={selectedDashboardId}
                 />
             </div>

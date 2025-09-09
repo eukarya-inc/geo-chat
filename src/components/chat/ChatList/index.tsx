@@ -25,6 +25,7 @@ interface ChatListProps {
     dashboards?: Dashboard[];
     onCreateDashboard?: () => void;
     onSelectDashboard?: (dashboardId: string) => void;
+    onRenameDashboard?: (dashboardId: string, newName: string) => void;
     selectedDashboardId?: string | null;
 }
 
@@ -38,9 +39,38 @@ export function ChatList({
     dashboards = [],
     onCreateDashboard,
     onSelectDashboard,
+    onRenameDashboard,
     selectedDashboardId
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+    const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
+    const [editingTitle, setEditingTitle] = useState<string>('');
+
+    const handleStartEditing = (dashboardId: string, currentTitle: string) => {
+        setEditingDashboardId(dashboardId);
+        setEditingTitle(currentTitle);
+    };
+
+    const handleSaveEdit = () => {
+        if (editingDashboardId && onRenameDashboard && editingTitle.trim()) {
+            onRenameDashboard(editingDashboardId, editingTitle.trim());
+        }
+        setEditingDashboardId(null);
+        setEditingTitle('');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingDashboardId(null);
+        setEditingTitle('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSaveEdit();
+        } else if (e.key === 'Escape') {
+            handleCancelEdit();
+        }
+    };
 
     return (
         <div className="h-full flex flex-col">
@@ -143,17 +173,56 @@ export function ChatList({
                                 {dashboards.map((dashboard) => (
                                     <div
                                         key={dashboard.id}
-                                        className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
+                                        className={`group relative flex items-center gap-2 p-3 mb-1 rounded transition-colors ${
                                             selectedDashboardId === dashboard.id
                                                 ? 'bg-green-50 border border-green-200'
                                                 : 'hover:bg-gray-100'
+                                        } ${
+                                            editingDashboardId !== dashboard.id ? 'cursor-pointer' : ''
                                         }`}
-                                        onClick={() => onSelectDashboard(dashboard.id)}
+                                        onClick={() => {
+                                            if (editingDashboardId !== dashboard.id && onSelectDashboard) {
+                                                onSelectDashboard(dashboard.id);
+                                            }
+                                        }}
                                     >
                                         <PresentationChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-medium truncate">
-                                                {dashboard.title}
+                                            <div className="text-sm font-medium">
+                                                {editingDashboardId === dashboard.id ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="text"
+                                                            value={editingTitle}
+                                                            onChange={(e) => setEditingTitle(e.target.value)}
+                                                            onKeyDown={handleKeyDown}
+                                                            onBlur={handleSaveEdit}
+                                                            autoFocus
+                                                            className="flex-1 px-1 py-0.5 text-sm border border-green-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                                        />
+                                                        <button
+                                                            onClick={handleCancelEdit}
+                                                            className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className="truncate cursor-pointer hover:bg-green-100 px-1 py-0.5 rounded"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation(); // Prevent dashboard selection
+                                                            if (onRenameDashboard) {
+                                                                handleStartEditing(dashboard.id, dashboard.title);
+                                                            }
+                                                        }}
+                                                        title="Click to edit name"
+                                                    >
+                                                        {dashboard.title}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="text-xs text-gray-500">
                                                 {dashboard.createdAt.toLocaleDateString('ja-JP')}
