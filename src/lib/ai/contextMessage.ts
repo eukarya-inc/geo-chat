@@ -59,7 +59,8 @@ export async function generateContextMessage(
         const result = await dbContext.executeQuery(sampleQuery, schemaName);
         
         if (result && result.length > 0) {
-          contextMessage += `\nSample data (first 5 rows):\n`;
+          contextMessage += `\nSample data (first 5 rows only - NOT the complete dataset):\n`;
+          contextMessage += `Note: This is a small sample. Use duckdb_query to query the full dataset for accurate analysis.\n`;
           contextMessage += '```json\n';
           contextMessage += JSON.stringify(result, null, 2);
           contextMessage += '\n```\n';
