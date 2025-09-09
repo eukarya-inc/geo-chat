@@ -3,6 +3,7 @@ import type { StructuredMessage } from '../types/message';
 import type { TableStyle } from '../components/map';
 import type { ChartSpec } from '../types/chart';
 import type { StyleSpecification } from 'maplibre-gl';
+import type { Layout } from 'react-grid-layout';
 
 // ===== Remote state type definitions (server sync target) =====
 export interface Table {
@@ -25,6 +26,25 @@ export interface MapSpec {
   tableStyles?: Record<string, TableStyle>;  // Table-specific styles to be combined with base style
 }
 
+// Dashboard visualization
+export interface DashboardVisualization {
+  id: string;
+  type: 'chart' | 'map' | 'table';
+  title: string;
+  chartSpec?: ChartSpec;
+  sql?: string; // SQL query used to generate the visualization
+  createdAt: Date;
+}
+
+// Dashboard
+export interface Dashboard {
+  id: string;
+  title: string;
+  createdAt: Date;
+  visualizations: DashboardVisualization[];
+  layout: Layout[];
+}
+
 // Consolidated Chat type that includes both metadata and state
 export interface Chat {
   id: string;
@@ -44,16 +64,21 @@ export type ChatState = Omit<Chat, 'id' | 'title' | 'createdAt' | 'selectedTable
 
 export interface RemoteState {
   chats: Record<string, Chat>;  // Changed from Chat[] to Record<string, Chat>
+  dashboards: Record<string, Dashboard>;  // Dashboard storage
 }
 
 // ===== Remote State Atoms =====
 // For server sync (not using atomWithStorage)
 export const remoteStateAtom = atom<RemoteState>({
-  chats: {}
+  chats: {},
+  dashboards: {}
 });
 
 // Derived atom (read-only)
 export const chatsAtom = atom((get) => get(remoteStateAtom).chats);
+
+// Dashboard atoms
+export const dashboardsAtom = atom((get) => get(remoteStateAtom).dashboards);
 
 // For backward compatibility - returns chat states keyed by ID
 export const chatStatesAtom = atom((get) => {
