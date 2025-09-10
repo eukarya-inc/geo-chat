@@ -31,6 +31,7 @@ function ChatPage() {
     const { dbContext } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
     const [showExportModal, setShowExportModal] = useState(false);
+    const [exportType, setExportType] = useState<'chart' | 'map'>('chart');
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
 
     // Enable state synchronization
@@ -190,6 +191,60 @@ function ChatPage() {
         
         
         // Automatically switch to the dashboard view to show the newly added chart
+        handleSelectDashboard(dashboardId);
+    };
+
+    // Map export to dashboard functionality
+    const handleExportMapToDashboard = (dashboardId: string) => {
+        if (!selectedChatId || !selectedTable) {
+            console.warn('Cannot export map: missing selectedChatId or selectedTable');
+            return;
+        }
+
+        const dashboard = getDashboard(dashboardId);
+        const mapSpecs = getCurrentChatState()?.mapSpecs;
+        
+        if (!dashboard) {
+            console.error('Dashboard not found:', dashboardId);
+            return;
+        }
+
+        // Create map visualization with current map state
+        const mapSpec = mapSpecs?.[selectedTable];
+        const newVisualization = {
+            id: `viz-${Date.now()}`,
+            type: 'map' as const,
+            title: `${selectedTable} Map`,
+            mapSpec: mapSpec,
+            tableName: selectedTable,
+            geometryColumn: selectedGeometryColumn || 'geometry',
+            sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
+            createdAt: new Date()
+        };
+
+        const newLayout = {
+            i: newVisualization.id,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 6,
+            minW: 4,
+            minH: 3
+        };
+
+        const updatedDashboard = {
+            ...dashboard,
+            visualizations: [...dashboard.visualizations, newVisualization],
+            layout: [...dashboard.layout, newLayout]
+        };
+
+        // Remember the selected dashboard for next time
+        setLastSelectedExportDashboard(dashboardId);
+
+        // Update the dashboard
+        updateDashboard(updatedDashboard);
+
+        // Automatically switch to the dashboard view to show the newly added map
         handleSelectDashboard(dashboardId);
     };
 
@@ -443,7 +498,12 @@ function ChatPage() {
                                             </div>
                                             <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
                                                 <button
-                                                    onClick={() => getAllDashboards().length > 0 && setShowExportModal(true)}
+                                                    onClick={() => {
+                                                        if (getAllDashboards().length > 0) {
+                                                            setExportType('chart');
+                                                            setShowExportModal(true);
+                                                        }
+                                                    }}
                                                     disabled={getAllDashboards().length === 0}
                                                     className={`p-2 rounded-full transition-colors shadow-lg ${
                                                         getAllDashboards().length > 0
@@ -452,7 +512,7 @@ function ChatPage() {
                                                     }`}
                                                     title={
                                                         getAllDashboards().length > 0
-                                                            ? "Export visualization"
+                                                            ? "Export chart visualization"
                                                             : "Create a dashboard first to export visualizations"
                                                     }
                                                 >
@@ -485,17 +545,42 @@ function ChatPage() {
 
                                 {/* Map Tab */}
                                 {activeTab === 'map' && connection && selectedTable && (
-                                    <div className="h-full overflow-hidden">
-                                        <Map
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            selectedTable={selectedTable}
-                                            selectedColumns={undefined}
-                                            geometryColumnName={selectedGeometryColumn}
-                                            tableStyles={tableStyles}
-                                            initialStyle={mapStyle}
-                                            onTableStyleChanged={updateTableStyle}
-                                        />
+                                    <div className="h-full overflow-hidden flex flex-col">
+                                        <div className="flex-1 overflow-hidden">
+                                            <Map
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                selectedTable={selectedTable}
+                                                selectedColumns={undefined}
+                                                geometryColumnName={selectedGeometryColumn}
+                                                tableStyles={tableStyles}
+                                                initialStyle={mapStyle}
+                                                onTableStyleChanged={updateTableStyle}
+                                            />
+                                        </div>
+                                        <div className="flex justify-end p-3 border-t border-gray-200 bg-white">
+                                            <button
+                                                onClick={() => {
+                                                    if (getAllDashboards().length > 0) {
+                                                        setExportType('map');
+                                                        setShowExportModal(true);
+                                                    }
+                                                }}
+                                                disabled={getAllDashboards().length === 0}
+                                                className={`p-2 rounded-full transition-colors shadow-lg ${
+                                                    getAllDashboards().length > 0
+                                                        ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                }`}
+                                                title={
+                                                    getAllDashboards().length > 0
+                                                        ? "Export map visualization"
+                                                        : "Create a dashboard first to export visualizations"
+                                                }
+                                            >
+                                                <ArrowUpTrayIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -514,13 +599,14 @@ function ChatPage() {
             {/* End of Main Content Area */}
         </div>
 
-        {/* Chart Export Modal */}
+        {/* Export Modal */}
         <ChartExportModal
             isOpen={showExportModal}
             onClose={() => setShowExportModal(false)}
             dashboards={getAllDashboards()}
-            onExport={handleExportChartToDashboard}
-            chartTitle={chartSpec?.title || 'Chart'}
+            onExport={exportType === 'chart' ? handleExportChartToDashboard : handleExportMapToDashboard}
+            title={exportType === 'chart' ? (chartSpec?.title || 'Chart') : `${selectedTable} Map`}
+            type={exportType}
             lastSelectedDashboard={lastSelectedExportDashboard}
         />
         </>

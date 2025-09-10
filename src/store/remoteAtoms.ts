@@ -32,6 +32,9 @@ export interface DashboardVisualization {
   type: 'chart' | 'map' | 'table';
   title: string;
   chartSpec?: ChartSpec;
+  mapSpec?: MapSpec;
+  tableName?: string; // Table name for map/table visualizations
+  geometryColumn?: string; // Geometry column for map visualizations
   sql?: string; // SQL query used to generate the visualization
   createdAt: Date;
 }
