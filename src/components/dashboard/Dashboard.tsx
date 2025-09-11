@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
+import Map from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
@@ -82,14 +83,8 @@ export function Dashboard({
     }, [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]);
 
     const handleRemoveVisualization = useCallback((vizId: string) => {
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: dashboard.visualizations.filter(viz => viz.id !== vizId),
-            layout: dashboard.layout.filter(item => item.i !== vizId)
-        };
-        onUpdateDashboard(updatedDashboard);
         onRemoveVisualization(vizId);
-    }, [dashboard, onUpdateDashboard, onRemoveVisualization]);
+    }, [onRemoveVisualization]);
 
     return (
         <div className="flex h-full">
@@ -210,6 +205,7 @@ export function Dashboard({
                             onLayoutChange={handleLayoutChange}
                             isDraggable={true}
                             isResizable={true}
+                            resizeHandles={['se', 'sw', 'ne', 'nw']}
                         >
                             {dashboard.visualizations.map((viz) => (
                                 <div 
@@ -237,13 +233,34 @@ export function Dashboard({
                                                         spec={viz.chartSpec.spec}
                                                         dbContext={dbContext}
                                                         schema={schemaName}
+                                                        showHeader={false}
+                                                    />
+                                                </div>
+                                            ) : viz.type === 'map' && viz.tableName ? (
+                                                <div className="h-full">
+                                                    <Map
+                                                        dbContext={dbContext}
+                                                        schema={schemaName}
+                                                        selectedTable={viz.tableName}
+                                                        geometryColumnName={viz.geometryColumn}
+                                                        tableStyles={viz.mapSpec?.tableStyles}
+                                                        initialStyle={viz.mapSpec?.style}
+                                                        showControls={false}
                                                     />
                                                 </div>
                                             ) : (
                                                 <div className="h-full flex items-center justify-center text-gray-500">
                                                     <div className="text-center">
+                                                        <div className="mb-2">
+                                                            {viz.type === 'chart' && <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />}
+                                                            {viz.type === 'map' && <MapIcon className="w-8 h-8 mx-auto text-gray-300" />}
+                                                        </div>
                                                         <p className="text-sm">
-                                                            {viz.type === 'chart' ? 'Chart spec missing' : `${viz.type} visualization`}
+                                                            {viz.type === 'chart' 
+                                                                ? 'Chart spec missing' 
+                                                                : viz.type === 'map'
+                                                                ? 'Map table missing'
+                                                                : `${viz.type} visualization`}
                                                         </p>
                                                         {viz.sql && (
                                                             <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">

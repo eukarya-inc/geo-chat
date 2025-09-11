@@ -98,7 +98,10 @@ export function useDashboardManagement() {
         visualizationId: string
     ) => {
         const dashboard = remoteState.dashboards[dashboardId];
-        if (!dashboard) return;
+        if (!dashboard) {
+            console.error('Dashboard not found:', dashboardId);
+            return;
+        }
 
         const updatedDashboard: Dashboard = {
             ...dashboard,

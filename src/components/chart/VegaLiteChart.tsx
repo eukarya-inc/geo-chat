@@ -15,6 +15,7 @@ interface VegaLiteChartProps {
   spec: ChartSpec;
   dbContext?: DBContext;
   schema?: string | null;
+  showHeader?: boolean;
 }
 
 interface ColumnInfo {
@@ -22,7 +23,7 @@ interface ColumnInfo {
   type: string;
 }
 
-const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext, schema = null }) => {
+const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext, schema = null, showHeader = true }) => {
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -546,41 +547,43 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
 
   return (
     <div style={{
-      border: '1px solid #dee2e6',
-      borderRadius: '4px',
+      border: showHeader ? '1px solid #dee2e6' : 'none',
+      borderRadius: showHeader ? '4px' : '0',
       backgroundColor: 'white'
     }}>
       {/* Chart Header with Controls */}
-      <div style={{
-        borderBottom: '1px solid #dee2e6',
-        padding: '8px 12px',
-        backgroundColor: '#f8f9fa',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        overflow: 'visible'
-      }}>
-        <div style={{ fontSize: '0.9em', fontWeight: 'bold', color: '#495057' }}>
-          {String(config.title) || 'Interactive Chart'}
+      {showHeader && (
+        <div style={{
+          borderBottom: '1px solid #dee2e6',
+          padding: '8px 12px',
+          backgroundColor: '#f8f9fa',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          overflow: 'visible'
+        }}>
+          <div style={{ fontSize: '0.9em', fontWeight: 'bold', color: '#495057' }}>
+            {String(config.title) || 'Interactive Chart'}
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            style={{
+              background: 'none',
+              border: '1px solid #6c757d',
+              borderRadius: '3px',
+              padding: '4px 8px',
+              fontSize: '0.8em',
+              cursor: 'pointer',
+              color: '#6c757d'
+            }}
+          >
+            {showConfig ? '✕ Hide Settings' : '⚙️ Configure'}
+          </button>
         </div>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          style={{
-            background: 'none',
-            border: '1px solid #6c757d',
-            borderRadius: '3px',
-            padding: '4px 8px',
-            fontSize: '0.8em',
-            cursor: 'pointer',
-            color: '#6c757d'
-          }}
-        >
-          {showConfig ? '✕ Hide Settings' : '⚙️ Configure'}
-        </button>
-      </div>
+      )}
 
       {/* Configuration Panel */}
-      {showConfig && (
+      {showHeader && showConfig && (
         <div style={{
           padding: '15px',
           backgroundColor: '#f8f9fa',
@@ -742,7 +745,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       <div style={{ padding: '0', overflow: 'visible' }}>
         <VegaLite
           spec={finalSpec}
-          actions={true}
+          actions={showHeader}
         />
       </div>
     </div>
@@ -754,6 +757,7 @@ export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
   return (
     prevProps.spec === nextProps.spec &&
     prevProps.dbContext === nextProps.dbContext &&
-    prevProps.schema === nextProps.schema
+    prevProps.schema === nextProps.schema &&
+    prevProps.showHeader === nextProps.showHeader
   );
 });

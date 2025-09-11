@@ -73,6 +73,7 @@ export interface MapProps {
     extraStyle?: ExtraStyle;
     onTableStyleChanged?: (tableName: string, style: TableStyle) => void;
     onExtraStyleChange?: (style: ExtraStyle) => void;
+    showControls?: boolean;  // Whether to show export and style editor controls (default: true)
 }
 
 interface QueryParams {
@@ -168,7 +169,8 @@ const MapComponent: React.FC<MapProps> = ({
     tableStyles = {},
     extraStyle,
     onTableStyleChanged,
-    onExtraStyleChange
+    onExtraStyleChange,
+    showControls = true
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -1411,48 +1413,50 @@ const MapComponent: React.FC<MapProps> = ({
             ></div>
             
             {/* Map Controls */}
-            <div style={{
-                position: 'absolute',
-                top: '10px',
-                left: '10px',
-                display: 'flex',
-                gap: '8px',
-                zIndex: 1000
-            }}>
-                <button
-                    onClick={() => setShowExportControls(!showExportControls)}
-                    style={{
-                        padding: '8px 12px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                    }}
-                >
-                    {showExportControls ? '✕ Hide Export' : '📤 Export'}
-                </button>
-                <button
-                    onClick={() => setShowStyleEditor(!showStyleEditor)}
-                    style={{
-                        padding: '8px 12px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                    }}
-                >
-                    {showStyleEditor ? '✕ Hide Style Editor' : '🎨 Style Editor'}
-                </button>
-            </div>
+            {showControls && (
+                <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    display: 'flex',
+                    gap: '8px',
+                    zIndex: 1000
+                }}>
+                    <button
+                        onClick={() => setShowExportControls(!showExportControls)}
+                        style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                        }}
+                    >
+                        {showExportControls ? '✕ Hide Export' : '📤 Export'}
+                    </button>
+                    <button
+                        onClick={() => setShowStyleEditor(!showStyleEditor)}
+                        style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#28a745',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                        }}
+                    >
+                        {showStyleEditor ? '✕ Hide Style Editor' : '🎨 Style Editor'}
+                    </button>
+                </div>
+            )}
 
             {/* Export Controls */}
-            {showExportControls && (
+            {showControls && showExportControls && (
                 <div style={{
                     position: 'absolute',
                     top: '50px',
@@ -1502,7 +1506,7 @@ const MapComponent: React.FC<MapProps> = ({
             )}
 
             {/* Style Editor */}
-            {showStyleEditor && (
+            {showControls && showStyleEditor && (
                 <MapStyleEditor 
                     styleManager={mapStyleManager || styleManagerRef.current} 
                     onStyleChange={handleStyleChange}
