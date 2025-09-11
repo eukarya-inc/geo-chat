@@ -83,14 +83,8 @@ export function Dashboard({
     }, [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]);
 
     const handleRemoveVisualization = useCallback((vizId: string) => {
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: dashboard.visualizations.filter(viz => viz.id !== vizId),
-            layout: dashboard.layout.filter(item => item.i !== vizId)
-        };
-        onUpdateDashboard(updatedDashboard);
         onRemoveVisualization(vizId);
-    }, [dashboard, onUpdateDashboard, onRemoveVisualization]);
+    }, [onRemoveVisualization]);
 
     return (
         <div className="flex h-full">
@@ -239,6 +233,7 @@ export function Dashboard({
                                                         spec={viz.chartSpec.spec}
                                                         dbContext={dbContext}
                                                         schema={schemaName}
+                                                        showHeader={false}
                                                     />
                                                 </div>
                                             ) : viz.type === 'map' && viz.tableName ? (

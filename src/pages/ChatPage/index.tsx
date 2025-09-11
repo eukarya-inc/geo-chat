@@ -104,6 +104,7 @@ function ChatPage() {
         getDashboard,
         getAllDashboards,
         updateDashboardLayout,
+        removeVisualizationFromDashboard,
         renameDashboard
     } = useDashboardManagement();
 
@@ -286,8 +287,8 @@ function ChatPage() {
                                 onAddVisualization={() => {
                                     // This will be handled by the chart export functionality
                                 }}
-                                onRemoveVisualization={() => {
-                                    // Handle visualization removal
+                                onRemoveVisualization={(vizId) => {
+                                    removeVisualizationFromDashboard(selectedDashboardId, vizId);
                                 }}
                                 onUpdateDashboard={updateDashboard}
                             />
