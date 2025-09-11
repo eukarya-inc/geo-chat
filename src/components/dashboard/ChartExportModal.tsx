@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { XMarkIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PresentationChartBarIcon, MapIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import type { Dashboard } from '../../store/remoteAtoms';
 
-interface ChartExportModalProps {
+interface ExportModalProps {
     isOpen: boolean;
     onClose: () => void;
     dashboards: Dashboard[];
     onExport: (dashboardId: string) => void;
-    chartTitle?: string;
+    title?: string;
+    type?: 'chart' | 'map';
     lastSelectedDashboard?: string | null;
 }
 
@@ -16,9 +17,10 @@ export function ChartExportModal({
     onClose,
     dashboards,
     onExport,
-    chartTitle = 'Chart',
+    title = 'Visualization',
+    type = 'chart',
     lastSelectedDashboard
-}: ChartExportModalProps) {
+}: ExportModalProps) {
     const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(lastSelectedDashboard || null);
 
     // Update selected dashboard when modal opens or lastSelectedDashboard changes
@@ -48,9 +50,16 @@ export function ChartExportModal({
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">
-                        Export "{chartTitle}" to Dashboard
-                    </h3>
+                    <div className="flex items-center gap-2">
+                        {type === 'map' ? (
+                            <MapIcon className="w-5 h-5 text-gray-600" />
+                        ) : (
+                            <ChartBarIcon className="w-5 h-5 text-gray-600" />
+                        )}
+                        <h3 className="text-lg font-medium text-gray-900">
+                            Export "{title}" to Dashboard
+                        </h3>
+                    </div>
                     <button
                         onClick={handleClose}
                         className="text-gray-400 hover:text-gray-500 transition-colors"
@@ -62,7 +71,7 @@ export function ChartExportModal({
                 {/* Dashboard List */}
                 <div className="space-y-2 mb-6">
                     <p className="text-sm text-gray-600 mb-3">
-                        Select a dashboard to export this chart to:
+                        Select a dashboard to export this {type} to:
                     </p>
                     
                     {dashboards.length === 0 ? (
@@ -129,7 +138,7 @@ export function ChartExportModal({
                                 : 'bg-gray-400 cursor-not-allowed'
                         }`}
                     >
-                        Export Chart
+                        Export {type === 'map' ? 'Map' : 'Chart'}
                     </button>
                 </div>
             </div>
