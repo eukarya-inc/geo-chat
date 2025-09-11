@@ -288,6 +288,10 @@ function ChatPage() {
                                     // This will be handled by the chart export functionality
                                 }}
                                 onRemoveVisualization={(vizId) => {
+                                    if (!selectedDashboardId) {
+                                        console.error('No dashboard selected for removal');
+                                        return;
+                                    }
                                     removeVisualizationFromDashboard(selectedDashboardId, vizId);
                                 }}
                                 onUpdateDashboard={updateDashboard}
