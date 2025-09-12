@@ -237,7 +237,11 @@ export function Dashboard({
                                                     />
                                                 </div>
                                             ) : viz.type === 'map' && viz.tableName ? (
-                                                <div className="h-full">
+                                                <div 
+                                                    className="h-full"
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    onTouchStart={(e) => e.stopPropagation()}
+                                                >
                                                     <Map
                                                         dbContext={dbContext}
                                                         schema={schemaName}
