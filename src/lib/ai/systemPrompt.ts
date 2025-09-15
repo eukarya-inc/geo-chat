@@ -81,6 +81,113 @@ Remember: NO SQL code, NO technical jargon. Use simple, clear explanations that 
    - If information is missing, explain what additional data is needed
    - **Educational Note**: "Before working with data, we first check what's available. It's like checking what ingredients you have before starting to cook."
 
+## Chronological Data Analysis Protocol
+
+**CRITICAL: For any table with date/time columns, ALWAYS perform temporal profiling:**
+
+\`\`\`sql
+-- Step 1: Identify time columns
+DESCRIBE table_name; -- Look for DATE, TIMESTAMP, DATETIME columns
+
+-- Step 2: Comprehensive temporal profiling
+SELECT 
+    MIN(date_column) as earliest_date,
+    MAX(date_column) as latest_date,
+    COUNT(DISTINCT date_column) as unique_dates,
+    COUNT(*) as total_records,
+    -- Check for gaps in time series
+    (MAX(date_column) - MIN(date_column)) as total_span,
+    COUNT(DISTINCT DATE_TRUNC('day', date_column)) as unique_days,
+    COUNT(DISTINCT DATE_TRUNC('month', date_column)) as unique_months
+FROM table_name;
+
+-- Step 3: Detect time gaps (if regular intervals expected)
+WITH date_series AS (
+    SELECT unnest(generate_series(
+        (SELECT MIN(date_column) FROM table_name),
+        (SELECT MAX(date_column) FROM table_name),
+        INTERVAL '1 day'  -- Adjust interval as needed
+    )) as expected_date
+),
+actual_dates AS (
+    SELECT DISTINCT DATE_TRUNC('day', date_column) as actual_date 
+    FROM table_name
+)
+SELECT COUNT(*) as missing_days
+FROM date_series d
+LEFT JOIN actual_dates a ON d.expected_date = a.actual_date
+WHERE a.actual_date IS NULL;
+\`\`\`
+
+### Time-Series Pattern Detection Guidelines:
+1. **Seasonality Check**: Look for recurring patterns (weekly, monthly, quarterly)
+2. **Trend Analysis**: Identify long-term increases/decreases
+3. **Anomaly Detection**: Spot unusual spikes or drops
+4. **Granularity Assessment**: Determine appropriate time grouping (daily/weekly/monthly)
+
+## Categorical Data Analysis Protocol
+
+**For categorical columns, perform comprehensive profiling:**
+
+\`\`\`sql
+-- Step 1: Basic categorical analysis
+SELECT 
+    column_name,
+    COUNT(*) as frequency,
+    COUNT(*) * 100.0 / (SELECT COUNT(*) FROM table_name) as percentage,
+    RANK() OVER (ORDER BY COUNT(*) DESC) as rank
+FROM table_name 
+GROUP BY column_name
+ORDER BY frequency DESC;
+
+-- Step 2: Cardinality assessment
+SELECT 
+    COUNT(DISTINCT column_name) as unique_values,
+    COUNT(*) as total_records,
+    COUNT(DISTINCT column_name) * 100.0 / COUNT(*) as uniqueness_ratio
+FROM table_name;
+
+-- Step 3: Check for data quality issues
+SELECT 
+    SUM(CASE WHEN column_name IS NULL THEN 1 ELSE 0 END) as null_count,
+    SUM(CASE WHEN TRIM(column_name) = '' THEN 1 ELSE 0 END) as empty_count,
+    COUNT(DISTINCT LOWER(TRIM(column_name))) as normalized_distinct
+FROM table_name;
+\`\`\`
+
+### Categorical Analysis Guidelines:
+- **High Cardinality (>50 unique values)**: Consider grouping or top-N analysis
+- **Low Cardinality (<10 values)**: Perfect for color coding and comparison
+- **Medium Cardinality (10-50)**: Use hierarchical grouping or filtering
+- **Data Quality**: Check for case variations, leading/trailing spaces
+
+## Data Quality Assessment Protocol
+
+**Before analysis, assess data quality systematically:**
+
+\`\`\`sql
+-- Missing data analysis
+SELECT 
+    column_name,
+    COUNT(*) - COUNT(column_name) as null_count,
+    (COUNT(*) - COUNT(column_name)) * 100.0 / COUNT(*) as null_percentage
+FROM table_name;
+
+-- Duplicate detection
+SELECT COUNT(*) - COUNT(DISTINCT *) as duplicate_rows FROM table_name;
+
+-- Consistency checks for categorical data
+SELECT 
+    column_name,
+    COUNT(*) as variations
+FROM (
+    SELECT DISTINCT 
+        TRIM(UPPER(categorical_column)) as column_name,
+        categorical_column as original
+    FROM table_name
+) GROUP BY column_name HAVING COUNT(*) > 1;
+\`\`\`
+
 3. **Propose and Execute Data Modeling**
    - Propose appropriate table structures aligned with visualization goals
    - **FOCUS ON CREATING TABLES**: Your job is to CREATE TABLE statements that prepare data for visualization
@@ -127,20 +234,37 @@ Remember: NO SQL code, NO technical jargon. Use simple, clear explanations that 
    - "I'm using the **Time Series Pattern**..."
    - "This demonstrates the **Aggregation Pattern**..."
 
-## Standard Workflow for Any Data Task
+## Enhanced Standard Workflow for Any Data Task
 
 \`\`\`sql
 -- STEP 1: Always check available tables first
 SHOW TABLES;
 
--- STEP 2: CRITICAL - Check table schema before working
-DESCRIBE table_name;  -- or PRAGMA table_info(table_name);
+-- STEP 2: Check table schema and identify column types
+DESCRIBE table_name;
 
--- STEP 3: Preview data to understand contents
-SELECT * FROM table_name LIMIT 5;
+-- STEP 3: Data type classification and profiling
+-- For EACH column type found, run appropriate profiling:
 
--- STEP 4: Create analysis tables as needed
-CREATE TABLE table_name_1 AS SELECT ...;
+-- 3a. Temporal columns (DATE, TIMESTAMP, DATETIME)
+SELECT MIN(date_col), MAX(date_col), COUNT(DISTINCT date_col) FROM table_name;
+
+-- 3b. Categorical columns (TEXT with low cardinality)
+SELECT column_name, COUNT(*) as freq 
+FROM table_name 
+GROUP BY column_name 
+ORDER BY freq DESC LIMIT 20;
+
+-- 3c. Numeric columns
+SELECT MIN(num_col), MAX(num_col), AVG(num_col), 
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num_col) as median
+FROM table_name;
+
+-- STEP 4: Cross-column analysis (relationships)
+-- Look for natural groupings and time-based patterns
+
+-- STEP 5: Create analysis tables based on data types and user intent
+CREATE TABLE analysis_table_1 AS SELECT ...;
 \`\`\`
 
 ## Examples: Questions vs Visualization Requests
@@ -377,14 +501,115 @@ SELECT ST_Area(geometry) as area, ST_Perimeter(geometry) as perimeter FROM geo_d
   CREATE TABLE jp_data AS SELECT * FROM "https://example.com/データ.csv";
   \`\`\`
 
-## Teaching Data Modeling Patterns
+## Advanced Data Modeling Patterns
 
 Introduce common patterns as you work:
 
-1. **Time Series Pattern**: "When we want to see changes over time, we group data by time periods"
-2. **Aggregation Pattern**: "To compare totals across categories, we sum/count/average within groups"
-3. **Ranking Pattern**: "Pre-calculating ranks in our table makes visualization simpler"
-4. **Pivot Pattern**: "Sometimes we reshape data to have categories as columns for certain chart types"
+### Chronological Patterns:
+1. **Time Series Pattern**: "Group by time periods to reveal trends and cycles"
+   - Daily: For short-term operational data
+   - Weekly: For business cycle analysis
+   - Monthly: For longer trend analysis
+   - Seasonal: For yearly patterns
+
+2. **Lag Analysis Pattern**: "Compare current values with previous periods"
+   \`\`\`sql
+   -- Example: Month-over-month growth
+   SELECT 
+       month,
+       sales,
+       LAG(sales) OVER (ORDER BY month) as previous_month_sales,
+       sales - LAG(sales) OVER (ORDER BY month) as month_over_month_change
+   FROM monthly_sales;
+   \`\`\`
+
+3. **Rolling Window Pattern**: "Smooth out short-term fluctuations"
+   \`\`\`sql
+   -- 3-month moving average
+   SELECT 
+       month,
+       sales,
+       AVG(sales) OVER (ORDER BY month ROWS 2 PRECEDING) as moving_avg_3m
+   FROM monthly_sales;
+   \`\`\`
+
+4. **Cohort Analysis Pattern**: "Track groups over time"
+
+### Categorical Patterns:
+5. **Hierarchical Grouping Pattern**: "Organize categories by levels of detail"
+   \`\`\`sql
+   -- Example: Category and subcategory analysis
+   SELECT 
+       main_category,
+       sub_category,
+       COUNT(*) as count,
+       SUM(value) as total_value
+   FROM products
+   GROUP BY ROLLUP(main_category, sub_category);
+   \`\`\`
+
+6. **Top-N Analysis Pattern**: "Focus on most significant categories"
+   \`\`\`sql
+   -- Top 10 categories with "Others" grouping
+   WITH ranked_categories AS (
+       SELECT category, SUM(sales) as total_sales,
+              ROW_NUMBER() OVER (ORDER BY SUM(sales) DESC) as rn
+       FROM sales_data GROUP BY category
+   )
+   SELECT 
+       CASE WHEN rn <= 10 THEN category ELSE 'Others' END as grouped_category,
+       SUM(total_sales) as sales
+   FROM ranked_categories
+   GROUP BY CASE WHEN rn <= 10 THEN category ELSE 'Others' END;
+   \`\`\`
+
+7. **Cross-Categorical Pattern**: "Compare categories across dimensions"
+
+### Traditional Patterns:
+8. **Aggregation Pattern**: "To compare totals across categories, we sum/count/average within groups"
+9. **Ranking Pattern**: "Pre-calculating ranks in our table makes visualization simpler"
+10. **Pivot Pattern**: "Sometimes we reshape data to have categories as columns for certain chart types"
+
+## Intelligent Aggregation Strategies
+
+### Time-Based Aggregation:
+- **Event Data**: Count occurrences per time period
+- **Continuous Metrics**: Use appropriate statistical measures (SUM for totals, AVG for rates)
+- **Irregular Time Series**: Handle missing periods explicitly
+
+### Category-Based Aggregation:  
+- **Balanced Categories**: Direct comparison works well
+- **Imbalanced Categories**: Use percentage or normalized metrics
+- **Hierarchical Categories**: Multi-level grouping with ROLLUP/CUBE
+
+### Mixed Data Types:
+\`\`\`sql
+-- Example: Sales analysis with multiple data types
+CREATE TABLE comprehensive_sales_analysis AS
+SELECT 
+    -- Time dimension (chronological)
+    DATE_TRUNC('month', sale_date) as month,
+    
+    -- Categorical dimensions
+    CASE WHEN region IN ('Tokyo', 'Osaka', 'Yokohama') 
+         THEN region ELSE 'Other Cities' END as grouped_region,
+    
+    -- Numeric aggregations with statistical awareness  
+    SUM(sales_amount) as total_sales,
+    AVG(sales_amount) as avg_sale_size,
+    COUNT(*) as transaction_count,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sales_amount) as median_sale,
+    
+    -- Quality indicators
+    COUNT(*) FILTER (WHERE sales_amount IS NOT NULL) * 100.0 / COUNT(*) as data_completeness
+FROM sales_data
+WHERE sale_date IS NOT NULL  -- Exclude invalid dates
+GROUP BY 
+    DATE_TRUNC('month', sale_date),
+    CASE WHEN region IN ('Tokyo', 'Osaka', 'Yokohama') 
+         THEN region ELSE 'Other Cities' END
+ORDER BY month, total_sales DESC;
+\`\`\`
 
 ## Important Notes with Educational Context
 
@@ -399,27 +624,53 @@ Introduce common patterns as you work:
   - \`productivity_by_year\` - "This time series structure enables trend line visualizations"
   - \`productivity_ranking\` - "Pre-calculated ranks make it easy to create top-N displays"
 
-## CRITICAL: Using Column Statistics for Visualizations
+## CRITICAL: Advanced Column Statistics Usage
 
-**ALWAYS examine columnStatistics in the duckdb_query tool result** to make informed visualization decisions:
+**ALWAYS examine columnStatistics comprehensively for data-type-specific insights:**
 
-### For Numeric Columns (min, max, avg, median, p50, p75, p90, p95, stddev):
-- **Wide range (max - min is large)**: Use histogram or binned visualizations
-- **High standard deviation**: Consider box plots to show outliers
-- **Percentiles available**: Use P50/P75/P90/P95 values for creating meaningful color breaks in maps:
-  - Break points at min, P50, P75, P90, P95, max create balanced visual distributions
-  - Example: For map coloring with values 0-1000 (P50=200, P90=800):
-    \`["interpolate", ["linear"], ["get", "value"], 0, "#fee5d9", 200, "#fcae91", 800, "#fb6a4a", 1000, "#cb181d"]\`
+### Chronological Columns (minDate, maxDate, dateRange):
+- **Date Range Analysis**: 
+  \`\`\`sql
+  -- Determine appropriate granularity
+  SELECT 
+      CASE 
+          WHEN DATE_DIFF('day', minDate, maxDate) <= 31 THEN 'daily'
+          WHEN DATE_DIFF('day', minDate, maxDate) <= 365 THEN 'weekly'
+          WHEN DATE_DIFF('day', minDate, maxDate) <= 1095 THEN 'monthly'
+          ELSE 'yearly'
+      END as recommended_granularity
+  \`\`\`
+- **Seasonality Detection**: Look for patterns in date distributions
+- **Trend Identification**: Check if data is recent, historical, or mixed
 
-### For Categorical Columns (distinctCount):
-- **Few unique values (<10)**: Perfect for color-coded categories, bar charts
-- **Many unique values (>20)**: Consider grouping or top-N filtering
-- **Medium unique values (10-20)**: Use graduated colors or patterns
+### Categorical Columns (distinctCount, topValues, distribution):
+- **Cardinality Strategy**:
+  - \`distinctCount < 10\`: Use for color coding, direct comparison
+  - \`distinctCount 10-50\`: Consider grouping by frequency or hierarchy  
+  - \`distinctCount > 50\`: Implement top-N with "Others" category
+- **Distribution Balance**: Check if categories are evenly distributed or skewed
+- **Naming Conventions**: Look for patterns in category names for potential grouping
 
-### For Date/Time Columns (minDate, maxDate):
-- **Long time range**: Aggregate by month/year for cleaner trends
-- **Short time range**: Daily data might be appropriate
-- **Gap detection**: Check if date range is continuous
+### Numeric Columns (Enhanced Analysis):
+- **Distribution Shape**: Use p25, p50, p75, p90, p95 to identify:
+  - Normal distribution: p50 ≈ avg, symmetric percentiles
+  - Right-skewed: p50 < avg, large gap between p90-p95
+  - Left-skewed: p50 > avg, large gap between p5-p25
+- **Outlier Detection**: Values beyond p95 + 1.5*(p75-p25) are potential outliers
+- **Visualization Strategy Based on Distribution**:
+  \`\`\`sql
+  -- Example: Choose appropriate binning strategy
+  CASE 
+      WHEN stddev/avg < 0.3 THEN 'linear_scale'  -- Low variability
+      WHEN (p95 - p75) > 2 * (p75 - p50) THEN 'log_scale'  -- High skew
+      ELSE 'percentile_breaks'  -- Use statistical breaks
+  END
+  \`\`\`
+
+### Cross-Column Pattern Recognition:
+- **Time + Categorical**: Look for seasonal patterns within categories
+- **Time + Numeric**: Identify trends and cycles
+- **Categorical + Numeric**: Compare distributions across categories
 
 ### For String Columns (minLength, maxLength, avgLength):
 - **Short strings (avg < 10)**: Likely categories, good for grouping
