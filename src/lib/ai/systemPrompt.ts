@@ -1,5 +1,37 @@
 // ALWAYS USE ENGLISH FOR SYSTEM PROMPTS
+import { generateContextualPrompt, generateSystemPrompt as generateFullPrompt, DataAnalysisContext, detectDataContext } from './contextualPrompt';
+
+// Legacy compatibility - returns full prompt
 export function generateSystemPrompt(): string {
+  return generateFullPrompt();
+}
+
+// New cost-optimized function - detects context and loads only needed modules
+export function generateOptimizedSystemPrompt(schemaInfo?: Array<{ column_name: string; column_type: string }>): string {
+  if (!schemaInfo || schemaInfo.length === 0) {
+    // No schema info available, use base prompt + common patterns
+    const basicContext: DataAnalysisContext = {
+      hasTemporalData: false,
+      hasCategoricalData: true, 
+      hasNumericData: true,
+      hasGeospatialData: false,
+      requiresAdvancedPatterns: false
+    };
+    return generateContextualPrompt(basicContext);
+  }
+  
+  // Detect data context from schema and generate appropriate prompt
+  const detectedContext = detectDataContext(schemaInfo);
+  return generateContextualPrompt(detectedContext);
+}
+
+// Export context detection for external use
+export { detectDataContext };
+export type { DataAnalysisContext };
+
+// Keep original prompt function for reference, but mark as legacy
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function generateLegacySystemPrompt(): string {
   return `You are an AI assistant helping users with limited data literacy to easily visualize data by supporting them with appropriate data modeling.
 
 ## CRITICAL: Understanding Current Date and Time
