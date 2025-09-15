@@ -470,6 +470,333 @@ SELECT ST_Area(geometry) as area, ST_Perimeter(geometry) as perimeter FROM geo_d
 ### Educational Note for GIS Data:
 "GIS (Geographic Information System) data contains location information. We use special functions starting with 'ST_' (Spatial Type) to work with maps and geographic features. Think of it like having special tools for map data - just like you need special tools to measure distances on a globe versus a flat surface."
 
+## Geospatial Business Intelligence Context
+
+**CRITICAL: For BI applications with geographic data, apply spatial intelligence beyond basic mapping:**
+
+### 1. Geospatial Intelligence Patterns
+
+**Automatic Geographic Context Detection:**
+\`\`\`sql
+-- Always assess geographic context first
+WITH geo_context_analysis AS (
+    SELECT 
+        COUNT(*) as total_records,
+        COUNT(DISTINCT ST_X(geometry)) as unique_longitudes,
+        COUNT(DISTINCT ST_Y(geometry)) as unique_latitudes,
+        ST_Envelope(ST_Collect(geometry)) as bounding_box,
+        -- Detect geographic clustering
+        ST_ClusterDBScan(geometry, 0.01, 5) OVER() as auto_cluster
+    FROM geo_table
+),
+geographic_density AS (
+    SELECT 
+        auto_cluster,
+        COUNT(*) as cluster_size,
+        ST_Centroid(ST_Collect(geometry)) as cluster_center,
+        AVG(business_metric) as cluster_performance
+    FROM geo_table
+    GROUP BY auto_cluster
+)
+SELECT * FROM geographic_density WHERE cluster_size >= 3;
+\`\`\`
+
+**Geographic Hierarchy Intelligence:**
+\`\`\`sql
+-- Auto-detect and utilize administrative boundaries
+WITH geographic_hierarchy AS (
+    SELECT 
+        -- Spatial containment analysis
+        country,
+        state_province,
+        city,
+        postal_code,
+        geometry,
+        business_value,
+        -- Calculate geographic market penetration
+        COUNT(*) OVER (PARTITION BY country) as country_presence,
+        COUNT(*) OVER (PARTITION BY state_province) as state_presence,
+        -- Geographic performance indexing
+        business_value / AVG(business_value) OVER (PARTITION BY country) as country_performance_index
+    FROM locations l
+    -- Join with administrative boundary data when available
+    LEFT JOIN administrative_boundaries b ON ST_Within(l.geometry, b.geometry)
+)
+\`\`\`
+
+### 2. Spatial Relationship Analysis Patterns
+
+**Proximity-Based Business Intelligence:**
+\`\`\`sql
+-- Competitive proximity analysis
+WITH competitor_proximity AS (
+    SELECT 
+        a.location_id,
+        a.business_metric,
+        a.geometry as location_geom,
+        -- Find competitors within business-relevant distance
+        ARRAY_AGG(
+            b.business_metric ORDER BY ST_Distance(a.geometry, b.geometry)
+        ) FILTER (WHERE ST_Distance(a.geometry, b.geometry) <= 5000 AND a.location_id != b.location_id) 
+        as nearby_competitor_metrics,
+        -- Market saturation index
+        COUNT(b.location_id) FILTER (WHERE ST_Distance(a.geometry, b.geometry) <= 2000) as market_density
+    FROM business_locations a
+    LEFT JOIN business_locations b ON ST_DWithin(a.geometry, b.geometry, 5000)
+    GROUP BY a.location_id, a.business_metric, a.geometry
+)
+SELECT 
+    location_id,
+    business_metric,
+    market_density,
+    -- Performance vs local competition
+    CASE WHEN ARRAY_LENGTH(nearby_competitor_metrics, 1) > 0 
+         THEN business_metric / (
+             SELECT AVG(unnest) FROM unnest(nearby_competitor_metrics)
+         )
+         ELSE NULL 
+    END as local_competitive_index
+FROM competitor_proximity;
+\`\`\`
+
+**Market Coverage and Gap Analysis:**
+\`\`\`sql
+-- Market coverage optimization
+CREATE TABLE market_coverage_analysis AS
+WITH coverage_grid AS (
+    -- Create analysis grid based on market boundaries
+    SELECT 
+        ST_SnapToGrid(geometry, 0.01) as grid_cell,  -- ~1km grid
+        COUNT(*) as location_count,
+        AVG(revenue) as avg_revenue,
+        SUM(customer_count) as total_customers
+    FROM business_locations
+    GROUP BY ST_SnapToGrid(geometry, 0.01)
+),
+market_potential AS (
+    SELECT 
+        grid_cell,
+        location_count,
+        total_customers,
+        -- Identify underserved high-potential areas
+        CASE 
+            WHEN total_customers > 1000 AND location_count = 0 THEN 'high_opportunity'
+            WHEN total_customers > 500 AND location_count <= 1 THEN 'expansion_candidate'
+            WHEN location_count > 3 THEN 'saturated'
+            ELSE 'standard'
+        END as market_status,
+        -- Calculate market penetration rate
+        COALESCE(location_count::FLOAT / NULLIF(total_customers::FLOAT / 1000, 0), 0) as penetration_rate
+    FROM coverage_grid
+)
+SELECT 
+    grid_cell as geometry,
+    market_status,
+    penetration_rate,
+    total_customers,
+    location_count
+FROM market_potential
+ORDER BY 
+    CASE market_status 
+        WHEN 'high_opportunity' THEN 1
+        WHEN 'expansion_candidate' THEN 2
+        ELSE 3 
+    END,
+    total_customers DESC;
+\`\`\`
+
+**Supply Chain & Logistics Optimization:**
+\`\`\`sql
+-- Spatial logistics intelligence
+WITH logistics_analysis AS (
+    SELECT 
+        warehouse_id,
+        warehouse_location,
+        customer_id,
+        customer_location,
+        order_value,
+        -- Calculate delivery efficiency metrics
+        ST_Distance(warehouse_location, customer_location) as delivery_distance,
+        order_value / ST_Distance(warehouse_location, customer_location) as value_per_km,
+        -- Optimal warehouse assignment
+        ROW_NUMBER() OVER (
+            PARTITION BY customer_id 
+            ORDER BY ST_Distance(warehouse_location, customer_location)
+        ) as warehouse_rank
+    FROM warehouses w
+    CROSS JOIN customers c
+    JOIN orders o ON c.customer_id = o.customer_id
+),
+route_optimization AS (
+    SELECT 
+        warehouse_id,
+        -- Service area analysis  
+        ST_ConvexHull(ST_Collect(customer_location)) as service_area,
+        AVG(delivery_distance) as avg_delivery_distance,
+        SUM(order_value) as total_service_value,
+        COUNT(*) as customers_served,
+        -- Logistics efficiency score
+        SUM(order_value) / SUM(delivery_distance) as logistics_efficiency
+    FROM logistics_analysis 
+    WHERE warehouse_rank = 1  -- Only optimal assignments
+    GROUP BY warehouse_id
+)
+SELECT 
+    warehouse_id,
+    customers_served,
+    avg_delivery_distance,
+    logistics_efficiency,
+    -- Identify optimization opportunities
+    CASE 
+        WHEN logistics_efficiency > (SELECT AVG(logistics_efficiency) * 1.2 FROM route_optimization) 
+        THEN 'high_efficiency'
+        WHEN logistics_efficiency < (SELECT AVG(logistics_efficiency) * 0.8 FROM route_optimization) 
+        THEN 'needs_optimization'
+        ELSE 'standard'
+    END as efficiency_status
+FROM route_optimization;
+\`\`\`
+
+### 3. Performance Optimization for Geospatial BI Workloads
+
+**Spatial Indexing Strategy:**
+\`\`\`sql
+-- Performance-optimized spatial queries for BI
+-- ALWAYS create spatial indexes for BI workloads
+-- Note: Actual index creation depends on database system
+
+-- Step 1: Spatial indexing preparation
+CREATE TABLE optimized_spatial_summary AS
+WITH spatial_preprocessing AS (
+    SELECT 
+        -- Pre-calculate frequently used spatial metrics
+        ST_X(geometry) as longitude,
+        ST_Y(geometry) as latitude,
+        ST_SnapToGrid(geometry, 0.001) as precision_geometry,  -- Reduce precision for performance
+        -- Business metrics
+        location_id,
+        business_metric,
+        category,
+        date_column
+    FROM large_geospatial_table
+),
+grid_aggregation AS (
+    SELECT 
+        precision_geometry,
+        category,
+        DATE_TRUNC('month', date_column) as month,
+        -- Pre-aggregate common BI metrics
+        COUNT(*) as location_count,
+        SUM(business_metric) as total_value,
+        AVG(business_metric) as avg_value,
+        -- Spatial density calculation
+        COUNT(*) / ST_Area(ST_Buffer(precision_geometry, 1000)) as spatial_density
+    FROM spatial_preprocessing
+    GROUP BY precision_geometry, category, DATE_TRUNC('month', date_column)
+)
+SELECT * FROM grid_aggregation;
+
+-- Step 2: Create materialized views for common spatial queries
+-- Common BI pattern: Time-series + Geography + Category
+CREATE TABLE monthly_spatial_performance AS
+SELECT 
+    DATE_TRUNC('month', analysis_date) as month,
+    ST_SnapToGrid(geometry, 0.01) as geo_grid,  -- ~1km resolution
+    category,
+    -- Pre-calculated KPIs
+    SUM(revenue) as monthly_revenue,
+    COUNT(*) as transaction_count,
+    AVG(customer_satisfaction) as avg_satisfaction,
+    -- Spatial context
+    ST_Centroid(ST_Collect(geometry)) as grid_center
+FROM transaction_data
+GROUP BY 
+    DATE_TRUNC('month', analysis_date),
+    ST_SnapToGrid(geometry, 0.01),
+    category;
+\`\`\`
+
+**Memory-Efficient Large Dataset Patterns:**
+\`\`\`sql
+-- Efficient spatial sampling for BI dashboards
+CREATE TABLE spatial_sample_analysis AS
+WITH intelligent_sampling AS (
+    SELECT 
+        *,
+        -- Stratified spatial sampling
+        ROW_NUMBER() OVER (
+            PARTITION BY ST_SnapToGrid(geometry, 0.1), category  -- Group by spatial grid + business dimension
+            ORDER BY RANDOM()
+        ) as sample_rank
+    FROM large_spatial_dataset
+    WHERE date_column >= CURRENT_DATE - INTERVAL '1 year'  -- Relevant time window
+),
+representative_sample AS (
+    SELECT * FROM intelligent_sampling 
+    WHERE sample_rank <= 100  -- Representative sample per spatial-category group
+),
+sample_statistics AS (
+    SELECT 
+        ST_SnapToGrid(geometry, 0.1) as analysis_grid,
+        category,
+        -- Statistical extrapolation from sample
+        COUNT(*) * (
+            SELECT COUNT(*) FROM large_spatial_dataset 
+            WHERE ST_Within(geometry, ST_Buffer(analysis_grid, 5000))
+        ) / 100.0 as estimated_total,
+        AVG(business_metric) as sample_avg,
+        STDDEV(business_metric) as sample_stddev
+    FROM representative_sample
+    GROUP BY ST_SnapToGrid(geometry, 0.1), category
+)
+SELECT * FROM sample_statistics;
+\`\`\`
+
+**Real-Time Spatial BI Optimization:**
+\`\`\`sql
+-- Incremental spatial updates for real-time BI
+CREATE TABLE incremental_spatial_metrics AS
+WITH recent_changes AS (
+    SELECT * FROM spatial_transactions 
+    WHERE last_updated >= CURRENT_TIMESTAMP - INTERVAL '1 hour'
+),
+affected_areas AS (
+    SELECT DISTINCT 
+        ST_SnapToGrid(geometry, 0.01) as update_grid
+    FROM recent_changes
+),
+incremental_recalculation AS (
+    SELECT 
+        ua.update_grid,
+        -- Only recalculate affected spatial areas
+        COUNT(st.*) as updated_count,
+        SUM(st.business_value) as updated_total,
+        AVG(st.business_value) as updated_avg,
+        -- Spatial aggregation
+        ST_Centroid(ST_Collect(st.geometry)) as area_center
+    FROM affected_areas ua
+    JOIN spatial_transactions st ON ST_Within(st.geometry, ST_Buffer(ua.update_grid, 500))
+    WHERE st.transaction_date >= CURRENT_DATE
+    GROUP BY ua.update_grid
+)
+-- Merge with existing aggregated data (upsert pattern)
+SELECT 
+    update_grid as geometry,
+    updated_count,
+    updated_total,
+    updated_avg,
+    CURRENT_TIMESTAMP as last_calculated
+FROM incremental_recalculation;
+\`\`\`
+
+### Educational Notes for Geospatial BI:
+
+**Spatial Intelligence Concept**: "In BI, location isn't just a coordinate - it's a business dimension. We analyze 'where' patterns just like 'when' patterns, looking for geographic clusters, market gaps, and spatial trends that drive business decisions."
+
+**Performance Philosophy**: "Spatial BI queries can be expensive. We pre-process spatial data into analysis-ready grids and use representative sampling strategies, similar to how time-series BI uses pre-aggregated time periods."
+
+**Business Context**: "Every spatial analysis should answer: Where are opportunities? Where are problems? How does location impact performance? Think like a business strategist using maps as a decision-making tool."
+
 ## File and URL Handling
 
 - **CRITICAL**: When working with files (local or remote URLs), ALWAYS create a table first:
