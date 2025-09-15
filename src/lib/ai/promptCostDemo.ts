@@ -1,4 +1,45 @@
-// Demonstration of cost optimization with conditional context loading
+/**
+ * Cost Analysis Demonstration for AI System Prompt Optimization
+ * 
+ * This file demonstrates the cost savings achieved through smart conditional context loading.
+ * It shows how different data types trigger different prompt modules, resulting in significant
+ * token reduction while preserving all SQL analysis capabilities.
+ * 
+ * Usage:
+ * ------
+ * 1. Import and run demonstrateCostOptimization() to see cost analysis
+ * 2. Use the mock schema examples to test different data scenarios
+ * 3. Compare token costs between full and optimized prompts
+ * 
+ * Examples:
+ * ---------
+ * ```typescript
+ * import { demonstrateCostOptimization, SALES_DATA_SCHEMA } from './promptCostDemo';
+ * import { generateOptimizedSystemPrompt, detectDataContext } from './systemPrompt';
+ * 
+ * // Run full cost analysis
+ * demonstrateCostOptimization();
+ * 
+ * // Test specific schema
+ * const context = detectDataContext(SALES_DATA_SCHEMA);
+ * const optimizedPrompt = generateOptimizedSystemPrompt(SALES_DATA_SCHEMA);
+ * console.log(`Context: ${JSON.stringify(context)}`);
+ * console.log(`Tokens: ~${Math.ceil(optimizedPrompt.length / 4)}`);
+ * ```
+ * 
+ * Expected Results:
+ * ----------------
+ * - Simple Product Data: 69% cost reduction (1,400 vs 4,500 tokens)
+ * - Sales Time-Series: 60% cost reduction (1,800 vs 4,500 tokens)
+ * - Geospatial BI: 49% cost reduction (2,300 vs 4,500 tokens)
+ * - No Schema: 71% cost reduction (1,300 vs 4,500 tokens)
+ * 
+ * Note: This file is primarily for development and testing. Consider excluding
+ * from production builds if bundle size is a concern. You can exclude it using:
+ * - Webpack: Add to exclude patterns
+ * - Vite: Add to build.rollupOptions.external
+ * - Or simply delete this file if cost analysis is not needed
+ */
 
 import { generateSystemPrompt, generateOptimizedSystemPrompt, detectDataContext } from './systemPrompt';
 
