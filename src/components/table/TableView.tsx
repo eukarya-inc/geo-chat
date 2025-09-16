@@ -130,13 +130,21 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
           );
           
-          const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => ({
-            id: col.name,
-            title: sortColumn === col.name 
-              ? `${col.name} ${sortDirection === 'ASC' ? '↑' : '↓'}`
-              : col.name,
-            width: calculatedWidth,
-          }));
+          const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
+            // Format column title with name and type
+            let title = col.name;
+            if (sortColumn === col.name) {
+              title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
+            }
+            // Add type info on a new line (using newline character)
+            title += `\n(${col.type})`;
+            
+            return {
+              id: col.name,
+              title,
+              width: calculatedWidth,
+            };
+          });
           
           // Store column types for later use
           const types: Record<string, string> = {};
@@ -338,23 +346,32 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   useEffect(() => {
     setColumns(prevColumns => 
       prevColumns.map(col => {
-        let title = col.id || col.title || '';
+        // Get the column type from columnTypes
+        const colType = columnTypes[col.id || ''] || '';
         
-        // Add sort indicator if this column is sorted
+        // Build the title with column name
+        let title = '';
+        
+        // Add sort indicator before column name if this column is sorted
         if (col.id && sortColumn === col.id) {
-          title = `${col.id} ${sortDirection === 'ASC' ? '↑' : '↓'}`;
+          title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.id}`;
         }
-        // Add a subtle indicator for sortable columns when not sorted
-        else if (col.id && sortColumn !== col.id) {
-          // Optional: show that column is sortable with a subtle indicator
-          // title = `${col.id} ⇅`;  // Uncomment if you want to show sortable indicator
+        // Regular column name when not sorted
+        else if (col.id) {
           title = col.id;
+        } else {
+          title = col.title || '';
+        }
+        
+        // Add type info on a new line if we have it
+        if (colType) {
+          title += `\n(${colType})`;
         }
         
         return { ...col, title };
       })
     );
-  }, [sortColumn, sortDirection]);
+  }, [sortColumn, sortDirection, columnTypes]);
 
 
   if (loading) {
@@ -385,7 +402,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         smoothScrollX={true}
         smoothScrollY={true}
         rowHeight={36}
-        headerHeight={36}
+        headerHeight={48}
         onVisibleRegionChanged={onVisibleRegionChanged}
         // Enable column resize
         onColumnResize={handleColumnResize}

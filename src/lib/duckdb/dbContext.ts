@@ -1,6 +1,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
 import { convertArrowToJS } from '../../utils/arrowConverter';
+import { detectCreateTableFromUrl, generateTableNameFromUrl, getFromClauseForUrl } from './tableUrlHelpers';
 
 export interface DBContext {
   // For components that need long-lived connections (like Table component)
@@ -28,6 +29,9 @@ export interface DBContext {
   
   // Export methods
   downloadTable(tableName: string, format: 'parquet' | 'csv' | 'json', schema?: string | null): Promise<Blob>;
+  
+  // Data loading methods
+  createTableFromUrl(url: string, schema?: string | null, tableName?: string): Promise<string>;
 }
 
 interface PooledConnection {
@@ -523,6 +527,14 @@ class DatabaseContext implements DBContext {
       return tables.map(name => ({ name }));
     }
     
+    // Check if this is a CREATE TABLE FROM URL pattern
+    const urlTableInfo = detectCreateTableFromUrl(sql);
+    if (urlTableInfo) {
+      // Use createTableFromUrl with the specified table name for better URL handling
+      await this.createTableFromUrl(urlTableInfo.url, sanitizedSchema, urlTableInfo.tableName);
+      return [];
+    }
+    
     const conn = await this.connect(sanitizedSchema);
     try {
       const result = await conn.query(sql);
@@ -767,6 +779,43 @@ class DatabaseContext implements DBContext {
     } finally {
       await conn.close();
     }
+  }
+  
+  // Data loading methods
+  async createTableFromUrl(url: string, schema: string | null = null, tableName?: string): Promise<string> {
+    const sanitizedSchema = this.sanitizeSchemaName(schema);
+    
+    // Use provided table name or generate from URL
+    const finalTableName = tableName || generateTableNameFromUrl(url);
+    
+    // Determine file type and create appropriate FROM clause
+    const from = getFromClauseForUrl(url);
+    
+    // Create the table directly without going through executeQuery to avoid recursion
+    const createTableSQL = `CREATE TABLE ${finalTableName} AS SELECT * FROM ${from}`;
+    const conn = await this.connect(sanitizedSchema);
+    try {
+      await conn.query(createTableSQL);
+      
+      // Force checkpoint for DDL operation
+      await conn.query('CHECKPOINT;');
+      try {
+        await conn.query('PRAGMA force_checkpoint;');
+      } catch {
+        // force_checkpoint might not be available in all versions
+      }
+    } finally {
+      await conn.close();
+    }
+    
+    // Record in SQL history
+    const formattedSQL = createTableSQL; // You may want to format this
+    this.sqlHistory.recordCreateTable(finalTableName, formattedSQL, 'remote-file', undefined, sanitizedSchema);
+    
+    // Notify about table change
+    this.notifyTableChange(finalTableName, sanitizedSchema);
+    
+    return finalTableName;
   }
   
   // Clean up resources when the context is destroyed

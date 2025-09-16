@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { formatSQL } from '../../utils/sqlFormatter';
 import { getTableInfo, formatTableInfoForAI } from '../../utils/tableInfoUtils';
 
 interface RemoteFileProps {
@@ -51,64 +50,14 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
             return;
         }
         
-        // Don't send any message here - we'll handle it after table creation
-
         setIsCreatingTable(true);
 
         try {
-
-            // URLからファイル名を抽出
-            const fileName = targetUrl.split('/').pop() || 'remote_file';
-            // URLエンコードされている場合はデコード
-            const decodedFileName = decodeURIComponent(fileName);
-
-            // 拡張子を除去
-            const nameWithoutExt = decodedFileName.split('.')[0];
-
-            // テーブル名として使える文字に変換
-            // 日本語を含む場合は短いハッシュを生成
-            let tableName;
-            // eslint-disable-next-line no-control-regex
-            if (/[^\x00-\x7F]/.test(nameWithoutExt)) {
-                // 非ASCII文字（日本語など）が含まれる場合
-                // 簡単なハッシュを生成（文字コードの合計を16進数に）
-                const hash = nameWithoutExt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString(16);
-                tableName = `table_${hash}`;
-            } else {
-                // ASCII文字のみの場合は既存の処理
-                tableName = nameWithoutExt.replace(/[^a-zA-Z0-9_]/g, '_');
-                if (/^\d/.test(tableName)) {
-                    tableName = `t_${tableName}`;
-                }
-            }
-
-            const isParquet = targetUrl.toLowerCase().endsWith('.parquet');
-            const isCSV = targetUrl.toLowerCase().endsWith('.csv');
-
-            let from;
-            if (isParquet) {
-                from = `'${targetUrl}'`;
-            } else if (isCSV) {
-                from = `read_csv_auto('${targetUrl}')`;
-            } else {
-                from = `st_read('${targetUrl}')`;
-            }
-
-            // Use executeQuery which now handles DDL operations with checkpointing
-            const createTableSQL = `CREATE TABLE ${tableName} AS SELECT * FROM ${from}`;
-            await dbContext.executeQuery(createTableSQL, schema);
-
-            // Record the CREATE TABLE SQL in history
-            if (dbContext) {
-                const formattedSQL = formatSQL(createTableSQL);
-                dbContext.getSQLHistory().recordCreateTable(tableName, formattedSQL, 'remote-file', undefined, schema);
-            }
+            // Use the new dbContext method to create the table
+            const tableName = await dbContext.createTableFromUrl(targetUrl, schema);
 
             setError(null);
             setUrl('');
-            
-            // Notify about table change with schema
-            dbContext.notifyTableChange(tableName, schema);
 
             // Get detailed table information for AI context
             const tableInfo = await getTableInfo(dbContext, tableName, schema);

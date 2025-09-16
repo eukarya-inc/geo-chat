@@ -13,12 +13,60 @@ export interface TableDataResult {
 }
 
 /**
- * Convert special values (BigInt, BLOB) to display-friendly formats
+ * Convert special values (BigInt, BLOB, Date) to display-friendly formats
  */
 function convertSpecialValues(value: unknown, columnType?: string): unknown {
   // Convert BigInt to string to avoid type issues
   if (typeof value === 'bigint') {
     return value.toString();
+  }
+
+  // Handle Date/Timestamp values
+  // DuckDB may return timestamps as Date objects or as numbers (milliseconds since epoch)
+  let dateValue: Date | null = null;
+  
+  if (value instanceof Date) {
+    dateValue = value;
+  } else if (typeof value === 'number' && columnType) {
+    // Check if this is a timestamp column
+    const upperType = columnType.toUpperCase();
+    if (upperType.includes('TIMESTAMP') || upperType.includes('DATETIME') || upperType === 'DATE') {
+      // DuckDB returns timestamps as milliseconds since epoch
+      dateValue = new Date(value);
+      
+      // Validate that the date is reasonable (between 1900 and 2100)
+      const year = dateValue.getFullYear();
+      if (year < 1900 || year > 2100) {
+        // Might be in seconds instead of milliseconds
+        dateValue = new Date(value * 1000);
+        // Check again
+        const newYear = dateValue.getFullYear();
+        if (newYear < 1900 || newYear > 2100) {
+          // Not a valid date, return as-is
+          return value;
+        }
+      }
+    }
+  }
+  
+  if (dateValue && !isNaN(dateValue.getTime())) {
+    // Format as YYYY-MM-DD HH:mm:ss
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValue.getDate()).padStart(2, '0');
+    const hours = String(dateValue.getHours()).padStart(2, '0');
+    const minutes = String(dateValue.getMinutes()).padStart(2, '0');
+    const seconds = String(dateValue.getSeconds()).padStart(2, '0');
+    
+    // Check if it's just a date (time is 00:00:00) or includes time
+    if (hours === '00' && minutes === '00' && seconds === '00') {
+      // Check column type to determine if we should show time
+      if (columnType && (columnType.toUpperCase() === 'DATE')) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 
   // Handle BLOB data (Uint8Array, ArrayBuffer, or objects with byteLength)
@@ -126,9 +174,18 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
     return new ArrowTable();
   }
 
+  // Don't apply convertSpecialValues here - keep original data for Arrow
+  // The conversion should only happen when displaying values
   const columnData: Record<string, unknown[]> = {};
   for (const col of columns) {
-    columnData[col.name] = data.map(row => convertSpecialValues(row[col.name], col.type));
+    columnData[col.name] = data.map(row => {
+      const value = row[col.name];
+      // Only convert BigInt here as it can't be stored in Arrow directly
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    });
   }
 
   return tableFromArrays(columnData);
