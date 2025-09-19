@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { 
-  detectDisplayColumns, 
-  isGeometryColumn, 
-  isBlobColumn, 
-  findGeometryColumns,
-  type ColumnInfo 
-} from './columnDetector';
+import {
+  detectDisplayColumns,
+  isGeometryColumn,
+  isBlobColumn,
+  type ColumnInfo
+} from './duckdb';
 
 describe('Column Detection Utilities', () => {
   let db: duckdb.AsyncDuckDB;
@@ -30,13 +29,13 @@ describe('Column Detection Utilities', () => {
     const logger = new duckdb.VoidLogger();
     db = new duckdb.AsyncDuckDB(logger, worker);
     await db.instantiate(bundle.mainModule);
-    
+
     conn = await db.connect();
-    
+
     // Install spatial extension
     await conn.query(`INSTALL spatial`);
     await conn.query(`LOAD spatial`);
-    
+
     // Create test tables with various column types
     await conn.query(`
       CREATE TABLE test_with_geometry (
@@ -50,7 +49,7 @@ describe('Column Detection Utilities', () => {
         is_active BOOLEAN
       )
     `);
-    
+
     await conn.query(`
       CREATE TABLE test_without_geometry (
         id INTEGER,
@@ -61,7 +60,7 @@ describe('Column Detection Utilities', () => {
         score DOUBLE
       )
     `);
-    
+
     // Create table with GEOMETRY type (DuckDB doesn't support subtype constraints in CREATE TABLE)
     await conn.query(`
       CREATE TABLE test_geometry_types (
@@ -84,9 +83,9 @@ describe('Column Detection Utilities', () => {
     it('should exclude GEOMETRY columns', async () => {
       const result = await conn.query('DESCRIBE test_with_geometry');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       const displayColumns = detectDisplayColumns(schemaData);
-      
+
       expect(displayColumns).not.toContain('geom');
       expect(displayColumns).toContain('id');
       expect(displayColumns).toContain('name');
@@ -99,18 +98,18 @@ describe('Column Detection Utilities', () => {
     it('should exclude BLOB columns', async () => {
       const result = await conn.query('DESCRIBE test_with_geometry');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       const displayColumns = detectDisplayColumns(schemaData);
-      
+
       expect(displayColumns).not.toContain('data');
     });
 
     it('should exclude specified geometry column name', async () => {
       const result = await conn.query('DESCRIBE test_with_geometry');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       const displayColumns = detectDisplayColumns(schemaData, 'name');
-      
+
       expect(displayColumns).not.toContain('name');
       expect(displayColumns).toContain('id');
       expect(displayColumns).toContain('description');
@@ -119,9 +118,9 @@ describe('Column Detection Utilities', () => {
     it('should return all columns when no GEOMETRY or BLOB types exist', async () => {
       const result = await conn.query('DESCRIBE test_without_geometry');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       const displayColumns = detectDisplayColumns(schemaData);
-      
+
       expect(displayColumns).toContain('id');
       expect(displayColumns).toContain('title');
       expect(displayColumns).toContain('content');
@@ -134,16 +133,16 @@ describe('Column Detection Utilities', () => {
     it('should handle multiple GEOMETRY columns', async () => {
       const result = await conn.query('DESCRIBE test_geometry_types');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       const displayColumns = detectDisplayColumns(schemaData);
-      
+
       // All geometry columns should be excluded
       expect(displayColumns).not.toContain('point_geom');
       expect(displayColumns).not.toContain('line_geom');
       expect(displayColumns).not.toContain('polygon_geom');
       expect(displayColumns).not.toContain('multi_geom');
       expect(displayColumns).not.toContain('any_geom');
-      
+
       // Regular data should be included
       expect(displayColumns).toContain('regular_data');
       expect(displayColumns).toHaveLength(1);
@@ -195,66 +194,25 @@ describe('Column Detection Utilities', () => {
     });
   });
 
-  describe('findGeometryColumns', () => {
-    it('should find all geometry columns', async () => {
-      const result = await conn.query('DESCRIBE test_with_geometry');
-      const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
-      const geometryColumns = findGeometryColumns(schemaData);
-      
-      expect(geometryColumns).toContain('geom');
-      expect(geometryColumns).toHaveLength(1);
-    });
-
-    it('should return empty array when no geometry columns exist', async () => {
-      const result = await conn.query('DESCRIBE test_without_geometry');
-      const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
-      const geometryColumns = findGeometryColumns(schemaData);
-      
-      expect(geometryColumns).toHaveLength(0);
-    });
-
-    it('should find multiple geometry columns', async () => {
-      const result = await conn.query('DESCRIBE test_geometry_types');
-      const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
-      const geometryColumns = findGeometryColumns(schemaData);
-      
-      expect(geometryColumns).toContain('point_geom');
-      expect(geometryColumns).toContain('line_geom');
-      expect(geometryColumns).toContain('polygon_geom');
-      expect(geometryColumns).toContain('multi_geom');
-      expect(geometryColumns).toContain('any_geom');
-      expect(geometryColumns).toHaveLength(5);
-    });
-  });
-
   describe('Integration with real DuckDB data', () => {
     it('should correctly process schema from DESCRIBE query', async () => {
       const result = await conn.query('DESCRIBE test_with_geometry');
       const schemaData = result.toArray() as unknown as ColumnInfo[];
-      
+
       // Verify the structure matches our interface
       expect(schemaData.length).toBeGreaterThan(0);
       schemaData.forEach(col => {
-        expect(col).toHaveProperty('column_name');
-        expect(col).toHaveProperty('column_type');
         expect(typeof col.column_name).toBe('string');
         expect(typeof col.column_type).toBe('string');
       });
-      
+
       // Test detection with real data
       const displayColumns = detectDisplayColumns(schemaData);
-      const geometryColumns = findGeometryColumns(schemaData);
-      
+
       // Should have some display columns but not geometry
       expect(displayColumns.length).toBeGreaterThan(0);
       expect(displayColumns).not.toContain('geom');
       expect(displayColumns).not.toContain('data');
-      
-      // Should find the geometry column
-      expect(geometryColumns).toContain('geom');
     });
   });
 });
