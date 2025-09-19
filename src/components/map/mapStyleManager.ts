@@ -12,7 +12,7 @@ export interface MapStyleUpdate {
 }
 
 export class MapStyleManager {
-    private map: maplibregl.Map;
+    map: maplibregl.Map;
 
     constructor(map: maplibregl.Map) {
         this.map = map;
@@ -26,18 +26,18 @@ export class MapStyleManager {
         if (!this.map?.loaded() || !this.map?.isStyleLoaded()) {
             // Map or style not fully loaded, attempting anyway
         }
-        
+
         try {
             switch (update.type) {
                 case 'layer-paint':
                     if (update.layerId && update.properties) {
                         // Check if layer exists
                         const layer = this.map.getLayer(update.layerId);
-                        
+
                         if (!layer) {
                             throw new Error(`Cannot style non-existing layer "${update.layerId}".`);
                         }
-                        
+
                         Object.entries(update.properties).forEach(([key, value]) => {
                             // Validate and fix style expressions before applying
                             let finalValue = value;
@@ -54,7 +54,7 @@ export class MapStyleManager {
                     if (update.layerId && update.properties) {
                         // Check if layer exists
                         const layer = this.map.getLayer(update.layerId);
-                        
+
                         if (!layer) {
                             throw new Error(`Cannot style non-existing layer "${update.layerId}".`);
                         }
@@ -74,7 +74,7 @@ export class MapStyleManager {
                     if (update.layerId && update.filter) {
                         // Check if layer exists
                         const layer = this.map.getLayer(update.layerId);
-                        
+
                         if (!layer) {
                             throw new Error(`Cannot style non-existing layer "${update.layerId}".`);
                         }
@@ -122,11 +122,11 @@ export class MapStyleManager {
     getLayerIds(): string[] {
         try {
             const style = this.map.getStyle();
-            
+
             if (!style?.layers) {
                 return [];
             }
-            
+
             const layerIds = style.layers.map(layer => layer.id);
             return layerIds;
         } catch {
@@ -155,13 +155,13 @@ export class MapStyleManager {
             line: ['line'],
             point: ['point', 'circle']
         };
-        
+
         return layers.filter(layerId => {
             const layer = this.map.getLayer(layerId);
             if (!layer) return false;
-            
+
             const layerType = (layer as { type: string }).type;
-            return patterns[geometryType].includes(layerType) || 
+            return patterns[geometryType].includes(layerType) ||
                    patterns[geometryType].some(pattern => layerId.includes(pattern));
         });
     }
@@ -181,43 +181,43 @@ export class MapStyleManager {
             if (this.map?.triggerRepaint) {
                 this.map.triggerRepaint();
             }
-            
+
             const layerInfo = this.getDataLayerInfo();
             const totalDataLayers = layerInfo.duckdb.length + layerInfo.geojson.length;
-            
+
             if (totalDataLayers > 0) {
                 return layerInfo;
             }
-            
+
             if (attempt < maxRetries - 1) {
                 await new Promise(resolve => setTimeout(resolve, delayMs));
                 // Increase delay for next attempt
                 delayMs = Math.min(delayMs * 1.5, 1000);
             }
         }
-        
+
         return this.getDataLayerInfo();
     }
 
     findBestLayerMatch(intent: string): string | null {
         const lowerIntent = intent.toLowerCase();
-        
+
         // Check for direct geometry type mentions
         if (lowerIntent.includes('polygon') || lowerIntent.includes('fill')) {
             const polygonLayers = this.findLayersByType('polygon');
             return polygonLayers[0] || null;
         }
-        
+
         if (lowerIntent.includes('line')) {
             const lineLayers = this.findLayersByType('line');
             return lineLayers[0] || null;
         }
-        
+
         if (lowerIntent.includes('point') || lowerIntent.includes('circle')) {
             const pointLayers = this.findLayersByType('point');
             return pointLayers[0] || null;
         }
-        
+
         // Return the first data layer if no specific type mentioned
         const dataLayers = [...this.getDataLayerInfo().duckdb, ...this.getDataLayerInfo().geojson];
         return dataLayers[0] || null;
@@ -292,7 +292,7 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
     // Hide/show layer commands
     if (cmd.includes('hide') || cmd.includes('show')) {
         const visibility = cmd.includes('hide') ? 'none' : 'visible';
-        
+
         if (cmd.includes('polygon')) {
             return {
                 type: 'layer-layout',
