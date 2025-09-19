@@ -167,6 +167,54 @@ function buildColumnNamesString(columns: TableColumn[]): string {
 }
 
 /**
+ * Convert complex types to displayable format for Arrow
+ */
+function convertComplexTypesForArrow(value: unknown, columnType?: string): unknown {
+  // Handle null/undefined values first
+  if (value === null || value === undefined) {
+    // For complex types that cause Arrow type inference issues, return empty string
+    if (columnType && (
+      columnType.includes('GEOMETRY') ||
+      columnType.includes('BLOB') ||
+      columnType.includes('JSON') ||
+      columnType.includes('STRUCT') ||
+      columnType.includes('[]')  // Array types
+    )) {
+      return '';
+    }
+    return null;
+  }
+
+  // Convert BigInt to string
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  // Handle binary data (BLOB, GEOMETRY) - convert to string representation
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
+    // Convert to string to avoid Arrow type inference issues with mixed null/binary
+    const byteLength = value instanceof ArrayBuffer ? value.byteLength : (value as Uint8Array).byteLength;
+    return `[BLOB: ${byteLength} bytes]`;
+  }
+
+  // Handle objects and arrays - convert to JSON string
+  if (typeof value === 'object' && value !== null) {
+    // Skip Date objects
+    if (value instanceof Date) {
+      return value;
+    }
+    // Convert all other objects and arrays to JSON strings
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  return value;
+}
+
+/**
  * Convert query result data to Arrow table format
  */
 function convertToArrowTable(data: Record<string, unknown>[], columns: TableColumn[]): ArrowTable {
@@ -174,17 +222,15 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
     return new ArrowTable();
   }
 
-  // Don't apply convertSpecialValues here - keep original data for Arrow
-  // The conversion should only happen when displaying values
+  // Convert complex types that Arrow can't handle directly
   const columnData: Record<string, unknown[]> = {};
+
+  // Process each column
   for (const col of columns) {
     columnData[col.name] = data.map(row => {
       const value = row[col.name];
-      // Only convert BigInt here as it can't be stored in Arrow directly
-      if (typeof value === 'bigint') {
-        return value.toString();
-      }
-      return value;
+      // Pass column type to help with conversion
+      return convertComplexTypesForArrow(value, col.type);
     });
   }
 
@@ -303,6 +349,7 @@ export async function getTableData(
   );
 
   const data = result.toArray();
+
   const arrowTable = convertToArrowTable(data, columns);
 
   return {
