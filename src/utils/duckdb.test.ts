@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-describe('duckdbTableUtils', () => {
+describe('duckdbTable', () => {
   describe('convertSpecialValues', () => {
     // We can't directly test the private function, but we can test the behavior
     // through the public functions that use it

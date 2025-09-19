@@ -5,8 +5,8 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { generateSQLExplanation } from '../sqlExplanationService';
 import { formatSQL } from '../../../utils/sqlFormatter';
 import { checkSQLType } from '../../../utils/sqlTypeChecker';
-import { getTableInfo } from '../../../utils/tableInfoUtils';
-import type { ColumnStatistics } from '../../../utils/tableInfoUtils';
+import { getTableInfo } from '../../../utils/tableInfo';
+import type { ColumnStatistics } from '../../../utils/tableInfo';
 
 export type Result = {
   error: string;

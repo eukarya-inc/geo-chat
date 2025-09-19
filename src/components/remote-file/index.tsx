@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { getTableInfo, formatTableInfoForAI } from '../../utils/tableInfoUtils';
+import { getTableInfo, formatTableInfoForAI } from '../../utils/tableInfo';
 
 interface RemoteFileProps {
     dbContext: DBContext;

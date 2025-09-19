@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapStyleManager } from './mapStyleManager';
-import { detectDisplayColumns, type ColumnInfo } from '../../utils/columnDetector';
+import { detectDisplayColumns, type ColumnInfo } from '../../utils/duckdb';
 import MapStyleEditor from './MapStyleEditor';
 import {
     parseDuckDBTileUrl,
