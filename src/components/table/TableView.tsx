@@ -41,7 +41,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     const styleElement = document.createElement('style');
     styleElement.textContent = scrollbarStyles;
     document.head.appendChild(styleElement);
-    
+
     return () => {
       document.head.removeChild(styleElement);
     };
@@ -85,12 +85,12 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         maxColumnWidth,
         Math.max(minColumnWidth, Math.floor(containerWidth / columns.length))
       );
-      
+
       const updatedColumns = columns.map(col => ({
         ...col,
         width: calculatedWidth
       }));
-      
+
       // Only update if width actually changed to avoid infinite loop
       const firstCol = columns[0];
       const firstWidth = 'width' in firstCol ? firstCol.width : undefined;
@@ -114,54 +114,57 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       // Clear cache and reset loading windows when connection or table changes
       arrowCache.clear();
       loadingWindowsRef.current.clear();
-      
+
       // Use dbContext connection if available to ensure proper schema context
       const conn = connection;
-      
+
       try {
         const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
-        
-          // Calculate initial column width based on container width
-          const minColumnWidth = 100;
-          const maxColumnWidth = 200;
-          const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
-          const calculatedWidth = Math.min(
-            maxColumnWidth,
-            Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
-          );
-          
-          const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
-            // Format column title with name and type
-            let title = col.name;
-            if (sortColumn === col.name) {
-              title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
-            }
-            // Add type info on a new line (using newline character)
-            title += `\n(${col.type})`;
-            
-            return {
-              id: col.name,
-              title,
-              width: calculatedWidth,
-            };
-          });
-          
-          // Store column types for later use
-          const types: Record<string, string> = {};
-          initialData.columns.forEach((col: { name: string; type: string }) => {
-            types[col.name] = col.type;
-          });
-          
-          setColumns(gridColumns);
-          setColumnTypes(types);
-          setTotalRows(initialData.totalRows);
-          
-          // Store initial Arrow table in cache
-          arrowCache.set('window-0-100', initialData.arrowTable);
-          
-          // Success - set loading to false
-          setLoading(false);
-        } catch (error) {
+
+        // Calculate initial column width based on container width
+        const minColumnWidth = 100;
+        const maxColumnWidth = 200;
+        const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
+        const calculatedWidth = Math.min(
+          maxColumnWidth,
+          Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
+        );
+
+        const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
+          // Format column title with name and type
+          let title = col.name;
+          if (sortColumn === col.name) {
+            title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
+          }
+          // Add type info on a new line (using newline character)
+          title += `\n(${col.type})`;
+
+          return {
+            id: col.name,
+            title,
+            width: calculatedWidth,
+          };
+        });
+
+        // Store column types for later use
+        const types: Record<string, string> = {};
+        initialData.columns.forEach((col: { name: string; type: string }) => {
+          types[col.name] = col.type;
+        });
+
+        setColumns(gridColumns);
+        setColumnTypes(types);
+        setTotalRows(initialData.totalRows);
+
+        // Store initial Arrow table in cache
+        arrowCache.set('window-0-100', initialData.arrowTable);
+
+        // Success - set loading to false
+        setLoading(false);
+      } catch (error) {
+        // Log the full error details
+        console.error("Error loading initial table data:", error);
+        console.error("Table name:", tableName);
         // Retry on various errors that might indicate the table isn't ready yet
         const errorMessage = error instanceof Error ? error.message : String(error);
         const shouldRetry = (
@@ -170,29 +173,31 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
           errorMessage.includes('not found') ||
           errorMessage.includes('Parser Error')
         ) && retryCount < 5; // Increase retry count to 5
-        
+
         if (shouldRetry) {
+          console.log(`Retrying table load (attempt ${retryCount + 1}/5)...`);
           // Keep loading state true while retrying
           setTimeout(() => {
             loadInitialData(retryCount + 1);
           }, 300 * (retryCount + 1)); // Shorter initial delay, still exponential
           return; // Don't set loading to false, we're still trying
         }
-        
+
         // Reset state on error
         setColumns([]);
         setColumnTypes({});
         setTotalRows(0);
         setLoading(false); // Only set loading to false when we're done retrying
-        
+
         // Provide more detailed error message
         let displayMessage = errorMessage;
-        
+
         // Check if it's a "no columns found" error
         if (errorMessage.includes('No columns found')) {
           displayMessage = `Table "${tableName}" was not found or has no columns. Please make sure the table exists in the current schema.`;
         }
-        
+
+        console.error("Display error:", displayMessage);
         setError(displayMessage);
       }
     };
@@ -205,25 +210,31 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       const windowSize = 100;
       const windowStart = Math.floor(startRow / windowSize) * windowSize;
       const windowEnd = windowStart + windowSize;
-      
+
       const cacheKey = `window-${windowStart}-${windowEnd}`;
-      
+
       // Check if already cached or currently loading
       if (arrowCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
         return;
       }
-      
+
       // Mark as loading
       loadingWindowsRef.current.add(cacheKey);
-      
+
       // Use dbContext connection if available to ensure proper schema context
       const conn = connection;
-      
+
       try {
         const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd, sortColumn || undefined, sortDirection);
         arrowCache.set(cacheKey, arrowTable);
       } catch (error) {
-        console.error("Error loading data window:", error);
+        console.error("Error loading data window:", error,  {
+          tableName,
+          windowStart,
+          windowEnd,
+          sortColumn,
+          sortDirection
+        });
       } finally {
         // Remove from loading set
         loadingWindowsRef.current.delete(cacheKey);
@@ -241,13 +252,13 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
       const [col, row] = cell;
-      
+
       // Find which window contains this row
       const windowSize = 100;
       const windowStart = Math.floor(row / windowSize) * windowSize;
       const windowEnd = windowStart + windowSize;
       const cacheKey = `window-${windowStart}-${windowEnd}`;
-      
+
       const arrowTable = arrowCache.get(cacheKey);
       if (!arrowTable) {
         // Try to load data but don't block - show empty cell instead
@@ -259,7 +270,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
           allowOverlay: false,
         };
       }
-      
+
       // Convert only the specific cell value from Arrow
       const rowInWindow = row - windowStart;
       const columnName = columns[col]?.id;
@@ -267,7 +278,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       const value = getValueFromArrowTable(arrowTable, rowInWindow, col, columnType);
       // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
       const displayValue = value === null ? "NULL" : String(value);
-      
+
       return {
         kind: GridCellKind.Text,
         data: displayValue,
@@ -288,10 +299,10 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     }) => {
       const startRow = range.y;
       const endRow = Math.min(range.y + range.height + 20, totalRows);
-      
+
       // Load current window immediately
       loadDataWindow(startRow);
-      
+
       // Pre-load adjacent windows with throttling
       const windowSize = 100;
       for (let row = startRow; row < endRow; row += windowSize) {
@@ -304,9 +315,9 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   // Handle column resize
   const handleColumnResize = useCallback(
     (column: GridColumn, newSize: number) => {
-      setColumns(prevColumns => 
-        prevColumns.map(col => 
-          col.id === column.id 
+      setColumns(prevColumns =>
+        prevColumns.map(col =>
+          col.id === column.id
             ? { ...col, width: newSize }
             : col
         )
@@ -320,10 +331,10 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     (colIndex: number) => {
       const column = columns[colIndex];
       if (!column) return;
-      
+
       const columnId = column.id;
       if (!columnId) return;
-      
+
       if (sortColumn === columnId) {
         if (sortDirection === 'ASC') {
           // First click: ASC -> DESC
@@ -344,14 +355,14 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
 
   // Update column titles when sort changes
   useEffect(() => {
-    setColumns(prevColumns => 
+    setColumns(prevColumns =>
       prevColumns.map(col => {
         // Get the column type from columnTypes
         const colType = columnTypes[col.id || ''] || '';
-        
+
         // Build the title with column name
         let title = '';
-        
+
         // Add sort indicator before column name if this column is sorted
         if (col.id && sortColumn === col.id) {
           title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.id}`;
@@ -362,12 +373,12 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         } else {
           title = col.title || '';
         }
-        
+
         // Add type info on a new line if we have it
         if (colType) {
           title += `\n(${colType})`;
         }
-        
+
         return { ...col, title };
       })
     );
