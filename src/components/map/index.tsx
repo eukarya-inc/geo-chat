@@ -1,5 +1,3 @@
-import { AsyncPreparedStatement } from '@duckdb/duckdb-wasm';
-import { Feature, GeoJsonProperties, Geometry } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import type { 
     LayerSpecification,
@@ -12,19 +10,16 @@ import type {
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getTileEnvelope, geojsonToVectorTile } from './utils/tileUtils';
 import { MapStyleManager } from './mapStyleManager';
 import { detectDisplayColumns, type ColumnInfo } from '../../utils/columnDetector';
-import { convertArrowToJS } from '../../utils/arrowConverter';
 import MapStyleEditor from './MapStyleEditor';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 
 interface DuckDBConnection {
     query: (sql: string) => Promise<{
         numRows: number;
-        toArray: () => Array<{ geojson: string }>;
+        toArray: () => Array<{ mvt: Uint8Array }>;
     }>;
-    prepare: (sql: string) => Promise<AsyncPreparedStatement>;
     close: () => Promise<void>;
 }
 
@@ -109,46 +104,60 @@ const calculateSimplifyTolerance = (zoomLevel: number): number => {
     return Number(simplify.toFixed(6));
 };
 
+// Generate SQL query for creating Mapbox Vector Tiles (MVT) from DuckDB data
+//
+// IMPORTANT: Axis Order Trap in DuckDB Spatial!
+// DuckDB's ST_Transform with EPSG:4326 defaults to lat,lon order (following the standard),
+// but most GeoJSON/WGS84 data is stored as lon,lat. This mismatch causes coordinates
+// to become Infinity when transforming to Web Mercator (EPSG:3857).
+//
+// Solution: Use the 4th parameter 'true' in ST_Transform to force always_xy mode (lon,lat order).
+// Without this, Web Mercator transformation will fail with Infinity values.
+//
+// Reference: https://github.com/duckdb/duckdb_spatial/issues/139
 const generateVectorTileQuery = (params: QueryParams): string => {
     const { zxy, selectedTable, selectedColumns, geometryColumnName } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
     const geomCol = geometryColumnName || 'geometry';
-    
+
     // Don't use schema-qualified table name - connection already has schema context
     const qualifiedTableName = selectedTable;
 
-    // Build column selection - just select columns directly
-    let finalColumnSelection = '';
-    if (selectedColumns.length > 0) {
-        // Simply select the columns without any conversion
-        // BIGINT handling will be done in JavaScript
-        finalColumnSelection = selectedColumns.map(col => `"${col}"`).join(', ');
-    } else {
-        finalColumnSelection = '1 as dummy';
-    }
+    // Build column selection for the struct
+    // Use TRY_CAST to safely convert complex types to VARCHAR (JSON string) for ST_AsMVT compatibility
+    const columnList = selectedColumns.map(col =>
+        `'${col}': TRY_CAST("${col}" AS VARCHAR)`
+    ).join(', ');
 
-    // Build the column list for the WITH clause - quote column names
-    const withColumns = selectedColumns.length > 0 
-        ? `"${geomCol}" as geom, ${selectedColumns.map(col => `"${col}"`).join(', ')}`
-        : `"${geomCol}" as geom, 1 as dummy`;
+    const structColumns = `{
+        'geometry': ST_AsMVTGeom(
+            ST_Transform(ST_Simplify("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
+            ST_Extent(ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})),
+            4096,
+            256,
+            false
+        )${columnList ? `, ${columnList}` : ''}
+    }`;
 
     return `
-        WITH filtered AS (
-            -- 空間フィルタリングを先に実行
-            SELECT 
-                ${withColumns}
+        WITH tile_data AS (
+            SELECT ${structColumns} AS feature
             FROM ${qualifiedTableName}
-            WHERE ST_Intersects(
-                "${geomCol}",
-                ST_MakeEnvelope(?, ?, ?, ?)
-            )
+            WHERE "${geomCol}" IS NOT NULL
+                AND ST_Intersects(
+                    ST_Transform("${geomCol}", 'EPSG:4326', 'EPSG:3857', true),
+                    ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})
+                )
+            LIMIT 10000  -- Limit features per tile to prevent serialization issues
         )
-        SELECT 
-            ST_AsGeoJSON(
-                ST_Simplify(geom, ${simplify})
-            ) AS geojson,
-            ${finalColumnSelection}
-        FROM filtered
+        SELECT ST_AsMVT(
+            feature,
+            'default',
+            4096,
+            'geometry'
+        ) AS mvt
+        FROM tile_data
+        WHERE feature.geometry IS NOT NULL
     `;
 };
 
@@ -709,7 +718,7 @@ const MapComponent: React.FC<MapProps> = ({
                     const layer: LayerSpecification = {
                         ...layerStyle,
                         source: sourceId,
-                        'source-layer': 'v',
+                        'source-layer': 'default',
                         minzoom: layerStyle.minzoom ?? 0,
                         maxzoom: layerStyle.maxzoom ?? 24,
                     } as LayerSpecification;
@@ -847,7 +856,6 @@ const MapComponent: React.FC<MapProps> = ({
                         throw new Error('Database connection is not available');
                     }
 
-                    const { minLng, minLat, maxLng, maxLat } = getTileEnvelope(zxy.z, zxy.x, zxy.y);
 
                     const currentColumns = selectedColumnsRef.current || [];
 
@@ -865,17 +873,16 @@ const MapComponent: React.FC<MapProps> = ({
                         geometryColumnName,
                         schema: null,  // Don't use URL-extracted schema
                     });
-                    
-                    
-                    let stmt;
+
+
                     let result;
                     try {
-                        stmt = await connectionRef.current.prepare(query);
-                        result = await stmt.query(minLng, minLat, maxLng, maxLat);
+                        // No need to prepare since we're not using parameters anymore
+                        result = await connectionRef.current.query(query);
                     } catch (error) {
                         console.error('Vector tile query error:', error);
                         console.error('Query:', query);
-                        console.error('Parameters:', { minLng, minLat, maxLng, maxLat });
+                        console.error('Tile coordinates:', { z: zxy.z, x: zxy.x, y: zxy.y });
                         return { data: new Uint8Array() };
                     }
                     
@@ -885,127 +892,54 @@ const MapComponent: React.FC<MapProps> = ({
                         return { data: new Uint8Array() };
                     }
 
-                    // Convert Arrow Table rows to JSON to properly handle STRUCT and LIST types
-                    const arrowRows = result.toArray();
-                    const rows = arrowRows.map((row: unknown) => {
-                        // Convert all Arrow types (StructRow, Vector, etc.) and BigInts
-                        return convertArrowToJS(row);
-                    }) as Array<{ geojson: string } & Record<string, unknown>>;
+                    // Get the MVT data directly from the query result
+                    let rows;
+                    try {
+                        rows = result.toArray();
+                    } catch (serializationError) {
+                        // If serialization fails, try to get just the first row
+                        console.warn('MVT serialization error, attempting single row access:', serializationError);
+                        try {
+                            // Try to access the data more directly
+                            const firstRow = result.get(0);
+                            rows = [firstRow];
+                        } catch (fallbackError) {
+                            console.error('Failed to retrieve MVT data:', fallbackError);
+                            tileCache.current.set(cacheKey, new Uint8Array());
+                            return { data: new Uint8Array() };
+                        }
+                    }
 
-                    console.log(`[DuckDB Result] Tile ${cacheKey}: ${rows.length} rows, sample:`, rows[0] ? {
-                        ...rows[0],
-                        geojson: rows[0].geojson ? `${rows[0].geojson.substring(0, 50)}...` : null
-                    } : null);
-                    const features = rows
-                        .map((row) => {
-                            try {
-                                if (!row.geojson) {
-                                    return null;
-                                }
-                                const geometry = JSON.parse(row.geojson) as Geometry;
-
-                                // 選択されたカラムの値をプロパティとして追加
-                                const properties: Record<string, unknown> = {};
-                                
-                                // Add all row properties with intelligent flattening
-                                Object.keys(row).forEach(key => {
-                                    if (key !== 'geojson') {
-                                        const value = row[key];
-                                        
-                                        // Note: BigInt conversion is already handled at the row level
-                                        // after toJSON() conversion, so values here are already converted
-                                        
-                                        // Handle JSON strings
-                                        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
-                                            try {
-                                                const parsed = JSON.parse(value);
-                                                
-                                                // If it's the 'properties' column, merge its contents
-                                                if (key === 'properties' && typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                                                    Object.assign(properties, parsed);
-                                                } 
-                                                // If it's an array with at least one element (LIST<STRUCT>)
-                                                else if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-                                                    // Store the full array
-                                                    properties[key] = parsed;
-                                                    
-                                                    // Flatten properties, preferring first non-null values
-                                                    const allKeys = new Set<string>();
-                                                    parsed.forEach((elem: unknown) => {
-                                                        if (typeof elem === 'object' && elem !== null) {
-                                                            Object.keys(elem as Record<string, unknown>).forEach(k => allKeys.add(k));
-                                                        }
-                                                    });
-                                                    
-                                                    // For each unique key, find the first non-null value
-                                                    allKeys.forEach(subKey => {
-                                                        if (!(subKey in properties)) {
-                                                            // Find first non-null value for this key
-                                                            for (const elem of parsed) {
-                                                                const elemObj = elem as Record<string, unknown>;
-                                                                if (elemObj && elemObj[subKey] !== null && elemObj[subKey] !== undefined) {
-                                                                    properties[subKey] = elemObj[subKey];
-                                                                    break;
-                                                                }
-                                                            }
-                                                            // If all values are null, use the first element's value (null)
-                                                            if (!(subKey in properties) && parsed[0]) {
-                                                                properties[subKey] = (parsed[0] as Record<string, unknown>)[subKey];
-                                                            }
-                                                        }
-                                                    });
-                                                } else {
-                                                    // For other columns, store the parsed value
-                                                    properties[key] = parsed;
-                                                }
-                                            } catch {
-                                                // If parsing fails, store as is
-                                                properties[key] = value;
-                                            }
-                                        } else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
-                                            // Handle JSON-encoded strings (remove the quotes)
-                                            try {
-                                                properties[key] = JSON.parse(value);
-                                            } catch {
-                                                properties[key] = value;
-                                            }
-                                        } else if (value !== null && value !== undefined) {
-                                            properties[key] = value;
-                                        }
-                                    }
-                                });
-
-
-                                return {
-                                    type: 'Feature' as const,
-                                    geometry: geometry,
-                                    properties: properties,
-                                } as Feature<Geometry, GeoJsonProperties>;
-                            } catch (error) {
-                                console.error('Failed to parse geometry:', error, 'Row:', row);
-                                return null;
-                            }
-                        })
-                        .filter((feature): feature is Feature<Geometry, GeoJsonProperties> => feature !== null);
-
-                    
-                    if (features.length === 0) {
+                    if (!rows || rows.length === 0 || !rows[0]) {
                         tileCache.current.set(cacheKey, new Uint8Array());
                         return { data: new Uint8Array() };
                     }
 
-                    const vectorTile = geojsonToVectorTile(features, zxy.z, zxy.x, zxy.y);
+                    // The result should contain a single row with the MVT binary data
+                    const mvtRow = rows[0] as { mvt: unknown };
+
+                    // DuckDB returns MVT data as Uint8Array directly
+                    const vectorTile = mvtRow.mvt as Uint8Array;
+
+                    if (!vectorTile || vectorTile.length === 0) {
+                        tileCache.current.set(cacheKey, new Uint8Array());
+                        return { data: new Uint8Array() };
+                    }
 
                     // Create a safe copy to avoid ArrayBuffer detachment issues
-                    const safeVectorTile = new Uint8Array(vectorTile.buffer.slice(0));
-                    
-                    // Cache a separate copy
-                    const cacheData = new Uint8Array(safeVectorTile.buffer.slice(0));
-                    tileCache.current.set(cacheKey, cacheData);
+                    // Handle case where Uint8Array might be a view on a larger buffer
+                    const safeVectorTile = new Uint8Array(
+                        vectorTile.buffer.slice(
+                            vectorTile.byteOffset,
+                            vectorTile.byteOffset + vectorTile.byteLength
+                        )
+                    );
 
-                    // Return yet another separate copy to avoid detachment
-                    const returnData = new Uint8Array(safeVectorTile.buffer.slice(0));
-                    return { data: returnData };
+                    // Cache a copy
+                    tileCache.current.set(cacheKey, safeVectorTile);
+
+                    // Return another copy for MapLibre to avoid shared buffer issues
+                    return { data: new Uint8Array(safeVectorTile) };
                 } catch {
                     return { data: new Uint8Array() };
                 }
