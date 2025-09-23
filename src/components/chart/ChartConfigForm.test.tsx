@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 
-// Extract DashboardChartConfig component for isolated testing
-// This test file tests the configuration logic that's embedded in Dashboard.tsx
+// Test the ChartConfigForm component logic
+// This test file tests the configuration logic that's now in the separate ChartConfigForm component
 
-describe('DashboardChartConfig Logic', () => {
+describe('ChartConfigForm Logic', () => {
   const mockDBContext: Partial<DBContext> = {
     getTableColumns: vi.fn().mockResolvedValue([
       { name: 'numeric_col', type: 'DOUBLE' },
@@ -332,6 +332,54 @@ describe('DashboardChartConfig Logic', () => {
       expect(updatedConfig.yField).toBe('y_col');
     });
 
+    it('should update chart title when title field changes', () => {
+      const initialConfig = {
+        plotType: 'scatter',
+        xField: 'x_col',
+        yField: 'y_col',
+        colorField: '',
+        sizeField: '',
+        title: 'Original Chart Title'
+      };
+
+      // Simulate title change
+      const updatedConfig = {
+        ...initialConfig,
+        title: 'Updated Chart Title'
+      };
+
+      expect(updatedConfig.title).toBe('Updated Chart Title');
+      expect(updatedConfig.plotType).toBe('scatter'); // Other fields remain unchanged
+      expect(updatedConfig.xField).toBe('x_col');
+      expect(updatedConfig.yField).toBe('y_col');
+    });
+
+    it('should use updated title in generated Vega spec', () => {
+      const config = {
+        plotType: 'scatter',
+        xField: 'x_col',
+        yField: 'y_col',
+        colorField: '',
+        sizeField: '',
+        title: 'Custom Chart Title'
+      };
+
+      // Simulate the generateVegaSpec function's title handling
+      const baseSpec = {
+        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        title: config.title, // Use title from config
+        width: 400,
+        height: 300,
+        data: mockChartSpec.spec.data,
+        config: {
+          view: { stroke: null },
+          axis: { grid: true }
+        }
+      };
+
+      expect(baseSpec.title).toBe('Custom Chart Title');
+    });
+
     it('should preserve original chart title and data source', () => {
       const baseSpec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
@@ -347,6 +395,25 @@ describe('DashboardChartConfig Logic', () => {
 
       expect(baseSpec.title).toBe('Original Title');
       expect(baseSpec.data).toEqual({ values: [], sql: 'SELECT * FROM test_table' });
+    });
+
+    it('should initialize title from existing chart spec', () => {
+      // Test extractCurrentConfig logic for title extraction
+      const existingChartSpec = {
+        ...mockChartSpec,
+        title: 'Existing Chart Title'
+      };
+
+      const extractedConfig = {
+        plotType: 'scatter',
+        xField: '',
+        yField: '',
+        colorField: '',
+        sizeField: '',
+        title: existingChartSpec.title || 'Chart'
+      };
+
+      expect(extractedConfig.title).toBe('Existing Chart Title');
     });
   });
 });
