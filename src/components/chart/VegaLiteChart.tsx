@@ -118,9 +118,8 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }, [initialSpec]);
 
   // Extract table name from SQL query
-  function extractTableName(spec: TopLevelSpec): string {
-    const specWithSQL = spec as ChartSpec;
-    if (specWithSQL.data && 'sql' in specWithSQL.data && specWithSQL.data.sql) {
+  function extractTableName(spec: VegaChartSpec): string {
+    if (spec.data && 'sql' in spec.data && spec.data.sql) {
       // Handle both "FROM table" and "FROM schema.table" patterns
       // Also handle quoted identifiers like "schema"."table"
       const patterns = [
@@ -129,7 +128,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       ];
 
       for (const pattern of patterns) {
-        const match = specWithSQL.data.sql.match(pattern);
+        const match = spec.data.sql.match(pattern);
         if (match) {
           // If it's a schema.table pattern, return just the table name (second capture group)
           if (match.length > 2) {
@@ -144,7 +143,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }
 
   // Extract plot type from spec
-  function extractPlotType(spec: TopLevelSpec): string {
+  function extractPlotType(spec: VegaChartSpec): string {
     if (!('mark' in spec)) return 'scatter';
 
     const mark = spec.mark;
@@ -179,23 +178,23 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }
 
   // Extract field from encoding
-  function extractField(spec: ChartSpec, encoding: string): string {
+  function extractField(spec: VegaChartSpec, encoding: string): string {
     if (!('encoding' in spec) || !spec.encoding) return '';
     const enc = spec.encoding;
 
-    if (encoding === 'x' && 'x' in enc && enc.x && 'field' in enc.x) {
+    if (encoding === 'x' && 'x' in enc && enc.x && typeof enc.x === 'object' && 'field' in enc.x) {
       return String(enc.x.field) || '';
     }
 
-    if (encoding === 'y' && 'y' in enc && enc.y && 'field' in enc.y) {
+    if (encoding === 'y' && 'y' in enc && enc.y && typeof enc.y === 'object' && 'field' in enc.y) {
       return String(enc.y.field) || '';
     }
 
-    if (encoding === 'color' && 'color' in enc && enc.color && 'field' in enc.color) {
+    if (encoding === 'color' && 'color' in enc && enc.color && typeof enc.color === 'object' && 'field' in enc.color) {
       return String(enc.color.field) || '';
     }
 
-    if (encoding === 'size' && 'size' in enc && enc.size && 'field' in enc.size) {
+    if (encoding === 'size' && 'size' in enc && enc.size && typeof enc.size === 'object' && 'field' in enc.size) {
       return String(enc.size.field) || '';
     }
 
@@ -294,7 +293,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }, [dbContext, config.tableName, schema]);
 
   // Generate new spec based on configuration
-  const generateSpec = useCallback(() => {
+  const generateSpec = useCallback((): VegaChartSpec => {
     if (!config.tableName || !config.plotType) return initialSpec;
 
     const getFieldType = (fieldName: string): 'quantitative' | 'ordinal' | 'nominal' | 'temporal' => {
@@ -333,7 +332,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       }
     };
 
-    let spec: ChartSpec | undefined = undefined;
+    let spec: VegaChartSpec | undefined = undefined;
 
     try {
       switch (config.plotType) {
@@ -468,7 +467,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
           if (onSpecChange && newSpec) {
             const updatedChartSpec: ChartSpec = {
               id: 'temp-' + Date.now(),
-              spec: newSpec as VegaChartSpec,
+              spec: newSpec,
               title: String(config.title) || 'Chart',
               timestamp: new Date()
             };
@@ -484,8 +483,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   // Fetch data when spec changes
   useEffect(() => {
     const fetchData = async () => {
-      const specWithSQL = currentSpec as ChartSpec;
-      if (!dbContext || !specWithSQL.data?.sql) {
+      if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
         setLoading(false);
         return;
       }
@@ -516,7 +514,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         setError(null);
 
         // Execute SQL query for chart data
-        const rows = await dbContext.executeQuery(specWithSQL.data.sql, schema);
+        const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
         setData(rows);
       } catch (err) {
         console.error('Error fetching data for Vega-Lite chart:', err);

@@ -7,7 +7,6 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 
 describe('DashboardChartConfig Logic', () => {
   const mockDBContext: Partial<DBContext> = {
-    connection: null,
     getTableColumns: vi.fn().mockResolvedValue([
       { name: 'numeric_col', type: 'DOUBLE' },
       { name: 'string_col', type: 'VARCHAR' },
@@ -25,7 +24,7 @@ describe('DashboardChartConfig Logic', () => {
         x: { field: 'numeric_col', type: 'quantitative' },
         y: { field: 'int_col', type: 'quantitative' },
       },
-      data: { sql: 'SELECT * FROM test_table' } as { sql: string },
+      data: { values: [], sql: 'SELECT * FROM test_table' },
       title: 'Original Title',
     },
     timestamp: new Date(),
@@ -347,7 +346,7 @@ describe('DashboardChartConfig Logic', () => {
       };
 
       expect(baseSpec.title).toBe('Original Title');
-      expect(baseSpec.data).toEqual({ sql: 'SELECT * FROM test_table' });
+      expect(baseSpec.data).toEqual({ values: [], sql: 'SELECT * FROM test_table' });
     });
   });
 });
