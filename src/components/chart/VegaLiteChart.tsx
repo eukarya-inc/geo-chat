@@ -1,21 +1,18 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import type { ChartSpec, VegaChartSpec } from '../../types/chart';
 
 import type { TopLevelSpec } from 'vega-lite';
 
-// Extend TopLevelSpec to include our custom data.sql property and common properties
-type ChartSpec = TopLevelSpec & {
-  data?: TopLevelSpec["data"] & {
-    sql?: string;
-  };
-};
-
 interface VegaLiteChartProps {
-  spec: ChartSpec;
+  spec: VegaChartSpec;
   dbContext?: DBContext;
   schema?: string | null;
   showHeader?: boolean;
+  enableActions?: boolean;
+  configOnly?: boolean;
+  onSpecChange?: (newSpec: ChartSpec) => void;
 }
 
 interface ColumnInfo {
@@ -23,11 +20,12 @@ interface ColumnInfo {
   type: string;
 }
 
-const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext, schema = null, showHeader = true }) => {
+const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbContext, schema = null, showHeader = true, enableActions = false, configOnly = false, onSpecChange }) => {
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
+  const [showConfig, setShowConfig] = useState(configOnly || false);
+  const chartRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [tables, setTables] = useState<string[]>([]);
 
@@ -120,9 +118,8 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }, [initialSpec]);
 
   // Extract table name from SQL query
-  function extractTableName(spec: TopLevelSpec): string {
-    const specWithSQL = spec as ChartSpec;
-    if (specWithSQL.data && 'sql' in specWithSQL.data && specWithSQL.data.sql) {
+  function extractTableName(spec: VegaChartSpec): string {
+    if (spec.data && 'sql' in spec.data && spec.data.sql) {
       // Handle both "FROM table" and "FROM schema.table" patterns
       // Also handle quoted identifiers like "schema"."table"
       const patterns = [
@@ -131,7 +128,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       ];
 
       for (const pattern of patterns) {
-        const match = specWithSQL.data.sql.match(pattern);
+        const match = spec.data.sql.match(pattern);
         if (match) {
           // If it's a schema.table pattern, return just the table name (second capture group)
           if (match.length > 2) {
@@ -146,7 +143,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }
 
   // Extract plot type from spec
-  function extractPlotType(spec: TopLevelSpec): string {
+  function extractPlotType(spec: VegaChartSpec): string {
     if (!('mark' in spec)) return 'scatter';
 
     const mark = spec.mark;
@@ -181,23 +178,23 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }
 
   // Extract field from encoding
-  function extractField(spec: ChartSpec, encoding: string): string {
+  function extractField(spec: VegaChartSpec, encoding: string): string {
     if (!('encoding' in spec) || !spec.encoding) return '';
     const enc = spec.encoding;
 
-    if (encoding === 'x' && 'x' in enc && enc.x && 'field' in enc.x) {
+    if (encoding === 'x' && 'x' in enc && enc.x && typeof enc.x === 'object' && 'field' in enc.x) {
       return String(enc.x.field) || '';
     }
 
-    if (encoding === 'y' && 'y' in enc && enc.y && 'field' in enc.y) {
+    if (encoding === 'y' && 'y' in enc && enc.y && typeof enc.y === 'object' && 'field' in enc.y) {
       return String(enc.y.field) || '';
     }
 
-    if (encoding === 'color' && 'color' in enc && enc.color && 'field' in enc.color) {
+    if (encoding === 'color' && 'color' in enc && enc.color && typeof enc.color === 'object' && 'field' in enc.color) {
       return String(enc.color.field) || '';
     }
 
-    if (encoding === 'size' && 'size' in enc && enc.size && 'field' in enc.size) {
+    if (encoding === 'size' && 'size' in enc && enc.size && typeof enc.size === 'object' && 'field' in enc.size) {
       return String(enc.size.field) || '';
     }
 
@@ -241,6 +238,26 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     return unsubscribe;
   }, [dbContext, schema]);
 
+  // Listen for external configuration triggers
+  useEffect(() => {
+    const handleShowConfig = (event: CustomEvent) => {
+      if (event.type === 'showChartConfig') {
+        setShowConfig(true);
+      }
+    };
+
+    const chartElement = chartRef.current;
+    if (chartElement) {
+      chartElement.addEventListener('showChartConfig', handleShowConfig as EventListener);
+    }
+
+    return () => {
+      if (chartElement) {
+        chartElement.removeEventListener('showChartConfig', handleShowConfig as EventListener);
+      }
+    };
+  }, []);
+
   // Fetch columns when table changes
   useEffect(() => {
     const fetchColumns = async () => {
@@ -276,7 +293,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
   }, [dbContext, config.tableName, schema]);
 
   // Generate new spec based on configuration
-  const generateSpec = useCallback(() => {
+  const generateSpec = useCallback((): VegaChartSpec => {
     if (!config.tableName || !config.plotType) return initialSpec;
 
     const getFieldType = (fieldName: string): 'quantitative' | 'ordinal' | 'nominal' | 'temporal' => {
@@ -315,7 +332,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       }
     };
 
-    let spec: ChartSpec | undefined = undefined;
+    let spec: VegaChartSpec | undefined = undefined;
 
     try {
       switch (config.plotType) {
@@ -446,18 +463,27 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       setCurrentSpec(prevSpec => {
         // Only update if the spec actually changed
         if (JSON.stringify(newSpec) !== JSON.stringify(prevSpec)) {
+          // Call the callback with the new spec if provided
+          if (onSpecChange && newSpec) {
+            const updatedChartSpec: ChartSpec = {
+              id: 'temp-' + Date.now(),
+              spec: newSpec,
+              title: String(config.title) || 'Chart',
+              timestamp: new Date()
+            };
+            onSpecChange(updatedChartSpec);
+          }
           return newSpec;
         }
         return prevSpec;
       });
     }
-  }, [config, columns, generateSpec]);
+  }, [config, columns, generateSpec, onSpecChange]);
 
   // Fetch data when spec changes
   useEffect(() => {
     const fetchData = async () => {
-      const specWithSQL = currentSpec as ChartSpec;
-      if (!dbContext || !specWithSQL.data?.sql) {
+      if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
         setLoading(false);
         return;
       }
@@ -488,7 +514,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
         setError(null);
 
         // Execute SQL query for chart data
-        const rows = await dbContext.executeQuery(specWithSQL.data.sql, schema);
+        const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
         setData(rows);
       } catch (err) {
         console.error('Error fetching data for Vega-Lite chart:', err);
@@ -545,12 +571,178 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
     data: { values: data }
   };
 
+  // If configOnly is true, return only the configuration panel
+  if (configOnly) {
+    return (
+      <div ref={chartRef}>
+        {/* Configuration Panel */}
+        <div style={{
+          padding: '0',
+          backgroundColor: 'white'
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            {/* Table Selection */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                Table:
+              </label>
+              <select
+                value={config.tableName}
+                onChange={(e) => setConfig(prev => ({ ...prev, tableName: e.target.value }))}
+                style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+              >
+                <option value="">Select table...</option>
+                {tables.map((table: string) => (
+                  <option key={table} value={table}>{table}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Chart Type */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                Chart Type:
+              </label>
+              <select
+                value={config.plotType}
+                onChange={(e) => setConfig(prev => ({ ...prev, plotType: e.target.value }))}
+                style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+              >
+                <option value="scatter">Scatter Plot</option>
+                <option value="line">Line Chart</option>
+                <option value="bar">Bar Chart</option>
+                <option value="histogram">Histogram</option>
+                <option value="pie">Pie Chart</option>
+                <option value="heatmap">Heatmap</option>
+                <option value="box">Box Plot</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Field Selections */}
+          {columns.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              {/* X Field */}
+              {(['scatter', 'line', 'bar', 'histogram', 'pie', 'heatmap', 'box'].includes(config.plotType)) && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                    {config.plotType === 'pie' ? 'Category:' : 'X Field:'}
+                  </label>
+                  <select
+                    value={config.xField}
+                    onChange={(e) => setConfig(prev => ({ ...prev, xField: e.target.value }))}
+                    style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+                  >
+                    <option value="">Select field...</option>
+                    {columns.map((col: ColumnInfo) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Y Field */}
+              {(['scatter', 'line', 'heatmap', 'box'].includes(config.plotType) ||
+                (['bar', 'pie'].includes(config.plotType))) && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                    {config.plotType === 'pie' ? 'Value (opt):' : config.plotType === 'box' ? 'Y Field:' : 'Y Field:'}
+                  </label>
+                  <select
+                    value={config.yField}
+                    onChange={(e) => setConfig(prev => ({ ...prev, yField: e.target.value }))}
+                    style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+                  >
+                    <option value="">
+                      {['bar', 'pie'].includes(config.plotType) ? 'Count records' : 'Select field...'}
+                    </option>
+                    {columns.map((col: ColumnInfo) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Optional Fields */}
+          {columns.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '12px' }}>
+              {/* Color Field */}
+              {['scatter', 'line', 'bar'].includes(config.plotType) && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                    Color (opt):
+                  </label>
+                  <select
+                    value={config.colorField}
+                    onChange={(e) => setConfig(prev => ({ ...prev, colorField: e.target.value }))}
+                    style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+                  >
+                    <option value="">None</option>
+                    {columns.map((col: ColumnInfo) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Size Field */}
+              {config.plotType === 'scatter' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                    Size (opt):
+                  </label>
+                  <select
+                    value={config.sizeField}
+                    onChange={(e) => setConfig(prev => ({ ...prev, sizeField: e.target.value }))}
+                    style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+                  >
+                    <option value="">None</option>
+                    {getNumericColumns().map((col: ColumnInfo) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Title */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85em', fontWeight: 'bold' }}>
+                  Title:
+                </label>
+                <input
+                  type="text"
+                  value={String(config.title)}
+                  onChange={(e) => setConfig(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Chart title..."
+                  style={{ width: '100%', padding: '6px', fontSize: '0.9em' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
-      border: showHeader ? '1px solid #dee2e6' : 'none',
-      borderRadius: showHeader ? '4px' : '0',
-      backgroundColor: 'white'
-    }}>
+    <div
+      ref={chartRef}
+      style={{
+        border: showHeader ? '1px solid #dee2e6' : 'none',
+        borderRadius: showHeader ? '4px' : '0',
+        backgroundColor: 'white'
+      }}
+    >
       {/* Chart Header with Controls */}
       {showHeader && (
         <div style={{
@@ -583,12 +775,35 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       )}
 
       {/* Configuration Panel */}
-      {showHeader && showConfig && (
+      {showConfig && (
         <div style={{
           padding: '15px',
           backgroundColor: '#f8f9fa',
-          borderBottom: '1px solid #dee2e6'
+          borderBottom: showHeader ? '1px solid #dee2e6' : 'none',
+          border: showHeader ? 'none' : '1px solid #dee2e6',
+          borderRadius: showHeader ? '0' : '4px',
+          position: showHeader ? 'static' : 'relative'
         }}>
+          {/* Close button when no header */}
+          {!showHeader && (
+            <button
+              onClick={() => setShowConfig(false)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: 'none',
+                border: 'none',
+                fontSize: '18px',
+                cursor: 'pointer',
+                color: '#6c757d'
+              }}
+              title="Close configuration"
+            >
+              ×
+            </button>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             {/* Table Selection */}
             <div>
@@ -745,7 +960,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({ spec: initialSpec, dbCont
       <div style={{ padding: '0', overflow: 'visible' }}>
         <VegaLite
           spec={finalSpec}
-          actions={showHeader}
+          actions={showHeader || enableActions}
         />
       </div>
     </div>
@@ -758,6 +973,9 @@ export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
     prevProps.spec === nextProps.spec &&
     prevProps.dbContext === nextProps.dbContext &&
     prevProps.schema === nextProps.schema &&
-    prevProps.showHeader === nextProps.showHeader
+    prevProps.showHeader === nextProps.showHeader &&
+    prevProps.enableActions === nextProps.enableActions &&
+    prevProps.configOnly === nextProps.configOnly &&
+    prevProps.onSpecChange === nextProps.onSpecChange
   );
 });

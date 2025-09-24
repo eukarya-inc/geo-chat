@@ -6,10 +6,12 @@ import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
+import { ChartConfigForm } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon, CogIcon } from '@heroicons/react/24/outline';
+import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
@@ -33,6 +35,8 @@ function ChatPage() {
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportType, setExportType] = useState<'chart' | 'map'>('chart');
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
+    const [showChartConfig, setShowChartConfig] = useState(false);
+    const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -134,25 +138,20 @@ function ChatPage() {
 
     // Chart export to dashboard functionality
     const handleExportChartToDashboard = (dashboardId: string) => {
-        if (!selectedChatId || !chartSpec || !selectedTable) {
+        const exportSpec = displayChartSpec; // Use configured chart if available
+        if (!selectedChatId || !exportSpec || !selectedTable) {
             console.warn('Cannot export chart: missing selectedChatId, chartSpec, or selectedTable');
             return;
         }
 
         const dashboard = getDashboard(dashboardId);
-        const chartSpecs = getCurrentChatState()?.chartSpecs;
-        
+
         if (!dashboard) {
             console.error('Dashboard not found:', dashboardId);
             return;
         }
-        
-        if (!chartSpecs || !chartSpecs[selectedTable]) {
-            console.error('Chart specs not found for table:', selectedTable);
-            return;
-        }
 
-        const chart = chartSpecs[selectedTable];
+        const chart = exportSpec;
         
         
         // Extract SQL from chart spec
@@ -161,7 +160,7 @@ function ChatPage() {
         const newVisualization = {
             id: `viz-${Date.now()}`,
             type: 'chart' as const,
-            title: chart.title || chartSpec.title || 'Chart',
+            title: chart.title || 'Chart',
             chartSpec: chart,
             sql: chartSql,
             createdAt: new Date()
@@ -194,6 +193,18 @@ function ChatPage() {
         // Automatically switch to the dashboard view to show the newly added chart
         handleSelectDashboard(dashboardId);
     };
+
+    // Chart configuration handlers
+    const handleChartSpecChange = (newSpec: ChartSpec) => {
+        setConfiguredChartSpec(newSpec);
+        // Update the AI state as well
+        if (selectedTable && updateChartFromAI) {
+            updateChartFromAI(selectedTable, newSpec.spec);
+        }
+    };
+
+    // Determine which chart spec to display - prefer configured version
+    const displayChartSpec = configuredChartSpec || chartSpec;
 
     // Map export to dashboard functionality
     const handleExportMapToDashboard = (dashboardId: string) => {
@@ -491,39 +502,88 @@ function ChatPage() {
 
                                 {/* Chart Tab */}
                                 {activeTab === 'chart' && (
-                                    chartSpec && connection && selectedChatId ? (
-                                        <div className="h-full overflow-hidden flex flex-col p-4">
-                                            <div className="flex-1 overflow-auto">
-                                                <VegaLiteChart
-                                                    key={`${schemaName}-${chartSpec.id}`}
-                                                    spec={chartSpec.spec}
-                                                    dbContext={dbContext}
-                                                    schema={schemaName}
-                                                />
+                                    displayChartSpec && connection && selectedChatId ? (
+                                        <div className="h-full overflow-hidden flex flex-col">
+                                            {/* Chart Display Area */}
+                                            <div className={`${showChartConfig ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}>
+                                                {/* Chart Title Bar with Menu */}
+                                                <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                        {displayChartSpec.title || 'Chart'}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setShowChartConfig(!showChartConfig)}
+                                                            className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100"
+                                                            title="Configure chart"
+                                                        >
+                                                            <CogIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (getAllDashboards().length > 0) {
+                                                                    setExportType('chart');
+                                                                    setShowExportModal(true);
+                                                                }
+                                                            }}
+                                                            disabled={getAllDashboards().length === 0}
+                                                            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                                                                getAllDashboards().length > 0
+                                                                    ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer shadow-sm'
+                                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                            }`}
+                                                            title={
+                                                                getAllDashboards().length > 0
+                                                                    ? "Export this chart to a dashboard"
+                                                                    : "⚠️ No dashboards available - Create a dashboard first to export charts"
+                                                            }
+                                                        >
+                                                            <ArrowUpTrayIcon className="w-3.5 h-3.5" />
+                                                            <span>Export</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Chart Content */}
+                                                <div className="flex-1 overflow-auto p-4">
+                                                    <VegaLiteChart
+                                                        key={`${schemaName}-${displayChartSpec.id}`}
+                                                        spec={displayChartSpec.spec}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName}
+                                                        showHeader={false}
+                                                        enableActions={false}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
-                                                <button
-                                                    onClick={() => {
-                                                        if (getAllDashboards().length > 0) {
-                                                            setExportType('chart');
-                                                            setShowExportModal(true);
-                                                        }
-                                                    }}
-                                                    disabled={getAllDashboards().length === 0}
-                                                    className={`p-2 rounded-full transition-colors shadow-lg ${
-                                                        getAllDashboards().length > 0
-                                                            ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    }`}
-                                                    title={
-                                                        getAllDashboards().length > 0
-                                                            ? "Export chart visualization"
-                                                            : "Create a dashboard first to export visualizations"
-                                                    }
-                                                >
-                                                    <ArrowUpTrayIcon className="w-5 h-5" />
-                                                </button>
-                                            </div>
+
+                                            {/* Configuration Panel - Horizontal Split */}
+                                            {showChartConfig && (
+                                                <div className="border-t border-gray-200 bg-white" style={{ height: '300px' }}>
+                                                    <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
+                                                        <h4 className="text-sm font-medium text-gray-900">Chart Configuration</h4>
+                                                        <button
+                                                            onClick={() => setShowChartConfig(false)}
+                                                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                                            title="Close configuration"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div className="overflow-auto p-4" style={{ height: 'calc(300px - 57px)' }}>
+                                                        {chartSpec && (
+                                                            <ChartConfigForm
+                                                                chartSpec={chartSpec}
+                                                                dbContext={dbContext}
+                                                                schema={schemaName || 'main'}
+                                                                onSpecChange={handleChartSpecChange}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="h-full flex items-center justify-center">
@@ -600,7 +660,7 @@ function ChatPage() {
             onClose={() => setShowExportModal(false)}
             dashboards={getAllDashboards()}
             onExport={exportType === 'chart' ? handleExportChartToDashboard : handleExportMapToDashboard}
-            title={exportType === 'chart' ? (chartSpec?.title || 'Chart') : `${selectedTable} Map`}
+            title={exportType === 'chart' ? (displayChartSpec?.title || 'Chart') : `${selectedTable} Map`}
             type={exportType}
             lastSelectedDashboard={lastSelectedExportDashboard}
         />
