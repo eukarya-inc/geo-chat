@@ -7,9 +7,11 @@ interface ChartConfigFormProps {
     dbContext: DBContext;
     schema: string;
     onSpecChange: (newSpec: ChartSpec) => void;
+    showApplyButton?: boolean; // Optional prop to control apply button visibility
+    autoApplyChanges?: boolean; // Optional prop to control automatic onSpecChange calls
 }
 
-export function ChartConfigForm({ chartSpec, dbContext, schema, onSpecChange }: ChartConfigFormProps) {
+export function ChartConfigForm({ chartSpec, dbContext, schema, onSpecChange, showApplyButton = true, autoApplyChanges = false }: ChartConfigFormProps) {
     const [columns, setColumns] = useState<Array<{name: string, type: string}>>([]);
 
     // Extract current configuration from the existing chart spec
@@ -220,8 +222,8 @@ export function ChartConfigForm({ chartSpec, dbContext, schema, onSpecChange }: 
         return newSpec;
     }, [config, columns, chartSpec.spec]);
 
-    // Handle configuration changes
-    useEffect(() => {
+    // Handle manual apply of configuration changes
+    const handleApplyChanges = () => {
         if (columns.length > 0) {
             const newVegaSpec = generateVegaSpec();
             const updatedSpec: ChartSpec = {
@@ -232,7 +234,21 @@ export function ChartConfigForm({ chartSpec, dbContext, schema, onSpecChange }: 
             };
             onSpecChange(updatedSpec);
         }
-    }, [config, columns, chartSpec, generateVegaSpec, onSpecChange]);
+    };
+
+    // Auto-apply changes when enabled (for modal usage)
+    useEffect(() => {
+        if (autoApplyChanges && columns.length > 0) {
+            const newVegaSpec = generateVegaSpec();
+            const updatedSpec: ChartSpec = {
+                ...chartSpec,
+                title: config.title,
+                spec: newVegaSpec as ChartSpec['spec'],
+                timestamp: new Date()
+            };
+            onSpecChange(updatedSpec);
+        }
+    }, [config, columns, chartSpec, generateVegaSpec, onSpecChange, autoApplyChanges]);
 
     return (
         <div>
@@ -367,6 +383,40 @@ export function ChartConfigForm({ chartSpec, dbContext, schema, onSpecChange }: 
                     }}
                 />
             </div>
+
+            {/* Apply Changes Button - Only show when not in modal */}
+            {showApplyButton && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                    <button
+                        onClick={handleApplyChanges}
+                        disabled={columns.length === 0}
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            backgroundColor: columns.length > 0 ? '#3b82f6' : '#9ca3af',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '0.9em',
+                            fontWeight: '500',
+                            cursor: columns.length > 0 ? 'pointer' : 'not-allowed',
+                            transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => {
+                            if (columns.length > 0) {
+                                e.currentTarget.style.backgroundColor = '#2563eb';
+                            }
+                        }}
+                        onMouseOut={(e) => {
+                            if (columns.length > 0) {
+                                e.currentTarget.style.backgroundColor = '#3b82f6';
+                            }
+                        }}
+                    >
+                        Apply Changes
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

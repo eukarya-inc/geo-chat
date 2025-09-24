@@ -55,6 +55,8 @@ export function ChartConfigModal({
                         dbContext={dbContext}
                         schema={schema}
                         onSpecChange={(newSpec) => setUpdatedSpec(newSpec)}
+                        showApplyButton={false}
+                        autoApplyChanges={true}
                     />
                 </div>
 
