@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
+import { ChartConfigModal } from '../chart';
 import Map from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
@@ -10,6 +11,210 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
+
+
+interface ChartDropdownMenuProps {
+    vizId: string;
+    vizTitle: string;
+    chartSpec: ChartSpec;
+    dbContext: DBContext;
+    schema: string;
+    onRemove: (vizId: string) => void;
+    onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
+}
+
+function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRemove, onUpdateChart }: ChartDropdownMenuProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const handleVegaConfigureOpen = () => {
+        setIsConfigModalOpen(true);
+        setIsOpen(false);
+    };
+
+    const handleVegaSaveAsPNG = () => {
+        // Use HTML5 canvas to capture the chart as PNG
+        const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+        if (chartContainer) {
+            const canvas = chartContainer.querySelector('canvas');
+            if (canvas) {
+                try {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.png`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        } else {
+                            alert('Failed to export chart as PNG. Please try again.');
+                        }
+                    }, 'image/png');
+                } catch (error) {
+                    console.error('Error exporting PNG:', error);
+                    alert('Failed to export chart as PNG. Please try again.');
+                }
+            } else {
+                alert('Chart canvas not found. Please try again.');
+            }
+        }
+        setIsOpen(false);
+    };
+
+    const handleVegaSaveAsSVG = () => {
+        // For SVG export, we need to access the Vega view
+        const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+        if (chartContainer) {
+            // Try to find the Vega view in various ways
+            const vegaContainer = chartContainer.querySelector('[class*="vega"]');
+            if (vegaContainer) {
+                // Try to get SVG content directly from the DOM
+                const svgElement = vegaContainer.querySelector('svg');
+                if (svgElement) {
+                    try {
+                        const svgData = new XMLSerializer().serializeToString(svgElement);
+                        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
+                        const url = URL.createObjectURL(svgBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.svg`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    } catch (error) {
+                        console.error('Error exporting SVG:', error);
+                        alert('Failed to export chart as SVG. Please try again.');
+                    }
+                } else {
+                    alert('SVG element not found. Please try PNG export instead.');
+                }
+            } else {
+                alert('Chart not found. Please try again.');
+            }
+        }
+        setIsOpen(false);
+    };
+
+    const handleRemove = () => {
+        onRemove(vizId);
+        setIsOpen(false);
+    };
+
+    return (
+        <>
+            <div className="relative" ref={dropdownRef}>
+                <button
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(!isOpen);
+                    }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
+                    title="Chart options"
+                    type="button"
+                >
+                    <EllipsisVerticalIcon className="w-4 h-4" />
+                </button>
+
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
+                    <div className="py-1">
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleVegaConfigureOpen();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ChartBarIcon className="w-4 h-4 mr-2" />
+                            Edit Chart Style
+                        </button>
+
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleVegaSaveAsPNG();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                            Save as PNG
+                        </button>
+
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleVegaSaveAsSVG();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                            Save as SVG
+                        </button>
+
+                        <hr className="my-1 border-gray-200" />
+
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemove();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <TrashIcon className="w-4 h-4 mr-2" />
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            )}
+            </div>
+
+            {/* Configuration Modal */}
+            <ChartConfigModal
+                isOpen={isConfigModalOpen}
+                onClose={() => setIsConfigModalOpen(false)}
+                chartSpec={chartSpec}
+                dbContext={dbContext}
+                schema={schema}
+                onUpdateChart={onUpdateChart}
+                vizId={vizId}
+            />
+        </>
+    );
+}
 
 // Re-export for backward compatibility, but use the one from remoteAtoms
 export type DashboardVisualization = DashboardVisualizationType;
@@ -85,6 +290,16 @@ export function Dashboard({
     const handleRemoveVisualization = useCallback((vizId: string) => {
         onRemoveVisualization(vizId);
     }, [onRemoveVisualization]);
+
+    const handleUpdateChart = useCallback((vizId: string, newSpec: ChartSpec) => {
+        const updatedDashboard = {
+            ...dashboard,
+            visualizations: dashboard.visualizations.map(viz =>
+                viz.id === vizId ? { ...viz, chartSpec: newSpec, title: newSpec.title || viz.title } : viz
+            )
+        };
+        onUpdateDashboard(updatedDashboard);
+    }, [dashboard, onUpdateDashboard]);
 
     return (
         <div className="flex h-full">
@@ -208,32 +423,50 @@ export function Dashboard({
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
                         >
                             {dashboard.visualizations.map((viz) => (
-                                <div 
-                                    key={viz.id} 
+                                <div
+                                    key={viz.id}
                                     className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                    data-viz-id={viz.id}
                                 >
                                     <div className="h-full flex flex-col">
-                                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
+                                        <div
+                                            className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50"
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
                                             <h4 className="text-sm font-medium text-gray-900 truncate">
                                                 {viz.title}
                                             </h4>
-                                            <button
-                                                onClick={() => handleRemoveVisualization(viz.id)}
-                                                className="text-gray-400 hover:text-red-500 transition-colors"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
+                                            {viz.type === 'chart' && viz.chartSpec && (
+                                                <ChartDropdownMenu
+                                                    vizId={viz.id}
+                                                    vizTitle={viz.title}
+                                                    chartSpec={viz.chartSpec}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName}
+                                                    onRemove={handleRemoveVisualization}
+                                                    onUpdateChart={handleUpdateChart}
+                                                />
+                                            )}
+                                            {viz.type !== 'chart' && (
+                                                <button
+                                                    onClick={() => handleRemoveVisualization(viz.id)}
+                                                    className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="flex-1 p-2 overflow-hidden">
                                             {viz.type === 'chart' && viz.chartSpec ? (
-                                                <div className="h-full">
+                                                <div className="h-full dashboard-chart-container">
                                                     <VegaLiteChart
                                                         spec={viz.chartSpec.spec}
                                                         dbContext={dbContext}
                                                         schema={schemaName}
                                                         showHeader={false}
+                                                        enableActions={false}
                                                     />
                                                 </div>
                                             ) : viz.type === 'map' && viz.tableName ? (
