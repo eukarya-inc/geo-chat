@@ -531,18 +531,8 @@ function ChatPage() {
                                                 <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                                 </svg>
-                                                <h3 className="text-lg font-medium text-gray-900 mb-2">グラフがまだありません</h3>
-                                                <p className="text-sm text-gray-500 mb-4">このテーブルのデータを可視化するグラフを作成しましょう</p>
-                                                <button
-                                                    onClick={() => {
-                                                        if (sendMessageRef.current) {
-                                                            sendMessageRef.current(`${selectedTable}テーブルのデータを分析して、適切なグラフを作成してください`);
-                                                        }
-                                                    }}
-                                                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                                >
-                                                    グラフを作成
-                                                </button>
+                                                <h3 className="text-lg font-medium text-gray-900 mb-2">グラフを生成中...</h3>
+                                                <p className="text-sm text-gray-500">このテーブルのデータから自動的にグラフを作成しています</p>
                                             </div>
                                         </div>
                                     )

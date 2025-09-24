@@ -81,18 +81,26 @@ export async function generateDefaultCharts(
           },
           mark: 'bar',
           encoding: {
-            x: {
+            y: {
               field: categoryColumn.name,
               type: 'nominal',
-              title: categoryColumn.name
+              title: categoryColumn.name,
+              sort: '-x'
             },
-            y: {
+            x: {
               field: valueColumn.name,
               type: 'quantitative',
-              title: valueColumn.name
+              title: valueColumn.name,
+              aggregate: 'mean'
             }
           },
-          height: 400
+          height: 400,
+          config: {
+            axis: {
+              labelLimit: 150,
+              labelOverlap: true
+            }
+          }
         }
       };
     }
@@ -194,7 +202,8 @@ export async function generateDefaultCharts(
             y: {
               field: column.name,
               type: 'nominal',
-              title: column.name
+              title: column.name,
+              sort: '-x'
             },
             x: {
               aggregate: 'count',
@@ -202,7 +211,13 @@ export async function generateDefaultCharts(
               title: 'Count'
             }
           },
-          height: 400
+          height: 400,
+          config: {
+            axis: {
+              labelLimit: 150,
+              labelOverlap: true
+            }
+          }
         }
       };
     }
