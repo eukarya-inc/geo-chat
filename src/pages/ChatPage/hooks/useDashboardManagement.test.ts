@@ -242,10 +242,11 @@ describe('useDashboardManagement', () => {
         id: 'chart-1',
         title: 'Test Chart',
         spec: {
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
           mark: 'bar',
           encoding: {},
           data: { values: [] }
-        } as any,
+        },
         timestamp: new Date(),
       },
       createdAt: new Date(),
