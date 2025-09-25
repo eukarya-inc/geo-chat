@@ -25,6 +25,7 @@ interface ChatListProps {
     dashboards?: Dashboard[];
     onCreateDashboard?: () => void;
     onSelectDashboard?: (dashboardId: string) => void;
+    onDeleteDashboard?: (dashboardId: string) => void;
     onRenameDashboard?: (dashboardId: string, newName: string) => void;
     selectedDashboardId?: string | null;
 }
@@ -39,10 +40,12 @@ export function ChatList({
     dashboards = [],
     onCreateDashboard,
     onSelectDashboard,
+    onDeleteDashboard,
     onRenameDashboard,
     selectedDashboardId
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+    const [hoveredDashboardId, setHoveredDashboardId] = useState<string | null>(null);
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState<string>('');
 
@@ -185,6 +188,8 @@ export function ChatList({
                                                 onSelectDashboard(dashboard.id);
                                             }
                                         }}
+                                        onMouseEnter={() => setHoveredDashboardId(dashboard.id)}
+                                        onMouseLeave={() => setHoveredDashboardId(null)}
                                     >
                                         <PresentationChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
@@ -228,6 +233,18 @@ export function ChatList({
                                                 {dashboard.createdAt.toLocaleDateString('ja-JP')}
                                             </div>
                                         </div>
+                                        {hoveredDashboardId === dashboard.id && onDeleteDashboard && (
+                                            <button
+                                                data-testid="dashboard-delete-button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteDashboard(dashboard.id);
+                                                }}
+                                                className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
