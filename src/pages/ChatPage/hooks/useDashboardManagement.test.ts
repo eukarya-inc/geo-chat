@@ -153,7 +153,7 @@ describe('useDashboardManagement', () => {
         result.current.renameDashboard(dashboard!.id, 'New Title');
       });
 
-      expect(result.current.dashboards[dashboard.id].title).toBe('New Title');
+      expect(result.current.dashboards[dashboard!.id].title).toBe('New Title');
     }
   });
 
@@ -168,11 +168,11 @@ describe('useDashboardManagement', () => {
 
     if (dashboard) {
       act(() => {
-        result.current.renameDashboard(dashboard.id, '   ');
+        result.current.renameDashboard(dashboard!.id, '   ');
       });
 
       // Should keep original title when new title is empty/whitespace
-      expect(result.current.dashboards[dashboard.id].title).toBe('Original Title');
+      expect(result.current.dashboards[dashboard!.id].title).toBe('Original Title');
     }
   });
 
@@ -243,7 +243,7 @@ describe('useDashboardManagement', () => {
         title: 'Test Chart',
         spec: {
           $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-          mark: 'bar',
+          mark: { type: 'bar' as const },
           encoding: {},
           data: { values: [] }
         },
@@ -276,12 +276,12 @@ describe('useDashboardManagement', () => {
 
     // Remove the visualization
     act(() => {
-      result.current.removeVisualizationFromDashboard(dashboard.id, 'viz-1');
+      result.current.removeVisualizationFromDashboard(dashboard!.id, 'viz-1');
     });
 
     // Verify visualization was removed
-    expect(result.current.dashboards[dashboard.id].visualizations).toHaveLength(0);
-    expect(result.current.dashboards[dashboard.id].layout).toHaveLength(0);
+    expect(result.current.dashboards[dashboard!.id].visualizations).toHaveLength(0);
+    expect(result.current.dashboards[dashboard!.id].layout).toHaveLength(0);
   });
 
   it('should handle removing visualization from non-existent dashboard', () => {
