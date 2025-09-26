@@ -73,7 +73,7 @@ describe('ChatList', () => {
     expect(screen.queryByTestId('dashboard-delete-button')).toBeInTheDocument();
   });
 
-  it('should show confirmation dialog when delete button is clicked', () => {
+  it('should show inline confirmation when delete button is clicked', () => {
     const mockOnDeleteDashboard = vi.fn();
     render(<ChatList {...defaultProps} onDeleteDashboard={mockOnDeleteDashboard} />);
 
@@ -91,9 +91,9 @@ describe('ChatList', () => {
       fireEvent.click(deleteButton);
     }
 
-    // Should show confirmation dialog
-    expect(screen.getByText('Delete Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Are you sure you want to delete "Test Dashboard 1"? This action cannot be undone.')).toBeInTheDocument();
+    // Should show inline confirmation
+    expect(screen.getByText('Delete "Test Dashboard 1"?')).toBeInTheDocument();
+    expect(screen.getByText('This cannot be undone.')).toBeInTheDocument();
     expect(screen.getByText('Cancel')).toBeInTheDocument();
     expect(screen.queryByTestId('confirm-delete-dashboard')).toBeInTheDocument();
 
@@ -164,8 +164,9 @@ describe('ChatList', () => {
     // Should have called delete
     expect(mockOnDeleteDashboard).toHaveBeenCalledWith('dashboard-1');
 
-    // Confirmation dialog should be closed
-    expect(screen.queryByText('Delete Dashboard')).not.toBeInTheDocument();
+    // Inline confirmation should be gone and normal dashboard item should be back
+    expect(screen.queryByText('Delete "Test Dashboard 1"?')).not.toBeInTheDocument();
+    expect(screen.getByText('Test Dashboard 1')).toBeInTheDocument();
   });
 
   it('should not call onDeleteDashboard when confirmation is canceled', () => {
@@ -193,8 +194,9 @@ describe('ChatList', () => {
     // Should not have called delete
     expect(mockOnDeleteDashboard).not.toHaveBeenCalled();
 
-    // Confirmation dialog should be closed
-    expect(screen.queryByText('Delete Dashboard')).not.toBeInTheDocument();
+    // Inline confirmation should be gone and normal dashboard item should be back
+    expect(screen.queryByText('Delete "Test Dashboard 1"?')).not.toBeInTheDocument();
+    expect(screen.getByText('Test Dashboard 1')).toBeInTheDocument();
   });
 
   it('should stop event propagation when delete button is clicked', () => {
@@ -223,8 +225,8 @@ describe('ChatList', () => {
       fireEvent.click(deleteButton);
     }
 
-    // Should show confirmation dialog but not call select or delete yet
-    expect(screen.getByText('Delete Dashboard')).toBeInTheDocument();
+    // Should show inline confirmation but not call select or delete yet
+    expect(screen.getByText('Delete "Test Dashboard 1"?')).toBeInTheDocument();
     expect(mockOnSelectDashboard).not.toHaveBeenCalled();
     expect(mockOnDeleteDashboard).not.toHaveBeenCalled();
   });

@@ -189,114 +189,124 @@ export function ChatList({
                             </div>
                         ) : (
                             <div className="p-2">
-                                {dashboards.map((dashboard) => (
-                                    <div
-                                        key={dashboard.id}
-                                        className={`group relative flex items-center gap-2 p-3 mb-1 rounded transition-colors ${
-                                            selectedDashboardId === dashboard.id
-                                                ? 'bg-green-50 border border-green-200'
-                                                : 'hover:bg-gray-100'
-                                        } ${
-                                            editingDashboardId !== dashboard.id ? 'cursor-pointer' : ''
-                                        }`}
-                                        onClick={() => {
-                                            if (editingDashboardId !== dashboard.id && onSelectDashboard) {
-                                                onSelectDashboard(dashboard.id);
-                                            }
-                                        }}
-                                        onMouseEnter={() => setHoveredDashboardId(dashboard.id)}
-                                        onMouseLeave={() => setHoveredDashboardId(null)}
-                                    >
-                                        <PresentationChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-medium">
-                                                {editingDashboardId === dashboard.id ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <input
-                                                            type="text"
-                                                            value={editingTitle}
-                                                            onChange={(e) => setEditingTitle(e.target.value)}
-                                                            onKeyDown={handleKeyDown}
-                                                            onBlur={handleSaveEdit}
-                                                            autoFocus
-                                                            className="flex-1 px-1 py-0.5 text-sm border border-green-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                        />
-                                                        <button
-                                                            onClick={handleCancelEdit}
-                                                            className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
-                                                        >
-                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div
-                                                        className="truncate cursor-pointer hover:bg-green-100 px-1 py-0.5 rounded"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation(); // Prevent dashboard selection
-                                                            if (onRenameDashboard) {
-                                                                handleStartEditing(dashboard.id, dashboard.title);
-                                                            }
-                                                        }}
-                                                        title="Click to edit name"
-                                                    >
-                                                        {dashboard.title}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {dashboard.createdAt.toLocaleDateString('ja-JP')}
-                                            </div>
-                                        </div>
-                                        {hoveredDashboardId === dashboard.id && onDeleteDashboard && (
-                                            <button
-                                                data-testid="dashboard-delete-button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteClick(dashboard.id, dashboard.title);
-                                                }}
-                                                className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                {dashboards.map((dashboard) => {
+                                    // Show delete confirmation inline for this dashboard
+                                    if (dashboardToDelete && dashboardToDelete.id === dashboard.id) {
+                                        return (
+                                            <div
+                                                key={dashboard.id}
+                                                className="flex items-center gap-2 p-3 mb-1 rounded bg-red-50 border border-red-200"
                                             >
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
+                                                <TrashIcon className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-medium text-red-900">
+                                                        Delete "{dashboard.title}"?
+                                                    </div>
+                                                    <div className="text-xs text-red-600 mt-0.5">
+                                                        This cannot be undone.
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleCancelDelete}
+                                                        className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        data-testid="confirm-delete-dashboard"
+                                                        onClick={handleConfirmDelete}
+                                                        className="px-2 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // Normal dashboard display
+                                    return (
+                                        <div
+                                            key={dashboard.id}
+                                            className={`group relative flex items-center gap-2 p-3 mb-1 rounded transition-colors ${
+                                                selectedDashboardId === dashboard.id
+                                                    ? 'bg-green-50 border border-green-200'
+                                                    : 'hover:bg-gray-100'
+                                            } ${
+                                                editingDashboardId !== dashboard.id ? 'cursor-pointer' : ''
+                                            }`}
+                                            onClick={() => {
+                                                if (editingDashboardId !== dashboard.id && onSelectDashboard) {
+                                                    onSelectDashboard(dashboard.id);
+                                                }
+                                            }}
+                                            onMouseEnter={() => setHoveredDashboardId(dashboard.id)}
+                                            onMouseLeave={() => setHoveredDashboardId(null)}
+                                        >
+                                            <PresentationChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium">
+                                                    {editingDashboardId === dashboard.id ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <input
+                                                                type="text"
+                                                                value={editingTitle}
+                                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                                onKeyDown={handleKeyDown}
+                                                                onBlur={handleSaveEdit}
+                                                                autoFocus
+                                                                className="flex-1 px-1 py-0.5 text-sm border border-green-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                                            />
+                                                            <button
+                                                                onClick={handleCancelEdit}
+                                                                className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div
+                                                            className="truncate cursor-pointer hover:bg-green-100 px-1 py-0.5 rounded"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation(); // Prevent dashboard selection
+                                                                if (onRenameDashboard) {
+                                                                    handleStartEditing(dashboard.id, dashboard.title);
+                                                                }
+                                                            }}
+                                                            title="Click to edit name"
+                                                        >
+                                                            {dashboard.title}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {dashboard.createdAt.toLocaleDateString('ja-JP')}
+                                                </div>
+                                            </div>
+                                            {hoveredDashboardId === dashboard.id && onDeleteDashboard && (
+                                                <button
+                                                    data-testid="dashboard-delete-button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteClick(dashboard.id, dashboard.title);
+                                                    }}
+                                                    className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
                 )}
             </div>
 
-            {/* Dashboard Delete Confirmation Modal */}
-            {dashboardToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                            Delete Dashboard
-                        </h3>
-                        <p className="text-gray-600 mb-4">
-                            Are you sure you want to delete "{dashboardToDelete.title}"? This action cannot be undone.
-                        </p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={handleCancelDelete}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                data-testid="confirm-delete-dashboard"
-                                onClick={handleConfirmDelete}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
