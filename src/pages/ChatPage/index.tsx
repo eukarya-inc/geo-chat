@@ -105,6 +105,7 @@ function ChatPage() {
     const {
         createDashboard,
         updateDashboard,
+        deleteDashboard,
         getDashboard,
         getAllDashboards,
         updateDashboardLayout,
@@ -134,6 +135,14 @@ function ChatPage() {
         selectChat(chatId);
         // Clear dashboard selection when chat is selected
         setSelectedDashboard(null);
+    };
+
+    const handleDeleteDashboard = (dashboardId: string) => {
+        // Clear selection if deleting the currently selected dashboard
+        if (selectedDashboardId === dashboardId) {
+            setSelectedDashboard(null);
+        }
+        deleteDashboard(dashboardId);
     };
 
     // Chart export to dashboard functionality
@@ -275,6 +284,7 @@ function ChatPage() {
                     dashboards={getAllDashboards()}
                     onCreateDashboard={handleCreateDashboard}
                     onSelectDashboard={handleSelectDashboard}
+                    onDeleteDashboard={handleDeleteDashboard}
                     onRenameDashboard={renameDashboard}
                     selectedDashboardId={selectedDashboardId}
                 />
