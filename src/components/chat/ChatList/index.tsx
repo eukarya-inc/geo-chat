@@ -48,6 +48,7 @@ export function ChatList({
     const [hoveredDashboardId, setHoveredDashboardId] = useState<string | null>(null);
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState<string>('');
+    const [dashboardToDelete, setDashboardToDelete] = useState<{id: string, title: string} | null>(null);
 
     const handleStartEditing = (dashboardId: string, currentTitle: string) => {
         setEditingDashboardId(dashboardId);
@@ -73,6 +74,21 @@ export function ChatList({
         } else if (e.key === 'Escape') {
             handleCancelEdit();
         }
+    };
+
+    const handleDeleteClick = (dashboardId: string, dashboardTitle: string) => {
+        setDashboardToDelete({ id: dashboardId, title: dashboardTitle });
+    };
+
+    const handleConfirmDelete = () => {
+        if (dashboardToDelete && onDeleteDashboard) {
+            onDeleteDashboard(dashboardToDelete.id);
+            setDashboardToDelete(null);
+        }
+    };
+
+    const handleCancelDelete = () => {
+        setDashboardToDelete(null);
     };
 
     return (
@@ -238,7 +254,7 @@ export function ChatList({
                                                 data-testid="dashboard-delete-button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    onDeleteDashboard(dashboard.id);
+                                                    handleDeleteClick(dashboard.id, dashboard.title);
                                                 }}
                                                 className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
                                             >
@@ -252,6 +268,35 @@ export function ChatList({
                     </div>
                 )}
             </div>
+
+            {/* Dashboard Delete Confirmation Modal */}
+            {dashboardToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            Delete Dashboard
+                        </h3>
+                        <p className="text-gray-600 mb-4">
+                            Are you sure you want to delete "{dashboardToDelete.title}"? This action cannot be undone.
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={handleCancelDelete}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                data-testid="confirm-delete-dashboard"
+                                onClick={handleConfirmDelete}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

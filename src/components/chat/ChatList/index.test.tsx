@@ -73,7 +73,7 @@ describe('ChatList', () => {
     expect(screen.queryByTestId('dashboard-delete-button')).toBeInTheDocument();
   });
 
-  it('should call onDeleteDashboard when delete button is clicked', () => {
+  it('should show confirmation dialog when delete button is clicked', () => {
     const mockOnDeleteDashboard = vi.fn();
     render(<ChatList {...defaultProps} onDeleteDashboard={mockOnDeleteDashboard} />);
 
@@ -91,7 +91,14 @@ describe('ChatList', () => {
       fireEvent.click(deleteButton);
     }
 
-    expect(mockOnDeleteDashboard).toHaveBeenCalledWith('dashboard-1');
+    // Should show confirmation dialog
+    expect(screen.getByText('Delete Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Are you sure you want to delete "Test Dashboard 1"? This action cannot be undone.')).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('confirm-delete-dashboard')).toBeInTheDocument();
+
+    // Should not have called delete yet
+    expect(mockOnDeleteDashboard).not.toHaveBeenCalled();
   });
 
   it('should not show delete button when onDeleteDashboard is not provided', () => {
@@ -130,6 +137,66 @@ describe('ChatList', () => {
     expect(screen.queryByTestId('dashboard-delete-button')).not.toBeInTheDocument();
   });
 
+  it('should call onDeleteDashboard when confirmation is confirmed', () => {
+    const mockOnDeleteDashboard = vi.fn();
+    render(<ChatList {...defaultProps} onDeleteDashboard={mockOnDeleteDashboard} />);
+
+    const dashboard1Text = screen.getByText('Test Dashboard 1');
+    const dashboardContainer = dashboard1Text.closest('div')?.parentElement;
+
+    // Hover over dashboard to show delete button
+    if (dashboardContainer) {
+      fireEvent.mouseEnter(dashboardContainer);
+    }
+
+    // Click delete button to show confirmation
+    const deleteButton = screen.queryByTestId('dashboard-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Click confirm button
+    const confirmButton = screen.queryByTestId('confirm-delete-dashboard');
+    if (confirmButton) {
+      fireEvent.click(confirmButton);
+    }
+
+    // Should have called delete
+    expect(mockOnDeleteDashboard).toHaveBeenCalledWith('dashboard-1');
+
+    // Confirmation dialog should be closed
+    expect(screen.queryByText('Delete Dashboard')).not.toBeInTheDocument();
+  });
+
+  it('should not call onDeleteDashboard when confirmation is canceled', () => {
+    const mockOnDeleteDashboard = vi.fn();
+    render(<ChatList {...defaultProps} onDeleteDashboard={mockOnDeleteDashboard} />);
+
+    const dashboard1Text = screen.getByText('Test Dashboard 1');
+    const dashboardContainer = dashboard1Text.closest('div')?.parentElement;
+
+    // Hover over dashboard to show delete button
+    if (dashboardContainer) {
+      fireEvent.mouseEnter(dashboardContainer);
+    }
+
+    // Click delete button to show confirmation
+    const deleteButton = screen.queryByTestId('dashboard-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Click cancel button
+    const cancelButton = screen.getByText('Cancel');
+    fireEvent.click(cancelButton);
+
+    // Should not have called delete
+    expect(mockOnDeleteDashboard).not.toHaveBeenCalled();
+
+    // Confirmation dialog should be closed
+    expect(screen.queryByText('Delete Dashboard')).not.toBeInTheDocument();
+  });
+
   it('should stop event propagation when delete button is clicked', () => {
     const mockOnSelectDashboard = vi.fn();
     const mockOnDeleteDashboard = vi.fn();
@@ -156,9 +223,10 @@ describe('ChatList', () => {
       fireEvent.click(deleteButton);
     }
 
-    // Should call delete but not select
-    expect(mockOnDeleteDashboard).toHaveBeenCalledWith('dashboard-1');
+    // Should show confirmation dialog but not call select or delete yet
+    expect(screen.getByText('Delete Dashboard')).toBeInTheDocument();
     expect(mockOnSelectDashboard).not.toHaveBeenCalled();
+    expect(mockOnDeleteDashboard).not.toHaveBeenCalled();
   });
 
   it('should highlight selected dashboard', () => {
