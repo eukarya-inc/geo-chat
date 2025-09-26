@@ -77,11 +77,11 @@ export function useChartVisualization(
         }
     }, [selectedTable, currentChatState?.chartSpecs]);
 
-    // Generate chart automatically when table is selected
+    // Generate chart when graph is turned on for the first time
     useEffect(() => {
         const generateChartIfNeeded = async () => {
-            // Only generate if table is selected, connection exists, and no chart exists
-            if (!selectedTable || !dbContext || !connection || !schemaName) {
+            // Only generate if graph is shown, table is selected, and no chart exists
+            if (!showGraph || !selectedTable || !dbContext || !connection || !schemaName) {
                 return;
             }
 
@@ -128,7 +128,7 @@ export function useChartVisualization(
         };
 
         generateChartIfNeeded();
-    }, [selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
+    }, [showGraph, selectedTable, dbContext, schemaName, connection, currentChatState?.chartSpecs, updateChartSpecInState]);
 
     // Function to toggle graph visibility for current table
     // Note: Not needed anymore since visibility is determined by chartSpec existence
