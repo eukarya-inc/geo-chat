@@ -88,8 +88,8 @@ describe('useDashboardManagement', () => {
       });
 
       // First dashboard should be deleted, second should remain
-      expect(result.current.dashboards[dashboard1.id]).toBeUndefined();
-      expect(result.current.dashboards[dashboard2.id]).toBeDefined();
+      expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
+      expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
     }
   });
 
