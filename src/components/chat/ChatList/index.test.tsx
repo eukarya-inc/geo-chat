@@ -264,4 +264,145 @@ describe('ChatList', () => {
 
     expect(mockOnCreateDashboard).toHaveBeenCalled();
   });
+
+  // Chat deletion tests
+  it('should show delete button on chat hover', () => {
+    render(<ChatList {...defaultProps} />);
+
+    const chat1Text = screen.getByText('Test Chat 1');
+    const chatContainer = chat1Text.closest('div')?.parentElement;
+
+    // Initially, delete button should not be visible
+    expect(screen.queryByTestId('chat-delete-button')).not.toBeInTheDocument();
+
+    // Hover over chat container
+    if (chatContainer) {
+      fireEvent.mouseEnter(chatContainer);
+    }
+
+    // Delete button should now be visible
+    expect(screen.queryByTestId('chat-delete-button')).toBeInTheDocument();
+  });
+
+  it('should show inline confirmation when chat delete button is clicked', () => {
+    const mockOnDeleteChat = vi.fn();
+    render(<ChatList {...defaultProps} onDeleteChat={mockOnDeleteChat} />);
+
+    const chat1Text = screen.getByText('Test Chat 1');
+    const chatContainer = chat1Text.closest('div')?.parentElement;
+
+    // Hover over chat to show delete button
+    if (chatContainer) {
+      fireEvent.mouseEnter(chatContainer);
+    }
+
+    // Find and click delete button
+    const deleteButton = screen.queryByTestId('chat-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Should show inline confirmation
+    expect(screen.getByText('Delete "Test Chat 1"?')).toBeInTheDocument();
+    expect(screen.getByText('This cannot be undone.')).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('confirm-delete-chat')).toBeInTheDocument();
+
+    // Should not have called delete yet
+    expect(mockOnDeleteChat).not.toHaveBeenCalled();
+  });
+
+  it('should call onDeleteChat when chat confirmation is confirmed', () => {
+    const mockOnDeleteChat = vi.fn();
+    render(<ChatList {...defaultProps} onDeleteChat={mockOnDeleteChat} />);
+
+    const chat1Text = screen.getByText('Test Chat 1');
+    const chatContainer = chat1Text.closest('div')?.parentElement;
+
+    // Hover over chat to show delete button
+    if (chatContainer) {
+      fireEvent.mouseEnter(chatContainer);
+    }
+
+    // Click delete button to show confirmation
+    const deleteButton = screen.queryByTestId('chat-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Click confirm button
+    const confirmButton = screen.queryByTestId('confirm-delete-chat');
+    if (confirmButton) {
+      fireEvent.click(confirmButton);
+    }
+
+    // Should have called delete
+    expect(mockOnDeleteChat).toHaveBeenCalledWith('chat-1');
+
+    // Inline confirmation should be gone and normal chat item should be back
+    expect(screen.queryByText('Delete "Test Chat 1"?')).not.toBeInTheDocument();
+    expect(screen.getByText('Test Chat 1')).toBeInTheDocument();
+  });
+
+  it('should not call onDeleteChat when chat confirmation is canceled', () => {
+    const mockOnDeleteChat = vi.fn();
+    render(<ChatList {...defaultProps} onDeleteChat={mockOnDeleteChat} />);
+
+    const chat1Text = screen.getByText('Test Chat 1');
+    const chatContainer = chat1Text.closest('div')?.parentElement;
+
+    // Hover over chat to show delete button
+    if (chatContainer) {
+      fireEvent.mouseEnter(chatContainer);
+    }
+
+    // Click delete button to show confirmation
+    const deleteButton = screen.queryByTestId('chat-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Click cancel button
+    const cancelButton = screen.getByText('Cancel');
+    fireEvent.click(cancelButton);
+
+    // Should not have called delete
+    expect(mockOnDeleteChat).not.toHaveBeenCalled();
+
+    // Inline confirmation should be gone and normal chat item should be back
+    expect(screen.queryByText('Delete "Test Chat 1"?')).not.toBeInTheDocument();
+    expect(screen.getByText('Test Chat 1')).toBeInTheDocument();
+  });
+
+  it('should stop event propagation when chat delete button is clicked', () => {
+    const mockOnSelectChat = vi.fn();
+    const mockOnDeleteChat = vi.fn();
+
+    render(
+      <ChatList
+        {...defaultProps}
+        onSelectChat={mockOnSelectChat}
+        onDeleteChat={mockOnDeleteChat}
+      />
+    );
+
+    const chat1Text = screen.getByText('Test Chat 1');
+    const chatContainer = chat1Text.closest('div')?.parentElement;
+
+    // Hover over chat to show delete button
+    if (chatContainer) {
+      fireEvent.mouseEnter(chatContainer);
+    }
+
+    // Find and click delete button
+    const deleteButton = screen.queryByTestId('chat-delete-button');
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    // Should show inline confirmation but not call select or delete yet
+    expect(screen.getByText('Delete "Test Chat 1"?')).toBeInTheDocument();
+    expect(mockOnSelectChat).not.toHaveBeenCalled();
+    expect(mockOnDeleteChat).not.toHaveBeenCalled();
+  });
 });

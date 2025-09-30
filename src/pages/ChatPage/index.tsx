@@ -524,32 +524,10 @@ function ChatPage() {
                                                     <div className="flex items-center gap-2">
                                                         <button
                                                             onClick={() => setShowChartConfig(!showChartConfig)}
-                                                            className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100"
+                                                            className="p-2 text-gray-700 hover:text-gray-900 transition-colors rounded-md hover:bg-gray-100"
                                                             title="Configure chart"
                                                         >
                                                             <CogIcon className="w-5 h-5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (getAllDashboards().length > 0) {
-                                                                    setExportType('chart');
-                                                                    setShowExportModal(true);
-                                                                }
-                                                            }}
-                                                            disabled={getAllDashboards().length === 0}
-                                                            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
-                                                                getAllDashboards().length > 0
-                                                                    ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer shadow-sm'
-                                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                            }`}
-                                                            title={
-                                                                getAllDashboards().length > 0
-                                                                    ? "Export this chart to a dashboard"
-                                                                    : "⚠️ No dashboards available - Create a dashboard first to export charts"
-                                                            }
-                                                        >
-                                                            <ArrowUpTrayIcon className="w-3.5 h-3.5" />
-                                                            <span>Export</span>
                                                         </button>
                                                     </div>
                                                 </div>
@@ -570,8 +548,8 @@ function ChatPage() {
                                             {/* Configuration Panel - Horizontal Split */}
                                             {showChartConfig && (
                                                 <div className="border-t border-gray-200 bg-white" style={{ height: '300px' }}>
-                                                    <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
-                                                        <h4 className="text-sm font-medium text-gray-900">Chart Configuration</h4>
+                                                    <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
+                                                        <h4 className="text-xs font-medium text-gray-900">Chart Configuration</h4>
                                                         <button
                                                             onClick={() => setShowChartConfig(false)}
                                                             className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
@@ -589,6 +567,60 @@ function ChatPage() {
                                                                 dbContext={dbContext}
                                                                 schema={schemaName || 'main'}
                                                                 onSpecChange={handleChartSpecChange}
+                                                                showSaveButton={true}
+                                                                onSave={() => {
+                                                                    // Show confirmation dialog before saving
+                                                                    const chartTitle = chartSpec.title || 'chart';
+                                                                    const chartElement = document.querySelector('.vega-embed canvas, .vega-embed svg');
+
+                                                                    if (!chartElement) {
+                                                                        alert('Chart not found. Please make sure the chart is displayed.');
+                                                                        return;
+                                                                    }
+
+                                                                    const format = chartElement.tagName === 'CANVAS' ? 'PNG' : 'SVG';
+                                                                    const confirmed = window.confirm(
+                                                                        `Do you want to save "${chartTitle}" as ${format} image?\n\nThis will download the file to your computer.`
+                                                                    );
+
+                                                                    if (confirmed) {
+                                                                        // Proceed with save
+                                                                        if (chartElement.tagName === 'CANVAS') {
+                                                                            // Save as PNG
+                                                                            const canvas = chartElement as HTMLCanvasElement;
+                                                                            const link = document.createElement('a');
+                                                                            link.download = `${chartTitle}.png`;
+                                                                            link.href = canvas.toDataURL();
+                                                                            link.click();
+                                                                        } else if (chartElement.tagName === 'svg') {
+                                                                            // Save as SVG
+                                                                            const svg = chartElement as SVGElement;
+                                                                            const serializer = new XMLSerializer();
+                                                                            const svgString = serializer.serializeToString(svg);
+                                                                            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                                                                            const link = document.createElement('a');
+                                                                            link.download = `${chartTitle}.svg`;
+                                                                            link.href = URL.createObjectURL(blob);
+                                                                            link.click();
+                                                                            URL.revokeObjectURL(link.href);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                isSaveDisabled={false}
+                                                                saveTooltip="Save chart as PNG or SVG image"
+                                                                showExportButton={true}
+                                                                onExport={() => {
+                                                                    if (getAllDashboards().length > 0) {
+                                                                        setExportType('chart');
+                                                                        setShowExportModal(true);
+                                                                    }
+                                                                }}
+                                                                isExportDisabled={getAllDashboards().length === 0}
+                                                                exportTooltip={
+                                                                    getAllDashboards().length > 0
+                                                                        ? "Export this chart to a dashboard"
+                                                                        : "⚠️ No dashboards available - Create a dashboard first to export charts"
+                                                                }
                                                             />
                                                         )}
                                                     </div>
