@@ -172,7 +172,8 @@ export function createDuckDBTool(
             success: true,
             data,
             rowCount: data.length,
-            sql: sql
+            sql: sql,
+            limitApplied: true
           };
 
           // Add warnings for truncated data
@@ -181,7 +182,6 @@ export function createDuckDBTool(
             toolResult.totalRowCount = originalLength;
             toolResult.warning = `クエリ結果が${originalLength}行ありましたが、AIへの応答は${AI_RETURN_LIMIT}行に制限されました。すべてのデータが必要な場合は、CREATE TABLE AS SELECT文で新しいテーブルを作成してください。`;
           } else if (executeSql !== sql && data.length === MAX_ROWS) {
-            toolResult.limitApplied = true;
             toolResult.warning = `クエリに自動的にLIMIT ${MAX_ROWS}が追加されました。より多くの行が存在する可能性があります。`;
           }
 

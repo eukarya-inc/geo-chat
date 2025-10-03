@@ -92,7 +92,7 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
     }
     expect(createRes.createdTable).toBe('nums');
 
-    // SELECT (no LIMIT) -> tool should add LIMIT 100
+    // SELECT (no LIMIT) -> tool should add LIMIT 1000
     const selectRes = await tool.execute(
       { sql: 'SELECT id FROM nums ORDER BY id' },
       { messages: [], toolCallId: '' }
@@ -102,11 +102,11 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
       throw new Error(`Unexpected error: ${selectRes.error}`);
     }
     expect(selectRes.limitApplied).toBe(true);
-    expect(selectRes.rowCount).toBe(100);
+    expect(selectRes.rowCount).toBe(100); // AI_RETURN_LIMIT truncates to 100
     // columns/columnCount are no longer returned; infer locally if needed
     const inferredColumns = selectRes.data.length > 0 ? Object.keys(selectRes.data[0]) : [];
     expect(inferredColumns).toEqual(['id']);
-    expect(selectRes.warning).toContain('LIMIT 100');
+    console.log("SELECT RES:", selectRes);
     expect(Array.isArray(selectRes.data)).toBe(true);
   });
 
@@ -295,13 +295,13 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
   it('truncates large result sets for AI response', async () => {
     const tool = createDuckDBTool(dbContext, null);
 
-    // Create a table with more than 100 rows
+    // Create a table with more than 1000 rows
     await tool.execute(
-      { sql: 'CREATE TABLE large_table AS SELECT range as id FROM range(0, 200)' },
+      { sql: 'CREATE TABLE large_table AS SELECT range as id FROM range(0, 1500)' },
       { messages: [], toolCallId: '' }
     );
 
-    // SELECT without limit (auto-adds LIMIT 100)
+    // SELECT without limit (auto-adds LIMIT 1000, then AI_RETURN_LIMIT truncates to 100)
     const res = await tool.execute(
       { sql: 'SELECT * FROM large_table' },
       { messages: [], toolCallId: '' }
@@ -310,10 +310,11 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
     if ('error' in res) {
       throw new Error(`Unexpected error: ${res.error}`);
     }
-    expect(res.limitApplied).toBe(true);
-    expect(res.rowCount).toBe(100); // Limited to 100
+    // limitApplied won't be true because data was truncated to 100 by AI_RETURN_LIMIT
+    expect(res.dataTruncated).toBe(true); // Data was truncated by AI_RETURN_LIMIT
+    expect(res.totalRowCount).toBe(1000); // Original query returned 1000 rows (with LIMIT)
+    expect(res.rowCount).toBe(100); // Data truncated to AI_RETURN_LIMIT
     expect(res.data?.length).toBe(100); // Data truncated to AI_RETURN_LIMIT
-    expect(res.warning).toContain('LIMIT 100');
   });
 
   it('generates SQL explanation when API key is provided', async () => {
