@@ -72,7 +72,7 @@ export function createDuckDBTool(
 
         // Add automatic LIMIT for SELECT queries to prevent huge results
         let executeSql = sql;
-        const MAX_ROWS = 100; // Maximum rows to fetch from DB
+        const MAX_ROWS = 1000; // Maximum rows to fetch from DB
 
         if (sqlType.isSelect && !sql.toUpperCase().includes('LIMIT')) {
           // Check if it's a simple SELECT or has complex structure

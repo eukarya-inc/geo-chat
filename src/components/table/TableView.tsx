@@ -80,20 +80,28 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     if (columns.length > 0 && containerWidth > 0) {
       const minColumnWidth = 100;
       const maxColumnWidth = 200;
-      // Calculate width but cap it at maxColumnWidth
+      // Calculate width but cap it at maxColumnWidth (exclude row number column from calculation)
+      const dataColumnCount = columns.length - 1; // Subtract 1 for row number column
       const calculatedWidth = Math.min(
         maxColumnWidth,
-        Math.max(minColumnWidth, Math.floor(containerWidth / columns.length))
+        Math.max(minColumnWidth, Math.floor(containerWidth / Math.max(1, dataColumnCount)))
       );
 
-      const updatedColumns = columns.map(col => ({
-        ...col,
-        width: calculatedWidth
-      }));
+      const updatedColumns = columns.map(col => {
+        // Keep row number column at fixed width
+        if (col.id === '__row_number__') {
+          return col;
+        }
+        return {
+          ...col,
+          width: calculatedWidth
+        };
+      });
 
       // Only update if width actually changed to avoid infinite loop
-      const firstCol = columns[0];
-      const firstWidth = 'width' in firstCol ? firstCol.width : undefined;
+      // Check second column (first data column) since first is row number
+      const firstDataCol = columns[1];
+      const firstWidth = firstDataCol && 'width' in firstDataCol ? firstDataCol.width : undefined;
       if (firstWidth !== calculatedWidth) {
         setColumns(updatedColumns);
       }
@@ -130,7 +138,14 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
           Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
         );
 
-        const gridColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
+        // Add row number column as the first column
+        const rowNumberColumn: GridColumn = {
+          id: '__row_number__',
+          title: 'S.No',
+          width: 60,
+        };
+
+        const dataColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
           // Format column title with name and type
           let title = col.name;
           if (sortColumn === col.name) {
@@ -145,6 +160,8 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             width: calculatedWidth,
           };
         });
+
+        const gridColumns: GridColumn[] = [rowNumberColumn, ...dataColumns];
 
         // Store column types for later use
         const types: Record<string, string> = {};
@@ -253,6 +270,18 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     (cell: Item): GridCell => {
       const [col, row] = cell;
 
+      // First column is row number
+      if (col === 0) {
+        const rowNumber = String(row + 1); // 1-based indexing
+        return {
+          kind: GridCellKind.Text,
+          data: rowNumber,
+          displayData: rowNumber,
+          allowOverlay: false,
+          readonly: true,
+        };
+      }
+
       // Find which window contains this row
       const windowSize = 100;
       const windowStart = Math.floor(row / windowSize) * windowSize;
@@ -272,10 +301,12 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
       }
 
       // Convert only the specific cell value from Arrow
+      // Adjust column index since first column is row number
+      const dataColIndex = col - 1;
       const rowInWindow = row - windowStart;
       const columnName = columns[col]?.id;
       const columnType = columnName ? columnTypes[columnName] : undefined;
-      const value = getValueFromArrowTable(arrowTable, rowInWindow, col, columnType);
+      const value = getValueFromArrowTable(arrowTable, rowInWindow, dataColIndex, columnType);
       // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
       const displayValue = value === null ? "NULL" : String(value);
 
@@ -315,6 +346,9 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   // Handle column resize
   const handleColumnResize = useCallback(
     (column: GridColumn, newSize: number) => {
+      // Don't allow resizing row number column
+      if (column.id === '__row_number__') return;
+
       setColumns(prevColumns =>
         prevColumns.map(col =>
           col.id === column.id
@@ -329,6 +363,9 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   // Handle header click for sorting
   const handleHeaderClicked = useCallback(
     (colIndex: number) => {
+      // Don't allow sorting on row number column
+      if (colIndex === 0) return;
+
       const column = columns[colIndex];
       if (!column) return;
 
@@ -357,6 +394,11 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
   useEffect(() => {
     setColumns(prevColumns =>
       prevColumns.map(col => {
+        // Skip row number column
+        if (col.id === '__row_number__') {
+          return col;
+        }
+
         // Get the column type from columnTypes
         const colType = columnTypes[col.id || ''] || '';
 
