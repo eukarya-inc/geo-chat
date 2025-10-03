@@ -55,7 +55,7 @@ export async function* createAIStreamGenerator({
       },
     });
     const result = await streamText({
-      model: anthropicClient('claude-3-5-sonnet-20241022'),
+      model: anthropicClient('claude-sonnet-4-5-20250929'),
       system: generateSystemPrompt(),
       messages,
       tools: {
