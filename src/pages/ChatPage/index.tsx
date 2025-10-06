@@ -153,6 +153,11 @@ function ChatPage() {
             return;
         }
 
+        // Persist configured changes to remote state before exporting
+        if (configuredChartSpec && updateChartFromAI) {
+            updateChartFromAI(selectedTable, configuredChartSpec.spec);
+        }
+
         const dashboard = getDashboard(dashboardId);
 
         if (!dashboard) {
@@ -206,10 +211,8 @@ function ChatPage() {
     // Chart configuration handlers
     const handleChartSpecChange = (newSpec: ChartSpec) => {
         setConfiguredChartSpec(newSpec);
-        // Update the AI state as well
-        if (selectedTable && updateChartFromAI) {
-            updateChartFromAI(selectedTable, newSpec.spec);
-        }
+        // Don't update remote state immediately with auto-apply to avoid feedback loops
+        // Remote state will be updated when chart is saved/exported
     };
 
     // Determine which chart spec to display - prefer configured version
@@ -547,26 +550,16 @@ function ChatPage() {
 
                                             {/* Configuration Panel - Horizontal Split */}
                                             {showChartConfig && (
-                                                <div className="border-t border-gray-200 bg-white" style={{ height: '300px' }}>
-                                                    <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
-                                                        <h4 className="text-xs font-medium text-gray-900">Chart Configuration</h4>
-                                                        <button
-                                                            onClick={() => setShowChartConfig(false)}
-                                                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                                                            title="Close configuration"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                    <div className="overflow-auto p-4" style={{ height: 'calc(300px - 57px)' }}>
+                                                <div className="border-t border-gray-200 bg-white" style={{ height: '280px' }}>
+                                                    <div className="overflow-auto p-3" style={{ height: '100%' }}>
                                                         {chartSpec && (
                                                             <ChartConfigForm
                                                                 chartSpec={chartSpec}
                                                                 dbContext={dbContext}
                                                                 schema={schemaName || 'main'}
                                                                 onSpecChange={handleChartSpecChange}
+                                                                autoApplyChanges={true}
+                                                                showApplyButton={false}
                                                                 showSaveButton={true}
                                                                 onSave={() => {
                                                                     // Show confirmation dialog before saving

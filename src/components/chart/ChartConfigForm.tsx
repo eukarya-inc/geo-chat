@@ -266,14 +266,15 @@ export function ChartConfigForm({
         if (autoApplyChanges && columns.length > 0) {
             const newVegaSpec = generateVegaSpec();
             const updatedSpec: ChartSpec = {
-                ...chartSpec,
+                id: chartSpec.id, // Keep the same ID
                 title: config.title,
                 spec: newVegaSpec as ChartSpec['spec'],
                 timestamp: new Date()
             };
             onSpecChange(updatedSpec);
         }
-    }, [config, columns, chartSpec, generateVegaSpec, onSpecChange, autoApplyChanges]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config, columns, autoApplyChanges]); // Removed chartSpec, generateVegaSpec, onSpecChange to avoid infinite loop
 
     return (
         <div>
