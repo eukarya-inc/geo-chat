@@ -292,7 +292,7 @@ const tools = {
 };
 
 const result = await generateText({
-  model: anthropic('claude-3-5-sonnet'),
+  model: anthropic('claude-sonnet-4-5'),
   tools,
   messages
 });
