@@ -122,18 +122,24 @@ export function useChatManagement(
       await dbContext.deleteSchema(schemaName);
     }
 
-    deleteChat(chatId);
-
-    // If this was the selected chat, notify about the new selection
+    // If this was the selected chat, handle selection before deletion
     if (selectedChatId === chatId) {
       const remainingChatIds = Object.keys(chatsRecord).filter(id => id !== chatId);
       if (remainingChatIds.length > 0) {
+        // Select the first remaining chat
         const nextChatId = remainingChatIds[0];
+        selectChat(nextChatId);
         const nextSchemaName = chatIdToSchemaName(nextChatId);
         // Notify table change
         dbContext.notifyTableChange(undefined, nextSchemaName);
+      } else {
+        // No remaining chats - clear selection
+        selectChat('');
       }
     }
+
+    // Now delete the chat
+    deleteChat(chatId);
   };
 
   // Handle chat selection

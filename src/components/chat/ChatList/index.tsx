@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PlusIcon, TrashIcon, ChartBarIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
 import type { StructuredMessage } from '../../../types/message';
 import type { MapSpec, Dashboard } from '../../../store/remoteAtoms';
@@ -49,6 +49,7 @@ export function ChatList({
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState<string>('');
     const [dashboardToDelete, setDashboardToDelete] = useState<{id: string, title: string} | null>(null);
+    const [chatToDelete, setChatToDelete] = useState<{id: string, title: string} | null>(null);
 
     const handleStartEditing = (dashboardId: string, currentTitle: string) => {
         setEditingDashboardId(dashboardId);
@@ -90,6 +91,34 @@ export function ChatList({
     const handleCancelDelete = () => {
         setDashboardToDelete(null);
     };
+
+    const handleChatDeleteClick = (chatId: string, chatTitle: string) => {
+        setChatToDelete({ id: chatId, title: chatTitle });
+        // Clear hover state when showing delete confirmation
+        setHoveredChatId(null);
+    };
+
+    const handleConfirmChatDelete = () => {
+        if (chatToDelete && onDeleteChat) {
+            onDeleteChat(chatToDelete.id);
+            setChatToDelete(null);
+            // Clear hovered state for the deleted chat to prevent UI issues
+            if (hoveredChatId === chatToDelete.id) {
+                setHoveredChatId(null);
+            }
+        }
+    };
+
+    const handleCancelChatDelete = () => {
+        setChatToDelete(null);
+    };
+
+    // Clear chatToDelete state if the chat no longer exists in the chats array
+    useEffect(() => {
+        if (chatToDelete && !chats.find(chat => chat.id === chatToDelete.id)) {
+            setChatToDelete(null);
+        }
+    }, [chats, chatToDelete]);
 
     return (
         <div className="h-full flex flex-col">
@@ -139,40 +168,79 @@ export function ChatList({
                         </div>
                     ) : (
                         <div className="p-2">
-                            {chats.map((chat) => (
-                                <div
-                                    key={chat.id}
-                                    className={`group relative flex items-center gap-2 p-3 mb-1 rounded cursor-pointer transition-colors ${
-                                        selectedChatId === chat.id && !selectedDashboardId
-                                            ? 'bg-blue-50 border border-blue-200'
-                                            : 'hover:bg-gray-100'
-                                    }`}
-                                    onClick={() => onSelectChat(chat.id)}
-                                    onMouseEnter={() => setHoveredChatId(chat.id)}
-                                    onMouseLeave={() => setHoveredChatId(null)}
-                                >
-                                    <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium truncate">
-                                            {chat.title}
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                            {chat.createdAt.toLocaleDateString('ja-JP')}
-                                        </div>
+                            {chats.map((chat) => {
+                                const isDeleting = chatToDelete && chatToDelete.id === chat.id;
+
+                                return (
+                                    <div key={chat.id} className="mb-1">
+                                        {/* Delete confirmation view */}
+                                        {isDeleting && (
+                                            <div className="flex items-center gap-2 p-3 rounded bg-red-50 border border-red-200">
+                                                <TrashIcon className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-medium text-red-900">
+                                                        Delete "{chat.title}"?
+                                                    </div>
+                                                    <div className="text-xs text-red-600 mt-0.5">
+                                                        This cannot be undone.
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleCancelChatDelete}
+                                                        className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        data-testid="confirm-delete-chat"
+                                                        onClick={handleConfirmChatDelete}
+                                                        className="px-2 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Normal chat display */}
+                                        {!isDeleting && (
+                                            <div
+                                                className={`group relative flex items-center gap-2 p-3 rounded cursor-pointer transition-colors ${
+                                                    selectedChatId === chat.id && !selectedDashboardId
+                                                        ? 'bg-blue-50 border border-blue-200'
+                                                        : 'hover:bg-gray-100'
+                                                }`}
+                                                onClick={() => onSelectChat(chat.id)}
+                                                onMouseEnter={() => setHoveredChatId(chat.id)}
+                                                onMouseLeave={() => setHoveredChatId(null)}
+                                            >
+                                                <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium truncate">
+                                                        {chat.title}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {chat.createdAt.toLocaleDateString('ja-JP')}
+                                                    </div>
+                                                </div>
+                                                {hoveredChatId === chat.id && (
+                                                    <button
+                                                        data-testid="chat-delete-button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleChatDeleteClick(chat.id, chat.title);
+                                                        }}
+                                                        className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                    {hoveredChatId === chat.id && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onDeleteChat(chat.id);
-                                            }}
-                                            className="absolute right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
