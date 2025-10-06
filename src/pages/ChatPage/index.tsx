@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AIChat from '../../components/chat';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
@@ -212,8 +212,18 @@ function ChatPage() {
     const handleChartSpecChange = (newSpec: ChartSpec) => {
         setConfiguredChartSpec(newSpec);
         // Don't update remote state immediately with auto-apply to avoid feedback loops
-        // Remote state will be updated when chart is saved/exported
+        // Remote state will be updated when chart is saved/exported or tab is switched
     };
+
+    // Persist configured chart changes when switching away from chart tab
+    useEffect(() => {
+        // When leaving chart tab, save configured changes to remote state
+        if (activeTab !== 'chart' && configuredChartSpec && selectedTable && updateChartFromAI) {
+            updateChartFromAI(selectedTable, configuredChartSpec.spec);
+            // Clear local configured state since it's now in remote state
+            setConfiguredChartSpec(null);
+        }
+    }, [activeTab, configuredChartSpec, selectedTable, updateChartFromAI]);
 
     // Determine which chart spec to display - prefer configured version
     const displayChartSpec = configuredChartSpec || chartSpec;
