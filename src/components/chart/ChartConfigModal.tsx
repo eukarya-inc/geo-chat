@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { ChartConfigForm } from './ChartConfigForm';
 import type { ChartSpec } from '../../types/chart';
@@ -22,6 +23,22 @@ export function ChartConfigModal({
     onUpdateChart,
     vizId
 }: ChartConfigModalProps) {
+    useEffect(() => {
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const handleSpecChange = (newSpec: ChartSpec) => {
