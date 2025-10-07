@@ -301,37 +301,41 @@ function ChatPage() {
         };
     }, [showChartDropdown]);
 
-    // Chart download handlers
-    const handleDownloadPNG = () => {
-        const chartElement = document.querySelector('.vega-embed canvas');
-        if (chartElement) {
-            const canvas = chartElement as HTMLCanvasElement;
+    // Chart download handler - automatically detects PNG or SVG
+    const handleDownloadChart = () => {
+        const chartTitle = displayChartSpec?.title || 'chart';
+
+        // Try PNG first (canvas)
+        const canvasElement = document.querySelector('.vega-embed canvas');
+        if (canvasElement) {
+            const canvas = canvasElement as HTMLCanvasElement;
             const link = document.createElement('a');
-            link.download = `${displayChartSpec?.title || 'chart'}.png`;
+            link.download = `${chartTitle}.png`;
             link.href = canvas.toDataURL();
             link.click();
-        } else {
-            alert('Chart canvas not found. Please try again.');
+            setShowChartDropdown(false);
+            return;
         }
-        setShowChartDropdown(false);
-    };
 
-    const handleDownloadSVG = () => {
-        const chartElement = document.querySelector('.vega-embed svg');
-        if (chartElement) {
-            const svg = chartElement as SVGElement;
+        // Try SVG if canvas not found
+        const svgElement = document.querySelector('.vega-embed svg');
+        if (svgElement) {
+            const svg = svgElement as SVGElement;
             const serializer = new XMLSerializer();
             const svgString = serializer.serializeToString(svg);
             const blob = new Blob([svgString], { type: 'image/svg+xml' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.download = `${displayChartSpec?.title || 'chart'}.svg`;
+            link.download = `${chartTitle}.svg`;
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);
-        } else {
-            alert('SVG element not found. Please try PNG export instead.');
+            setShowChartDropdown(false);
+            return;
         }
+
+        // If neither found
+        alert('Chart not found. Please ensure the chart is fully rendered and try again.');
         setShowChartDropdown(false);
     };
 
@@ -627,28 +631,14 @@ function ChatPage() {
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 e.stopPropagation();
-                                                                                handleDownloadPNG();
+                                                                                handleDownloadChart();
                                                                             }}
                                                                             onMouseDown={(e) => e.stopPropagation()}
                                                                             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                                                             type="button"
                                                                         >
                                                                             <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                                                            Download as PNG
-                                                                        </button>
-
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                handleDownloadSVG();
-                                                                            }}
-                                                                            onMouseDown={(e) => e.stopPropagation()}
-                                                                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                                                            type="button"
-                                                                        >
-                                                                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                                                            Download as SVG
+                                                                            Download Chart Image
                                                                         </button>
                                                                     </div>
                                                                 </div>
