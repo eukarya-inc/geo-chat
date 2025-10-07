@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { ChartConfigForm } from './ChartConfigForm';
 import type { ChartSpec } from '../../types/chart';
@@ -23,15 +22,11 @@ export function ChartConfigModal({
     onUpdateChart,
     vizId
 }: ChartConfigModalProps) {
-    const [updatedSpec, setUpdatedSpec] = useState<ChartSpec | null>(null);
-
     if (!isOpen) return null;
 
-    const handleApplyChanges = () => {
-        if (updatedSpec) {
-            onUpdateChart(vizId, updatedSpec);
-        }
-        onClose();
+    const handleSpecChange = (newSpec: ChartSpec) => {
+        // Auto-apply changes immediately
+        onUpdateChart(vizId, newSpec);
     };
 
     return (
@@ -54,7 +49,7 @@ export function ChartConfigModal({
                         chartSpec={chartSpec}
                         dbContext={dbContext}
                         schema={schema}
-                        onSpecChange={(newSpec) => setUpdatedSpec(newSpec)}
+                        onSpecChange={handleSpecChange}
                         showApplyButton={false}
                         autoApplyChanges={true}
                     />
@@ -67,13 +62,6 @@ export function ChartConfigModal({
                         className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                     >
                         Close
-                    </button>
-                    <button
-                        onClick={handleApplyChanges}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                        disabled={!updatedSpec}
-                    >
-                        Apply Changes
                     </button>
                 </div>
             </div>
