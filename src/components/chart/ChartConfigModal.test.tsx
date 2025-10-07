@@ -64,7 +64,6 @@ describe('ChartConfigModal', () => {
 
     expect(screen.getByText('Chart Configuration')).toBeInTheDocument();
     expect(screen.getByText('Close')).toBeInTheDocument();
-    expect(screen.getByText('Apply Changes')).toBeInTheDocument();
   });
 
   it('should render the chart config form', () => {
@@ -73,10 +72,19 @@ describe('ChartConfigModal', () => {
     expect(screen.getByTestId('chart-config-form')).toBeInTheDocument();
   });
 
-  it('should have Apply Changes button disabled initially', () => {
+  it('should auto-apply changes when spec is updated', () => {
     render(<ChartConfigModal {...defaultProps} />);
 
-    const applyButton = screen.getByText('Apply Changes');
-    expect(applyButton).toBeDisabled();
+    const updateButton = screen.getByText('Update Spec');
+    updateButton.click();
+
+    // Verify onUpdateChart was called with the correct parameters
+    expect(defaultProps.onUpdateChart).toHaveBeenCalledWith(
+      'test-viz-id',
+      expect.objectContaining({
+        id: 'test-id',
+        title: 'Test Chart'
+      })
+    );
   });
 });
