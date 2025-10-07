@@ -10,7 +10,7 @@ import { ChartConfigForm } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -339,6 +339,16 @@ function ChatPage() {
         setShowChartDropdown(false);
     };
 
+    // Remove chart handler
+    const handleRemoveChart = () => {
+        if (selectedTable && deleteChartFromAI) {
+            deleteChartFromAI(selectedTable);
+            setConfiguredChartSpec(null);
+            setShowChartConfig(false);
+        }
+        setShowChartDropdown(false);
+    };
+
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
@@ -638,7 +648,23 @@ function ChatPage() {
                                                                             type="button"
                                                                         >
                                                                             <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                                                            Download Chart Image
+                                                                            Save as Image
+                                                                        </button>
+
+                                                                        <hr className="my-1 border-gray-200" />
+
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                handleRemoveChart();
+                                                                            }}
+                                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                                                            type="button"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4 mr-2" />
+                                                                            Remove Chart
                                                                         </button>
                                                                     </div>
                                                                 </div>
