@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AIChat from '../../components/chat';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
@@ -10,7 +10,14 @@ import { ChartConfigForm } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, CogIcon } from '@heroicons/react/24/outline';
+import {
+    TableCellsIcon,
+    ArrowUpTrayIcon,
+    CogIcon,
+    EllipsisVerticalIcon,
+    ArrowDownTrayIcon,
+    TrashIcon,
+} from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -37,6 +44,8 @@ function ChatPage() {
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
     const [showChartConfig, setShowChartConfig] = useState(false);
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
+    const [showChartDropdown, setShowChartDropdown] = useState(false);
+    const chartDropdownRef = useRef<HTMLDivElement>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -265,6 +274,71 @@ function ChatPage() {
 
         // Automatically switch to the dashboard view to show the newly added map
         handleSelectDashboard(dashboardId);
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (chartDropdownRef.current && !chartDropdownRef.current.contains(event.target as Node)) {
+                setShowChartDropdown(false);
+            }
+        }
+
+        if (showChartDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showChartDropdown]);
+
+    // Chart download handler - automatically detects PNG or SVG
+    const handleDownloadChart = () => {
+        const chartTitle = displayChartSpec?.title || 'chart';
+
+        // Try PNG first (canvas)
+        const canvasElement = document.querySelector('.vega-embed canvas');
+        if (canvasElement) {
+            const canvas = canvasElement as HTMLCanvasElement;
+            const link = document.createElement('a');
+            link.download = `${chartTitle}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            setShowChartDropdown(false);
+            return;
+        }
+
+        // Try SVG if canvas not found
+        const svgElement = document.querySelector('.vega-embed svg');
+        if (svgElement) {
+            const svg = svgElement as SVGElement;
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svg);
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `${chartTitle}.svg`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            setShowChartDropdown(false);
+            return;
+        }
+
+        // If neither found
+        alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+        setShowChartDropdown(false);
+    };
+
+    // Remove chart handler
+    const handleRemoveChart = () => {
+        if (selectedTable && deleteChartFromAI) {
+            deleteChartFromAI(selectedTable);
+            setConfiguredChartSpec(null);
+            setShowChartConfig(false);
+        }
+        setShowChartDropdown(false);
     };
 
     return (
@@ -521,15 +595,84 @@ function ChatPage() {
                                                                     {displayChartSpec.title || 'Chart'}
                                                                 </h4>
                                                                 <div className="flex items-center gap-2">
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            setShowChartConfig(!showChartConfig)
-                                                                        }
-                                                                        className="p-2 text-gray-700 hover:text-gray-900 transition-colors rounded-md hover:bg-gray-100"
-                                                                        title="Configure chart"
-                                                                    >
-                                                                        <CogIcon className="w-5 h-5" />
-                                                                    </button>
+                                                                    <div className="relative" ref={chartDropdownRef}>
+                                                                        <button
+                                                                            onClick={e => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setShowChartDropdown(
+                                                                                    !showChartDropdown
+                                                                                );
+                                                                            }}
+                                                                            onMouseDown={e => e.stopPropagation()}
+                                                                            className="p-2 text-gray-700 hover:text-gray-900 transition-colors rounded-md hover:bg-gray-100 cursor-pointer"
+                                                                            title="Chart options"
+                                                                            type="button"
+                                                                        >
+                                                                            <EllipsisVerticalIcon className="w-5 h-5" />
+                                                                        </button>
+
+                                                                        {showChartDropdown && (
+                                                                            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
+                                                                                <div className="py-1">
+                                                                                    <button
+                                                                                        onClick={e => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setShowChartConfig(
+                                                                                                !showChartConfig
+                                                                                            );
+                                                                                            setShowChartDropdown(false);
+                                                                                        }}
+                                                                                        onMouseDown={e =>
+                                                                                            e.stopPropagation()
+                                                                                        }
+                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                                        type="button"
+                                                                                    >
+                                                                                        <CogIcon className="w-4 h-4 mr-2" />
+                                                                                        Chart Configuration
+                                                                                    </button>
+
+                                                                                    <hr className="my-1 border-gray-200" />
+
+                                                                                    <button
+                                                                                        onClick={e => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            handleDownloadChart();
+                                                                                        }}
+                                                                                        onMouseDown={e =>
+                                                                                            e.stopPropagation()
+                                                                                        }
+                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                                        type="button"
+                                                                                    >
+                                                                                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                                                                        Save as Image
+                                                                                    </button>
+
+                                                                                    <hr className="my-1 border-gray-200" />
+
+                                                                                    <button
+                                                                                        onClick={e => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            handleRemoveChart();
+                                                                                        }}
+                                                                                        onMouseDown={e =>
+                                                                                            e.stopPropagation()
+                                                                                        }
+                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                                                                        type="button"
+                                                                                    >
+                                                                                        <TrashIcon className="w-4 h-4 mr-2" />
+                                                                                        Remove Chart
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
