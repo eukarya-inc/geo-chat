@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm run dev` - Start development server with host 0.0.0.0
 - `npm run build` - Build project (runs TypeScript compiler then Vite build)
+- `npm run format` - Format source files with Prettier (writes changes)
+- `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
 - `npm test` - Run Vitest tests (single run)
@@ -14,16 +16,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:unit` - Run unit tests
 - `npm run preview` - Preview built application
 
-## IMPORTANT: Always Run Lint, Build and Test After Changes
+## IMPORTANT: Always Run Format Check, Lint, Build and Test After Changes
 
 After making any code changes, you MUST run:
+
 ```bash
-npm run lint && npm run build && npm test
+npm run format:check && npm run lint && npm run build && npm test
 ```
 
 This ensures:
-1. Code follows the project's style guidelines
-2. No ESLint errors or warnings
+
+1. Code matches the project's Prettier formatting rules
+2. ESLint passes without errors or warnings
 3. TypeScript compilation succeeds
 4. The build process completes without errors
 5. All tests pass
@@ -38,10 +42,10 @@ If lint, build or tests fail, fix the issues before considering the task complet
 When generating styles for map visualization:
 
 1. **ALWAYS use direct property access** for all properties:
-   - ✅ CORRECT: `["get", "都道府県名"]`
-   - ✅ CORRECT: `["get", "prefecture"]`
-   - ❌ WRONG: `["get", "properties", ["get", "都道府県名"]]`
-   - ❌ WRONG: `["get", ["get", "都道府県名", ["get", "properties"]]]`
+    - ✅ CORRECT: `["get", "都道府県名"]`
+    - ✅ CORRECT: `["get", "prefecture"]`
+    - ❌ WRONG: `["get", "properties", ["get", "都道府県名"]]`
+    - ❌ WRONG: `["get", ["get", "都道府県名", ["get", "properties"]]]`
 
 2. **The system automatically extracts JSON properties** when the 'properties' column is selected in the table list
 
@@ -50,6 +54,7 @@ When generating styles for map visualization:
 ### Map Rendering Requirements
 
 **CRITICAL: Vector tiles require at least one column to be selected**
+
 - When no columns are selected, the vector tile query generates invalid SQL
 - This causes points/lines/polygons to not appear on the map even though geometry exists
 - The map will still zoom to the correct bounds (proving geometry is valid) but features won't render
@@ -101,10 +106,10 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 ### State Management
 
 - **Jotai Atoms**: Used for global state management, organized in `src/store/`:
-  - `remoteAtoms.ts`: Remote state (chats, messages, map specs, chart specs)
-  - `localAtoms.ts`: Local UI state (selected chat, visibility settings)
-  - `derivedAtoms.ts`: Computed atoms combining remote and local state
-  - `atoms.ts`: Re-exports all atoms for backward compatibility
+    - `remoteAtoms.ts`: Remote state (chats, messages, map specs, chart specs)
+    - `localAtoms.ts`: Local UI state (selected chat, visibility settings)
+    - `derivedAtoms.ts`: Computed atoms combining remote and local state
+    - `atoms.ts`: Re-exports all atoms for backward compatibility
 
 ### AI Tool Integration
 
@@ -142,6 +147,7 @@ The application includes comprehensive AI tools for data manipulation and visual
 #### When to Use Browser Tests
 
 Use browser tests (`.browser.test.ts`) when testing:
+
 - DuckDB-WASM functionality
 - MapLibre GL map rendering
 - Vector tile processing
@@ -149,6 +155,7 @@ Use browser tests (`.browser.test.ts`) when testing:
 - Browser-specific APIs (WebWorkers, SharedArrayBuffer, etc.)
 
 Use regular unit tests (`.test.ts`) when testing:
+
 - Pure utility functions
 - Data transformations
 - Business logic without browser dependencies
@@ -169,6 +176,7 @@ npm run lint
 ```
 
 This ensures:
+
 - Code follows the project's style guidelines
 - No syntax errors or warnings
 - Consistent formatting across the codebase

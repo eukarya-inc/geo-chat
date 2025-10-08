@@ -1,44 +1,47 @@
 name: CI Check
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+    pull_request:
+        branches:
+            - main
+    push:
+        branches:
+            - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps
 
-      - name: Install Playwright browsers
-        run: npx playwright install webkit --with-deps
+            - name: Install Playwright browsers
+              run: npx playwright install webkit --with-deps
 
-      - name: Run linter
-        run: npm run lint
+            - name: Verify formatting
+              run: npm run format:check
 
-      - name: Run tests
-        run: npm run test
+            - name: Run linter
+              run: npm run lint
 
-      - name: Build project
-        run: npm run build
+            - name: Run tests
+              run: npm run test
 
-      - name: Verify build output
-        run: |
-          echo "Build completed successfully"
-          ls -la dist/
-          echo "Index.html content:"
-          cat dist/index.html
+            - name: Build project
+              run: npm run build
+
+            - name: Verify build output
+              run: |
+                  echo "Build completed successfully"
+                  ls -la dist/
+                  echo "Index.html content:"
+                  cat dist/index.html
