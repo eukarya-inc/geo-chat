@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from '@glideapps/glide-data-grid';
-import { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
-import type { DBContext } from '../../lib/duckdb/dbContext';
-import { getTableData, getTableDataByWindow, getValueFromArrowTable } from '../../utils/duckdb';
-import { Table as ArrowTable } from 'apache-arrow';
-import { throttle } from '../../utils/throttle';
-import '@glideapps/glide-data-grid/dist/index.css';
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
+import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from "@glideapps/glide-data-grid";
+import { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
+import type { DBContext } from "../../lib/duckdb/dbContext";
+import { getTableData, getTableDataByWindow, getValueFromArrowTable } from "../../utils/duckdb";
+import { Table as ArrowTable } from "apache-arrow";
+import { throttle } from "../../utils/throttle";
+import "@glideapps/glide-data-grid/dist/index.css";
 
 // CSS to ensure scrollbars are visible
 const scrollbarStyles = `
@@ -30,429 +30,453 @@ const scrollbarStyles = `
 `;
 
 interface TableViewProps {
-    connection: AsyncDuckDBConnection;
-    tableName: string;
-    dbContext?: DBContext;
+  connection: AsyncDuckDBConnection;
+  tableName: string;
+  dbContext?: DBContext;
 }
 
 export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbContext }) => {
-    // Inject scrollbar styles
-    useEffect(() => {
-        const styleElement = document.createElement('style');
-        styleElement.textContent = scrollbarStyles;
-        document.head.appendChild(styleElement);
+  // Inject scrollbar styles
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = scrollbarStyles;
+    document.head.appendChild(styleElement);
 
-        return () => {
-            document.head.removeChild(styleElement);
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+  const [columns, setColumns] = useState<GridColumn[]>([]);
+  const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
+  const [totalRows, setTotalRows] = useState(0);
+  const [arrowCache] = useState(new Map<string, ArrowTable>());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadingWindowsRef = useRef(new Set<string>());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
+
+  // Track container width
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Update column widths when container width or columns change
+  useEffect(() => {
+    if (columns.length > 0 && containerWidth > 0) {
+      const minColumnWidth = 100;
+      const maxColumnWidth = 200;
+      // Calculate width but cap it at maxColumnWidth (exclude row number column from calculation)
+      const dataColumnCount = columns.length - 1; // Subtract 1 for row number column
+      const calculatedWidth = Math.min(
+        maxColumnWidth,
+        Math.max(minColumnWidth, Math.floor(containerWidth / Math.max(1, dataColumnCount)))
+      );
+
+      const updatedColumns = columns.map(col => {
+        // Keep row number column at fixed width
+        if (col.id === '__row_number__') {
+          return col;
+        }
+        return {
+          ...col,
+          width: calculatedWidth
         };
-    }, []);
-    const [columns, setColumns] = useState<GridColumn[]>([]);
-    const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
-    const [totalRows, setTotalRows] = useState(0);
-    const [arrowCache] = useState(new Map<string, ArrowTable>());
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const loadingWindowsRef = useRef(new Set<string>());
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [containerWidth, setContainerWidth] = useState(800);
-    const [sortColumn, setSortColumn] = useState<string | null>(null);
-    const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
+      });
 
-    // Track container width
-    useEffect(() => {
-        const observer = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                setContainerWidth(entry.contentRect.width);
-            }
+      // Only update if width actually changed to avoid infinite loop
+      // Check second column (first data column) since first is row number
+      const firstDataCol = columns[1];
+      const firstWidth = firstDataCol && 'width' in firstDataCol ? firstDataCol.width : undefined;
+      if (firstWidth !== calculatedWidth) {
+        setColumns(updatedColumns);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerWidth, columns.length]); // Note: only depend on columns.length, not columns itself to avoid infinite loop
+
+  // Reset cache when sort changes
+  useEffect(() => {
+    arrowCache.clear();
+    loadingWindowsRef.current.clear();
+  }, [sortColumn, sortDirection, arrowCache]);
+
+  useEffect(() => {
+    const loadInitialData = async (retryCount = 0) => {
+      setLoading(true);
+      setError(null);
+      // Clear cache and reset loading windows when connection or table changes
+      arrowCache.clear();
+      loadingWindowsRef.current.clear();
+
+      // Use dbContext connection if available to ensure proper schema context
+      const conn = connection;
+
+      try {
+        const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
+
+        // Calculate initial column width based on container width
+        const minColumnWidth = 100;
+        const maxColumnWidth = 200;
+        const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
+        const calculatedWidth = Math.min(
+          maxColumnWidth,
+          Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
+        );
+
+        // Add row number column as the first column
+        const rowNumberColumn: GridColumn = {
+          id: '__row_number__',
+          title: 'S.No',
+          width: 60,
+        };
+
+        const dataColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
+          // Format column title with name and type
+          let title = col.name;
+          if (sortColumn === col.name) {
+            title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
+          }
+          // Add type info on a new line (using newline character)
+          title += `\n(${col.type})`;
+
+          return {
+            id: col.name,
+            title,
+            width: calculatedWidth,
+          };
         });
 
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
+        const gridColumns: GridColumn[] = [rowNumberColumn, ...dataColumns];
+
+        // Store column types for later use
+        const types: Record<string, string> = {};
+        initialData.columns.forEach((col: { name: string; type: string }) => {
+          types[col.name] = col.type;
+        });
+
+        setColumns(gridColumns);
+        setColumnTypes(types);
+        setTotalRows(initialData.totalRows);
+
+        // Store initial Arrow table in cache
+        arrowCache.set('window-0-100', initialData.arrowTable);
+
+        // Success - set loading to false
+        setLoading(false);
+      } catch (error) {
+        // Log the full error details
+        console.error("Error loading initial table data:", error);
+        console.error("Table name:", tableName);
+        // Retry on various errors that might indicate the table isn't ready yet
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const shouldRetry = (
+          errorMessage.includes('No columns found') ||
+          errorMessage.includes('does not exist') ||
+          errorMessage.includes('not found') ||
+          errorMessage.includes('Parser Error')
+        ) && retryCount < 5; // Increase retry count to 5
+
+        if (shouldRetry) {
+          console.log(`Retrying table load (attempt ${retryCount + 1}/5)...`);
+          // Keep loading state true while retrying
+          setTimeout(() => {
+            loadInitialData(retryCount + 1);
+          }, 300 * (retryCount + 1)); // Shorter initial delay, still exponential
+          return; // Don't set loading to false, we're still trying
         }
 
-        return () => {
-            observer.disconnect();
-        };
-    }, []);
+        // Reset state on error
+        setColumns([]);
+        setColumnTypes({});
+        setTotalRows(0);
+        setLoading(false); // Only set loading to false when we're done retrying
 
-    // Update column widths when container width or columns change
-    useEffect(() => {
-        if (columns.length > 0 && containerWidth > 0) {
-            const minColumnWidth = 100;
-            const maxColumnWidth = 200;
-            // Calculate width but cap it at maxColumnWidth (exclude row number column from calculation)
-            const dataColumnCount = columns.length - 1; // Subtract 1 for row number column
-            const calculatedWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, Math.floor(containerWidth / Math.max(1, dataColumnCount))));
+        // Provide more detailed error message
+        let displayMessage = errorMessage;
 
-            const updatedColumns = columns.map(col => {
-                // Keep row number column at fixed width
-                if (col.id === '__row_number__') {
-                    return col;
-                }
-                return {
-                    ...col,
-                    width: calculatedWidth,
-                };
-            });
-
-            // Only update if width actually changed to avoid infinite loop
-            // Check second column (first data column) since first is row number
-            const firstDataCol = columns[1];
-            const firstWidth = firstDataCol && 'width' in firstDataCol ? firstDataCol.width : undefined;
-            if (firstWidth !== calculatedWidth) {
-                setColumns(updatedColumns);
-            }
+        // Check if it's a "no columns found" error
+        if (errorMessage.includes('No columns found')) {
+          displayMessage = `Table "${tableName}" was not found or has no columns. Please make sure the table exists in the current schema.`;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [containerWidth, columns.length]); // Note: only depend on columns.length, not columns itself to avoid infinite loop
 
-    // Reset cache when sort changes
-    useEffect(() => {
-        arrowCache.clear();
-        loadingWindowsRef.current.clear();
-    }, [sortColumn, sortDirection, arrowCache]);
+        console.error("Display error:", displayMessage);
+        setError(displayMessage);
+      }
+    };
 
-    useEffect(() => {
-        const loadInitialData = async (retryCount = 0) => {
-            setLoading(true);
-            setError(null);
-            // Clear cache and reset loading windows when connection or table changes
-            arrowCache.clear();
-            loadingWindowsRef.current.clear();
+    loadInitialData();
+  }, [connection, tableName, arrowCache, dbContext, containerWidth, sortColumn, sortDirection]);
 
-            // Use dbContext connection if available to ensure proper schema context
-            const conn = connection;
+  const loadDataWindow = useCallback(
+    async (startRow: number) => {
+      const windowSize = 100;
+      const windowStart = Math.floor(startRow / windowSize) * windowSize;
+      const windowEnd = windowStart + windowSize;
 
-            try {
-                const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
+      const cacheKey = `window-${windowStart}-${windowEnd}`;
 
-                // Calculate initial column width based on container width
-                const minColumnWidth = 100;
-                const maxColumnWidth = 200;
-                const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
-                const calculatedWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length)));
+      // Check if already cached or currently loading
+      if (arrowCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
+        return;
+      }
 
-                // Add row number column as the first column
-                const rowNumberColumn: GridColumn = {
-                    id: '__row_number__',
-                    title: 'S.No',
-                    width: 60,
-                };
+      // Mark as loading
+      loadingWindowsRef.current.add(cacheKey);
 
-                const dataColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
-                    // Format column title with name and type
-                    let title = col.name;
-                    if (sortColumn === col.name) {
-                        title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
-                    }
-                    // Add type info on a new line (using newline character)
-                    title += `\n(${col.type})`;
+      // Use dbContext connection if available to ensure proper schema context
+      const conn = connection;
 
-                    return {
-                        id: col.name,
-                        title,
-                        width: calculatedWidth,
-                    };
-                });
+      try {
+        const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd, sortColumn || undefined, sortDirection);
+        arrowCache.set(cacheKey, arrowTable);
+      } catch (error) {
+        console.error("Error loading data window:", error,  {
+          tableName,
+          windowStart,
+          windowEnd,
+          sortColumn,
+          sortDirection
+        });
+      } finally {
+        // Remove from loading set
+        loadingWindowsRef.current.delete(cacheKey);
+      }
+    },
+    [connection, tableName, arrowCache, sortColumn, sortDirection]
+  );
 
-                const gridColumns: GridColumn[] = [rowNumberColumn, ...dataColumns];
+  // Create a throttled version of loadDataWindow
+  const throttledLoadDataWindow = useMemo(
+    () => throttle(loadDataWindow, 200),
+    [loadDataWindow]
+  );
 
-                // Store column types for later use
-                const types: Record<string, string> = {};
-                initialData.columns.forEach((col: { name: string; type: string }) => {
-                    types[col.name] = col.type;
-                });
+  const getCellContent = useCallback(
+    (cell: Item): GridCell => {
+      const [col, row] = cell;
 
-                setColumns(gridColumns);
-                setColumnTypes(types);
-                setTotalRows(initialData.totalRows);
-
-                // Store initial Arrow table in cache
-                arrowCache.set('window-0-100', initialData.arrowTable);
-
-                // Success - set loading to false
-                setLoading(false);
-            } catch (error) {
-                // Log the full error details
-                console.error('Error loading initial table data:', error);
-                console.error('Table name:', tableName);
-                // Retry on various errors that might indicate the table isn't ready yet
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const shouldRetry =
-                    (errorMessage.includes('No columns found') ||
-                        errorMessage.includes('does not exist') ||
-                        errorMessage.includes('not found') ||
-                        errorMessage.includes('Parser Error')) &&
-                    retryCount < 5; // Increase retry count to 5
-
-                if (shouldRetry) {
-                    console.log(`Retrying table load (attempt ${retryCount + 1}/5)...`);
-                    // Keep loading state true while retrying
-                    setTimeout(
-                        () => {
-                            loadInitialData(retryCount + 1);
-                        },
-                        300 * (retryCount + 1)
-                    ); // Shorter initial delay, still exponential
-                    return; // Don't set loading to false, we're still trying
-                }
-
-                // Reset state on error
-                setColumns([]);
-                setColumnTypes({});
-                setTotalRows(0);
-                setLoading(false); // Only set loading to false when we're done retrying
-
-                // Provide more detailed error message
-                let displayMessage = errorMessage;
-
-                // Check if it's a "no columns found" error
-                if (errorMessage.includes('No columns found')) {
-                    displayMessage = `Table "${tableName}" was not found or has no columns. Please make sure the table exists in the current schema.`;
-                }
-
-                console.error('Display error:', displayMessage);
-                setError(displayMessage);
-            }
+      // First column is row number
+      if (col === 0) {
+        const rowNumber = String(row + 1); // 1-based indexing
+        return {
+          kind: GridCellKind.Text,
+          data: rowNumber,
+          displayData: rowNumber,
+          allowOverlay: false,
+          readonly: true,
         };
+      }
 
-        loadInitialData();
-    }, [connection, tableName, arrowCache, dbContext, containerWidth, sortColumn, sortDirection]);
+      // Find which window contains this row
+      const windowSize = 100;
+      const windowStart = Math.floor(row / windowSize) * windowSize;
+      const windowEnd = windowStart + windowSize;
+      const cacheKey = `window-${windowStart}-${windowEnd}`;
 
-    const loadDataWindow = useCallback(
-        async (startRow: number) => {
-            const windowSize = 100;
-            const windowStart = Math.floor(startRow / windowSize) * windowSize;
-            const windowEnd = windowStart + windowSize;
+      const arrowTable = arrowCache.get(cacheKey);
+      if (!arrowTable) {
+        // Try to load data but don't block - show empty cell instead
+        throttledLoadDataWindow(row);
+        return {
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: false,
+        };
+      }
 
-            const cacheKey = `window-${windowStart}-${windowEnd}`;
+      // Convert only the specific cell value from Arrow
+      // Adjust column index since first column is row number
+      const dataColIndex = col - 1;
+      const rowInWindow = row - windowStart;
+      const columnName = columns[col]?.id;
+      const columnType = columnName ? columnTypes[columnName] : undefined;
+      const value = getValueFromArrowTable(arrowTable, rowInWindow, dataColIndex, columnType);
+      // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
+      const displayValue = value === null ? "NULL" : String(value);
 
-            // Check if already cached or currently loading
-            if (arrowCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
-                return;
-            }
+      return {
+        kind: GridCellKind.Text,
+        data: displayValue,
+        displayData: displayValue,
+        allowOverlay: true,
+      };
+    },
+    [arrowCache, throttledLoadDataWindow, columns, columnTypes]
+  );
 
-            // Mark as loading
-            loadingWindowsRef.current.add(cacheKey);
 
-            // Use dbContext connection if available to ensure proper schema context
-            const conn = connection;
+  const onVisibleRegionChanged = useCallback(
+    (range: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }) => {
+      const startRow = range.y;
+      const endRow = Math.min(range.y + range.height + 20, totalRows);
 
-            try {
-                const arrowTable = await getTableDataByWindow(conn, tableName, windowStart, windowEnd, sortColumn || undefined, sortDirection);
-                arrowCache.set(cacheKey, arrowTable);
-            } catch (error) {
-                console.error('Error loading data window:', error, {
-                    tableName,
-                    windowStart,
-                    windowEnd,
-                    sortColumn,
-                    sortDirection,
-                });
-            } finally {
-                // Remove from loading set
-                loadingWindowsRef.current.delete(cacheKey);
-            }
-        },
-        [connection, tableName, arrowCache, sortColumn, sortDirection]
+      // Load current window immediately
+      loadDataWindow(startRow);
+
+      // Pre-load adjacent windows with throttling
+      const windowSize = 100;
+      for (let row = startRow; row < endRow; row += windowSize) {
+        throttledLoadDataWindow(row);
+      }
+    },
+    [loadDataWindow, throttledLoadDataWindow, totalRows]
+  );
+
+  // Handle column resize
+  const handleColumnResize = useCallback(
+    (column: GridColumn, newSize: number) => {
+      // Don't allow resizing row number column
+      if (column.id === '__row_number__') return;
+
+      setColumns(prevColumns =>
+        prevColumns.map(col =>
+          col.id === column.id
+            ? { ...col, width: newSize }
+            : col
+        )
+      );
+    },
+    []
+  );
+
+  // Handle header click for sorting
+  const handleHeaderClicked = useCallback(
+    (colIndex: number) => {
+      // Don't allow sorting on row number column
+      if (colIndex === 0) return;
+
+      const column = columns[colIndex];
+      if (!column) return;
+
+      const columnId = column.id;
+      if (!columnId) return;
+
+      if (sortColumn === columnId) {
+        if (sortDirection === 'ASC') {
+          // First click: ASC -> DESC
+          setSortDirection('DESC');
+        } else {
+          // Second click: DESC -> Remove sort (back to default)
+          setSortColumn(null);
+          setSortDirection('ASC');
+        }
+      } else {
+        // New column: start with ASC
+        setSortColumn(columnId);
+        setSortDirection('ASC');
+      }
+    },
+    [columns, sortColumn, sortDirection]
+  );
+
+  // Update column titles when sort changes
+  useEffect(() => {
+    setColumns(prevColumns =>
+      prevColumns.map(col => {
+        // Skip row number column
+        if (col.id === '__row_number__') {
+          return col;
+        }
+
+        // Get the column type from columnTypes
+        const colType = columnTypes[col.id || ''] || '';
+
+        // Build the title with column name
+        let title = '';
+
+        // Add sort indicator before column name if this column is sorted
+        if (col.id && sortColumn === col.id) {
+          title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.id}`;
+        }
+        // Regular column name when not sorted
+        else if (col.id) {
+          title = col.id;
+        } else {
+          title = col.title || '';
+        }
+
+        // Add type info on a new line if we have it
+        if (colType) {
+          title += `\n(${colType})`;
+        }
+
+        return { ...col, title };
+      })
     );
+  }, [sortColumn, sortDirection, columnTypes]);
 
-    // Create a throttled version of loadDataWindow
-    const throttledLoadDataWindow = useMemo(() => throttle(loadDataWindow, 200), [loadDataWindow]);
 
-    const getCellContent = useCallback(
-        (cell: Item): GridCell => {
-            const [col, row] = cell;
+  if (loading) {
+    return <div style={{ padding: "20px" }}>Loading table...</div>;
+  }
 
-            // First column is row number
-            if (col === 0) {
-                const rowNumber = String(row + 1); // 1-based indexing
-                return {
-                    kind: GridCellKind.Text,
-                    data: rowNumber,
-                    displayData: rowNumber,
-                    allowOverlay: false,
-                    readonly: true,
-                };
-            }
-
-            // Find which window contains this row
-            const windowSize = 100;
-            const windowStart = Math.floor(row / windowSize) * windowSize;
-            const windowEnd = windowStart + windowSize;
-            const cacheKey = `window-${windowStart}-${windowEnd}`;
-
-            const arrowTable = arrowCache.get(cacheKey);
-            if (!arrowTable) {
-                // Try to load data but don't block - show empty cell instead
-                throttledLoadDataWindow(row);
-                return {
-                    kind: GridCellKind.Text,
-                    data: '',
-                    displayData: '',
-                    allowOverlay: false,
-                };
-            }
-
-            // Convert only the specific cell value from Arrow
-            // Adjust column index since first column is row number
-            const dataColIndex = col - 1;
-            const rowInWindow = row - windowStart;
-            const columnName = columns[col]?.id;
-            const columnType = columnName ? columnTypes[columnName] : undefined;
-            const value = getValueFromArrowTable(arrowTable, rowInWindow, dataColIndex, columnType);
-            // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
-            const displayValue = value === null ? 'NULL' : String(value);
-
-            return {
-                kind: GridCellKind.Text,
-                data: displayValue,
-                displayData: displayValue,
-                allowOverlay: true,
-            };
-        },
-        [arrowCache, throttledLoadDataWindow, columns, columnTypes]
-    );
-
-    const onVisibleRegionChanged = useCallback(
-        (range: { x: number; y: number; width: number; height: number }) => {
-            const startRow = range.y;
-            const endRow = Math.min(range.y + range.height + 20, totalRows);
-
-            // Load current window immediately
-            loadDataWindow(startRow);
-
-            // Pre-load adjacent windows with throttling
-            const windowSize = 100;
-            for (let row = startRow; row < endRow; row += windowSize) {
-                throttledLoadDataWindow(row);
-            }
-        },
-        [loadDataWindow, throttledLoadDataWindow, totalRows]
-    );
-
-    // Handle column resize
-    const handleColumnResize = useCallback((column: GridColumn, newSize: number) => {
-        // Don't allow resizing row number column
-        if (column.id === '__row_number__') return;
-
-        setColumns(prevColumns => prevColumns.map(col => (col.id === column.id ? { ...col, width: newSize } : col)));
-    }, []);
-
-    // Handle header click for sorting
-    const handleHeaderClicked = useCallback(
-        (colIndex: number) => {
-            // Don't allow sorting on row number column
-            if (colIndex === 0) return;
-
-            const column = columns[colIndex];
-            if (!column) return;
-
-            const columnId = column.id;
-            if (!columnId) return;
-
-            if (sortColumn === columnId) {
-                if (sortDirection === 'ASC') {
-                    // First click: ASC -> DESC
-                    setSortDirection('DESC');
-                } else {
-                    // Second click: DESC -> Remove sort (back to default)
-                    setSortColumn(null);
-                    setSortDirection('ASC');
-                }
-            } else {
-                // New column: start with ASC
-                setSortColumn(columnId);
-                setSortDirection('ASC');
-            }
-        },
-        [columns, sortColumn, sortDirection]
-    );
-
-    // Update column titles when sort changes
-    useEffect(() => {
-        setColumns(prevColumns =>
-            prevColumns.map(col => {
-                // Skip row number column
-                if (col.id === '__row_number__') {
-                    return col;
-                }
-
-                // Get the column type from columnTypes
-                const colType = columnTypes[col.id || ''] || '';
-
-                // Build the title with column name
-                let title = '';
-
-                // Add sort indicator before column name if this column is sorted
-                if (col.id && sortColumn === col.id) {
-                    title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.id}`;
-                }
-                // Regular column name when not sorted
-                else if (col.id) {
-                    title = col.id;
-                } else {
-                    title = col.title || '';
-                }
-
-                // Add type info on a new line if we have it
-                if (colType) {
-                    title += `\n(${colType})`;
-                }
-
-                return { ...col, title };
-            })
-        );
-    }, [sortColumn, sortDirection, columnTypes]);
-
-    if (loading) {
-        return <div style={{ padding: '20px' }}>Loading table...</div>;
-    }
-
-    if (error) {
-        return (
-            <div style={{ padding: '20px', color: '#dc3545' }}>
-                <strong>Error loading table:</strong>
-                <div style={{ marginTop: '10px', fontSize: '14px', fontFamily: 'monospace' }}>{error}</div>
-            </div>
-        );
-    }
-
-    if (columns.length === 0) {
-        return <div style={{ padding: '20px' }}>No columns found in table</div>;
-    }
-
+  if (error) {
     return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-            <DataEditor
-                columns={columns}
-                rows={totalRows}
-                getCellContent={getCellContent}
-                smoothScrollX={true}
-                smoothScrollY={true}
-                rowHeight={36}
-                headerHeight={48}
-                onVisibleRegionChanged={onVisibleRegionChanged}
-                // Enable column resize
-                onColumnResize={handleColumnResize}
-                // Enable column sorting
-                onHeaderClicked={handleHeaderClicked}
-                // Make grid read-only but allow overlay for viewing
-                onCellEdited={() => {
-                    // Do nothing - prevents actual editing
-                    return undefined;
-                }}
-                theme={{
-                    bgCell: '#fff',
-                    bgCellMedium: '#fafafa',
-                    bgHeader: '#f8f9fa',
-                    bgHeaderHasFocus: '#e9ecef',
-                    bgHeaderHovered: '#e9ecef',
-                    borderColor: '#dee2e6',
-                    cellHorizontalPadding: 8,
-                    cellVerticalPadding: 6,
-                }}
-            />
+      <div style={{ padding: "20px", color: "#dc3545" }}>
+        <strong>Error loading table:</strong>
+        <div style={{ marginTop: "10px", fontSize: "14px", fontFamily: "monospace" }}>
+          {error}
         </div>
+      </div>
     );
+  }
+
+  if (columns.length === 0) {
+    return <div style={{ padding: "20px" }}>No columns found in table</div>;
+  }
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
+      <DataEditor
+        columns={columns}
+        rows={totalRows}
+        getCellContent={getCellContent}
+        smoothScrollX={true}
+        smoothScrollY={true}
+        rowHeight={36}
+        headerHeight={48}
+        onVisibleRegionChanged={onVisibleRegionChanged}
+        // Enable column resize
+        onColumnResize={handleColumnResize}
+        // Enable column sorting
+        onHeaderClicked={handleHeaderClicked}
+        // Make grid read-only but allow overlay for viewing
+        onCellEdited={() => {
+          // Do nothing - prevents actual editing
+          return undefined;
+        }}
+        theme={{
+          bgCell: "#fff",
+          bgCellMedium: "#fafafa",
+          bgHeader: "#f8f9fa",
+          bgHeaderHasFocus: "#e9ecef",
+          bgHeaderHovered: "#e9ecef",
+          borderColor: "#dee2e6",
+          cellHorizontalPadding: 8,
+          cellVerticalPadding: 6,
+        }}
+      />
+    </div>
+  );
 };

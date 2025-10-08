@@ -5,7 +5,11 @@ import { checkTableGeometry } from '../../../utils/duckdb';
 import type { TableStyle } from '../../../components/map';
 import { updateChatStateAtom, currentChatStateAtom } from '../../../store/atoms';
 
-export function useMapVisualization(selectedTable: string | null, connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null) {
+
+export function useMapVisualization(
+    selectedTable: string | null,
+    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
+) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geometry');
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -42,60 +46,56 @@ export function useMapVisualization(selectedTable: string | null, connection: Aw
     }, [selectedTable, connection]);
 
     // Update table styles for current table
-    const updateTableStyle = useCallback(
-        (tableName: string, style: TableStyle) => {
-            if (!tableName) {
-                console.warn('No table name provided for style update');
-                return;
+    const updateTableStyle = useCallback((tableName: string, style: TableStyle) => {
+        if (!tableName) {
+            console.warn('No table name provided for style update');
+            return;
+        }
+
+
+        const currentSpecs = currentChatState?.mapSpecs || {};
+
+        // The tableName passed here should be the table we're updating styles for
+        // We need to ensure the mapSpec exists for this table
+        const currentSpec = currentSpecs[tableName] || {};
+
+        // Update the mapSpec for the specific table
+        const updatedMapSpecs = {
+            ...currentSpecs,
+            [tableName]: {
+                ...currentSpec,
+                tableStyles: {
+                    ...(currentSpec.tableStyles || {}),
+                    [tableName]: style  // The table's own styles are stored under its name
+                }
             }
+        };
 
-            const currentSpecs = currentChatState?.mapSpecs || {};
 
-            // The tableName passed here should be the table we're updating styles for
-            // We need to ensure the mapSpec exists for this table
-            const currentSpec = currentSpecs[tableName] || {};
-
-            // Update the mapSpec for the specific table
-            const updatedMapSpecs = {
-                ...currentSpecs,
-                [tableName]: {
-                    ...currentSpec,
-                    tableStyles: {
-                        ...(currentSpec.tableStyles || {}),
-                        [tableName]: style, // The table's own styles are stored under its name
-                    },
-                },
-            };
-
-            updateChatStateAtomSet({
-                mapSpecs: updatedMapSpecs,
-            });
-        },
-        [currentChatState?.mapSpecs, updateChatStateAtomSet]
-    );
+        updateChatStateAtomSet({
+            mapSpecs: updatedMapSpecs
+        });
+    }, [currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
     // Delete table styles for a dropped table
-    const deleteTableStyle = useCallback(
-        (tableName: string) => {
-            if (!tableName) {
-                console.warn('No table name provided for style deletion');
-                return;
-            }
+    const deleteTableStyle = useCallback((tableName: string) => {
+        if (!tableName) {
+            console.warn('No table name provided for style deletion');
+            return;
+        }
 
-            const currentSpecs = currentChatState?.mapSpecs || {};
+        const currentSpecs = currentChatState?.mapSpecs || {};
 
-            // Remove the mapSpec for the dropped table
-            const updatedMapSpecs = { ...currentSpecs };
-            delete updatedMapSpecs[tableName];
+        // Remove the mapSpec for the dropped table
+        const updatedMapSpecs = { ...currentSpecs };
+        delete updatedMapSpecs[tableName];
 
-            updateChatStateAtomSet({
-                mapSpecs: updatedMapSpecs,
-            });
+        updateChatStateAtomSet({
+            mapSpecs: updatedMapSpecs
+        });
 
-            console.log(`[Map Visualization] Deleted map spec for table: ${tableName}`);
-        },
-        [currentChatState?.mapSpecs, updateChatStateAtomSet]
-    );
+        console.log(`[Map Visualization] Deleted map spec for table: ${tableName}`);
+    }, [currentChatState?.mapSpecs, updateChatStateAtomSet]);
 
     return {
         mapSelectedColumns,

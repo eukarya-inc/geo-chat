@@ -36,7 +36,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
         const basePath = import.meta.env.BASE_URL || '/';
         const sampleUrl = `${window.location.origin}${basePath}data/customer.parquet`;
         setUrl(sampleUrl);
-
+        
         // Automatically create table after setting URL
         setTimeout(() => {
             createTableFromUrl(sampleUrl);
@@ -49,7 +49,7 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
             console.log('RemoteFile: missing dbContext or url');
             return;
         }
-
+        
         setIsCreatingTable(true);
 
         try {
@@ -62,11 +62,11 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
             // Get detailed table information for AI context
             const tableInfo = await getTableInfo(dbContext, tableName, schema);
             const tableInfoText = formatTableInfoForAI(tableInfo);
-
+            
             // Create message with both marker and detailed info
             // The marker is for backward compatibility and the info is for AI context
             const tableMessage = `<!--TABLE_CREATED:${tableName}--><!--TABLE_INFO_START-->\n${tableInfoText}\n<!--TABLE_INFO_END-->`;
-
+            
             if (onSendMessage) {
                 // Send the table message for all cases (both Example and regular Create Table)
                 onSendMessage(tableMessage);

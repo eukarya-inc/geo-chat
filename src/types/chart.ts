@@ -1,14 +1,14 @@
 import type { TopLevelSpec } from 'vega-lite';
 
 export interface ChartSpec {
-    id: string;
-    spec: VegaChartSpec;
-    timestamp: Date;
-    title?: string;
+  id: string;
+  spec: VegaChartSpec;
+  timestamp: Date;
+  title?: string;
 }
 
 export type VegaChartSpec = TopLevelSpec & {
-    data?: TopLevelSpec['data'] & {
-        sql?: string;
-    };
+  data?: TopLevelSpec["data"] & {
+    sql?: string;
+  };
 };

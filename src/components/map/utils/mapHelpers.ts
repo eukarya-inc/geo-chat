@@ -33,8 +33,8 @@ export function getDefaultTableStyle(tableName: string, index: number): TableSty
             filter: ['==', '$type', 'Polygon'],
             paint: {
                 'fill-color': color,
-                'fill-opacity': 0.3,
-            },
+                'fill-opacity': 0.3
+            }
         } as VectorTileLayer,
         // Polygon outline layer
         {
@@ -43,8 +43,8 @@ export function getDefaultTableStyle(tableName: string, index: number): TableSty
             filter: ['==', '$type', 'Polygon'],
             paint: {
                 'line-color': color,
-                'line-width': 1,
-            },
+                'line-width': 1
+            }
         } as VectorTileLayer,
         // LineString layer
         {
@@ -53,8 +53,8 @@ export function getDefaultTableStyle(tableName: string, index: number): TableSty
             filter: ['==', '$type', 'LineString'],
             paint: {
                 'line-color': color,
-                'line-width': 2,
-            },
+                'line-width': 2
+            }
         } as VectorTileLayer,
         // Point layer
         {
@@ -65,8 +65,8 @@ export function getDefaultTableStyle(tableName: string, index: number): TableSty
                 'circle-radius': 5,
                 'circle-color': color,
                 'circle-stroke-color': '#ffffff',
-                'circle-stroke-width': 1,
-            },
+                'circle-stroke-width': 1
+            }
         } as VectorTileLayer,
     ];
 }
@@ -74,7 +74,10 @@ export function getDefaultTableStyle(tableName: string, index: number): TableSty
 /**
  * Merge base style with overlay style
  */
-export function mergeStyles(baseStyle: maplibregl.StyleSpecification, overlayStyle: ExtraStyle | null | undefined): maplibregl.StyleSpecification {
+export function mergeStyles(
+    baseStyle: maplibregl.StyleSpecification,
+    overlayStyle: ExtraStyle | null | undefined
+): maplibregl.StyleSpecification {
     const merged = JSON.parse(JSON.stringify(baseStyle)); // Deep clone
 
     if (!overlayStyle) return merged;
@@ -98,7 +101,7 @@ export function mergeStyles(baseStyle: maplibregl.StyleSpecification, overlaySty
 export async function exportMapAsPNG(map: maplibregl.Map): Promise<void> {
     try {
         // Wait for the map to be idle (all tiles loaded)
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
             if (map.loaded()) {
                 map.once('idle', () => resolve());
                 map.triggerRepaint();
@@ -126,15 +129,20 @@ export async function exportMapAsPNG(map: maplibregl.Map): Promise<void> {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
     } catch {
         alert('Export failed. This might be due to browser security restrictions with WebGL canvas export.');
     }
 }
 
+
 /**
  * Generate popup content for a map feature
  */
-export function generatePopupContent(feature: maplibregl.MapGeoJSONFeature, coordinates: maplibregl.LngLat): string {
+export function generatePopupContent(
+    feature: maplibregl.MapGeoJSONFeature,
+    coordinates: maplibregl.LngLat
+): string {
     const geometry = feature.geometry as GeoJSON.Geometry;
     const properties = feature.properties;
 
@@ -174,24 +182,22 @@ export function generatePopupContent(feature: maplibregl.MapGeoJSONFeature, coor
     }
 
     // Format properties
-    const propsHtml =
-        properties && Object.keys(properties).length > 0
-            ? Object.entries(properties)
-                  .map(([key, value]) => {
-                      const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
-                      return `
+    const propsHtml = properties && Object.keys(properties).length > 0
+        ? Object.entries(properties)
+            .map(([key, value]) => {
+                const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
+                return `
                     <div style="margin: 5px 0; ${typeof value === 'object' ? 'max-height: 200px; overflow-y: auto;' : ''}">
                         <strong>${key}:</strong>
-                        ${
-                            typeof value === 'object'
-                                ? `<pre style="margin: 2px 0; font-size: 11px; background: #f0f0f0; padding: 4px; border-radius: 2px;">${displayValue}</pre>`
-                                : ` ${displayValue}`
+                        ${typeof value === 'object'
+                            ? `<pre style="margin: 2px 0; font-size: 11px; background: #f0f0f0; padding: 4px; border-radius: 2px;">${displayValue}</pre>`
+                            : ` ${displayValue}`
                         }
                     </div>
                 `;
-                  })
-                  .join('')
-            : '<div style="margin: 5px 0; color: #666;">（プロパティなし）</div>';
+            })
+            .join('')
+        : '<div style="margin: 5px 0; color: #666;">（プロパティなし）</div>';
 
     return `
         <div style="font-size: 14px; max-height: 400px; overflow-y: auto;">
@@ -219,7 +225,9 @@ export function createDefaultStyle(): maplibregl.StyleSpecification {
         sources: {
             osm: {
                 type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tiles: [
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                ],
                 tileSize: 256,
                 attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
             },

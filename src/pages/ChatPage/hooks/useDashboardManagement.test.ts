@@ -8,292 +8,293 @@ import React from 'react';
 
 // Create a test wrapper with isolated Jotai store for each test
 function createWrapper() {
-    const store = createStore();
-    return ({ children }: { children: ReactNode }) => React.createElement(Provider, { store }, children);
+  const store = createStore();
+  return ({ children }: { children: ReactNode }) =>
+    React.createElement(Provider, { store }, children);
 }
 
 describe('useDashboardManagement', () => {
-    let wrapper: ReturnType<typeof createWrapper>;
+  let wrapper: ReturnType<typeof createWrapper>;
 
-    beforeEach(() => {
-        wrapper = createWrapper();
+  beforeEach(() => {
+    wrapper = createWrapper();
+  });
+
+  it('should create a new dashboard', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+
+    let newDashboard: Dashboard | undefined;
+
+    act(() => {
+      newDashboard = result.current.createDashboard('Test Dashboard');
     });
 
-    it('should create a new dashboard', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    expect(newDashboard).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^dashboard-\d+$/),
+        title: 'Test Dashboard',
+        createdAt: expect.any(Date),
+        visualizations: [],
+        layout: [],
+      })
+    );
 
-        let newDashboard: Dashboard | undefined;
+    // Dashboard should be added to the state
+    if (newDashboard) {
+      expect(result.current.dashboards[newDashboard.id]).toEqual(newDashboard);
+    }
+  });
 
-        act(() => {
-            newDashboard = result.current.createDashboard('Test Dashboard');
-        });
+  it('should create dashboard with default title when no title provided', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        expect(newDashboard).toEqual(
-            expect.objectContaining({
-                id: expect.stringMatching(/^dashboard-\d+$/),
-                title: 'Test Dashboard',
-                createdAt: expect.any(Date),
-                visualizations: [],
-                layout: [],
-            })
-        );
+    let newDashboard: Dashboard | undefined;
 
-        // Dashboard should be added to the state
-        if (newDashboard) {
-            expect(result.current.dashboards[newDashboard.id]).toEqual(newDashboard);
-        }
+    act(() => {
+      newDashboard = result.current.createDashboard();
     });
 
-    it('should create dashboard with default title when no title provided', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    if (newDashboard) {
+      expect(newDashboard.title).toMatch(/^Dashboard \d+$/);
+    }
+  });
 
-        let newDashboard: Dashboard | undefined;
+  it('should delete an existing dashboard', async () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        act(() => {
-            newDashboard = result.current.createDashboard();
-        });
+    let dashboard1: Dashboard | undefined;
+    let dashboard2: Dashboard | undefined;
 
-        if (newDashboard) {
-            expect(newDashboard.title).toMatch(/^Dashboard \d+$/);
-        }
+    // Create two dashboards with small delay to ensure unique IDs
+    act(() => {
+      dashboard1 = result.current.createDashboard('Dashboard 1');
     });
 
-    it('should delete an existing dashboard', async () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    // Small delay to ensure different timestamp
+    await new Promise(resolve => setTimeout(resolve, 1));
 
-        let dashboard1: Dashboard | undefined;
-        let dashboard2: Dashboard | undefined;
-
-        // Create two dashboards with small delay to ensure unique IDs
-        act(() => {
-            dashboard1 = result.current.createDashboard('Dashboard 1');
-        });
-
-        // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
-
-        act(() => {
-            dashboard2 = result.current.createDashboard('Dashboard 2');
-        });
-
-        if (dashboard1 && dashboard2) {
-            // Verify both dashboards exist
-            expect(result.current.dashboards[dashboard1.id]).toBeDefined();
-            expect(result.current.dashboards[dashboard2.id]).toBeDefined();
-
-            // Delete the first dashboard
-            act(() => {
-                result.current.deleteDashboard(dashboard1!.id);
-            });
-
-            // First dashboard should be deleted, second should remain
-            expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
-            expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
-        }
+    act(() => {
+      dashboard2 = result.current.createDashboard('Dashboard 2');
     });
 
-    it('should handle deleting non-existent dashboard gracefully', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    if (dashboard1 && dashboard2) {
+      // Verify both dashboards exist
+      expect(result.current.dashboards[dashboard1.id]).toBeDefined();
+      expect(result.current.dashboards[dashboard2.id]).toBeDefined();
 
-        // Create one dashboard
-        let dashboard: Dashboard | undefined;
-        act(() => {
-            dashboard = result.current.createDashboard('Test Dashboard');
-        });
+      // Delete the first dashboard
+      act(() => {
+        result.current.deleteDashboard(dashboard1!.id);
+      });
 
-        const dashboardCount = Object.keys(result.current.dashboards).length;
+      // First dashboard should be deleted, second should remain
+      expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
+      expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
+    }
+  });
 
-        // Try to delete a non-existent dashboard
-        act(() => {
-            result.current.deleteDashboard('non-existent-id');
-        });
+  it('should handle deleting non-existent dashboard gracefully', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        // Should not affect existing dashboards
-        expect(Object.keys(result.current.dashboards)).toHaveLength(dashboardCount);
-        if (dashboard) {
-            expect(result.current.dashboards[dashboard.id]).toBeDefined();
-        }
+    // Create one dashboard
+    let dashboard: Dashboard | undefined;
+    act(() => {
+      dashboard = result.current.createDashboard('Test Dashboard');
     });
 
-    it('should update dashboard correctly', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    const dashboardCount = Object.keys(result.current.dashboards).length;
 
-        let dashboard: Dashboard | undefined;
-
-        act(() => {
-            dashboard = result.current.createDashboard('Original Title');
-        });
-
-        if (dashboard) {
-            const updatedDashboard: Dashboard = {
-                ...dashboard,
-                title: 'Updated Title',
-            };
-
-            act(() => {
-                result.current.updateDashboard(updatedDashboard);
-            });
-
-            expect(result.current.dashboards[dashboard.id].title).toBe('Updated Title');
-        }
+    // Try to delete a non-existent dashboard
+    act(() => {
+      result.current.deleteDashboard('non-existent-id');
     });
 
-    it('should rename dashboard correctly', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    // Should not affect existing dashboards
+    expect(Object.keys(result.current.dashboards)).toHaveLength(dashboardCount);
+    if (dashboard) {
+      expect(result.current.dashboards[dashboard.id]).toBeDefined();
+    }
+  });
 
-        let dashboard: Dashboard | undefined;
+  it('should update dashboard correctly', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        act(() => {
-            dashboard = result.current.createDashboard('Original Title');
-        });
+    let dashboard: Dashboard | undefined;
 
-        if (dashboard) {
-            act(() => {
-                result.current.renameDashboard(dashboard!.id, 'New Title');
-            });
-
-            expect(result.current.dashboards[dashboard!.id].title).toBe('New Title');
-        }
+    act(() => {
+      dashboard = result.current.createDashboard('Original Title');
     });
 
-    it('should handle renaming with empty string by keeping original title', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    if (dashboard) {
+      const updatedDashboard: Dashboard = {
+        ...dashboard,
+        title: 'Updated Title',
+      };
 
-        let dashboard: Dashboard | undefined;
+      act(() => {
+        result.current.updateDashboard(updatedDashboard);
+      });
 
-        act(() => {
-            dashboard = result.current.createDashboard('Original Title');
-        });
+      expect(result.current.dashboards[dashboard.id].title).toBe('Updated Title');
+    }
+  });
 
-        if (dashboard) {
-            act(() => {
-                result.current.renameDashboard(dashboard!.id, '   ');
-            });
+  it('should rename dashboard correctly', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-            // Should keep original title when new title is empty/whitespace
-            expect(result.current.dashboards[dashboard!.id].title).toBe('Original Title');
-        }
+    let dashboard: Dashboard | undefined;
+
+    act(() => {
+      dashboard = result.current.createDashboard('Original Title');
     });
 
-    it('should get all dashboards as array', async () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    if (dashboard) {
+      act(() => {
+        result.current.renameDashboard(dashboard!.id, 'New Title');
+      });
 
-        let dashboard1: Dashboard | undefined;
-        let dashboard2: Dashboard | undefined;
+      expect(result.current.dashboards[dashboard!.id].title).toBe('New Title');
+    }
+  });
 
-        // Create two dashboards with small delay to ensure unique IDs
-        act(() => {
-            dashboard1 = result.current.createDashboard('Dashboard 1');
-        });
+  it('should handle renaming with empty string by keeping original title', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
+    let dashboard: Dashboard | undefined;
 
-        act(() => {
-            dashboard2 = result.current.createDashboard('Dashboard 2');
-        });
-
-        const allDashboards = result.current.getAllDashboards();
-
-        expect(allDashboards).toHaveLength(2);
-        if (dashboard1 && dashboard2) {
-            expect(allDashboards).toContain(dashboard1);
-            expect(allDashboards).toContain(dashboard2);
-        }
+    act(() => {
+      dashboard = result.current.createDashboard('Original Title');
     });
 
-    it('should get specific dashboard by id', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    if (dashboard) {
+      act(() => {
+        result.current.renameDashboard(dashboard!.id, '   ');
+      });
 
-        let dashboard: Dashboard | undefined;
+      // Should keep original title when new title is empty/whitespace
+      expect(result.current.dashboards[dashboard!.id].title).toBe('Original Title');
+    }
+  });
 
-        act(() => {
-            dashboard = result.current.createDashboard('Test Dashboard');
-        });
+  it('should get all dashboards as array', async () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        if (dashboard) {
-            const retrievedDashboard = result.current.getDashboard(dashboard.id);
-            expect(retrievedDashboard).toEqual(dashboard);
-        }
+    let dashboard1: Dashboard | undefined;
+    let dashboard2: Dashboard | undefined;
 
-        // Should return undefined for non-existent id
-        const nonExistent = result.current.getDashboard('non-existent-id');
-        expect(nonExistent).toBeUndefined();
+    // Create two dashboards with small delay to ensure unique IDs
+    act(() => {
+      dashboard1 = result.current.createDashboard('Dashboard 1');
     });
 
-    it('should remove visualization from dashboard', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    // Small delay to ensure different timestamp
+    await new Promise(resolve => setTimeout(resolve, 1));
 
-        let dashboard: Dashboard | undefined;
-
-        act(() => {
-            dashboard = result.current.createDashboard('Test Dashboard');
-        });
-
-        if (!dashboard) return;
-
-        // Add a visualization manually to test removal
-        const mockVisualization = {
-            id: 'viz-1',
-            type: 'chart' as const,
-            title: 'Test Chart',
-            chartSpec: {
-                id: 'chart-1',
-                title: 'Test Chart',
-                spec: {
-                    $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-                    mark: { type: 'bar' as const },
-                    encoding: {},
-                    data: { values: [] },
-                },
-                timestamp: new Date(),
-            },
-            createdAt: new Date(),
-        };
-
-        const mockLayout = {
-            i: 'viz-1',
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 4,
-        };
-
-        const dashboardWithViz: Dashboard = {
-            ...dashboard,
-            visualizations: [mockVisualization],
-            layout: [mockLayout],
-        };
-
-        act(() => {
-            result.current.updateDashboard(dashboardWithViz);
-        });
-
-        // Verify visualization was added
-        expect(result.current.dashboards[dashboard.id].visualizations).toHaveLength(1);
-        expect(result.current.dashboards[dashboard.id].layout).toHaveLength(1);
-
-        // Remove the visualization
-        act(() => {
-            result.current.removeVisualizationFromDashboard(dashboard!.id, 'viz-1');
-        });
-
-        // Verify visualization was removed
-        expect(result.current.dashboards[dashboard!.id].visualizations).toHaveLength(0);
-        expect(result.current.dashboards[dashboard!.id].layout).toHaveLength(0);
+    act(() => {
+      dashboard2 = result.current.createDashboard('Dashboard 2');
     });
 
-    it('should handle removing visualization from non-existent dashboard', () => {
-        const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+    const allDashboards = result.current.getAllDashboards();
 
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(allDashboards).toHaveLength(2);
+    if (dashboard1 && dashboard2) {
+      expect(allDashboards).toContain(dashboard1);
+      expect(allDashboards).toContain(dashboard2);
+    }
+  });
 
-        act(() => {
-            result.current.removeVisualizationFromDashboard('non-existent-id', 'viz-1');
-        });
+  it('should get specific dashboard by id', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
 
-        expect(consoleSpy).toHaveBeenCalledWith('Dashboard not found:', 'non-existent-id');
+    let dashboard: Dashboard | undefined;
 
-        consoleSpy.mockRestore();
+    act(() => {
+      dashboard = result.current.createDashboard('Test Dashboard');
     });
+
+    if (dashboard) {
+      const retrievedDashboard = result.current.getDashboard(dashboard.id);
+      expect(retrievedDashboard).toEqual(dashboard);
+    }
+
+    // Should return undefined for non-existent id
+    const nonExistent = result.current.getDashboard('non-existent-id');
+    expect(nonExistent).toBeUndefined();
+  });
+
+  it('should remove visualization from dashboard', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+
+    let dashboard: Dashboard | undefined;
+
+    act(() => {
+      dashboard = result.current.createDashboard('Test Dashboard');
+    });
+
+    if (!dashboard) return;
+
+    // Add a visualization manually to test removal
+    const mockVisualization = {
+      id: 'viz-1',
+      type: 'chart' as const,
+      title: 'Test Chart',
+      chartSpec: {
+        id: 'chart-1',
+        title: 'Test Chart',
+        spec: {
+          $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+          mark: { type: 'bar' as const },
+          encoding: {},
+          data: { values: [] }
+        },
+        timestamp: new Date(),
+      },
+      createdAt: new Date(),
+    };
+
+    const mockLayout = {
+      i: 'viz-1',
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    };
+
+    const dashboardWithViz: Dashboard = {
+      ...dashboard,
+      visualizations: [mockVisualization],
+      layout: [mockLayout],
+    };
+
+    act(() => {
+      result.current.updateDashboard(dashboardWithViz);
+    });
+
+    // Verify visualization was added
+    expect(result.current.dashboards[dashboard.id].visualizations).toHaveLength(1);
+    expect(result.current.dashboards[dashboard.id].layout).toHaveLength(1);
+
+    // Remove the visualization
+    act(() => {
+      result.current.removeVisualizationFromDashboard(dashboard!.id, 'viz-1');
+    });
+
+    // Verify visualization was removed
+    expect(result.current.dashboards[dashboard!.id].visualizations).toHaveLength(0);
+    expect(result.current.dashboards[dashboard!.id].layout).toHaveLength(0);
+  });
+
+  it('should handle removing visualization from non-existent dashboard', () => {
+    const { result } = renderHook(() => useDashboardManagement(), { wrapper });
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      result.current.removeVisualizationFromDashboard('non-existent-id', 'viz-1');
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith('Dashboard not found:', 'non-existent-id');
+
+    consoleSpy.mockRestore();
+  });
 });

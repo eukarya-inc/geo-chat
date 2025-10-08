@@ -45,7 +45,12 @@ export function removeGeoJSONSource(map: maplibregl.Map): void {
 /**
  * Add source and layers for a table
  */
-export function addTableLayers(map: maplibregl.Map, tableSpec: string, tableStyle: TableStyle, sourceId: string): void {
+export function addTableLayers(
+    map: maplibregl.Map,
+    tableSpec: string,
+    tableStyle: TableStyle,
+    sourceId: string
+): void {
     // Check if source already exists, if so remove it first
     if (map.getSource(sourceId)) {
         // Remove all layers using this source
@@ -175,7 +180,7 @@ export function updateMapLayers(params: {
         onExtraStyleChange,
         initializedTables,
         styleManager,
-        tileCache,
+        tileCache
     } = params;
 
     // Always ensure StyleManager has the current map reference before any operations

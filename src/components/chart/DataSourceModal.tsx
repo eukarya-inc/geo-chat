@@ -11,7 +11,12 @@ interface DataSourceModalProps {
 
 type DataSourceType = 'sql' | 'url' | 'inline';
 
-export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: DataSourceModalProps) {
+export function DataSourceModal({
+    isOpen,
+    onClose,
+    chartSpec,
+    onUpdateChart
+}: DataSourceModalProps) {
     const [dataSourceType, setDataSourceType] = useState<DataSourceType>('sql');
     const [sqlQuery, setSqlQuery] = useState('');
     const [tableName, setTableName] = useState('');
@@ -84,6 +89,7 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
             }
 
             dataConfig = { sql: sqlQuery };
+
         } else if (dataSourceType === 'url') {
             if (!dataUrl.trim()) {
                 setError('URL cannot be empty');
@@ -99,6 +105,7 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
             }
 
             dataConfig = { url: dataUrl };
+
         } else if (dataSourceType === 'inline') {
             if (!inlineData.trim()) {
                 setError('Inline data cannot be empty');
@@ -126,8 +133,8 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
             ...chartSpec,
             spec: {
                 ...chartSpec.spec,
-                data: dataConfig,
-            } as unknown as VegaChartSpec,
+                data: dataConfig
+            } as unknown as VegaChartSpec
         };
 
         onUpdateChart(updatedSpec);
@@ -138,7 +145,10 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
         setTableName(newTableName);
         // Update SQL query to use new table name
         if (sqlQuery) {
-            const updatedQuery = sqlQuery.replace(/FROM\s+(?:["']?\w+["']?\.)?["']?\w+["']?/i, `FROM ${newTableName}`);
+            const updatedQuery = sqlQuery.replace(
+                /FROM\s+(?:["']?\w+["']?\.)?["']?\w+["']?/i,
+                `FROM ${newTableName}`
+            );
             setSqlQuery(updatedQuery);
         }
     };
@@ -149,7 +159,10 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
                 {/* Modal Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900">Edit Data Source</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -195,30 +208,38 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
                         <>
                             {/* Table Name Input */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Table Name</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Table Name
+                                </label>
                                 <input
                                     type="text"
                                     value={tableName}
-                                    onChange={e => handleTableChange(e.target.value)}
+                                    onChange={(e) => handleTableChange(e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Enter table name"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">The table to query data from</p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    The table to query data from
+                                </p>
                             </div>
 
                             {/* SQL Query Editor */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">SQL Query</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    SQL Query
+                                </label>
                                 <textarea
                                     value={sqlQuery}
-                                    onChange={e => {
+                                    onChange={(e) => {
                                         setSqlQuery(e.target.value);
                                         setError('');
                                     }}
                                     className="w-full h-48 px-3 py-2 font-mono text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="SELECT * FROM table_name"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">The SQL query used to fetch data for this chart</p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    The SQL query used to fetch data for this chart
+                                </p>
                             </div>
                         </>
                     )}
@@ -226,18 +247,22 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
                     {/* URL Data Source */}
                     {dataSourceType === 'url' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Data URL</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Data URL
+                            </label>
                             <input
                                 type="text"
                                 value={dataUrl}
-                                onChange={e => {
+                                onChange={(e) => {
                                     setDataUrl(e.target.value);
                                     setError('');
                                 }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="https://example.com/data.json"
                             />
-                            <p className="mt-1 text-xs text-gray-500">URL to a JSON, CSV, or other data file supported by Vega-Lite</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                                URL to a JSON, CSV, or other data file supported by Vega-Lite
+                            </p>
                             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                                 <p className="text-xs text-blue-800">
                                     <strong>Supported formats:</strong> JSON, CSV, TSV, DSV, TopoJSON
@@ -249,17 +274,21 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
                     {/* Inline Data Source */}
                     {dataSourceType === 'inline' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Inline Data (JSON Array)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Inline Data (JSON Array)
+                            </label>
                             <textarea
                                 value={inlineData}
-                                onChange={e => {
+                                onChange={(e) => {
                                     setInlineData(e.target.value);
                                     setError('');
                                 }}
                                 className="w-full h-64 px-3 py-2 font-mono text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                 placeholder='[{"x": 1, "y": 2}, {"x": 2, "y": 4}]'
                             />
-                            <p className="mt-1 text-xs text-gray-500">Enter data as a JSON array of objects</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                                Enter data as a JSON array of objects
+                            </p>
                         </div>
                     )}
 
@@ -273,8 +302,8 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
                     {/* Data Source Info */}
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                         <p className="text-xs text-blue-800">
-                            <strong>Note:</strong> Changing the data source may affect the chart visualization. Ensure the new data source has compatible
-                            columns for the current chart configuration.
+                            <strong>Note:</strong> Changing the data source may affect the chart visualization.
+                            Ensure the new data source has compatible columns for the current chart configuration.
                         </p>
                     </div>
                 </div>

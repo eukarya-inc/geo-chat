@@ -42,16 +42,20 @@ export function processMapStyle(style: StyleSpecification): StyleSpecification {
 /**
  * Update vector source URL in style
  */
-export function updateVectorSourceUrl(style: StyleSpecification, sourceId: string, tileUrl: string): StyleSpecification {
+export function updateVectorSourceUrl(
+    style: StyleSpecification,
+    sourceId: string,
+    tileUrl: string
+): StyleSpecification {
     return {
         ...style,
         sources: {
             ...style.sources,
             [sourceId]: {
                 type: 'vector',
-                tiles: [tileUrl],
-            },
-        },
+                tiles: [tileUrl]
+            }
+        }
     };
 }
 
@@ -64,9 +68,9 @@ export function createDefaultMapStyle(sourceId: string, tileUrl: string): StyleS
         sources: {
             [sourceId]: {
                 type: 'vector',
-                tiles: [tileUrl],
-            },
+                tiles: [tileUrl]
+            }
         },
-        layers: [],
+        layers: []
     };
 }

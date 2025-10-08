@@ -12,8 +12,8 @@ describe('DataSourceModal', () => {
             mark: 'circle',
             encoding: {},
             data: {
-                sql: 'SELECT * FROM test_table',
-            },
+                sql: 'SELECT * FROM test_table'
+            }
         } as VegaChartSpec,
         timestamp: new Date(),
     };
@@ -30,7 +30,7 @@ describe('DataSourceModal', () => {
             isOpen: true,
             onClose: vi.fn(),
             chartSpec: mockChartSpec,
-            onUpdateChart: vi.fn(),
+            onUpdateChart: vi.fn()
         };
     });
 
@@ -121,9 +121,9 @@ describe('DataSourceModal', () => {
             expect.objectContaining({
                 spec: expect.objectContaining({
                     data: expect.objectContaining({
-                        sql: 'SELECT id, name FROM users',
-                    }),
-                }),
+                        sql: 'SELECT id, name FROM users'
+                    })
+                })
             })
         );
         expect(defaultProps.onClose).toHaveBeenCalled();

@@ -7,84 +7,84 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 
 // Mock the ChartConfigForm component since we test it separately
 vi.mock('./ChartConfigForm', () => ({
-    ChartConfigForm: ({ onSpecChange }: { onSpecChange: (spec: ChartSpec) => void }) => {
-        const mockSpec: ChartSpec = {
-            id: 'test-id',
-            title: 'Test Chart',
-            spec: {
-                mark: 'circle',
-                encoding: {},
-                data: { values: [] },
-            },
-            timestamp: new Date(),
-        };
+  ChartConfigForm: ({ onSpecChange }: { onSpecChange: (spec: ChartSpec) => void }) => {
+    const mockSpec: ChartSpec = {
+      id: 'test-id',
+      title: 'Test Chart',
+      spec: {
+        mark: 'circle',
+        encoding: {},
+        data: { values: [] }
+      },
+      timestamp: new Date()
+    };
 
-        return (
-            <div data-testid="chart-config-form">
-                <button onClick={() => onSpecChange(mockSpec)}>Update Spec</button>
-            </div>
-        );
-    },
+    return (
+      <div data-testid="chart-config-form">
+        <button onClick={() => onSpecChange(mockSpec)}>Update Spec</button>
+      </div>
+    );
+  }
 }));
 
 describe('ChartConfigModal', () => {
-    const mockDBContext: Partial<DBContext> = {
-        getTableColumns: vi.fn().mockResolvedValue([]),
-    };
+  const mockDBContext: Partial<DBContext> = {
+    getTableColumns: vi.fn().mockResolvedValue([]),
+  };
 
-    const mockChartSpec: ChartSpec = {
-        id: 'test-chart',
-        title: 'Test Chart',
-        spec: {
-            mark: 'circle',
-            encoding: {},
-            data: { values: [] },
-        },
-        timestamp: new Date(),
-    };
+  const mockChartSpec: ChartSpec = {
+    id: 'test-chart',
+    title: 'Test Chart',
+    spec: {
+      mark: 'circle',
+      encoding: {},
+      data: { values: [] }
+    },
+    timestamp: new Date(),
+  };
 
-    const defaultProps = {
-        isOpen: true,
-        onClose: vi.fn(),
-        chartSpec: mockChartSpec,
-        dbContext: mockDBContext as DBContext,
-        schema: 'test_schema',
-        onUpdateChart: vi.fn(),
-        vizId: 'test-viz-id',
-    };
+  const defaultProps = {
+    isOpen: true,
+    onClose: vi.fn(),
+    chartSpec: mockChartSpec,
+    dbContext: mockDBContext as DBContext,
+    schema: 'test_schema',
+    onUpdateChart: vi.fn(),
+    vizId: 'test-viz-id'
+  };
 
-    it('should not render when isOpen is false', () => {
-        render(<ChartConfigModal {...defaultProps} isOpen={false} />);
+  it('should not render when isOpen is false', () => {
+    render(<ChartConfigModal {...defaultProps} isOpen={false} />);
 
-        expect(screen.queryByText('Chart Configuration')).not.toBeInTheDocument();
-    });
+    expect(screen.queryByText('Chart Configuration')).not.toBeInTheDocument();
+  });
 
-    it('should render when isOpen is true', () => {
-        render(<ChartConfigModal {...defaultProps} />);
+  it('should render when isOpen is true', () => {
+    render(<ChartConfigModal {...defaultProps} />);
 
-        expect(screen.getByText('Chart Configuration')).toBeInTheDocument();
-        expect(screen.getByText('Close')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Chart Configuration')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
+  });
 
-    it('should render the chart config form', () => {
-        render(<ChartConfigModal {...defaultProps} />);
+  it('should render the chart config form', () => {
+    render(<ChartConfigModal {...defaultProps} />);
 
-        expect(screen.getByTestId('chart-config-form')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('chart-config-form')).toBeInTheDocument();
+  });
 
-    it('should auto-apply changes when spec is updated', () => {
-        render(<ChartConfigModal {...defaultProps} />);
+  it('should auto-apply changes when spec is updated', () => {
+    render(<ChartConfigModal {...defaultProps} />);
 
-        const updateButton = screen.getByText('Update Spec');
-        updateButton.click();
+    const updateButton = screen.getByText('Update Spec');
+    updateButton.click();
 
-        // Verify onUpdateChart was called with the correct parameters
-        expect(defaultProps.onUpdateChart).toHaveBeenCalledWith(
-            'test-viz-id',
-            expect.objectContaining({
-                id: 'test-id',
-                title: 'Test Chart',
-            })
-        );
-    });
+    // Verify onUpdateChart was called with the correct parameters
+    expect(defaultProps.onUpdateChart).toHaveBeenCalledWith(
+      'test-viz-id',
+      expect.objectContaining({
+        id: 'test-id',
+        title: 'Test Chart'
+      })
+    );
+  });
 });

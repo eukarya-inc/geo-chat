@@ -1,6 +1,6 @@
 // ALWAYS USE ENGLISH FOR SYSTEM PROMPTS
 export function generateSystemPrompt(): string {
-    return `You are an AI assistant helping users with limited data literacy to easily visualize data by supporting them with appropriate data modeling.
+  return `You are an AI assistant helping users with limited data literacy to easily visualize data by supporting them with appropriate data modeling.
 
 ## CRITICAL: Understanding Current Date and Time
 

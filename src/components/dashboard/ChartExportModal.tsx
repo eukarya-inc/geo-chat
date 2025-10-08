@@ -12,7 +12,15 @@ interface ExportModalProps {
     lastSelectedDashboard?: string | null;
 }
 
-export function ChartExportModal({ isOpen, onClose, dashboards, onExport, title = 'Visualization', type = 'chart', lastSelectedDashboard }: ExportModalProps) {
+export function ChartExportModal({
+    isOpen,
+    onClose,
+    dashboards,
+    onExport,
+    title = 'Visualization',
+    type = 'chart',
+    lastSelectedDashboard
+}: ExportModalProps) {
     const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(lastSelectedDashboard || null);
 
     // Update selected dashboard when modal opens or lastSelectedDashboard changes
@@ -43,18 +51,29 @@ export function ChartExportModal({ isOpen, onClose, dashboards, onExport, title 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                        {type === 'map' ? <MapIcon className="w-5 h-5 text-gray-600" /> : <ChartBarIcon className="w-5 h-5 text-gray-600" />}
-                        <h3 className="text-lg font-medium text-gray-900">Export "{title}" to Dashboard</h3>
+                        {type === 'map' ? (
+                            <MapIcon className="w-5 h-5 text-gray-600" />
+                        ) : (
+                            <ChartBarIcon className="w-5 h-5 text-gray-600" />
+                        )}
+                        <h3 className="text-lg font-medium text-gray-900">
+                            Export "{title}" to Dashboard
+                        </h3>
                     </div>
-                    <button onClick={handleClose} className="text-gray-400 hover:text-gray-500 transition-colors">
+                    <button
+                        onClick={handleClose}
+                        className="text-gray-400 hover:text-gray-500 transition-colors"
+                    >
                         <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Dashboard List */}
                 <div className="space-y-2 mb-6">
-                    <p className="text-sm text-gray-600 mb-3">Select a dashboard to export this {type} to:</p>
-
+                    <p className="text-sm text-gray-600 mb-3">
+                        Select a dashboard to export this {type} to:
+                    </p>
+                    
                     {dashboards.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
                             <PresentationChartBarIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -63,7 +82,7 @@ export function ChartExportModal({ isOpen, onClose, dashboards, onExport, title 
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
-                            {dashboards.map(dashboard => (
+                            {dashboards.map((dashboard) => (
                                 <div
                                     key={dashboard.id}
                                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -73,15 +92,22 @@ export function ChartExportModal({ isOpen, onClose, dashboards, onExport, title 
                                     }`}
                                     onClick={() => setSelectedDashboardId(dashboard.id)}
                                 >
-                                    <div className={`p-2 rounded ${selectedDashboardId === dashboard.id ? 'bg-blue-100' : 'bg-white'}`}>
-                                        <PresentationChartBarIcon
-                                            className={`w-5 h-5 ${selectedDashboardId === dashboard.id ? 'text-blue-600' : 'text-gray-500'}`}
-                                        />
+                                    <div className={`p-2 rounded ${
+                                        selectedDashboardId === dashboard.id
+                                            ? 'bg-blue-100'
+                                            : 'bg-white'
+                                    }`}>
+                                        <PresentationChartBarIcon className={`w-5 h-5 ${
+                                            selectedDashboardId === dashboard.id
+                                                ? 'text-blue-600'
+                                                : 'text-gray-500'
+                                        }`} />
                                     </div>
                                     <div className="flex-1">
                                         <h4 className="font-medium">{dashboard.title}</h4>
                                         <p className="text-xs text-gray-500">
-                                            {dashboard.visualizations.length} visualizations • Created {dashboard.createdAt.toLocaleDateString()}
+                                            {dashboard.visualizations.length} visualizations • 
+                                            Created {dashboard.createdAt.toLocaleDateString()}
                                         </p>
                                     </div>
                                     {selectedDashboardId === dashboard.id && (
@@ -97,14 +123,19 @@ export function ChartExportModal({ isOpen, onClose, dashboards, onExport, title 
 
                 {/* Actions */}
                 <div className="flex gap-3 justify-end">
-                    <button onClick={handleClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors">
+                    <button
+                        onClick={handleClose}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                    >
                         Cancel
                     </button>
                     <button
                         onClick={handleExport}
                         disabled={!selectedDashboardId}
                         className={`px-4 py-2 text-white rounded transition-colors ${
-                            selectedDashboardId ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'
+                            selectedDashboardId
+                                ? 'bg-blue-500 hover:bg-blue-600'
+                                : 'bg-gray-400 cursor-not-allowed'
                         }`}
                     >
                         Export {type === 'map' ? 'Map' : 'Chart'}

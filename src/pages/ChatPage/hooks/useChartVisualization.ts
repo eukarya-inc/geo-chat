@@ -4,7 +4,12 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
 import type { ChartSpec, VegaChartSpec } from '../../../types/chart';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import { updateChatStateAtom, currentChatAtom, currentChatStateAtom, currentTableShowGraphAtom } from '../../../store/atoms';
+import {
+    updateChatStateAtom,
+    currentChatAtom,
+    currentChatStateAtom,
+    currentTableShowGraphAtom
+} from '../../../store/atoms';
 
 export function useChartVisualization(
     selectedTable: string | null,
@@ -32,25 +37,22 @@ export function useChartVisualization(
     }, [selectedTable]);
 
     // Update chart spec in remote state when it changes
-    const updateChartSpecInState = useCallback(
-        (table: string, spec: ChartSpec) => {
-            if (currentChat && lastUpdatedTableRef.current !== table) {
-                lastUpdatedTableRef.current = table;
-                updateChatState({
-                    chartSpecs: {
-                        ...(currentChatState?.chartSpecs || {}),
-                        [table]: {
-                            id: spec.id,
-                            spec: spec.spec,
-                            timestamp: spec.timestamp,
-                            title: spec.title,
-                        },
-                    },
-                });
-            }
-        },
-        [currentChat, currentChatState?.chartSpecs, updateChatState]
-    );
+    const updateChartSpecInState = useCallback((table: string, spec: ChartSpec) => {
+        if (currentChat && lastUpdatedTableRef.current !== table) {
+            lastUpdatedTableRef.current = table;
+            updateChatState({
+                chartSpecs: {
+                    ...(currentChatState?.chartSpecs || {}),
+                    [table]: {
+                        id: spec.id,
+                        spec: spec.spec,
+                        timestamp: spec.timestamp,
+                        title: spec.title
+                    }
+                }
+            });
+        }
+    }, [currentChat, currentChatState?.chartSpecs, updateChatState]);
 
     // Load existing chart spec or clear when table changes
     useEffect(() => {
@@ -67,7 +69,7 @@ export function useChartVisualization(
                 id: existingSpec.id,
                 spec: existingSpec.spec,
                 timestamp: existingSpec.timestamp,
-                title: existingSpec.title || `Chart for ${selectedTable}`,
+                title: existingSpec.title || `Chart for ${selectedTable}`
             });
         } else {
             // Don't generate chart automatically, wait for user to turn on graph
@@ -113,7 +115,7 @@ export function useChartVisualization(
                         id: `preview-${selectedTable}-${schemaName}`,
                         spec: result.spec,
                         timestamp: new Date(),
-                        title: result.title,
+                        title: result.title
                     };
                     setChartSpec(newChartSpec);
 
@@ -135,77 +137,67 @@ export function useChartVisualization(
     };
 
     // Function to update chart spec from AI tool
-    const updateChartFromAI = useCallback(
-        async (tableName: string, spec: VegaChartSpec) => {
-            if (!dbContext || !schemaName) {
-                throw new Error('Database context or schema not available');
+    const updateChartFromAI = useCallback(async (tableName: string, spec: VegaChartSpec) => {
+        if (!dbContext || !schemaName) {
+            throw new Error('Database context or schema not available');
+        }
+
+        // Validate that the table exists
+        const isValid = await dbContext.validateTable(tableName, schemaName);
+        if (!isValid) {
+            throw new Error(`Table "${tableName}" does not exist in schema "${schemaName}"`);
+        }
+
+        // Create new chart spec
+        const newChartSpec: ChartSpec = {
+            id: `ai-chart-${tableName}-${Date.now()}`,
+            spec: spec,
+            timestamp: new Date(),
+            title: typeof spec.title === 'string' ? spec.title : (typeof spec.title === 'object' && spec.title && 'text' in spec.title ? String(spec.title.text) : undefined) || `Chart for ${tableName}`
+        };
+
+        // Update local state if this is the currently selected table
+        if (tableName === selectedTable) {
+            setChartSpec(newChartSpec);
+        }
+
+        // Update remote state
+        updateChatState({
+            chartSpecs: {
+                ...(currentChatState?.chartSpecs || {}),
+                [tableName]: {
+                    id: newChartSpec.id,
+                    spec: newChartSpec.spec,
+                    timestamp: newChartSpec.timestamp,
+                    title: newChartSpec.title
+                }
             }
+        });
 
-            // Validate that the table exists
-            const isValid = await dbContext.validateTable(tableName, schemaName);
-            if (!isValid) {
-                throw new Error(`Table "${tableName}" does not exist in schema "${schemaName}"`);
-            }
-
-            // Create new chart spec
-            const newChartSpec: ChartSpec = {
-                id: `ai-chart-${tableName}-${Date.now()}`,
-                spec: spec,
-                timestamp: new Date(),
-                title:
-                    typeof spec.title === 'string'
-                        ? spec.title
-                        : (typeof spec.title === 'object' && spec.title && 'text' in spec.title ? String(spec.title.text) : undefined) ||
-                          `Chart for ${tableName}`,
-            };
-
-            // Update local state if this is the currently selected table
-            if (tableName === selectedTable) {
-                setChartSpec(newChartSpec);
-            }
-
-            // Update remote state
-            updateChatState({
-                chartSpecs: {
-                    ...(currentChatState?.chartSpecs || {}),
-                    [tableName]: {
-                        id: newChartSpec.id,
-                        spec: newChartSpec.spec,
-                        timestamp: newChartSpec.timestamp,
-                        title: newChartSpec.title,
-                    },
-                },
-            });
-
-            // Graph display is automatically turned on when chartSpec exists
-        },
-        [dbContext, schemaName, selectedTable, currentChatState, updateChatState]
-    );
+        // Graph display is automatically turned on when chartSpec exists
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState]);
 
     // Function to delete chart spec from AI tool
-    const deleteChartFromAI = useCallback(
-        async (tableName: string) => {
-            if (!dbContext || !schemaName) {
-                throw new Error('Database context or schema not available');
-            }
+    const deleteChartFromAI = useCallback(async (tableName: string) => {
+        if (!dbContext || !schemaName) {
+            throw new Error('Database context or schema not available');
+        }
 
-            // Clear local state if this is the currently selected table
-            if (tableName === selectedTable) {
-                setChartSpec(null);
-            }
+        // Clear local state if this is the currently selected table
+        if (tableName === selectedTable) {
+            setChartSpec(null);
+        }
 
-            // Update remote state to remove the chart spec
-            const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
-            delete updatedChartSpecs[tableName];
+        // Update remote state to remove the chart spec
+        const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
+        delete updatedChartSpecs[tableName];
+        
+        updateChatState({
+            chartSpecs: updatedChartSpecs
+        });
 
-            updateChatState({
-                chartSpecs: updatedChartSpecs,
-            });
-
-            // Graph display is automatically turned off when chartSpec is deleted
-        },
-        [dbContext, schemaName, selectedTable, currentChatState, updateChatState]
-    );
+        // Graph display is automatically turned off when chartSpec is deleted
+    }, [dbContext, schemaName, selectedTable, currentChatState, updateChatState]);
 
     return {
         chartSpec,

@@ -2,19 +2,19 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 
 export async function generateSQLExplanation(sql: string, apiKey: string): Promise<string> {
-    if (!apiKey) {
-        return '';
-    }
+  if (!apiKey) {
+    return '';
+  }
 
-    try {
-        const anthropic = createAnthropic({
-            apiKey,
-            headers: {
-                'anthropic-dangerous-direct-browser-access': 'true',
-            },
-        });
+  try {
+    const anthropic = createAnthropic({
+      apiKey,
+      headers: {
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+    });
 
-        const prompt = `
+    const prompt = `
 Analyze the following CREATE TABLE SQL and generate an explanation in Japanese. Match the explanation length to the SQL complexity.
 
 Example 1 - Complex SQL with CTE:
@@ -84,14 +84,14 @@ SQL:
 ${sql}
 `;
 
-        const { text } = await generateText({
-            model: anthropic('claude-3-haiku-20240307'), // Use faster model for explanations
-            prompt,
-        });
+    const { text } = await generateText({
+      model: anthropic('claude-3-haiku-20240307'), // Use faster model for explanations
+      prompt,
+    });
 
-        return text.trim();
-    } catch (error) {
-        console.error('Failed to generate SQL explanation:', error);
-        return '';
-    }
+    return text.trim();
+  } catch (error) {
+    console.error('Failed to generate SQL explanation:', error);
+    return '';
+  }
 }

@@ -153,7 +153,7 @@ export class MapStyleManager {
         const patterns = {
             polygon: ['polygon', 'fill'],
             line: ['line'],
-            point: ['point', 'circle'],
+            point: ['point', 'circle']
         };
 
         return layers.filter(layerId => {
@@ -161,20 +161,21 @@ export class MapStyleManager {
             if (!layer) return false;
 
             const layerType = (layer as { type: string }).type;
-            return patterns[geometryType].includes(layerType) || patterns[geometryType].some(pattern => layerId.includes(pattern));
+            return patterns[geometryType].includes(layerType) ||
+                   patterns[geometryType].some(pattern => layerId.includes(pattern));
         });
     }
 
-    getDataLayerInfo(): { duckdb: string[]; geojson: string[] } {
+    getDataLayerInfo(): { duckdb: string[], geojson: string[] } {
         const layers = this.getLayerIds();
         const result = {
             duckdb: layers.filter(id => id.startsWith('duckdb-')),
-            geojson: layers.filter(id => id.startsWith('geojson-')),
+            geojson: layers.filter(id => id.startsWith('geojson-'))
         };
         return result;
     }
 
-    async getDataLayerInfoWithRetry(maxRetries: number = 10, delayMs: number = 200): Promise<{ duckdb: string[]; geojson: string[] }> {
+    async getDataLayerInfoWithRetry(maxRetries: number = 10, delayMs: number = 200): Promise<{ duckdb: string[], geojson: string[] }> {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             // Force a fresh check of the map style
             if (this.map?.triggerRepaint) {
@@ -236,8 +237,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-paint',
                 layerId: cmd.includes('geojson') ? 'geojson-polygons' : 'duckdb-polygons',
                 properties: {
-                    'fill-color': color || '#ff6600',
-                },
+                    'fill-color': color || '#ff6600'
+                }
             };
         }
 
@@ -246,8 +247,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-paint',
                 layerId: cmd.includes('geojson') ? 'geojson-lines' : 'duckdb-lines',
                 properties: {
-                    'line-color': color || '#ff6600',
-                },
+                    'line-color': color || '#ff6600'
+                }
             };
         }
 
@@ -256,8 +257,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-paint',
                 layerId: cmd.includes('geojson') ? 'geojson-points' : 'duckdb-points',
                 properties: {
-                    'circle-color': color || '#ff0000',
-                },
+                    'circle-color': color || '#ff0000'
+                }
             };
         }
     }
@@ -272,8 +273,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-paint',
                 layerId: cmd.includes('geojson') ? 'geojson-polygons' : 'duckdb-polygons',
                 properties: {
-                    'fill-opacity': opacity !== null ? opacity : 0.5,
-                },
+                    'fill-opacity': opacity !== null ? opacity : 0.5
+                }
             };
         }
 
@@ -282,8 +283,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-paint',
                 layerId: cmd.includes('geojson') ? 'geojson-lines' : 'duckdb-lines',
                 properties: {
-                    'line-opacity': opacity !== null ? opacity : 0.8,
-                },
+                    'line-opacity': opacity !== null ? opacity : 0.8
+                }
             };
         }
     }
@@ -297,8 +298,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-layout',
                 layerId: cmd.includes('geojson') ? 'geojson-polygons' : 'duckdb-polygons',
                 properties: {
-                    visibility: visibility,
-                },
+                    'visibility': visibility
+                }
             };
         }
 
@@ -307,8 +308,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-layout',
                 layerId: cmd.includes('geojson') ? 'geojson-lines' : 'duckdb-lines',
                 properties: {
-                    visibility: visibility,
-                },
+                    'visibility': visibility
+                }
             };
         }
 
@@ -317,8 +318,8 @@ export const parseStyleCommand = (command: string): MapStyleUpdate | null => {
                 type: 'layer-layout',
                 layerId: cmd.includes('geojson') ? 'geojson-points' : 'duckdb-points',
                 properties: {
-                    visibility: visibility,
-                },
+                    'visibility': visibility
+                }
             };
         }
     }

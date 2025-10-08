@@ -7,7 +7,7 @@ import type {
     FillExtrusionLayerSpecification,
     HeatmapLayerSpecification,
     SourceSpecification,
-    StyleSpecification,
+    StyleSpecification
 } from 'maplibre-gl';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { MapStyleManager } from './mapStyleManager';
@@ -41,9 +41,9 @@ export type ExtraStyle = {
 
 export interface MapProps {
     dbContext: DBContext;
-    schema?: string | null; // Current schema context
-    selectedTable: string | null; // For backward compatibility and primary table
-    tables?: string[]; // New prop for multiple tables: ["schema.table1", "table2", ...]
+    schema?: string | null;  // Current schema context
+    selectedTable: string | null;  // For backward compatibility and primary table
+    tables?: string[];  // New prop for multiple tables: ["schema.table1", "table2", ...]
     selectedColumns?: string[];
     onMapReady?: (styleManager: MapStyleManager) => void;
     onStyleChange?: (styleChanger: (style: StyleSpecification) => void) => void;
@@ -57,5 +57,5 @@ export interface MapProps {
     extraStyle?: ExtraStyle;
     onTableStyleChanged?: (tableName: string, style: TableStyle) => void;
     onExtraStyleChange?: (style: ExtraStyle) => void;
-    showControls?: boolean; // Whether to show export and style editor controls (default: true)
+    showControls?: boolean;  // Whether to show export and style editor controls (default: true)
 }

@@ -8,7 +8,7 @@ interface MapStyleEditorProps {
 }
 
 const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleChange, onClose }) => {
-    const [isOpen, setIsOpen] = useState(true); // Default to open when component is rendered
+    const [isOpen, setIsOpen] = useState(true);  // Default to open when component is rendered
     const [styleJson, setStyleJson] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [isApplying, setIsApplying] = useState(false);
@@ -41,7 +41,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
         try {
             // Parse JSON to validate it
             const parsedStyle = JSON.parse(styleJson) as maplibregl.StyleSpecification;
-
+            
             // Validate required properties
             if (!parsedStyle.version || !parsedStyle.layers || !parsedStyle.sources) {
                 throw new Error('Invalid style: missing required properties (version, layers, sources)');
@@ -53,14 +53,14 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
             if (!map) {
                 throw new Error('StyleManager has no map reference');
             }
-
+            
             if (!map.loaded() || !map.isStyleLoaded()) {
                 throw new Error('Map not ready for style changes');
             }
 
             // Apply the new style directly to the map
             map.setStyle(parsedStyle);
-
+            
             setIsManuallyEdited(true);
             setError('');
         } catch (err) {
@@ -96,7 +96,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
     };
 
     if (!isOpen) {
-        return null; // Don't render anything when closed, control is handled by parent
+        return null;  // Don't render anything when closed, control is handled by parent
     }
 
     return (
@@ -116,7 +116,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                transition: 'all 0.3s ease',
+                transition: 'all 0.3s ease'
             }}
         >
             {/* Header */}
@@ -127,7 +127,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                     backgroundColor: '#f8f9fa',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    alignItems: 'center'
                 }}
             >
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>
@@ -142,7 +142,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                             fontSize: '16px',
                             cursor: 'pointer',
                             color: '#666',
-                            padding: '4px',
+                            padding: '4px'
                         }}
                         title={isExpanded ? 'Collapse' : 'Expand'}
                     >
@@ -159,7 +159,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                             fontSize: '18px',
                             cursor: 'pointer',
                             color: '#666',
-                            padding: '0 4px',
+                            padding: '0 4px'
                         }}
                     >
                         ×
@@ -174,7 +174,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                     borderBottom: '1px solid #ddd',
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                    gap: '8px',
+                    gap: '8px'
                 }}
             >
                 <button
@@ -192,7 +192,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         minHeight: '36px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'center'
                     }}
                 >
                     {isApplying ? 'Applying...' : 'Apply Style'}
@@ -212,7 +212,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         minHeight: '36px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'center'
                     }}
                 >
                     Reset
@@ -231,7 +231,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         minHeight: '36px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'center'
                     }}
                 >
                     Format JSON
@@ -260,7 +260,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                                     },
                                 ],
                             } as maplibregl.StyleSpecification;
-
+                            
                             setIsApplying(true);
                             try {
                                 await onStyleChange(defaultStyle);
@@ -287,7 +287,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         minHeight: '36px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'center'
                     }}
                 >
                     Reset to Default
@@ -302,18 +302,19 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         backgroundColor: '#f8d7da',
                         color: '#721c24',
                         borderBottom: '1px solid #ddd',
-                        fontSize: '12px',
+                        fontSize: '12px'
                     }}
                 >
                     {error}
                 </div>
             )}
 
+
             {/* JSON Editor */}
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <textarea
                     value={styleJson}
-                    onChange={e => setStyleJson(e.target.value)}
+                    onChange={(e) => setStyleJson(e.target.value)}
                     placeholder="Map style JSON will appear here..."
                     style={{
                         flex: 1,
@@ -326,7 +327,7 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                         resize: 'none',
                         backgroundColor: '#2d3748',
                         color: '#e2e8f0',
-                        borderRadius: '0',
+                        borderRadius: '0'
                     }}
                 />
             </div>
@@ -338,11 +339,11 @@ const MapStyleEditor: React.FC<MapStyleEditorProps> = ({ styleManager, onStyleCh
                     borderTop: '1px solid #ddd',
                     backgroundColor: '#f8f9fa',
                     fontSize: '11px',
-                    color: '#666',
+                    color: '#666'
                 }}
             >
-                Edit the MapLibre GL style JSON above. Click "Apply Style" to update the map. Note: Applying a new style will replace the current map
-                completely.
+                Edit the MapLibre GL style JSON above. Click "Apply Style" to update the map.
+                Note: Applying a new style will replace the current map completely.
             </div>
         </div>
     );

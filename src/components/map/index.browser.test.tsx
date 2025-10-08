@@ -7,22 +7,23 @@ import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import { convertArrowToJS } from '../../utils/arrowConverter';
 
 // Helper to generate vector tile queries with different column handling strategies
-const generateVectorTileQuery = (table: string, columns: string[], strategy: 'bug' | 'simple' | 'to_json' = 'simple') => {
-    const columnSelect =
-        columns.length > 0
-            ? columns
-                  .map(col => {
-                      switch (strategy) {
-                          case 'bug':
-                              return `CASE WHEN typeof("${col}") = 'BIGINT' THEN CAST("${col}" AS DOUBLE) ELSE "${col}" END as "${col}"`;
-                          case 'to_json':
-                              return `to_json("${col}") as "${col}"`;
-                          default:
-                              return `"${col}"`;
-                      }
-                  })
-                  .join(', ')
-            : '1 as dummy';
+const generateVectorTileQuery = (
+    table: string, 
+    columns: string[], 
+    strategy: 'bug' | 'simple' | 'to_json' = 'simple'
+) => {
+    const columnSelect = columns.length > 0 
+        ? columns.map(col => {
+            switch (strategy) {
+                case 'bug': 
+                    return `CASE WHEN typeof("${col}") = 'BIGINT' THEN CAST("${col}" AS DOUBLE) ELSE "${col}" END as "${col}"`;
+                case 'to_json': 
+                    return `to_json("${col}") as "${col}"`;
+                default: 
+                    return `"${col}"`;
+            }
+        }).join(', ')
+        : '1 as dummy';
 
     return `
         WITH filtered AS (
@@ -43,10 +44,13 @@ describe('Map Component BIGINT Handling', () => {
             mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
             eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker },
         });
-
-        db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker!));
+        
+        db = new duckdb.AsyncDuckDB(
+            new duckdb.VoidLogger(),
+            new Worker(bundle.mainWorker!)
+        );
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-
+        
         const conn = await db.connect();
         await conn.query(`INSTALL spatial`);
         await conn.close();
@@ -55,7 +59,7 @@ describe('Map Component BIGINT Handling', () => {
     it('should fail with type mixing error when using CASE without consistent types', async () => {
         const conn = await db.connect();
         await conn.query(`LOAD spatial`);
-
+        
         await conn.query(`
             CREATE OR REPLACE TABLE test_mixed (
                 geom GEOMETRY,
@@ -67,14 +71,16 @@ describe('Map Component BIGINT Handling', () => {
         `);
 
         const query = generateVectorTileQuery('test_mixed', ['varchar_col', 'bigint_col'], 'bug');
-
-        await expect(conn.prepare(query).then(stmt => stmt.query(139.5, 35.5, 140.0, 36.0))).rejects.toThrow('Cannot mix values of type VARCHAR and DOUBLE');
+        
+        await expect(
+            conn.prepare(query).then(stmt => stmt.query(139.5, 35.5, 140.0, 36.0))
+        ).rejects.toThrow('Cannot mix values of type VARCHAR and DOUBLE');
     });
 
     it('should preserve numeric types with JavaScript BigInt handling', async () => {
         const conn = await db.connect();
         await conn.query(`LOAD spatial`);
-
+        
         await conn.query(`
             CREATE OR REPLACE TABLE test_simple (
                 geom GEOMETRY,
@@ -88,11 +94,11 @@ describe('Map Component BIGINT Handling', () => {
         const query = generateVectorTileQuery('test_simple', ['int_col', 'bigint_col'], 'simple');
         const result = await conn.prepare(query).then(stmt => stmt.query(139.5, 35.5, 140.0, 36.0));
         const row = result.toArray()[0] as Record<string, unknown>;
-
+        
         // Types preserved
         expect(typeof row.int_col).toBe('number');
         expect(typeof row.bigint_col).toBe('bigint');
-
+        
         // BigInt needs conversion for JSON
         const jsonStr = JSON.stringify({ ...row, bigint_col: Number(row.bigint_col) });
         expect(JSON.parse(jsonStr).bigint_col).toBe(999999999999999);
@@ -101,7 +107,7 @@ describe('Map Component BIGINT Handling', () => {
     it('should handle LIST of STRUCT columns (Arrow Vector)', async () => {
         const conn = await db.connect();
         await conn.query(`LOAD spatial`);
-
+        
         await conn.query(`
             CREATE OR REPLACE TABLE test_list (
                 geom GEOMETRY,
@@ -117,11 +123,11 @@ describe('Map Component BIGINT Handling', () => {
         const query = generateVectorTileQuery('test_list', ['items'], 'simple');
         const result = await conn.prepare(query).then(stmt => stmt.query(139.5, 35.5, 140.0, 36.0));
         const row = result.toArray()[0];
-
+        
         // Verify items is an Arrow Vector
         expect(row.items?.constructor?.name).toBe('_Vector');
         expect(typeof row.items.toArray).toBe('function');
-
+        
         // Test using the imported conversion function
         const converted = convertArrowToJS(row) as Record<string, unknown>;
         const items = converted.items as Array<{ name: string; value: number }>;
@@ -135,7 +141,7 @@ describe('Map Component BIGINT Handling', () => {
     it('should handle STRUCT columns with nested BigInt', async () => {
         const conn = await db.connect();
         await conn.query(`LOAD spatial`);
-
+        
         await conn.query(`
             CREATE OR REPLACE TABLE test_struct (
                 geom GEOMETRY,
@@ -147,17 +153,18 @@ describe('Map Component BIGINT Handling', () => {
 
         const query = generateVectorTileQuery('test_struct', ['nested'], 'simple');
         const result = await conn.prepare(query).then(stmt => stmt.query(139.5, 35.5, 140.0, 36.0));
-
+        
         // Arrow StructRow needs conversion
         const row = result.toArray()[0];
         const jsonRow = typeof row.toJSON === 'function' ? row.toJSON() : row;
-
+        
         // Before conversion, BigInt is preserved
         expect(jsonRow.nested.name).toBe('Test');
         expect(typeof jsonRow.nested.count).toBe('bigint');
-
+        
         // Use the imported conversion function
         const converted = convertArrowToJS(row) as { nested: { name: string; count: number } };
         expect(converted.nested.count).toBe(999999999999);
     });
+
 });

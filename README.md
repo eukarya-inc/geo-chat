@@ -5,7 +5,6 @@ A modern browser-based Business Intelligence application that combines DuckDB-WA
 ## Overview
 
 LINKS BI Prototype demonstrates how to build a powerful data analysis platform entirely in the browser using:
-
 - **DuckDB-WASM** for SQL analytics with spatial extension support
 - **MapLibre GL** for interactive map visualization
 - **AI-powered SQL assistant** using Claude API
@@ -22,7 +21,6 @@ LINKS BI Prototype demonstrates how to build a powerful data analysis platform e
 ## Architecture
 
 The application is built with:
-
 - **React** + **TypeScript** for the UI framework
 - **DuckDB-WASM** for database operations
 - **MapLibre GL** for map rendering
@@ -54,7 +52,6 @@ npm run build
 ## Documentation
 
 For detailed documentation:
-
 - [CLAUDE.md](./CLAUDE.md) - Development guide for AI assistants and architectural details
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System design and components (if available)
 
