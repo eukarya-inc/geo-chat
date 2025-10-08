@@ -18,10 +18,10 @@ export interface DBContext {
     executeQuery(sql: string, schema?: string | null): Promise<any[]>;
     getSQLHistory(): SQLHistoryManager;
     dropTable(tableName: string, schema?: string | null): Promise<void>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     describeTable(
         tableName: string,
         schema?: string | null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<Array<{ column_name: string; column_type: string; [key: string]: any }>>;
     getPoolStats(): { schema: string | null; total: number; inUse: number }[];
     closeSchemaConnections(schema: string | null): Promise<void>;
@@ -614,10 +614,10 @@ class DatabaseContext implements DBContext {
         // DO NOT close the connection - it's returned to the pool automatically
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async describeTable(
         tableName: string,
         schema: string | null = null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<Array<{ column_name: string; column_type: string; [key: string]: any }>> {
         const sanitizedSchema = this.sanitizeSchemaName(schema);
         const conn = await this.connect(sanitizedSchema);

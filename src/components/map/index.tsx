@@ -300,8 +300,8 @@ const MapComponent: React.FC<MapProps> = ({
                     fitMapToData(selectedTable, geometryColumnName);
                 }, 500); // Wait a bit for tiles to load
             }
-            // eslint-disable-next-line react-hooks/exhaustive-deps
         },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [
             selectedTable,
             tables,

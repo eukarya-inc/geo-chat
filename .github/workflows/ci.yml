@@ -27,7 +27,7 @@ jobs:
             - name: Install Playwright browsers
               run: npx playwright install webkit --with-deps
 
-            - name: Verify formatting
+            - name: Run formatter
               run: npm run format:check
 
             - name: Run linter
