@@ -13,11 +13,14 @@ export function useMessageHandling(
     }, []);
 
     // Create memoized callback for message updates
-    const handleMessagesChange = useCallback((messages: StructuredMessage[]) => {
-        if (selectedChatId) {
-            updateChatMessages(selectedChatId, messages);
-        }
-    }, [selectedChatId, updateChatMessages]);
+    const handleMessagesChange = useCallback(
+        (messages: StructuredMessage[]) => {
+            if (selectedChatId) {
+                updateChatMessages(selectedChatId, messages);
+            }
+        },
+        [selectedChatId, updateChatMessages]
+    );
 
     return {
         sendMessageRef,

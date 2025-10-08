@@ -24,14 +24,17 @@ export function useTableSelection(
     }, [schemaName, prevSchemaName]);
 
     // Handle table selection and update both local state and Jotai atom
-    const handleTableSelection = useCallback((tableName: string | null) => {
-        setSelectedTable(tableName);
-        
-        // Update the selected table in Jotai atom
-        if (schemaName) {
-            setTableInAtom(tableName);
-        }
-    }, [schemaName, setTableInAtom]);
+    const handleTableSelection = useCallback(
+        (tableName: string | null) => {
+            setSelectedTable(tableName);
+
+            // Update the selected table in Jotai atom
+            if (schemaName) {
+                setTableInAtom(tableName);
+            }
+        },
+        [schemaName, setTableInAtom]
+    );
 
     // Subscribe to table changes from dbContext
     useEffect(() => {
@@ -68,7 +71,12 @@ export function useTableSelection(
     useEffect(() => {
         const restoreTableSelection = async () => {
             // Only restore if we have a connection and this is the right chat
-            if (connection && currentChat && `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName && dbContext) {
+            if (
+                connection &&
+                currentChat &&
+                `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName &&
+                dbContext
+            ) {
                 if (currentChat.selectedTable) {
                     // Check if the table actually exists in this schema
                     try {
