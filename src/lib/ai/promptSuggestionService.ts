@@ -4,43 +4,42 @@ import { z } from 'zod';
 import type { DBContext } from '../duckdb/dbContext';
 
 const SuggestedPromptsSchema = z.object({
-  prompts: z.array(z.object({
-    text: z.string().describe('The actual prompt text in Japanese'),
-    category: z.enum(['analysis', 'visualization', 'transformation', 'geographic']).describe('Category of the prompt')
-  })).max(8).describe('Array of up to 8 suggested prompts')
+    prompts: z
+        .array(
+            z.object({
+                text: z.string().describe('The actual prompt text in Japanese'),
+                category: z.enum(['analysis', 'visualization', 'transformation', 'geographic']).describe('Category of the prompt'),
+            })
+        )
+        .max(8)
+        .describe('Array of up to 8 suggested prompts'),
 });
 
 export async function generatePromptSuggestions(
-  tableName: string, 
-  dbContext: DBContext,
-  schema: string | null,
-  apiKey: string
+    tableName: string,
+    dbContext: DBContext,
+    schema: string | null,
+    apiKey: string
 ): Promise<{ text: string; category: string }[]> {
-  if (!apiKey || !dbContext) {
-    return [];
-  }
+    if (!apiKey || !dbContext) {
+        return [];
+    }
 
-  try {
-    // Get table schema information
-    const schemaData = await dbContext.executeQuery(
-      `DESCRIBE ${tableName}`,
-      schema
-    );
-    
-    // Get sample data
-    const sampleData = await dbContext.executeQuery(
-      `SELECT * FROM ${tableName} LIMIT 5`,
-      schema
-    );
+    try {
+        // Get table schema information
+        const schemaData = await dbContext.executeQuery(`DESCRIBE ${tableName}`, schema);
 
-    const anthropic = createAnthropic({
-      apiKey,
-      headers: {
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-    });
+        // Get sample data
+        const sampleData = await dbContext.executeQuery(`SELECT * FROM ${tableName} LIMIT 5`, schema);
 
-    const prompt = `
+        const anthropic = createAnthropic({
+            apiKey,
+            headers: {
+                'anthropic-dangerous-direct-browser-access': 'true',
+            },
+        });
+
+        const prompt = `
 You are analyzing a table to suggest relevant analysis prompts for a user with limited data literacy.
 
 Table Name: ${tableName}
@@ -85,15 +84,15 @@ For example:
 - If you see 'order' data → then you can suggest "注文の分析をしたい"
 `;
 
-    const { object } = await generateObject({
-      model: anthropic('claude-3-haiku-20240307'),
-      prompt,
-      schema: SuggestedPromptsSchema,
-    });
+        const { object } = await generateObject({
+            model: anthropic('claude-3-haiku-20240307'),
+            prompt,
+            schema: SuggestedPromptsSchema,
+        });
 
-    return object.prompts;
-  } catch (error) {
-    console.error('Failed to generate prompt suggestions:', error);
-    return [];
-  }
+        return object.prompts;
+    } catch (error) {
+        console.error('Failed to generate prompt suggestions:', error);
+        return [];
+    }
 }

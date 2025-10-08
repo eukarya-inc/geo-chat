@@ -4,11 +4,7 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { selectTableAtom, currentChatAtom } from '../../../store/atoms';
 
-export function useTableSelection(
-    dbContext: DBContext | null,
-    schemaName: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
-) {
+export function useTableSelection(dbContext: DBContext | null, schemaName: string | null, connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null) {
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [prevSchemaName, setPrevSchemaName] = useState<string | null>(null);
     const setTableInAtom = useSetAtom(selectTableAtom);
@@ -24,14 +20,17 @@ export function useTableSelection(
     }, [schemaName, prevSchemaName]);
 
     // Handle table selection and update both local state and Jotai atom
-    const handleTableSelection = useCallback((tableName: string | null) => {
-        setSelectedTable(tableName);
-        
-        // Update the selected table in Jotai atom
-        if (schemaName) {
-            setTableInAtom(tableName);
-        }
-    }, [schemaName, setTableInAtom]);
+    const handleTableSelection = useCallback(
+        (tableName: string | null) => {
+            setSelectedTable(tableName);
+
+            // Update the selected table in Jotai atom
+            if (schemaName) {
+                setTableInAtom(tableName);
+            }
+        },
+        [schemaName, setTableInAtom]
+    );
 
     // Subscribe to table changes from dbContext
     useEffect(() => {

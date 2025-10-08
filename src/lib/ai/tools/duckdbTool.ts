@@ -8,300 +8,310 @@ import { checkSQLType } from '../../../utils/sqlTypeChecker';
 import { getTableInfo } from '../../../utils/tableInfo';
 import type { ColumnStatistics } from '../../../utils/tableInfo';
 
-export type Result = {
-  error: string;
-  suggestion?: string;
-  sql: string;
-} | {
-  success: boolean;
-  data: Record<string, unknown>[];
-  rowCount: number;
-  totalRowCount?: number;
-  sql: string;
-  sqlExplanation?: string;
-  suggestions?: string[];
-  createdTable?: string;
-  tableSchema?: {name: string, type: string}[];
-  sampleData?: Record<string, unknown>[];
-  columnStatistics?: Record<string, ColumnStatistics>;
-  hasGeometry?: boolean;
-  geometryInfo?: {columnName: string, geometryType: string}[];
-  limitApplied?: boolean;
-  dataTruncated?: boolean;
-  warning?: string;
-};
+export type Result =
+    | {
+          error: string;
+          suggestion?: string;
+          sql: string;
+      }
+    | {
+          success: boolean;
+          data: Record<string, unknown>[];
+          rowCount: number;
+          totalRowCount?: number;
+          sql: string;
+          sqlExplanation?: string;
+          suggestions?: string[];
+          createdTable?: string;
+          tableSchema?: { name: string; type: string }[];
+          sampleData?: Record<string, unknown>[];
+          columnStatistics?: Record<string, ColumnStatistics>;
+          hasGeometry?: boolean;
+          geometryInfo?: { columnName: string; geometryType: string }[];
+          limitApplied?: boolean;
+          dataTruncated?: boolean;
+          warning?: string;
+      };
 
 export function createDuckDBTool(
-  dbContext: DBContext, 
-  schema: string | null, 
-  apiKey?: string,
-  onChartDelete?: (tableName: string) => Promise<void>,
-  onMapStyleDelete?: (tableName: string) => Promise<void>
+    dbContext: DBContext,
+    schema: string | null,
+    apiKey?: string,
+    onChartDelete?: (tableName: string) => Promise<void>,
+    onMapStyleDelete?: (tableName: string) => Promise<void>
 ) {
-  return tool({
-    description,
-    parameters: z.object({
-      sql: z.string().describe('SQL query to execute'),
-      purpose: z.enum(['chart', 'map', 'both', 'analysis', 'none']).optional()
-        .describe('Purpose of the table being created: chart (for chart visualization), map (for map visualization), both (for both chart and map), analysis (for data analysis only), none (no specific visualization purpose)'),
-    }),
-    execute: async ({ sql, purpose }): Promise<Result> => {
-      try {
-        // Check SQL statement type and multiple statements
-        const sqlType = checkSQLType(sql);
-
-        // Check for multiple statements
-        if (sqlType.hasMultipleStatements) {
-          return {
-            error: 'Multiple SQL statements detected. Please execute one statement at a time.',
-            suggestion: 'Split your SQL statements and execute them separately.',
-            sql: sql
-          };
-        }
-
-        // Try parsing SQL for CREATE TABLE statements to validate syntax.
-        // Note: The external parser may not support all DuckDB constructs (e.g., OR REPLACE, complex functions).
-        // If parsing fails, proceed to execution and let DuckDB validate instead of blocking with a parse error.
-        if (sqlType.isCreateTable) {
-          try {
-            parse(sql);
-          } catch (parseError) {
-            console.warn('[DuckDB Tool] Skipping external SQL parse validation for CREATE TABLE:', parseError);
-          }
-        }
-
-        // Execute query directly without auto-adding LIMIT
-        // AI_RETURN_LIMIT will still truncate results for token cost control
-        const executeSql = sql;
-
-        // Execute query - executeQuery now handles DDL operations automatically
-        const result = await dbContext.executeQuery(executeSql, schema);
-        // Data is already converted from Arrow format by executeQuery
-        let data = result as Record<string, unknown>[];
-
-        // Hard limit on data returned to AI to prevent token limit issues
-        const AI_RETURN_LIMIT = 100; // Maximum rows to actually return to AI
-        let truncated = false;
-        const originalLength = data.length;
-
-        if (data.length > AI_RETURN_LIMIT) {
-          console.log(`[DuckDB Tool] Truncating result from ${data.length} to ${AI_RETURN_LIMIT} rows for AI response`);
-          data = data.slice(0, AI_RETURN_LIMIT);
-          truncated = true;
-        }
-
-          // Simple table refresh for DDL operations
-          let sqlExplanation: string | undefined;
-          let createdTableName: string | undefined;
-
-          if (sqlType.isTableOperation) {
-            // Checkpoint is already handled by executeQuery for DDL operations
-
-            // Extract table name from CREATE TABLE statements
-            if (sqlType.isCreateTable) {
-              const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
-              if (tableNameMatch) {
-                createdTableName = tableNameMatch[2];
-
-                // Format SQL for both explanation and storage
-                const formattedSQL = formatSQL(sql);
-
-                // Generate explanation for CREATE TABLE using formatted SQL
-                if (apiKey) {
-                  sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
-                }
-
-                // Record the CREATE TABLE SQL in history with explanation
-                if (dbContext) {
-                  dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation, schema);
-                }
-              }
-            }
-            
-            // Handle DROP TABLE statements
-            if (sqlType.isDropTable) {
-              const dropTableNameMatch = sql.match(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
-              if (dropTableNameMatch) {
-                const droppedTableName = dropTableNameMatch[1];
-                
-                // Delete associated chart and map specs
-                if (onChartDelete) {
-                  try {
-                    await onChartDelete(droppedTableName);
-                    console.log(`[DuckDB Tool] Deleted chart spec for dropped table: ${droppedTableName}`);
-                  } catch (error) {
-                    console.error(`Failed to delete chart spec for table ${droppedTableName}:`, error);
-                  }
-                }
-                
-                if (onMapStyleDelete) {
-                  try {
-                    await onMapStyleDelete(droppedTableName);
-                    console.log(`[DuckDB Tool] Deleted map style for dropped table: ${droppedTableName}`);
-                  } catch (error) {
-                    console.error(`Failed to delete map style for table ${droppedTableName}:`, error);
-                  }
-                }
-              }
-            }
-
-            if (dbContext) {
-              // Force consistency is already handled by executeQuery for DDL operations
-              // Just notify table change with schema
-              setTimeout(() => {
-                dbContext.notifyTableChange(createdTableName, schema);
-              }, 300);
-            }
-          }
-
-          // Add metadata for large datasets
-          const toolResult: Result = {
-            success: true,
-            data,
-            rowCount: data.length,
-            sql: sql
-          };
-
-          // Add warnings for truncated data
-          if (truncated) {
-            toolResult.dataTruncated = true;
-            toolResult.totalRowCount = originalLength;
-            toolResult.warning = `クエリ結果が${originalLength}行ありましたが、AIへの応答は${AI_RETURN_LIMIT}行に制限されました。すべてのデータが必要な場合は、CREATE TABLE AS SELECT文で新しいテーブルを作成してください。`;
-          }
-
-          // Add SQL explanation if available
-          if (sqlExplanation) {
-            toolResult.sqlExplanation = sqlExplanation;
-          }
-
-          // Add createdTable if a table was created
-          if (createdTableName) {
-            toolResult.createdTable = createdTableName;
-
+    return tool({
+        description,
+        parameters: z.object({
+            sql: z.string().describe('SQL query to execute'),
+            purpose: z
+                .enum(['chart', 'map', 'both', 'analysis', 'none'])
+                .optional()
+                .describe(
+                    'Purpose of the table being created: chart (for chart visualization), map (for map visualization), both (for both chart and map), analysis (for data analysis only), none (no specific visualization purpose)'
+                ),
+        }),
+        execute: async ({ sql, purpose }): Promise<Result> => {
             try {
-              // Get comprehensive table information using the shared utility
-              const tableInfo = await getTableInfo(dbContext, createdTableName, schema);
-              
-              // Merge tableInfo into toolResult (excluding tableName and suggestions which need special handling)
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { tableName, suggestions, ...tableInfoToMerge } = tableInfo;
-              Object.assign(toolResult, tableInfoToMerge);
-              
-              // Merge suggestions
-              if (!toolResult.suggestions) {
-                toolResult.suggestions = [];
-              }
-              if (suggestions) {
-                toolResult.suggestions.push(...suggestions);
-              }
+                // Check SQL statement type and multiple statements
+                const sqlType = checkSQLType(sql);
 
-              // Validate based on purpose
-              if (purpose && purpose !== 'none' && purpose !== 'analysis') {
-                // Check for 0 records - drop table if empty
-                if (tableInfo.rowCount === 0) {
-                  console.log(`[DuckDB Tool] Dropping table ${createdTableName} - 0 records found`);
-                  try {
-                    await dbContext.dropTable(createdTableName, schema);
-                  } catch (dropError) {
-                    console.error('Failed to drop table:', dropError);
-                  }
-                  
-                  return {
-                    error: `テーブル「${createdTableName}」は作成されましたが、レコードが0件でした。テーブルは削除されました。条件を見直してデータが取得できるようにしてください。`,
-                    suggestion: 'Check your WHERE conditions, JOIN clauses, or source data to ensure records are returned. You may need to adjust filters or date ranges.',
-                    sql: sql
-                  };
+                // Check for multiple statements
+                if (sqlType.hasMultipleStatements) {
+                    return {
+                        error: 'Multiple SQL statements detected. Please execute one statement at a time.',
+                        suggestion: 'Split your SQL statements and execute them separately.',
+                        sql: sql,
+                    };
                 }
 
-                // Check for geometry columns if purpose includes map
-                if ((purpose === 'map' || purpose === 'both') && !tableInfo.hasGeometry) {
-                  // Drop the table since it doesn't meet requirements
-                  console.log(`[DuckDB Tool] Dropping table ${createdTableName} - no geometry column found for map visualization`);
-                  try {
-                    await dbContext.dropTable(createdTableName, schema);
-                  } catch (dropError) {
-                    console.error('Failed to drop table:', dropError);
-                  }
-                  
-                  return {
-                    error: `テーブル「${createdTableName}」は地図表示用に作成されましたが、ジオメトリカラムが含まれていません。テーブルは削除されました。ST_Point()やST_Read()を使用してジオメトリカラムを追加してください。`,
-                    suggestion: 'For map visualization, ensure your table includes a geometry column. Example: CREATE TABLE with_geom AS SELECT *, ST_Point(longitude, latitude) as geometry FROM your_table',
-                    sql: sql
-                  };
+                // Try parsing SQL for CREATE TABLE statements to validate syntax.
+                // Note: The external parser may not support all DuckDB constructs (e.g., OR REPLACE, complex functions).
+                // If parsing fails, proceed to execution and let DuckDB validate instead of blocking with a parse error.
+                if (sqlType.isCreateTable) {
+                    try {
+                        parse(sql);
+                    } catch (parseError) {
+                        console.warn('[DuckDB Tool] Skipping external SQL parse validation for CREATE TABLE:', parseError);
+                    }
                 }
 
-                // Check for single record warning
-                if ((purpose === 'chart' || purpose === 'map' || purpose === 'both') && tableInfo.rowCount === 1) {
-                  if (!toolResult.warning) {
-                    toolResult.warning = `⚠️ テーブル「${createdTableName}」には1件のレコードしかありません。可視化には複数のデータポイントが推奨されます。`;
-                  }
-                  if (!toolResult.suggestions) {
-                    toolResult.suggestions = [];
-                  }
-                  toolResult.suggestions.unshift(
-                    '単一レコードのため、グラフや地図での可視化効果が限定的です。',
-                    'より多くのデータを取得するか、集計条件を見直すことをお勧めします。'
-                  );
-                }
-              }
+                // Execute query directly without auto-adding LIMIT
+                // AI_RETURN_LIMIT will still truncate results for token cost control
+                const executeSql = sql;
 
-            } catch (schemaError) {
-              console.error('Failed to get table schema:', schemaError);
-              // Continue without schema info if there's an error
-              if (!toolResult.suggestions) {
-                toolResult.suggestions = [];
-              }
-              toolResult.suggestions.unshift(`テーブル「${createdTableName}」が作成されました。このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`);
+                // Execute query - executeQuery now handles DDL operations automatically
+                const result = await dbContext.executeQuery(executeSql, schema);
+                // Data is already converted from Arrow format by executeQuery
+                let data = result as Record<string, unknown>[];
+
+                // Hard limit on data returned to AI to prevent token limit issues
+                const AI_RETURN_LIMIT = 100; // Maximum rows to actually return to AI
+                let truncated = false;
+                const originalLength = data.length;
+
+                if (data.length > AI_RETURN_LIMIT) {
+                    console.log(`[DuckDB Tool] Truncating result from ${data.length} to ${AI_RETURN_LIMIT} rows for AI response`);
+                    data = data.slice(0, AI_RETURN_LIMIT);
+                    truncated = true;
+                }
+
+                // Simple table refresh for DDL operations
+                let sqlExplanation: string | undefined;
+                let createdTableName: string | undefined;
+
+                if (sqlType.isTableOperation) {
+                    // Checkpoint is already handled by executeQuery for DDL operations
+
+                    // Extract table name from CREATE TABLE statements
+                    if (sqlType.isCreateTable) {
+                        const tableNameMatch = sql.match(/CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+                        if (tableNameMatch) {
+                            createdTableName = tableNameMatch[2];
+
+                            // Format SQL for both explanation and storage
+                            const formattedSQL = formatSQL(sql);
+
+                            // Generate explanation for CREATE TABLE using formatted SQL
+                            if (apiKey) {
+                                sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
+                            }
+
+                            // Record the CREATE TABLE SQL in history with explanation
+                            if (dbContext) {
+                                dbContext.getSQLHistory().recordCreateTable(createdTableName, formattedSQL, 'ai-chat', sqlExplanation, schema);
+                            }
+                        }
+                    }
+
+                    // Handle DROP TABLE statements
+                    if (sqlType.isDropTable) {
+                        const dropTableNameMatch = sql.match(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
+                        if (dropTableNameMatch) {
+                            const droppedTableName = dropTableNameMatch[1];
+
+                            // Delete associated chart and map specs
+                            if (onChartDelete) {
+                                try {
+                                    await onChartDelete(droppedTableName);
+                                    console.log(`[DuckDB Tool] Deleted chart spec for dropped table: ${droppedTableName}`);
+                                } catch (error) {
+                                    console.error(`Failed to delete chart spec for table ${droppedTableName}:`, error);
+                                }
+                            }
+
+                            if (onMapStyleDelete) {
+                                try {
+                                    await onMapStyleDelete(droppedTableName);
+                                    console.log(`[DuckDB Tool] Deleted map style for dropped table: ${droppedTableName}`);
+                                } catch (error) {
+                                    console.error(`Failed to delete map style for table ${droppedTableName}:`, error);
+                                }
+                            }
+                        }
+                    }
+
+                    if (dbContext) {
+                        // Force consistency is already handled by executeQuery for DDL operations
+                        // Just notify table change with schema
+                        setTimeout(() => {
+                            dbContext.notifyTableChange(createdTableName, schema);
+                        }, 300);
+                    }
+                }
+
+                // Add metadata for large datasets
+                const toolResult: Result = {
+                    success: true,
+                    data,
+                    rowCount: data.length,
+                    sql: sql,
+                };
+
+                // Add warnings for truncated data
+                if (truncated) {
+                    toolResult.dataTruncated = true;
+                    toolResult.totalRowCount = originalLength;
+                    toolResult.warning = `クエリ結果が${originalLength}行ありましたが、AIへの応答は${AI_RETURN_LIMIT}行に制限されました。すべてのデータが必要な場合は、CREATE TABLE AS SELECT文で新しいテーブルを作成してください。`;
+                }
+
+                // Add SQL explanation if available
+                if (sqlExplanation) {
+                    toolResult.sqlExplanation = sqlExplanation;
+                }
+
+                // Add createdTable if a table was created
+                if (createdTableName) {
+                    toolResult.createdTable = createdTableName;
+
+                    try {
+                        // Get comprehensive table information using the shared utility
+                        const tableInfo = await getTableInfo(dbContext, createdTableName, schema);
+
+                        // Merge tableInfo into toolResult (excluding tableName and suggestions which need special handling)
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        const { tableName, suggestions, ...tableInfoToMerge } = tableInfo;
+                        Object.assign(toolResult, tableInfoToMerge);
+
+                        // Merge suggestions
+                        if (!toolResult.suggestions) {
+                            toolResult.suggestions = [];
+                        }
+                        if (suggestions) {
+                            toolResult.suggestions.push(...suggestions);
+                        }
+
+                        // Validate based on purpose
+                        if (purpose && purpose !== 'none' && purpose !== 'analysis') {
+                            // Check for 0 records - drop table if empty
+                            if (tableInfo.rowCount === 0) {
+                                console.log(`[DuckDB Tool] Dropping table ${createdTableName} - 0 records found`);
+                                try {
+                                    await dbContext.dropTable(createdTableName, schema);
+                                } catch (dropError) {
+                                    console.error('Failed to drop table:', dropError);
+                                }
+
+                                return {
+                                    error: `テーブル「${createdTableName}」は作成されましたが、レコードが0件でした。テーブルは削除されました。条件を見直してデータが取得できるようにしてください。`,
+                                    suggestion:
+                                        'Check your WHERE conditions, JOIN clauses, or source data to ensure records are returned. You may need to adjust filters or date ranges.',
+                                    sql: sql,
+                                };
+                            }
+
+                            // Check for geometry columns if purpose includes map
+                            if ((purpose === 'map' || purpose === 'both') && !tableInfo.hasGeometry) {
+                                // Drop the table since it doesn't meet requirements
+                                console.log(`[DuckDB Tool] Dropping table ${createdTableName} - no geometry column found for map visualization`);
+                                try {
+                                    await dbContext.dropTable(createdTableName, schema);
+                                } catch (dropError) {
+                                    console.error('Failed to drop table:', dropError);
+                                }
+
+                                return {
+                                    error: `テーブル「${createdTableName}」は地図表示用に作成されましたが、ジオメトリカラムが含まれていません。テーブルは削除されました。ST_Point()やST_Read()を使用してジオメトリカラムを追加してください。`,
+                                    suggestion:
+                                        'For map visualization, ensure your table includes a geometry column. Example: CREATE TABLE with_geom AS SELECT *, ST_Point(longitude, latitude) as geometry FROM your_table',
+                                    sql: sql,
+                                };
+                            }
+
+                            // Check for single record warning
+                            if ((purpose === 'chart' || purpose === 'map' || purpose === 'both') && tableInfo.rowCount === 1) {
+                                if (!toolResult.warning) {
+                                    toolResult.warning = `⚠️ テーブル「${createdTableName}」には1件のレコードしかありません。可視化には複数のデータポイントが推奨されます。`;
+                                }
+                                if (!toolResult.suggestions) {
+                                    toolResult.suggestions = [];
+                                }
+                                toolResult.suggestions.unshift(
+                                    '単一レコードのため、グラフや地図での可視化効果が限定的です。',
+                                    'より多くのデータを取得するか、集計条件を見直すことをお勧めします。'
+                                );
+                            }
+                        }
+                    } catch (schemaError) {
+                        console.error('Failed to get table schema:', schemaError);
+                        // Continue without schema info if there's an error
+                        if (!toolResult.suggestions) {
+                            toolResult.suggestions = [];
+                        }
+                        toolResult.suggestions.unshift(
+                            `テーブル「${createdTableName}」が作成されました。このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`
+                        );
+                    }
+                }
+
+                // Add suggestions for large datasets (only if not already added by table creation)
+                if (!createdTableName) {
+                    if (data.length > 100) {
+                        if (!toolResult.suggestions) {
+                            toolResult.suggestions = [];
+                        }
+                        toolResult.suggestions.push(
+                            'データが多いです。特定の条件でフィルタしてみませんか？',
+                            'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
+                            'LIMIT句を使って必要な行数のみを取得できます',
+                            'GROUP BYを使ってカテゴリ別の集計ができます'
+                        );
+                    } else if (data.length > 20) {
+                        if (!toolResult.suggestions) {
+                            toolResult.suggestions = [];
+                        }
+                        toolResult.suggestions.push(
+                            'データをさらに絞り込みたい場合はWHERE句を使用してください',
+                            'ORDER BYでデータを並び替えられます',
+                            '集計関数でデータの概要を把握できます'
+                        );
+                    }
+                }
+
+                return toolResult;
+            } catch (error) {
+                let errorMessage = 'Unknown error occurred';
+
+                if (error instanceof Error) {
+                    errorMessage = error.message;
+                } else if (typeof error === 'object' && error !== null) {
+                    // Handle WebAssembly exceptions and other objects
+                    errorMessage = error.toString();
+                    if (errorMessage === '[object WebAssembly.Exception]') {
+                        errorMessage =
+                            'WebAssembly execution error - this usually indicates invalid SQL syntax, missing tables, or inaccessible external resources';
+                    }
+                } else {
+                    errorMessage = String(error);
+                }
+
+                return {
+                    error: errorMessage,
+                    sql: sql,
+                };
             }
-          }
-
-          // Add suggestions for large datasets (only if not already added by table creation)
-          if (!createdTableName) {
-            if (data.length > 100) {
-              if (!toolResult.suggestions) {
-                toolResult.suggestions = [];
-              }
-              toolResult.suggestions.push(
-                'データが多いです。特定の条件でフィルタしてみませんか？',
-                'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
-                'LIMIT句を使って必要な行数のみを取得できます',
-                'GROUP BYを使ってカテゴリ別の集計ができます'
-              );
-            } else if (data.length > 20) {
-              if (!toolResult.suggestions) {
-                toolResult.suggestions = [];
-              }
-              toolResult.suggestions.push(
-                'データをさらに絞り込みたい場合はWHERE句を使用してください',
-                'ORDER BYでデータを並び替えられます',
-                '集計関数でデータの概要を把握できます'
-              );
-            }
-          }
-
-          return toolResult;
-      } catch (error) {
-        let errorMessage = 'Unknown error occurred';
-
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        } else if (typeof error === 'object' && error !== null) {
-          // Handle WebAssembly exceptions and other objects
-          errorMessage = error.toString();
-          if (errorMessage === '[object WebAssembly.Exception]') {
-            errorMessage = 'WebAssembly execution error - this usually indicates invalid SQL syntax, missing tables, or inaccessible external resources';
-          }
-        } else {
-          errorMessage = String(error);
-        }
-
-        return {
-          error: errorMessage,
-          sql: sql
-        };
-      }
-    },
-  });
+        },
+    });
 }
 
 const description = `

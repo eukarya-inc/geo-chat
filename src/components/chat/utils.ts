@@ -8,22 +8,19 @@
  * @returns true if the message only contains TABLE_CREATED (and optionally TABLE_INFO), false otherwise
  */
 export function isTableCreatedOnlyMessage(content: string): boolean {
-  // First remove TABLE_INFO blocks if present
-  const contentWithoutTableInfo = content
-    .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '');
-  
-  // Check if it contains TABLE_CREATED and nothing else after removing the marker
-  const hasTableCreated = contentWithoutTableInfo.includes('<!--TABLE_CREATED:');
-  if (!hasTableCreated) {
-    return false;
-  }
-  
-  // Remove TABLE_CREATED markers and check if anything remains
-  const remainingContent = contentWithoutTableInfo
-    .replace(/<!--TABLE_CREATED:[^>]+-->/g, '')
-    .trim();
-  
-  return remainingContent === '';
+    // First remove TABLE_INFO blocks if present
+    const contentWithoutTableInfo = content.replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '');
+
+    // Check if it contains TABLE_CREATED and nothing else after removing the marker
+    const hasTableCreated = contentWithoutTableInfo.includes('<!--TABLE_CREATED:');
+    if (!hasTableCreated) {
+        return false;
+    }
+
+    // Remove TABLE_CREATED markers and check if anything remains
+    const remainingContent = contentWithoutTableInfo.replace(/<!--TABLE_CREATED:[^>]+-->/g, '').trim();
+
+    return remainingContent === '';
 }
 
 /**
@@ -33,8 +30,8 @@ export function isTableCreatedOnlyMessage(content: string): boolean {
  * @returns The cleaned content for display
  */
 export function removeMetadataMarkers(content: string): string {
-  return content
-    .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
-    .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
-    .trim();
+    return content
+        .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
+        .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
+        .trim();
 }

@@ -3,11 +3,7 @@ import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { Chat } from '../../../components/chat/ChatList';
 
-export function useSchemaManagement(
-    dbContext: DBContext | null,
-    schemaName: string | null,
-    chats: Chat[]
-) {
+export function useSchemaManagement(dbContext: DBContext | null, schemaName: string | null, chats: Chat[]) {
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
 
     // Combined schema switching and connection setup
@@ -39,9 +35,9 @@ export function useSchemaManagement(
                 if (!isCleanedUp) {
                     // Ensure connection is fully ready before setting it
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    
+
                     setConnection(conn);
-                    
+
                     // Restore table selection for this chat
                     const targetChat = chats.find(chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName);
                     if (targetChat?.selectedTable) {
@@ -54,7 +50,7 @@ export function useSchemaManagement(
                             console.log(`Table ${targetChat.selectedTable} not found in schema ${schemaName}`);
                         }
                     }
-                    
+
                     // Notify table change after connection is established with a longer delay
                     if (dbContext) {
                         setTimeout(() => {
@@ -80,6 +76,6 @@ export function useSchemaManagement(
     }, [schemaName, dbContext]); // Only depend on schemaName and dbContext
 
     return {
-        connection
+        connection,
     };
 }

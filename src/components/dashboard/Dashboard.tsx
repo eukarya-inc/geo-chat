@@ -1,6 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon } from '@heroicons/react/24/outline';
+import {
+    ChartBarIcon,
+    CogIcon,
+    PuzzlePieceIcon,
+    MapIcon,
+    EllipsisVerticalIcon,
+    TrashIcon,
+    ArrowDownTrayIcon,
+    CircleStackIcon,
+} from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -11,7 +20,6 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
-
 
 interface ChartDropdownMenuProps {
     vizId: string;
@@ -63,7 +71,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             const canvas = chartContainer.querySelector('canvas');
             if (canvas) {
                 try {
-                    canvas.toBlob((blob) => {
+                    canvas.toBlob(blob => {
                         if (blob) {
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
@@ -128,12 +136,12 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
         <>
             <div className="relative" ref={dropdownRef}>
                 <button
-                    onClick={(e) => {
+                    onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
                         setIsOpen(!isOpen);
                     }}
-                    onMouseDown={(e) => {
+                    onMouseDown={e => {
                         e.stopPropagation();
                     }}
                     className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
@@ -143,85 +151,85 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                     <EllipsisVerticalIcon className="w-4 h-4" />
                 </button>
 
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                    <div className="py-1">
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaConfigureOpen();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ChartBarIcon className="w-4 h-4 mr-2" />
-                            Edit Chart Style
-                        </button>
+                {isOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
+                        <div className="py-1">
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaConfigureOpen();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ChartBarIcon className="w-4 h-4 mr-2" />
+                                Edit Chart Style
+                            </button>
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDataSourceOpen();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <CircleStackIcon className="w-4 h-4 mr-2" />
-                            Edit Data Source
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDataSourceOpen();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <CircleStackIcon className="w-4 h-4 mr-2" />
+                                Edit Data Source
+                            </button>
 
-                        <hr className="my-1 border-gray-200" />
+                            <hr className="my-1 border-gray-200" />
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaSaveAsPNG();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as PNG
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaSaveAsPNG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                Save as PNG
+                            </button>
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaSaveAsSVG();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as SVG
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaSaveAsSVG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                Save as SVG
+                            </button>
 
-                        <hr className="my-1 border-gray-200" />
+                            <hr className="my-1 border-gray-200" />
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleRemove();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <TrashIcon className="w-4 h-4 mr-2" />
-                            Remove
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleRemove();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <TrashIcon className="w-4 h-4 mr-2" />
+                                Remove
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
             </div>
 
             {/* Configuration Modal */}
@@ -240,7 +248,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                 isOpen={isDataSourceModalOpen}
                 onClose={() => setIsDataSourceModalOpen(false)}
                 chartSpec={chartSpec}
-                onUpdateChart={(newSpec) => onUpdateChart(vizId, newSpec)}
+                onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
             />
         </>
     );
@@ -276,60 +284,71 @@ export function Dashboard({
     onLayoutChange,
     onAddVisualization,
     onRemoveVisualization,
-    onUpdateDashboard
+    onUpdateDashboard,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
 
+    const handleLayoutChange = useCallback(
+        (layout: Layout[]) => {
+            onLayoutChange(layout);
+        },
+        [onLayoutChange]
+    );
 
-    const handleLayoutChange = useCallback((layout: Layout[]) => {
-        onLayoutChange(layout);
-    }, [onLayoutChange]);
+    const handleAddChart = useCallback(
+        (chartId: string) => {
+            const chart = availableCharts[chartId];
+            if (!chart) return;
 
-    const handleAddChart = useCallback((chartId: string) => {
-        const chart = availableCharts[chartId];
-        if (!chart) return;
+            const newVisualization: DashboardVisualization = {
+                id: `viz-${Date.now()}`,
+                type: 'chart',
+                title: chart.title || 'Chart',
+                chartSpec: chart,
+                createdAt: new Date(),
+            };
 
-        const newVisualization: DashboardVisualization = {
-            id: `viz-${Date.now()}`,
-            type: 'chart',
-            title: chart.title || 'Chart',
-            chartSpec: chart,
-            createdAt: new Date()
-        };
+            const newLayout: Layout = {
+                i: newVisualization.id,
+                x: 0,
+                y: 0,
+                w: 6,
+                h: 4,
+                minW: 3,
+                minH: 2,
+            };
 
-        const newLayout: Layout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 4,
-            minW: 3,
-            minH: 2
-        };
+            const updatedDashboard = {
+                ...dashboard,
+                visualizations: [...dashboard.visualizations, newVisualization],
+                layout: [...dashboard.layout, newLayout],
+            };
 
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout]
-        };
+            onUpdateDashboard(updatedDashboard);
+            onAddVisualization(chartId);
+        },
+        [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]
+    );
 
-        onUpdateDashboard(updatedDashboard);
-        onAddVisualization(chartId);
-    }, [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]);
+    const handleRemoveVisualization = useCallback(
+        (vizId: string) => {
+            onRemoveVisualization(vizId);
+        },
+        [onRemoveVisualization]
+    );
 
-    const handleRemoveVisualization = useCallback((vizId: string) => {
-        onRemoveVisualization(vizId);
-    }, [onRemoveVisualization]);
-
-    const handleUpdateChart = useCallback((vizId: string, newSpec: ChartSpec) => {
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: dashboard.visualizations.map(viz =>
-                viz.id === vizId ? { ...viz, chartSpec: newSpec, title: newSpec.title || viz.title } : viz
-            )
-        };
-        onUpdateDashboard(updatedDashboard);
-    }, [dashboard, onUpdateDashboard]);
+    const handleUpdateChart = useCallback(
+        (vizId: string, newSpec: ChartSpec) => {
+            const updatedDashboard = {
+                ...dashboard,
+                visualizations: dashboard.visualizations.map(viz =>
+                    viz.id === vizId ? { ...viz, chartSpec: newSpec, title: newSpec.title || viz.title } : viz
+                ),
+            };
+            onUpdateDashboard(updatedDashboard);
+        },
+        [dashboard, onUpdateDashboard]
+    );
 
     return (
         <div className="flex h-full">
@@ -380,18 +399,11 @@ export function Dashboard({
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-700">Available Charts</h3>
                             {Object.entries(availableCharts).map(([chartId, chart]) => (
-                                <div
-                                    key={chartId}
-                                    className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
-                                >
+                                <div key={chartId} className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
-                                            <h4 className="text-sm font-medium text-gray-900">
-                                                {chart.title || 'Untitled Chart'}
-                                            </h4>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Created: {chart.timestamp?.toLocaleDateString() || 'Unknown'}
-                                            </p>
+                                            <h4 className="text-sm font-medium text-gray-900">{chart.title || 'Untitled Chart'}</h4>
+                                            <p className="text-xs text-gray-500 mt-1">Created: {chart.timestamp?.toLocaleDateString() || 'Unknown'}</p>
                                         </div>
                                         <button
                                             onClick={() => handleAddChart(chartId)}
@@ -403,9 +415,7 @@ export function Dashboard({
                                 </div>
                             ))}
                             {Object.keys(availableCharts).length === 0 && (
-                                <p className="text-sm text-gray-500 text-center py-8">
-                                    No charts available. Create charts in the chat to add them here.
-                                </p>
+                                <p className="text-sm text-gray-500 text-center py-8">No charts available. Create charts in the chat to add them here.</p>
                             )}
                         </div>
                     )}
@@ -429,9 +439,7 @@ export function Dashboard({
                     {activeTab === 'plugins' && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-700">Plugin Settings</h3>
-                            <p className="text-sm text-gray-500">
-                                Plugins functionality will be available in future updates.
-                            </p>
+                            <p className="text-sm text-gray-500">Plugins functionality will be available in future updates.</p>
                         </div>
                     )}
                 </div>
@@ -452,20 +460,14 @@ export function Dashboard({
                             isResizable={true}
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
                         >
-                            {dashboard.visualizations.map((viz) => (
-                                <div
-                                    key={viz.id}
-                                    className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
-                                    data-viz-id={viz.id}
-                                >
+                            {dashboard.visualizations.map(viz => (
+                                <div key={viz.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden" data-viz-id={viz.id}>
                                     <div className="h-full flex flex-col">
                                         <div
                                             className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50"
-                                            onMouseDown={(e) => e.stopPropagation()}
+                                            onMouseDown={e => e.stopPropagation()}
                                         >
-                                            <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                {viz.title}
-                                            </h4>
+                                            <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
                                             {viz.type === 'chart' && viz.chartSpec && (
                                                 <ChartDropdownMenu
                                                     vizId={viz.id}
@@ -500,11 +502,7 @@ export function Dashboard({
                                                     />
                                                 </div>
                                             ) : viz.type === 'map' && viz.tableName ? (
-                                                <div 
-                                                    className="h-full"
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onTouchStart={(e) => e.stopPropagation()}
-                                                >
+                                                <div className="h-full" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
                                                     <Map
                                                         dbContext={dbContext}
                                                         schema={schemaName}
@@ -523,17 +521,13 @@ export function Dashboard({
                                                             {viz.type === 'map' && <MapIcon className="w-8 h-8 mx-auto text-gray-300" />}
                                                         </div>
                                                         <p className="text-sm">
-                                                            {viz.type === 'chart' 
-                                                                ? 'Chart spec missing' 
+                                                            {viz.type === 'chart'
+                                                                ? 'Chart spec missing'
                                                                 : viz.type === 'map'
-                                                                ? 'Map table missing'
-                                                                : `${viz.type} visualization`}
+                                                                  ? 'Map table missing'
+                                                                  : `${viz.type} visualization`}
                                                         </p>
-                                                        {viz.sql && (
-                                                            <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
-                                                                {viz.sql}
-                                                            </p>
-                                                        )}
+                                                        {viz.sql && <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">{viz.sql}</p>}
                                                     </div>
                                                 </div>
                                             )}
@@ -547,9 +541,7 @@ export function Dashboard({
                             <div className="text-center">
                                 <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                                 <h3 className="text-lg font-medium text-gray-900 mb-2">Empty Dashboard</h3>
-                                <p className="text-sm text-gray-500 mb-4">
-                                    Add charts from the sidebar to get started
-                                </p>
+                                <p className="text-sm text-gray-500 mb-4">Add charts from the sidebar to get started</p>
                             </div>
                         </div>
                     )}

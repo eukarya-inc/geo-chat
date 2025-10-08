@@ -33,8 +33,8 @@ describe('convertArrowToJS', () => {
             value: BigInt(100000000000),
             nested: {
                 count: BigInt(999),
-                text: 'hello'
-            }
+                text: 'hello',
+            },
         };
         const result = convertArrowToJS(input);
         expect(result).toEqual({
@@ -42,8 +42,8 @@ describe('convertArrowToJS', () => {
             value: 100000000000,
             nested: {
                 count: 999,
-                text: 'hello'
-            }
+                text: 'hello',
+            },
         });
     });
 
@@ -51,13 +51,13 @@ describe('convertArrowToJS', () => {
         // Create actual Arrow Vector with BigInt values
         const data = [
             { name: 'Item1', value: BigInt(100000000000) },
-            { name: 'Item2', value: BigInt(200000000000) }
+            { name: 'Item2', value: BigInt(200000000000) },
         ];
-        
+
         // Build Arrow Table with struct type
         const table = arrow.tableFromJSON(data);
         const vector = table.getChild('value');
-        
+
         // Test that the vector is properly converted
         if (vector) {
             const result = convertArrowToJS(vector);
@@ -72,18 +72,18 @@ describe('convertArrowToJS', () => {
         // Create Arrow Table with mixed types including BigInt
         const data = [
             { id: 1, name: 'Test1', count: BigInt(999999999999) },
-            { id: 2, name: 'Test2', count: BigInt(888888888888) }
+            { id: 2, name: 'Test2', count: BigInt(888888888888) },
         ];
-        
+
         const table = arrow.tableFromJSON(data);
-        
+
         // Convert the entire table
         const rows = table.toArray();
         const result = rows.map((row: unknown) => convertArrowToJS(row));
-        
+
         expect(Array.isArray(result)).toBe(true);
         expect(result).toHaveLength(2);
-        
+
         const firstRow = result[0] as Record<string, unknown>;
         expect(firstRow.id).toBe(1);
         expect(firstRow.name).toBe('Test1');
@@ -94,19 +94,19 @@ describe('convertArrowToJS', () => {
     it('should handle Arrow Struct type', () => {
         // Create Arrow Table with struct column
         const data = [
-            { 
-                nested: { 
-                    field1: 'value1', 
-                    field2: BigInt(12345678901234)
-                } 
-            }
+            {
+                nested: {
+                    field1: 'value1',
+                    field2: BigInt(12345678901234),
+                },
+            },
         ];
-        
+
         const table = arrow.tableFromJSON(data);
         const rows = table.toArray();
-        
+
         const result = convertArrowToJS(rows[0]) as Record<string, unknown>;
-        
+
         expect(result.nested).toBeDefined();
         const nested = result.nested as Record<string, unknown>;
         expect(nested.field1).toBe('value1');
@@ -121,10 +121,10 @@ describe('convertArrowToJS', () => {
             constructor: { name: '_Vector' },
             toArray: () => [
                 { name: 'Item1', value: BigInt(100000000000) },
-                { name: 'Item2', value: BigInt(200000000000) }
-            ]
+                { name: 'Item2', value: BigInt(200000000000) },
+            ],
         };
-        
+
         const result = convertArrowToJS(mockVector);
         expect(Array.isArray(result)).toBe(true);
         const items = result as unknown[];
@@ -149,14 +149,14 @@ describe('convertArrowToJS', () => {
                     tags: ['tag1', 'tag2'],
                     details: {
                         description: 'Test description',
-                        value: BigInt(555555555555)
-                    }
-                }
-            })
+                        value: BigInt(555555555555),
+                    },
+                },
+            }),
         };
-        
+
         const result = convertArrowToJS(mockStructRow) as Record<string, unknown>;
-        
+
         expect(result.id).toBe(1);
         const metadata = result.metadata as Record<string, unknown>;
         expect(metadata.count).toBe(999999999999);
