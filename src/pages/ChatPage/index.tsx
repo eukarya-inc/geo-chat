@@ -10,7 +10,7 @@ import { ChartConfigForm } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon, TrashIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -339,6 +339,71 @@ function ChatPage() {
         setShowChartDropdown(false);
     };
 
+    // Copy chart to clipboard handler
+    const handleCopyChartToClipboard = async () => {
+        try {
+            // Try canvas (PNG) first
+            const canvasElement = document.querySelector('.vega-embed canvas');
+            if (canvasElement) {
+                const canvas = canvasElement as HTMLCanvasElement;
+                canvas.toBlob(async (blob) => {
+                    if (blob) {
+                        try {
+                            await navigator.clipboard.write([
+                                new ClipboardItem({ 'image/png': blob })
+                            ]);
+                            alert('Chart copied to clipboard!');
+                        } catch (err) {
+                            console.error('Failed to copy chart to clipboard:', err);
+                            alert('Failed to copy chart to clipboard. Please try downloading instead.');
+                        }
+                    }
+                });
+                setShowChartDropdown(false);
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = document.querySelector('.vega-embed svg');
+            if (svgElement) {
+                const svg = svgElement as SVGElement;
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+
+                img.onload = async () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx?.drawImage(img, 0, 0);
+                    canvas.toBlob(async (blob) => {
+                        if (blob) {
+                            try {
+                                await navigator.clipboard.write([
+                                    new ClipboardItem({ 'image/png': blob })
+                                ]);
+                                alert('Chart copied to clipboard!');
+                            } catch (err) {
+                                console.error('Failed to copy chart to clipboard:', err);
+                                alert('Failed to copy chart to clipboard. Please try downloading instead.');
+                            }
+                        }
+                    });
+                };
+
+                img.src = 'data:image/svg+xml;base64,' + btoa(encodeURIComponent(svgData).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                setShowChartDropdown(false);
+                return;
+            }
+
+            alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert('Failed to copy chart to clipboard.');
+        }
+        setShowChartDropdown(false);
+    };
+
     // Remove chart handler
     const handleRemoveChart = () => {
         if (selectedTable && deleteChartFromAI) {
@@ -632,6 +697,20 @@ function ChatPage() {
                                                                         </button>
 
                                                                         <hr className="my-1 border-gray-200" />
+
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                handleCopyChartToClipboard();
+                                                                            }}
+                                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                            type="button"
+                                                                        >
+                                                                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                                                                            Copy to Clipboard
+                                                                        </button>
 
                                                                         <button
                                                                             onClick={(e) => {

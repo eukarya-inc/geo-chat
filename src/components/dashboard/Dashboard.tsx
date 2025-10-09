@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -119,6 +119,75 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
         setIsOpen(false);
     };
 
+    const handleCopyToClipboard = async () => {
+        try {
+            const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+            if (!chartContainer) {
+                alert('Chart not found. Please try again.');
+                setIsOpen(false);
+                return;
+            }
+
+            // Try canvas (PNG) first
+            const canvas = chartContainer.querySelector('canvas');
+            if (canvas) {
+                canvas.toBlob(async (blob) => {
+                    if (blob) {
+                        try {
+                            await navigator.clipboard.write([
+                                new ClipboardItem({ 'image/png': blob })
+                            ]);
+                            alert('Chart copied to clipboard!');
+                        } catch (err) {
+                            console.error('Failed to copy chart to clipboard:', err);
+                            alert('Failed to copy chart to clipboard. Please try downloading instead.');
+                        }
+                    }
+                });
+                setIsOpen(false);
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = chartContainer.querySelector('svg');
+            if (svgElement) {
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const tempCanvas = document.createElement('canvas');
+                const ctx = tempCanvas.getContext('2d');
+                const img = new Image();
+
+                img.onload = async () => {
+                    tempCanvas.width = img.width;
+                    tempCanvas.height = img.height;
+                    ctx?.drawImage(img, 0, 0);
+                    tempCanvas.toBlob(async (blob) => {
+                        if (blob) {
+                            try {
+                                await navigator.clipboard.write([
+                                    new ClipboardItem({ 'image/png': blob })
+                                ]);
+                                alert('Chart copied to clipboard!');
+                            } catch (err) {
+                                console.error('Failed to copy chart to clipboard:', err);
+                                alert('Failed to copy chart to clipboard. Please try downloading instead.');
+                            }
+                        }
+                    });
+                };
+
+                img.src = 'data:image/svg+xml;base64,' + btoa(encodeURIComponent(svgData).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                setIsOpen(false);
+                return;
+            }
+
+            alert('Chart not found. Please try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert('Failed to copy chart to clipboard.');
+        }
+        setIsOpen(false);
+    };
+
     const handleRemove = () => {
         onRemove(vizId);
         setIsOpen(false);
@@ -175,6 +244,20 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                         </button>
 
                         <hr className="my-1 border-gray-200" />
+
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleCopyToClipboard();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                            Copy to Clipboard
+                        </button>
 
                         <button
                             onClick={(e) => {
