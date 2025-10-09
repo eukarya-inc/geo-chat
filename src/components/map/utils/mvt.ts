@@ -11,6 +11,32 @@ export interface QueryParams {
     selectedColumns: string[];
     geometryColumnName: string;
     schema?: string | null;
+    columnTypes?: Record<string, string>;
+}
+
+/**
+ * Determine whether a column type should be stringified for MVT compatibility
+ */
+function shouldStringifyColumn(columnType?: string | null): boolean {
+    if (!columnType) {
+        return false;
+    }
+
+    const upperType = columnType.toUpperCase();
+
+    // STRUCT, LIST (aka arrays), MAP, JSON and UNION types must be stringified
+    if (
+        upperType.includes('STRUCT') ||
+        upperType.includes('LIST') ||
+        upperType.includes('[]') ||
+        upperType.includes('MAP') ||
+        upperType.includes('JSON') ||
+        upperType.includes('UNION')
+    ) {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -21,7 +47,7 @@ export interface QueryParams {
  * forces always_xy mode to ensure lon,lat order.
  */
 export function generateVectorTileQuery(params: QueryParams): string {
-    const { zxy, selectedTable, selectedColumns, geometryColumnName } = params;
+    const { zxy, selectedTable, selectedColumns, geometryColumnName, columnTypes } = params;
     const simplify = calculateSimplifyTolerance(zxy.z);
     const geomCol = geometryColumnName || 'geometry';
 
@@ -30,7 +56,15 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
     // Build column selection for the struct
     // Use TRY_CAST to safely convert complex types to VARCHAR (JSON string) for ST_AsMVT compatibility
-    const columnList = selectedColumns.map(col => `'${col}': TRY_CAST("${col}" AS VARCHAR)`).join(', ');
+    const columnList = selectedColumns
+        .map(col => {
+            const columnType = columnTypes?.[col];
+            const structKey = col.replace(/'/g, "''"); // Escape single quotes for SQL string literal keys
+            const valueExpression = shouldStringifyColumn(columnType) ? `TRY_CAST("${col}" AS VARCHAR)` : `"${col}"`;
+
+            return `'${structKey}': ${valueExpression}`;
+        })
+        .join(', ');
 
     const structColumns = `{
         'geometry': ST_AsMVTGeom(
