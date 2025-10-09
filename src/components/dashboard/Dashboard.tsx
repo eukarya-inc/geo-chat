@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -119,6 +119,107 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
         setIsOpen(false);
     };
 
+    const handleCopyToClipboard = async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setIsOpen(false);
+                return;
+            }
+
+            const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+            if (!chartContainer) {
+                alert('Chart not found. Please try again.');
+                setIsOpen(false);
+                return;
+            }
+
+            // Try canvas (PNG) first
+            const canvas = chartContainer.querySelector('canvas');
+            if (canvas) {
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from canvas'));
+                        }
+                    }, 'image/png');
+                });
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blobPromise })
+                ]);
+
+                alert('Chart copied to clipboard!');
+                setIsOpen(false);
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = chartContainer.querySelector('svg');
+            if (svgElement) {
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            // Create canvas and draw image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.width;
+                            tempCanvas.height = img.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get canvas context'));
+                                return;
+                            }
+
+                            ctx.drawImage(img, 0, 0);
+
+                            // Convert to blob
+                            tempCanvas.toBlob((blob) => {
+                                URL.revokeObjectURL(url);
+                                if (blob) {
+                                    resolve(blob);
+                                } else {
+                                    reject(new Error('Failed to create PNG from SVG'));
+                                }
+                            }, 'image/png');
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Failed to load SVG image'));
+                    };
+                    img.src = url;
+                });
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blobPromise })
+                ]);
+
+                alert('Chart copied to clipboard!');
+                setIsOpen(false);
+                return;
+            }
+
+            alert('Chart not found. Please try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+        setIsOpen(false);
+    };
+
     const handleRemove = () => {
         onRemove(vizId);
         setIsOpen(false);
@@ -175,6 +276,20 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                         </button>
 
                         <hr className="my-1 border-gray-200" />
+
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleCopyToClipboard();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                            Copy to Clipboard
+                        </button>
 
                         <button
                             onClick={(e) => {
