@@ -354,17 +354,19 @@ function ChatPage() {
             if (canvasElement) {
                 const canvas = canvasElement as HTMLCanvasElement;
 
-                // Convert canvas to blob using Promise
-                const blob = await new Promise<Blob | null>((resolve) => {
-                    canvas.toBlob((b) => resolve(b), 'image/png');
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from canvas'));
+                        }
+                    }, 'image/png');
                 });
 
-                if (!blob) {
-                    throw new Error('Failed to create image from canvas');
-                }
-
                 await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blob })
+                    new ClipboardItem({ 'image/png': blobPromise })
                 ]);
 
                 alert('Chart copied to clipboard!');
@@ -380,37 +382,46 @@ function ChatPage() {
                 const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
                 const url = URL.createObjectURL(svgBlob);
 
-                // Create a promise-based image loading
-                const loadImage = (): Promise<HTMLImageElement> => {
-                    return new Promise((resolve, reject) => {
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.onerror = reject;
-                        img.src = url;
-                    });
-                };
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            // Create canvas and draw image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.width;
+                            tempCanvas.height = img.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get canvas context'));
+                                return;
+                            }
 
-                const img = await loadImage();
-                URL.revokeObjectURL(url);
+                            ctx.drawImage(img, 0, 0);
 
-                // Create canvas and draw image
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.width;
-                tempCanvas.height = img.height;
-                const ctx = tempCanvas.getContext('2d');
-                if (!ctx) throw new Error('Failed to get canvas context');
-
-                ctx.drawImage(img, 0, 0);
-
-                // Convert to blob
-                const blob = await new Promise<Blob | null>((resolve) => {
-                    tempCanvas.toBlob((b) => resolve(b), 'image/png');
+                            // Convert to blob
+                            tempCanvas.toBlob((blob) => {
+                                URL.revokeObjectURL(url);
+                                if (blob) {
+                                    resolve(blob);
+                                } else {
+                                    reject(new Error('Failed to create PNG from SVG'));
+                                }
+                            }, 'image/png');
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Failed to load SVG image'));
+                    };
+                    img.src = url;
                 });
 
-                if (!blob) throw new Error('Failed to create PNG from SVG');
-
                 await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blob })
+                    new ClipboardItem({ 'image/png': blobPromise })
                 ]);
 
                 alert('Chart copied to clipboard!');
