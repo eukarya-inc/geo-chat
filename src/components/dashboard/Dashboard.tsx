@@ -304,7 +304,7 @@ export function Dashboard({
                     <div className="flex">
                         <button
                             onClick={() => setActiveTab('charts')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'charts'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -315,7 +315,7 @@ export function Dashboard({
                         </button>
                         <button
                             onClick={() => setActiveTab('layout')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'layout'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -326,7 +326,7 @@ export function Dashboard({
                         </button>
                         <button
                             onClick={() => setActiveTab('plugins')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'plugins'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
