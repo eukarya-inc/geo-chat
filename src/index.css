@@ -1,86 +1,86 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 #root {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* Shimmer animation for loading state */
 @keyframes shimmer {
-  0% {
-    background-position: 200% center;
-  }
-  100% {
-    background-position: -200% center;
-  }
+    0% {
+        background-position: 200% center;
+    }
+    100% {
+        background-position: -200% center;
+    }
 }
 
 .animate-shimmer {
-  animation: shimmer 2s linear infinite;
+    animation: shimmer 2s linear infinite;
 }
 
 /* Prose styles for markdown rendering */
 .prose {
-  color: inherit;
-  max-width: 65ch;
+    color: inherit;
+    max-width: 65ch;
 }
 
 .prose.max-w-none {
-  max-width: none;
+    max-width: none;
 }
 
 /* Fix long URL wrapping */
 .prose a,
 .whitespace-pre-wrap a {
-  word-break: break-all;
-  overflow-wrap: anywhere;
+    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 /* Fix markdown list rendering */
 .prose ul {
-  list-style-type: disc;
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
-  padding-left: 1.625em;
+    list-style-type: disc;
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    padding-left: 1.625em;
 }
 
 .prose ol {
-  list-style-type: decimal;
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
-  padding-left: 1.625em;
+    list-style-type: decimal;
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    padding-left: 1.625em;
 }
 
 .prose li {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
 }
 
 .prose ul > li,
 .prose ol > li {
-  padding-left: 0.375em;
+    padding-left: 0.375em;
 }
 
 .prose ul ul,
 .prose ul ol,
 .prose ol ul,
 .prose ol ol {
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
 }
 
 .prose p {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
 }
 
 .prose p:first-child {
-  margin-top: 0;
+    margin-top: 0;
 }
 
 .prose p:last-child {
-  margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 /* Force break for any long continuous text */
@@ -93,16 +93,16 @@
 .whitespace-pre-wrap code,
 .whitespace-pre-wrap code span,
 .whitespace-pre-wrap a {
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 /* Hide scrollbar for recommended prompts */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+    scrollbar-width: none; /* Firefox */
 }
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Safari and Chrome */
+    display: none; /* Safari and Chrome */
 }

@@ -1,6 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon, EllipsisVerticalIcon, TrashIcon, ArrowDownTrayIcon, CircleStackIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import {
+    ChartBarIcon,
+    CogIcon,
+    PuzzlePieceIcon,
+    MapIcon,
+    EllipsisVerticalIcon,
+    TrashIcon,
+    ArrowDownTrayIcon,
+    CircleStackIcon,
+    ClipboardDocumentIcon,
+} from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -12,7 +22,6 @@ import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-
 interface ChartDropdownMenuProps {
     vizId: string;
     vizTitle: string;
@@ -23,7 +32,15 @@ interface ChartDropdownMenuProps {
     onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
 }
 
-function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRemove, onUpdateChart }: ChartDropdownMenuProps) {
+function ChartDropdownMenu({
+    vizId,
+    vizTitle,
+    chartSpec,
+    dbContext,
+    schema,
+    onRemove,
+    onUpdateChart,
+}: ChartDropdownMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [isDataSourceModalOpen, setIsDataSourceModalOpen] = useState(false);
@@ -63,7 +80,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             const canvas = chartContainer.querySelector('canvas');
             if (canvas) {
                 try {
-                    canvas.toBlob((blob) => {
+                    canvas.toBlob(blob => {
                         if (blob) {
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
@@ -140,7 +157,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             if (canvas) {
                 // Safari requires ClipboardItem to be created synchronously with a Promise
                 const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob((blob) => {
+                    canvas.toBlob(blob => {
                         if (blob) {
                             resolve(blob);
                         } else {
@@ -149,9 +166,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                     }, 'image/png');
                 });
 
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blobPromise })
-                ]);
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
 
                 alert('Chart copied to clipboard!');
                 setIsOpen(false);
@@ -183,7 +198,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                             ctx.drawImage(img, 0, 0);
 
                             // Convert to blob
-                            tempCanvas.toBlob((blob) => {
+                            tempCanvas.toBlob(blob => {
                                 URL.revokeObjectURL(url);
                                 if (blob) {
                                     resolve(blob);
@@ -203,9 +218,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                     img.src = url;
                 });
 
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blobPromise })
-                ]);
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
 
                 alert('Chart copied to clipboard!');
                 setIsOpen(false);
@@ -229,12 +242,12 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
         <>
             <div className="relative" ref={dropdownRef}>
                 <button
-                    onClick={(e) => {
+                    onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
                         setIsOpen(!isOpen);
                     }}
-                    onMouseDown={(e) => {
+                    onMouseDown={e => {
                         e.stopPropagation();
                     }}
                     className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
@@ -244,99 +257,99 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                     <EllipsisVerticalIcon className="w-4 h-4" />
                 </button>
 
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                    <div className="py-1">
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaConfigureOpen();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ChartBarIcon className="w-4 h-4 mr-2" />
-                            Edit Chart Style
-                        </button>
+                {isOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
+                        <div className="py-1">
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaConfigureOpen();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ChartBarIcon className="w-4 h-4 mr-2" />
+                                Edit Chart Style
+                            </button>
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDataSourceOpen();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <CircleStackIcon className="w-4 h-4 mr-2" />
-                            Edit Data Source
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDataSourceOpen();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <CircleStackIcon className="w-4 h-4 mr-2" />
+                                Edit Data Source
+                            </button>
 
-                        <hr className="my-1 border-gray-200" />
+                            <hr className="my-1 border-gray-200" />
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleCopyToClipboard();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                            Copy to Clipboard
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleCopyToClipboard();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                                Copy to Clipboard
+                            </button>
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaSaveAsPNG();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as PNG
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaSaveAsPNG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                Save as PNG
+                            </button>
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleVegaSaveAsSVG();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as SVG
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleVegaSaveAsSVG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                Save as SVG
+                            </button>
 
-                        <hr className="my-1 border-gray-200" />
+                            <hr className="my-1 border-gray-200" />
 
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleRemove();
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <TrashIcon className="w-4 h-4 mr-2" />
-                            Remove
-                        </button>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleRemove();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <TrashIcon className="w-4 h-4 mr-2" />
+                                Remove
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
             </div>
 
             {/* Configuration Modal */}
@@ -355,7 +368,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
                 isOpen={isDataSourceModalOpen}
                 onClose={() => setIsDataSourceModalOpen(false)}
                 chartSpec={chartSpec}
-                onUpdateChart={(newSpec) => onUpdateChart(vizId, newSpec)}
+                onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
             />
         </>
     );
@@ -387,28 +400,36 @@ export function Dashboard({
     schemaName,
     onLayoutChange,
     onRemoveVisualization,
-    onUpdateDashboard
+    onUpdateDashboard,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
 
+    const handleLayoutChange = useCallback(
+        (layout: Layout[]) => {
+            onLayoutChange(layout);
+        },
+        [onLayoutChange]
+    );
 
-    const handleLayoutChange = useCallback((layout: Layout[]) => {
-        onLayoutChange(layout);
-    }, [onLayoutChange]);
+    const handleRemoveVisualization = useCallback(
+        (vizId: string) => {
+            onRemoveVisualization(vizId);
+        },
+        [onRemoveVisualization]
+    );
 
-    const handleRemoveVisualization = useCallback((vizId: string) => {
-        onRemoveVisualization(vizId);
-    }, [onRemoveVisualization]);
-
-    const handleUpdateChart = useCallback((vizId: string, newSpec: ChartSpec) => {
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: dashboard.visualizations.map(viz =>
-                viz.id === vizId ? { ...viz, chartSpec: newSpec, title: newSpec.title || viz.title } : viz
-            )
-        };
-        onUpdateDashboard(updatedDashboard);
-    }, [dashboard, onUpdateDashboard]);
+    const handleUpdateChart = useCallback(
+        (vizId: string, newSpec: ChartSpec) => {
+            const updatedDashboard = {
+                ...dashboard,
+                visualizations: dashboard.visualizations.map(viz =>
+                    viz.id === vizId ? { ...viz, chartSpec: newSpec, title: newSpec.title || viz.title } : viz
+                ),
+            };
+            onUpdateDashboard(updatedDashboard);
+        },
+        [dashboard, onUpdateDashboard]
+    );
 
     return (
         <div className="flex h-full">
@@ -458,7 +479,7 @@ export function Dashboard({
                     {activeTab === 'charts' && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-700">Available Visualizations</h3>
-                            {dashboard.visualizations.map((viz) => (
+                            {dashboard.visualizations.map(viz => (
                                 <div
                                     key={viz.id}
                                     className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
@@ -530,7 +551,7 @@ export function Dashboard({
                             isResizable={true}
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
                         >
-                            {dashboard.visualizations.map((viz) => (
+                            {dashboard.visualizations.map(viz => (
                                 <div
                                     key={viz.id}
                                     className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
@@ -539,11 +560,9 @@ export function Dashboard({
                                     <div className="h-full flex flex-col">
                                         <div
                                             className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50"
-                                            onMouseDown={(e) => e.stopPropagation()}
+                                            onMouseDown={e => e.stopPropagation()}
                                         >
-                                            <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                {viz.title}
-                                            </h4>
+                                            <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
                                             {viz.type === 'chart' && viz.chartSpec && (
                                                 <ChartDropdownMenu
                                                     vizId={viz.id}
@@ -560,8 +579,18 @@ export function Dashboard({
                                                     onClick={() => handleRemoveVisualization(viz.id)}
                                                     className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                                 >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M6 18L18 6M6 6l12 12"
+                                                        />
                                                     </svg>
                                                 </button>
                                             )}
@@ -578,10 +607,10 @@ export function Dashboard({
                                                     />
                                                 </div>
                                             ) : viz.type === 'map' && viz.tableName ? (
-                                                <div 
+                                                <div
                                                     className="h-full"
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onTouchStart={(e) => e.stopPropagation()}
+                                                    onMouseDown={e => e.stopPropagation()}
+                                                    onTouchStart={e => e.stopPropagation()}
                                                 >
                                                     <Map
                                                         dbContext={dbContext}
@@ -597,15 +626,19 @@ export function Dashboard({
                                                 <div className="h-full flex items-center justify-center text-gray-500">
                                                     <div className="text-center">
                                                         <div className="mb-2">
-                                                            {viz.type === 'chart' && <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />}
-                                                            {viz.type === 'map' && <MapIcon className="w-8 h-8 mx-auto text-gray-300" />}
+                                                            {viz.type === 'chart' && (
+                                                                <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                            )}
+                                                            {viz.type === 'map' && (
+                                                                <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                            )}
                                                         </div>
                                                         <p className="text-sm">
-                                                            {viz.type === 'chart' 
-                                                                ? 'Chart spec missing' 
+                                                            {viz.type === 'chart'
+                                                                ? 'Chart spec missing'
                                                                 : viz.type === 'map'
-                                                                ? 'Map table missing'
-                                                                : `${viz.type} visualization`}
+                                                                  ? 'Map table missing'
+                                                                  : `${viz.type} visualization`}
                                                         </p>
                                                         {viz.sql && (
                                                             <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
@@ -625,9 +658,7 @@ export function Dashboard({
                             <div className="text-center">
                                 <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                                 <h3 className="text-lg font-medium text-gray-900 mb-2">Empty Dashboard</h3>
-                                <p className="text-sm text-gray-500 mb-4">
-                                    Add charts from the sidebar to get started
-                                </p>
+                                <p className="text-sm text-gray-500 mb-4">Add charts from the sidebar to get started</p>
                             </div>
                         </div>
                     )}

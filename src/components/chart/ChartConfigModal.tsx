@@ -21,7 +21,7 @@ export function ChartConfigModal({
     dbContext,
     schema,
     onUpdateChart,
-    vizId
+    vizId,
 }: ChartConfigModalProps) {
     useEffect(() => {
         const handleEscape = (event: KeyboardEvent) => {
@@ -52,10 +52,7 @@ export function ChartConfigModal({
                 {/* Modal Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900">Chart Configuration</h3>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
-                    >
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>

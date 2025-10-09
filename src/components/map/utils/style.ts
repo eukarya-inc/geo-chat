@@ -53,9 +53,9 @@ export function updateVectorSourceUrl(
             ...style.sources,
             [sourceId]: {
                 type: 'vector',
-                tiles: [tileUrl]
-            }
-        }
+                tiles: [tileUrl],
+            },
+        },
     };
 }
 
@@ -68,9 +68,9 @@ export function createDefaultMapStyle(sourceId: string, tileUrl: string): StyleS
         sources: {
             [sourceId]: {
                 type: 'vector',
-                tiles: [tileUrl]
-            }
+                tiles: [tileUrl],
+            },
         },
-        layers: []
+        layers: [],
     };
 }

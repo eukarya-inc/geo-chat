@@ -7,14 +7,14 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { fixMaplibreExpressionWithWarnings } from '../../../components/map/utils/maplibreExpressionFixer';
 
 export function createMapStyleTool(
-  getMapSpec: (tableName: string) => MapSpec | undefined,
-  onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
-  dbContext?: DBContext | null,
-  schema?: string | null
+    getMapSpec: (tableName: string) => MapSpec | undefined,
+    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
+    dbContext?: DBContext | null,
+    schema?: string | null
 ) {
-  if (!onMapStyleUpdate) return null;
-  return tool({
-    description: `Update map styles for a specific table and geometry type.
+    if (!onMapStyleUpdate) return null;
+    return tool({
+        description: `Update map styles for a specific table and geometry type.
 
 IMPORTANT: JSON SYNTAX REQUIREMENTS
 - When passing style_properties as a JSON string, use PURE JSON only
@@ -192,382 +192,394 @@ Common style properties by layer type:
 
 To show/hide layers, include a visibility property in the style.`,
 
-    parameters: z.object({
-      table_name: z.string()
-        .describe('Name of the table to update styles for'),
-      geometry_type: z.enum(['point', 'line', 'polygon'])
-        .describe('CRITICAL: Must match actual geometry type! Use SQL to check: SELECT ST_GeometryType(geom) FROM table. For POINT/MULTIPOINT use "point", for LINESTRING/MULTILINESTRING use "line", for POLYGON/MULTIPOLYGON use "polygon"'),
-      style_properties: z.union([
-        z.record(z.any()),
-        z.string().transform((str) => {
-          try {
-            // Remove single-line comments (// ...) and multi-line comments (/* ... */)
-            const cleanedStr = str
-              .replace(/\/\/.*$/gm, '') // Remove single-line comments
-              .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
-              .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas before } or ]
-            
-            return JSON.parse(cleanedStr);
-          } catch (error) {
-            console.error('Failed to parse style_properties JSON:', str);
-            console.error('Parse error:', error);
-            throw new Error(`Invalid JSON string for style_properties: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          }
-        })
-      ])
-        .describe('Style properties as a JavaScript object or JSON string. If using JSON string, must be pure valid JSON with NO comments and NO trailing commas'),
-      description: z.string()
-        .describe('Human-readable description of what this style change does')
-    }),
+        parameters: z.object({
+            table_name: z.string().describe('Name of the table to update styles for'),
+            geometry_type: z
+                .enum(['point', 'line', 'polygon'])
+                .describe(
+                    'CRITICAL: Must match actual geometry type! Use SQL to check: SELECT ST_GeometryType(geom) FROM table. For POINT/MULTIPOINT use "point", for LINESTRING/MULTILINESTRING use "line", for POLYGON/MULTIPOLYGON use "polygon"'
+                ),
+            style_properties: z
+                .union([
+                    z.record(z.any()),
+                    z.string().transform(str => {
+                        try {
+                            // Remove single-line comments (// ...) and multi-line comments (/* ... */)
+                            const cleanedStr = str
+                                .replace(/\/\/.*$/gm, '') // Remove single-line comments
+                                .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+                                .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas before } or ]
 
-    execute: async ({ table_name, geometry_type, style_properties, description }) => {
-      try {
-        // Get current map spec to check existing styles
-        const mapSpec = getMapSpec(table_name);
+                            return JSON.parse(cleanedStr);
+                        } catch (error) {
+                            console.error('Failed to parse style_properties JSON:', str);
+                            console.error('Parse error:', error);
+                            throw new Error(
+                                `Invalid JSON string for style_properties: ${error instanceof Error ? error.message : 'Unknown error'}`
+                            );
+                        }
+                    }),
+                ])
+                .describe(
+                    'Style properties as a JavaScript object or JSON string. If using JSON string, must be pure valid JSON with NO comments and NO trailing commas'
+                ),
+            description: z.string().describe('Human-readable description of what this style change does'),
+        }),
 
-        // Check if table has geometry column using DESCRIBE
-        if (dbContext) {
-          try {
-            const describeQuery = schema 
-              ? `DESCRIBE ${schema}.${table_name}`
-              : `DESCRIBE ${table_name}`;
-            
-            const schemaResult = await dbContext.executeQuery(describeQuery, schema);
-            
-            if (schemaResult && schemaResult.length > 0) {
-              // Check for geometry columns
-              const hasGeometry = schemaResult.some((row: Record<string, unknown>) => {
-                const columnType = String(row.column_type || row.type || '');
-                return columnType.toUpperCase() === 'GEOMETRY';
-              });
+        execute: async ({ table_name, geometry_type, style_properties, description }) => {
+            try {
+                // Get current map spec to check existing styles
+                const mapSpec = getMapSpec(table_name);
 
-              if (!hasGeometry) {
-                const columnInfo = schemaResult.map((row: Record<string, unknown>) => 
-                  `${row.column_name || row.name} (${row.column_type || row.type})`
-                ).join(', ');
+                // Check if table has geometry column using DESCRIBE
+                if (dbContext) {
+                    try {
+                        const describeQuery = schema ? `DESCRIBE ${schema}.${table_name}` : `DESCRIBE ${table_name}`;
 
-                return {
-                  success: false,
-                  error: `Table '${table_name}' has no geometry column and cannot be displayed on the map. To visualize this table, you need to either:
+                        const schemaResult = await dbContext.executeQuery(describeQuery, schema);
+
+                        if (schemaResult && schemaResult.length > 0) {
+                            // Check for geometry columns
+                            const hasGeometry = schemaResult.some((row: Record<string, unknown>) => {
+                                const columnType = String(row.column_type || row.type || '');
+                                return columnType.toUpperCase() === 'GEOMETRY';
+                            });
+
+                            if (!hasGeometry) {
+                                const columnInfo = schemaResult
+                                    .map(
+                                        (row: Record<string, unknown>) =>
+                                            `${row.column_name || row.name} (${row.column_type || row.type})`
+                                    )
+                                    .join(', ');
+
+                                return {
+                                    success: false,
+                                    error: `Table '${table_name}' has no geometry column and cannot be displayed on the map. To visualize this table, you need to either:
 1. Create a new table with geometry using ST_Point(longitude, latitude) or similar spatial functions
 2. Join with another table that has geometry data
 3. Use the original table that has geometry instead of flattened/aggregated versions
 
-Available columns in '${table_name}': ${columnInfo}`
-                };
-              }
-            }
-          } catch (describeError) {
-            // If DESCRIBE fails, table might not exist
-            return {
-              success: false,
-              error: `Table '${table_name}' not found or cannot be accessed: ${describeError instanceof Error ? describeError.message : 'Unknown error'}`
-            };
-          }
-        }
-
-        // Parse JSON string if needed (though the transform should handle this)
-        let parsedStyleProperties = style_properties;
-        if (typeof style_properties === 'string') {
-          try {
-            // Clean up JSON with comments before parsing
-            const cleanedStr = style_properties
-              .replace(/\/\/.*$/gm, '') // Remove single-line comments
-              .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
-              .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
-            parsedStyleProperties = JSON.parse(cleanedStr);
-          } catch {
-            console.error('Failed to parse style_properties in execute:', style_properties);
-            // If parsing fails, use as-is (shouldn't happen with the transform)
-            parsedStyleProperties = style_properties;
-          }
-        }
-
-        // Generate layer IDs based on geometry type
-        const layerIds = {
-          point: [`duckdb-points-${table_name}`],
-          line: [`duckdb-lines-${table_name}`],
-          polygon: [`duckdb-polygons-${table_name}`, `duckdb-polygon-outlines-${table_name}`]
-        };
-        
-        // Get current table styles (array of layers)
-        const currentTableStyles = mapSpec?.tableStyles || {};
-        const currentLayers = currentTableStyles[table_name] || [];
-        
-
-        // Helper function to safely extract color for outline from style properties
-        const getOutlineColor = (props: Record<string, unknown>): unknown => {
-          // If fill-outline-color is explicitly provided, use it
-          if (props['fill-outline-color']) {
-            return props['fill-outline-color'];
-          }
-          
-          // If fill-color is provided
-          if (props['fill-color']) {
-            // If it's a simple color string, use it
-            if (typeof props['fill-color'] === 'string') {
-              return props['fill-color'];
-            }
-            // If it's an array (MapLibre expression), check if it's valid for line-color
-            // For complex expressions, we should create a separate line-color expression
-            // or fall back to a default color to avoid validation errors
-            if (Array.isArray(props['fill-color'])) {
-              // Don't directly reuse fill-color expressions for line-color
-              // as they might have incompatible nested structures
-              console.warn('Complex fill-color expression detected, using default outline color');
-              return '#000000';
-            }
-          }
-          
-          return '#000000';
-        };
-        
-        // Fix any malformed expressions in style_properties using the imported helper
-        const allWarnings: string[] = [];
-        const syntaxErrors: string[] = [];
-        
-        // Validate each style property
-        const validateStyleProperty = (layerType: string, propName: string, propValue: unknown): void => {
-          try {
-            const errors = validateStyleMin.paintProperty(layerType, propName, propValue, v8);
-            if (errors && errors.length > 0) {
-              errors.forEach(error => {
-                // Check if this is a critical syntax error
-                const errorMessage = error.message.toLowerCase();
-                if (errorMessage.includes('unknown property') ||
-                    errorMessage.includes('invalid type') ||
-                    errorMessage.includes('expected') ||
-                    errorMessage.includes('must be') ||
-                    errorMessage.includes('cannot')) {
-                  syntaxErrors.push(`${propName}: ${error.message}`);
-                } else {
-                  allWarnings.push(`Style validation: ${propName}: ${error.message}`);
-                }
-              });
-            }
-          } catch (e) {
-            // If validation itself fails, it might be because the property doesn't apply to this layer type
-            // In that case, we'll let MapLibre handle it at runtime
-            console.warn(`Validation check skipped for ${propName}:`, e);
-          }
-        };
-        
-        // Map geometry type to MapLibre layer type for validation
-        const mapLibreLayerType = geometry_type === 'point' ? 'circle' : 
-                                  geometry_type === 'line' ? 'line' : 'fill';
-        
-        // Fix expressions and validate
-        const fixedStyleProperties = Object.fromEntries(
-          Object.entries(parsedStyleProperties).map(([key, value]) => {
-            const result = fixMaplibreExpressionWithWarnings(value);
-            if (result.warnings.length > 0) {
-              result.warnings.forEach(warning => {
-                allWarnings.push(`${key}: ${warning}` as string);
-              });
-            }
-            
-            // Validate the fixed property
-            validateStyleProperty(mapLibreLayerType, key, result.fixed);
-            
-            return [key, result.fixed];
-          })
-        );
-        
-        // If there are syntax errors, return error immediately
-        if (syntaxErrors.length > 0) {
-          return {
-            success: false,
-            error: `Style validation failed:\n${syntaxErrors.join('\n')}`,
-            warnings: allWarnings.length > 0 ? allWarnings : undefined
-          };
-        }
-
-        const targetLayerIds = layerIds[geometry_type];
-        
-        // Update existing layers or create new ones
-        const updatedLayers = [...currentLayers];
-        
-        targetLayerIds.forEach(layerId => {
-          const existingLayerIndex = updatedLayers.findIndex((l: VectorTileLayer) => l.id === layerId);
-          
-          if (existingLayerIndex >= 0) {
-            // Update existing layer
-            const existingLayer = updatedLayers[existingLayerIndex];
-            
-            // Determine the layer type and appropriate properties
-            let paint: Record<string, unknown> = {};
-            
-            if (layerId.includes('polygon-outlines')) {
-              // For polygon outlines, derive line properties from fill properties safely
-              const existingPaint = existingLayer.paint as Record<string, unknown>;
-              const outlineColor = getOutlineColor(fixedStyleProperties);
-              paint = {
-                'line-color': outlineColor || existingPaint?.['line-color'] || '#000000',
-                'line-width': fixedStyleProperties['line-width'] || 1,
-                'line-opacity': fixedStyleProperties['line-opacity'] || 0.8
-              };
-            } else if (layerId.includes('polygons')) {
-              // For polygon fills - only apply fill-specific properties
-              const existingPaint = existingLayer.paint as Record<string, unknown>;
-              paint = {};
-              if (fixedStyleProperties['fill-color'] !== undefined) {
-                paint['fill-color'] = fixedStyleProperties['fill-color'];
-              } else if (existingPaint?.['fill-color']) {
-                paint['fill-color'] = existingPaint['fill-color'];
-              }
-              if (fixedStyleProperties['fill-opacity'] !== undefined) {
-                paint['fill-opacity'] = fixedStyleProperties['fill-opacity'];
-              } else if (existingPaint?.['fill-opacity']) {
-                paint['fill-opacity'] = existingPaint['fill-opacity'];
-              }
-            } else if (layerId.includes('lines')) {
-              // For lines - apply line properties
-              paint = fixedStyleProperties;
-            } else if (layerId.includes('points')) {
-              // For points - apply circle properties
-              paint = fixedStyleProperties;
-            }
-            
-            // Validate the complete layer before updating
-            const updatedLayer = {
-              ...existingLayer,
-              paint: { ...existingLayer.paint, ...paint }
-            };
-            
-            // Validate the layer structure
-            try {
-              const layerErrors = validateStyleMin.layer(updatedLayer as unknown, v8);
-              if (layerErrors && layerErrors.length > 0) {
-                const criticalErrors: string[] = [];
-                layerErrors.forEach(error => {
-                  const errorMessage = error.message.toLowerCase();
-                  if (errorMessage.includes('unknown') ||
-                      errorMessage.includes('invalid') ||
-                      errorMessage.includes('required')) {
-                    criticalErrors.push(error.message);
-                  } else {
-                    allWarnings.push(`Layer validation: ${error.message}`);
-                  }
-                });
-                
-                if (criticalErrors.length > 0) {
-                  return {
-                    success: false,
-                    error: `Layer validation failed:\n${criticalErrors.join('\n')}`,
-                    warnings: allWarnings.length > 0 ? allWarnings : undefined
-                  };
-                }
-              }
-            } catch (e) {
-              console.error('Layer validation failed:', e);
-              return {
-                success: false,
-                error: `Layer validation failed: Invalid layer structure`,
-                warnings: allWarnings.length > 0 ? allWarnings : undefined
-              };
-            }
-            
-            updatedLayers[existingLayerIndex] = updatedLayer;
-          } else {
-            // Create new layer if it doesn't exist
-            let newLayer: VectorTileLayer | undefined;
-            
-            if (layerId.includes('polygon-outlines')) {
-              // For polygon outlines - use safe outline color extraction
-              const outlineColor = getOutlineColor(fixedStyleProperties);
-              newLayer = {
-                id: layerId,
-                type: 'line',
-                paint: {
-                  'line-color': outlineColor as string,
-                  'line-width': (fixedStyleProperties['line-width'] || 1) as number,
-                  'line-opacity': (fixedStyleProperties['line-opacity'] || 0.8) as number
-                }
-              };
-            } else if (layerId.includes('polygons')) {
-              // For polygon fills
-              newLayer = {
-                id: layerId,
-                type: 'fill',
-                paint: {
-                  'fill-color': (fixedStyleProperties['fill-color'] || '#3388ff') as string,
-                  'fill-opacity': (fixedStyleProperties['fill-opacity'] ?? 0.3) as number
-                }
-              };
-            } else if (layerId.includes('lines')) {
-              // For lines
-              newLayer = {
-                id: layerId,
-                type: 'line',
-                paint: fixedStyleProperties
-              };
-            } else if (layerId.includes('points')) {
-              // For points (use circle type)
-              newLayer = {
-                id: layerId,
-                type: 'circle',
-                paint: fixedStyleProperties
-              };
-            }
-            
-            if (newLayer) {
-              // Validate the new layer before adding
-              try {
-                const layerErrors = validateStyleMin.layer(newLayer as unknown, v8);
-                if (layerErrors && layerErrors.length > 0) {
-                  const criticalErrors: string[] = [];
-                  layerErrors.forEach(error => {
-                    const errorMessage = error.message.toLowerCase();
-                    if (errorMessage.includes('unknown') ||
-                        errorMessage.includes('invalid') ||
-                        errorMessage.includes('required')) {
-                      criticalErrors.push(error.message);
-                    } else {
-                      allWarnings.push(`New layer validation: ${error.message}`);
+Available columns in '${table_name}': ${columnInfo}`,
+                                };
+                            }
+                        }
+                    } catch (describeError) {
+                        // If DESCRIBE fails, table might not exist
+                        return {
+                            success: false,
+                            error: `Table '${table_name}' not found or cannot be accessed: ${describeError instanceof Error ? describeError.message : 'Unknown error'}`,
+                        };
                     }
-                  });
-                  
-                  if (criticalErrors.length > 0) {
-                    return {
-                      success: false,
-                      error: `New layer validation failed:\n${criticalErrors.join('\n')}`,
-                      warnings: allWarnings.length > 0 ? allWarnings : undefined
-                    };
-                  }
                 }
-              } catch (e) {
-                console.error('New layer validation failed:', e);
-                return {
-                  success: false,
-                  error: `New layer validation failed: Invalid layer structure`,
-                  warnings: allWarnings.length > 0 ? allWarnings : undefined
+
+                // Parse JSON string if needed (though the transform should handle this)
+                let parsedStyleProperties = style_properties;
+                if (typeof style_properties === 'string') {
+                    try {
+                        // Clean up JSON with comments before parsing
+                        const cleanedStr = style_properties
+                            .replace(/\/\/.*$/gm, '') // Remove single-line comments
+                            .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+                            .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+                        parsedStyleProperties = JSON.parse(cleanedStr);
+                    } catch {
+                        console.error('Failed to parse style_properties in execute:', style_properties);
+                        // If parsing fails, use as-is (shouldn't happen with the transform)
+                        parsedStyleProperties = style_properties;
+                    }
+                }
+
+                // Generate layer IDs based on geometry type
+                const layerIds = {
+                    point: [`duckdb-points-${table_name}`],
+                    line: [`duckdb-lines-${table_name}`],
+                    polygon: [`duckdb-polygons-${table_name}`, `duckdb-polygon-outlines-${table_name}`],
                 };
-              }
-              
-              updatedLayers.push(newLayer);
+
+                // Get current table styles (array of layers)
+                const currentTableStyles = mapSpec?.tableStyles || {};
+                const currentLayers = currentTableStyles[table_name] || [];
+
+                // Helper function to safely extract color for outline from style properties
+                const getOutlineColor = (props: Record<string, unknown>): unknown => {
+                    // If fill-outline-color is explicitly provided, use it
+                    if (props['fill-outline-color']) {
+                        return props['fill-outline-color'];
+                    }
+
+                    // If fill-color is provided
+                    if (props['fill-color']) {
+                        // If it's a simple color string, use it
+                        if (typeof props['fill-color'] === 'string') {
+                            return props['fill-color'];
+                        }
+                        // If it's an array (MapLibre expression), check if it's valid for line-color
+                        // For complex expressions, we should create a separate line-color expression
+                        // or fall back to a default color to avoid validation errors
+                        if (Array.isArray(props['fill-color'])) {
+                            // Don't directly reuse fill-color expressions for line-color
+                            // as they might have incompatible nested structures
+                            console.warn('Complex fill-color expression detected, using default outline color');
+                            return '#000000';
+                        }
+                    }
+
+                    return '#000000';
+                };
+
+                // Fix any malformed expressions in style_properties using the imported helper
+                const allWarnings: string[] = [];
+                const syntaxErrors: string[] = [];
+
+                // Validate each style property
+                const validateStyleProperty = (layerType: string, propName: string, propValue: unknown): void => {
+                    try {
+                        const errors = validateStyleMin.paintProperty(layerType, propName, propValue, v8);
+                        if (errors && errors.length > 0) {
+                            errors.forEach(error => {
+                                // Check if this is a critical syntax error
+                                const errorMessage = error.message.toLowerCase();
+                                if (
+                                    errorMessage.includes('unknown property') ||
+                                    errorMessage.includes('invalid type') ||
+                                    errorMessage.includes('expected') ||
+                                    errorMessage.includes('must be') ||
+                                    errorMessage.includes('cannot')
+                                ) {
+                                    syntaxErrors.push(`${propName}: ${error.message}`);
+                                } else {
+                                    allWarnings.push(`Style validation: ${propName}: ${error.message}`);
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // If validation itself fails, it might be because the property doesn't apply to this layer type
+                        // In that case, we'll let MapLibre handle it at runtime
+                        console.warn(`Validation check skipped for ${propName}:`, e);
+                    }
+                };
+
+                // Map geometry type to MapLibre layer type for validation
+                const mapLibreLayerType =
+                    geometry_type === 'point' ? 'circle' : geometry_type === 'line' ? 'line' : 'fill';
+
+                // Fix expressions and validate
+                const fixedStyleProperties = Object.fromEntries(
+                    Object.entries(parsedStyleProperties).map(([key, value]) => {
+                        const result = fixMaplibreExpressionWithWarnings(value);
+                        if (result.warnings.length > 0) {
+                            result.warnings.forEach(warning => {
+                                allWarnings.push(`${key}: ${warning}` as string);
+                            });
+                        }
+
+                        // Validate the fixed property
+                        validateStyleProperty(mapLibreLayerType, key, result.fixed);
+
+                        return [key, result.fixed];
+                    })
+                );
+
+                // If there are syntax errors, return error immediately
+                if (syntaxErrors.length > 0) {
+                    return {
+                        success: false,
+                        error: `Style validation failed:\n${syntaxErrors.join('\n')}`,
+                        warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                    };
+                }
+
+                const targetLayerIds = layerIds[geometry_type];
+
+                // Update existing layers or create new ones
+                const updatedLayers = [...currentLayers];
+
+                targetLayerIds.forEach(layerId => {
+                    const existingLayerIndex = updatedLayers.findIndex((l: VectorTileLayer) => l.id === layerId);
+
+                    if (existingLayerIndex >= 0) {
+                        // Update existing layer
+                        const existingLayer = updatedLayers[existingLayerIndex];
+
+                        // Determine the layer type and appropriate properties
+                        let paint: Record<string, unknown> = {};
+
+                        if (layerId.includes('polygon-outlines')) {
+                            // For polygon outlines, derive line properties from fill properties safely
+                            const existingPaint = existingLayer.paint as Record<string, unknown>;
+                            const outlineColor = getOutlineColor(fixedStyleProperties);
+                            paint = {
+                                'line-color': outlineColor || existingPaint?.['line-color'] || '#000000',
+                                'line-width': fixedStyleProperties['line-width'] || 1,
+                                'line-opacity': fixedStyleProperties['line-opacity'] || 0.8,
+                            };
+                        } else if (layerId.includes('polygons')) {
+                            // For polygon fills - only apply fill-specific properties
+                            const existingPaint = existingLayer.paint as Record<string, unknown>;
+                            paint = {};
+                            if (fixedStyleProperties['fill-color'] !== undefined) {
+                                paint['fill-color'] = fixedStyleProperties['fill-color'];
+                            } else if (existingPaint?.['fill-color']) {
+                                paint['fill-color'] = existingPaint['fill-color'];
+                            }
+                            if (fixedStyleProperties['fill-opacity'] !== undefined) {
+                                paint['fill-opacity'] = fixedStyleProperties['fill-opacity'];
+                            } else if (existingPaint?.['fill-opacity']) {
+                                paint['fill-opacity'] = existingPaint['fill-opacity'];
+                            }
+                        } else if (layerId.includes('lines')) {
+                            // For lines - apply line properties
+                            paint = fixedStyleProperties;
+                        } else if (layerId.includes('points')) {
+                            // For points - apply circle properties
+                            paint = fixedStyleProperties;
+                        }
+
+                        // Validate the complete layer before updating
+                        const updatedLayer = {
+                            ...existingLayer,
+                            paint: { ...existingLayer.paint, ...paint },
+                        };
+
+                        // Validate the layer structure
+                        try {
+                            const layerErrors = validateStyleMin.layer(updatedLayer as unknown, v8);
+                            if (layerErrors && layerErrors.length > 0) {
+                                const criticalErrors: string[] = [];
+                                layerErrors.forEach(error => {
+                                    const errorMessage = error.message.toLowerCase();
+                                    if (
+                                        errorMessage.includes('unknown') ||
+                                        errorMessage.includes('invalid') ||
+                                        errorMessage.includes('required')
+                                    ) {
+                                        criticalErrors.push(error.message);
+                                    } else {
+                                        allWarnings.push(`Layer validation: ${error.message}`);
+                                    }
+                                });
+
+                                if (criticalErrors.length > 0) {
+                                    return {
+                                        success: false,
+                                        error: `Layer validation failed:\n${criticalErrors.join('\n')}`,
+                                        warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                                    };
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Layer validation failed:', e);
+                            return {
+                                success: false,
+                                error: `Layer validation failed: Invalid layer structure`,
+                                warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                            };
+                        }
+
+                        updatedLayers[existingLayerIndex] = updatedLayer;
+                    } else {
+                        // Create new layer if it doesn't exist
+                        let newLayer: VectorTileLayer | undefined;
+
+                        if (layerId.includes('polygon-outlines')) {
+                            // For polygon outlines - use safe outline color extraction
+                            const outlineColor = getOutlineColor(fixedStyleProperties);
+                            newLayer = {
+                                id: layerId,
+                                type: 'line',
+                                paint: {
+                                    'line-color': outlineColor as string,
+                                    'line-width': (fixedStyleProperties['line-width'] || 1) as number,
+                                    'line-opacity': (fixedStyleProperties['line-opacity'] || 0.8) as number,
+                                },
+                            };
+                        } else if (layerId.includes('polygons')) {
+                            // For polygon fills
+                            newLayer = {
+                                id: layerId,
+                                type: 'fill',
+                                paint: {
+                                    'fill-color': (fixedStyleProperties['fill-color'] || '#3388ff') as string,
+                                    'fill-opacity': (fixedStyleProperties['fill-opacity'] ?? 0.3) as number,
+                                },
+                            };
+                        } else if (layerId.includes('lines')) {
+                            // For lines
+                            newLayer = {
+                                id: layerId,
+                                type: 'line',
+                                paint: fixedStyleProperties,
+                            };
+                        } else if (layerId.includes('points')) {
+                            // For points (use circle type)
+                            newLayer = {
+                                id: layerId,
+                                type: 'circle',
+                                paint: fixedStyleProperties,
+                            };
+                        }
+
+                        if (newLayer) {
+                            // Validate the new layer before adding
+                            try {
+                                const layerErrors = validateStyleMin.layer(newLayer as unknown, v8);
+                                if (layerErrors && layerErrors.length > 0) {
+                                    const criticalErrors: string[] = [];
+                                    layerErrors.forEach(error => {
+                                        const errorMessage = error.message.toLowerCase();
+                                        if (
+                                            errorMessage.includes('unknown') ||
+                                            errorMessage.includes('invalid') ||
+                                            errorMessage.includes('required')
+                                        ) {
+                                            criticalErrors.push(error.message);
+                                        } else {
+                                            allWarnings.push(`New layer validation: ${error.message}`);
+                                        }
+                                    });
+
+                                    if (criticalErrors.length > 0) {
+                                        return {
+                                            success: false,
+                                            error: `New layer validation failed:\n${criticalErrors.join('\n')}`,
+                                            warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                                        };
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('New layer validation failed:', e);
+                                return {
+                                    success: false,
+                                    error: `New layer validation failed: Invalid layer structure`,
+                                    warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                                };
+                            }
+
+                            updatedLayers.push(newLayer);
+                        }
+                    }
+                });
+
+                // Apply the update through callback
+                await onMapStyleUpdate(table_name, updatedLayers);
+
+                return {
+                    success: true,
+                    message: `${description} (Applied to table: ${table_name}, geometry: ${geometry_type})`,
+                    appliedUpdate: {
+                        tableName: table_name,
+                        geometryType: geometry_type,
+                        layers: updatedLayers,
+                    },
+                    warnings: allWarnings.length > 0 ? allWarnings : undefined,
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: `Error applying style update: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                };
             }
-          }
-        });
-
-        // Apply the update through callback
-        await onMapStyleUpdate(table_name, updatedLayers);
-
-        return {
-          success: true,
-          message: `${description} (Applied to table: ${table_name}, geometry: ${geometry_type})`,
-          appliedUpdate: {
-            tableName: table_name,
-            geometryType: geometry_type,
-            layers: updatedLayers
-          },
-          warnings: allWarnings.length > 0 ? allWarnings : undefined
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: `Error applying style update: ${error instanceof Error ? error.message : 'Unknown error'}`
-        };
-      }
-    }
-  });
+        },
+    });
 }

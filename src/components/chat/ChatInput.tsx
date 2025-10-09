@@ -29,14 +29,14 @@ export default function ChatInput({
     placeholder,
     className,
     rows = 2,
-    schemaName
+    schemaName,
 }: ChatInputProps) {
     const [tables, setTables] = useState<string[]>([]);
     const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
         isOpen: false,
         triggerIndex: -1,
         searchText: '',
-        selectedIndex: 0
+        selectedIndex: 0,
     });
     const listRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -47,7 +47,7 @@ export default function ChatInput({
             if (!dbContext) {
                 return;
             }
-            
+
             try {
                 const tableNames = await dbContext.getTables(schemaName);
                 setTables(tableNames);
@@ -61,7 +61,7 @@ export default function ChatInput({
 
     // Track if we're clicking on the dropdown
     const isClickingDropdownRef = useRef(false);
-    
+
     // Handle blur event to close autocomplete
     const handleBlur = useCallback(() => {
         // Only close if we're not clicking on the dropdown
@@ -72,129 +72,136 @@ export default function ChatInput({
     }, []);
 
     // Handle input changes
-    const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const newValue = e.target.value;
-        const cursorPos = e.target.selectionStart;
-        
-        // Check for @ trigger
-        if (cursorPos > 0) {
-            const textBeforeCursor = newValue.substring(0, cursorPos);
-            const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-            
-            if (lastAtIndex !== -1) {
-                const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-                
-                // Check if @ is not followed by space or newline
-                if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-                    setAutocomplete({
-                        isOpen: true,
-                        triggerIndex: lastAtIndex,
-                        searchText: textAfterAt.toLowerCase(),
-                        selectedIndex: 0
-                    });
+    const handleChange = useCallback(
+        (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+            const newValue = e.target.value;
+            const cursorPos = e.target.selectionStart;
+
+            // Check for @ trigger
+            if (cursorPos > 0) {
+                const textBeforeCursor = newValue.substring(0, cursorPos);
+                const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+                if (lastAtIndex !== -1) {
+                    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+
+                    // Check if @ is not followed by space or newline
+                    if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+                        setAutocomplete({
+                            isOpen: true,
+                            triggerIndex: lastAtIndex,
+                            searchText: textAfterAt.toLowerCase(),
+                            selectedIndex: 0,
+                        });
+                    } else {
+                        setAutocomplete(prev => ({ ...prev, isOpen: false }));
+                    }
                 } else {
                     setAutocomplete(prev => ({ ...prev, isOpen: false }));
                 }
             } else {
                 setAutocomplete(prev => ({ ...prev, isOpen: false }));
             }
-        } else {
-            setAutocomplete(prev => ({ ...prev, isOpen: false }));
-        }
-        
-        onChange(e);
-    }, [onChange]);
 
-    // Filter tables based on search text
-    const filteredTables = tables.filter(table => 
-        table.toLowerCase().includes(autocomplete.searchText)
+            onChange(e);
+        },
+        [onChange]
     );
 
+    // Filter tables based on search text
+    const filteredTables = tables.filter(table => table.toLowerCase().includes(autocomplete.searchText));
+
     // Handle table selection
-    const selectTable = useCallback((tableName: string) => {
-        if (!textareaRef.current) return;
-        
-        const beforeAt = value.substring(0, autocomplete.triggerIndex);
-        const afterSearch = value.substring(autocomplete.triggerIndex + 1 + autocomplete.searchText.length);
-        const newValue = beforeAt + '@' + tableName + ' ' + afterSearch;
-        
-        const newCursorPos = autocomplete.triggerIndex + tableName.length + 2;
-        
-        // Create synthetic event
-        const event = {
-            target: {
-                value: newValue,
-                selectionStart: newCursorPos,
-                selectionEnd: newCursorPos
-            }
-        } as React.ChangeEvent<HTMLTextAreaElement>;
-        
-        onChange(event);
-        
-        // Reset autocomplete state
-        setAutocomplete({
-            isOpen: false,
-            triggerIndex: -1,
-            searchText: '',
-            selectedIndex: 0
-        });
-        
-        // Set cursor position immediately using requestAnimationFrame for better performance
-        requestAnimationFrame(() => {
-            if (textareaRef.current) {
-                textareaRef.current.selectionStart = newCursorPos;
-                textareaRef.current.selectionEnd = newCursorPos;
-                textareaRef.current.focus();
-            }
-        });
-    }, [value, autocomplete, onChange, textareaRef]);
+    const selectTable = useCallback(
+        (tableName: string) => {
+            if (!textareaRef.current) return;
+
+            const beforeAt = value.substring(0, autocomplete.triggerIndex);
+            const afterSearch = value.substring(autocomplete.triggerIndex + 1 + autocomplete.searchText.length);
+            const newValue = beforeAt + '@' + tableName + ' ' + afterSearch;
+
+            const newCursorPos = autocomplete.triggerIndex + tableName.length + 2;
+
+            // Create synthetic event
+            const event = {
+                target: {
+                    value: newValue,
+                    selectionStart: newCursorPos,
+                    selectionEnd: newCursorPos,
+                },
+            } as React.ChangeEvent<HTMLTextAreaElement>;
+
+            onChange(event);
+
+            // Reset autocomplete state
+            setAutocomplete({
+                isOpen: false,
+                triggerIndex: -1,
+                searchText: '',
+                selectedIndex: 0,
+            });
+
+            // Set cursor position immediately using requestAnimationFrame for better performance
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.selectionStart = newCursorPos;
+                    textareaRef.current.selectionEnd = newCursorPos;
+                    textareaRef.current.focus();
+                }
+            });
+        },
+        [value, autocomplete, onChange, textareaRef]
+    );
 
     // Handle keyboard navigation
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (autocomplete.isOpen && filteredTables.length > 0) {
-            switch (e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    setAutocomplete(prev => ({
-                        ...prev,
-                        selectedIndex: Math.min(prev.selectedIndex + 1, filteredTables.length - 1)
-                    }));
-                    return; // Don't propagate
-                    
-                case 'ArrowUp':
-                    e.preventDefault();
-                    setAutocomplete(prev => ({
-                        ...prev,
-                        selectedIndex: Math.max(prev.selectedIndex - 1, 0)
-                    }));
-                    return; // Don't propagate
-                    
-                case 'Enter':
-                    if (!e.shiftKey) {
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+            if (autocomplete.isOpen && filteredTables.length > 0) {
+                switch (e.key) {
+                    case 'ArrowDown':
                         e.preventDefault();
-                        e.stopPropagation(); // Stop propagation to prevent form submission
+                        setAutocomplete(prev => ({
+                            ...prev,
+                            selectedIndex: Math.min(prev.selectedIndex + 1, filteredTables.length - 1),
+                        }));
+                        return; // Don't propagate
+
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        setAutocomplete(prev => ({
+                            ...prev,
+                            selectedIndex: Math.max(prev.selectedIndex - 1, 0),
+                        }));
+                        return; // Don't propagate
+
+                    case 'Enter':
+                        if (!e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation(); // Stop propagation to prevent form submission
+                            selectTable(filteredTables[autocomplete.selectedIndex]);
+                            return; // Don't call original handler
+                        }
+                        break;
+
+                    case 'Escape':
+                        e.preventDefault();
+                        setAutocomplete(prev => ({ ...prev, isOpen: false }));
+                        return; // Don't propagate
+
+                    case 'Tab':
+                        e.preventDefault();
                         selectTable(filteredTables[autocomplete.selectedIndex]);
-                        return; // Don't call original handler
-                    }
-                    break;
-                    
-                case 'Escape':
-                    e.preventDefault();
-                    setAutocomplete(prev => ({ ...prev, isOpen: false }));
-                    return; // Don't propagate
-                    
-                case 'Tab':
-                    e.preventDefault();
-                    selectTable(filteredTables[autocomplete.selectedIndex]);
-                    return; // Don't propagate
+                        return; // Don't propagate
+                }
             }
-        }
-        
-        // Call original onKeyDown if provided and autocomplete didn't handle the event
-        if (onKeyDown) {
-            onKeyDown(e);
-        }
-    }, [autocomplete, filteredTables, selectTable, onKeyDown]);
+
+            // Call original onKeyDown if provided and autocomplete didn't handle the event
+            if (onKeyDown) {
+                onKeyDown(e);
+            }
+        },
+        [autocomplete, filteredTables, selectTable, onKeyDown]
+    );
 
     // Scroll selected item into view
     useEffect(() => {
@@ -218,12 +225,9 @@ export default function ChatInput({
                 className={className}
                 rows={rows}
             />
-            
+
             {autocomplete.isOpen && filteredTables.length > 0 && (
-                <div
-                    className="absolute bottom-full mb-1 left-0 z-50"
-                    style={{ zIndex: 9999 }}
-                >
+                <div className="absolute bottom-full mb-1 left-0 z-50" style={{ zIndex: 9999 }}>
                     <div
                         ref={listRef}
                         className="bg-white border border-gray-300 rounded-md shadow-lg overflow-auto py-1"
@@ -237,7 +241,7 @@ export default function ChatInput({
                                 className={`w-full text-left px-3 py-1.5 hover:bg-gray-100 cursor-pointer ${
                                     index === autocomplete.selectedIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-800'
                                 }`}
-                                onMouseDown={(e) => {
+                                onMouseDown={e => {
                                     e.preventDefault();
                                     isClickingDropdownRef.current = true;
                                     selectTable(table);

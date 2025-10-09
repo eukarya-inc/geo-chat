@@ -5,25 +5,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapStyleManager } from './mapStyleManager';
 import { detectDisplayColumns, type ColumnInfo } from '../../utils/duckdb';
 import MapStyleEditor from './MapStyleEditor';
-import {
-    parseDuckDBTileUrl,
-    generateVectorTileQuery,
-    processMVTResult
-} from './utils/mvt';
+import { parseDuckDBTileUrl, generateVectorTileQuery, processMVTResult } from './utils/mvt';
 import { processMapStyle } from './utils/style';
 import { updateMapLayers as updateMapLayersHelper } from './utils/layerOperations';
 import type { MapProps } from './types';
-import {
-    exportMapAsPNG as exportMapAsPNGHelper,
-    generatePopupContent,
-    createDefaultStyle
-} from './utils/mapHelpers';
+import { exportMapAsPNG as exportMapAsPNGHelper, generatePopupContent, createDefaultStyle } from './utils/mapHelpers';
 
 // Re-export types for convenience
 export type { ViewState, VectorTileLayer, TableStyle, ExtraStyle, MapProps } from './types';
-
-
-
 
 const MapComponent: React.FC<MapProps> = ({
     dbContext,
@@ -43,7 +32,7 @@ const MapComponent: React.FC<MapProps> = ({
     extraStyle,
     onTableStyleChanged,
     onExtraStyleChange,
-    showControls = true
+    showControls = true,
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -73,7 +62,6 @@ const MapComponent: React.FC<MapProps> = ({
 
     // Update layers when effectiveColumns change AND map is initialized
     useEffect(() => {
-
         // Only proceed if we have a table and map is initialized
         if (!selectedTable || !mapRef.current || !isInitialized) {
             return;
@@ -126,36 +114,38 @@ const MapComponent: React.FC<MapProps> = ({
         await exportMapAsPNGHelper(mapRef.current);
     }, []);
 
-
     // Define popup ref inside the component
     const popupRef = useRef<maplibregl.Popup | null>(null);
 
-    const handleFeatureClick = useCallback((e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        if (!e.features?.[0] || !mapRef.current) return;
+    const handleFeatureClick = useCallback(
+        (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+            if (!e.features?.[0] || !mapRef.current) return;
 
-        const feature = e.features[0];
-        const coordinates = e.lngLat;
+            const feature = e.features[0];
+            const coordinates = e.lngLat;
 
-        // Generate popup content using helper function
-        const content = generatePopupContent(feature, coordinates);
+            // Generate popup content using helper function
+            const content = generatePopupContent(feature, coordinates);
 
-        // Close existing popup if any
-        if (popupRef.current) {
-            popupRef.current.remove();
-            popupRef.current = null;
-        }
+            // Close existing popup if any
+            if (popupRef.current) {
+                popupRef.current.remove();
+                popupRef.current = null;
+            }
 
-        // Create new popup and display
-        popupRef.current = new maplibregl.Popup({
-            closeButton: true,
-            closeOnClick: true,
-            offset: 25,
-            maxWidth: '400px',
-            className: 'max-h-96 overflow-y-auto'
-        });
+            // Create new popup and display
+            popupRef.current = new maplibregl.Popup({
+                closeButton: true,
+                closeOnClick: true,
+                offset: 25,
+                maxWidth: '400px',
+                className: 'max-h-96 overflow-y-auto',
+            });
 
-        popupRef.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current);
-    }, []);
+            popupRef.current.setLngLat(coordinates).setHTML(content).addTo(mapRef.current);
+        },
+        []
+    );
 
     // Function to zoom map to data bounds
     const fitMapToData = useCallback(async (tableName: string, geomColumn: string) => {
@@ -184,17 +174,25 @@ const MapComponent: React.FC<MapProps> = ({
                 SELECT * FROM all_bounds
             `);
 
-            const bounds = result.toArray()[0] as unknown as { min_lng: number; max_lng: number; min_lat: number; max_lat: number; };
+            const bounds = result.toArray()[0] as unknown as {
+                min_lng: number;
+                max_lng: number;
+                min_lat: number;
+                max_lat: number;
+            };
 
             if (bounds && bounds.min_lng !== null && bounds.min_lng !== undefined) {
-                mapRef.current.fitBounds([
-                    [bounds.min_lng, bounds.min_lat],
-                    [bounds.max_lng, bounds.max_lat]
-                ], {
-                    padding: 50,
-                    duration: 1000,
-                    maxZoom: 16 // Prevent excessive zoom
-                });
+                mapRef.current.fitBounds(
+                    [
+                        [bounds.min_lng, bounds.min_lat],
+                        [bounds.max_lng, bounds.max_lat],
+                    ],
+                    {
+                        padding: 50,
+                        duration: 1000,
+                        maxZoom: 16, // Prevent excessive zoom
+                    }
+                );
             }
         } catch (error) {
             console.error('Error fitting map to data bounds:', error);
@@ -211,9 +209,7 @@ const MapComponent: React.FC<MapProps> = ({
 
             try {
                 // Get table schema
-                const schemaQuery = schema
-                    ? `DESCRIBE ${schema}.${selectedTable}`
-                    : `DESCRIBE ${selectedTable}`;
+                const schemaQuery = schema ? `DESCRIBE ${schema}.${selectedTable}` : `DESCRIBE ${selectedTable}`;
                 const result = await connectionRef.current.query(schemaQuery);
                 const schemaData = result.toArray() as unknown as ColumnInfo[];
 
@@ -228,16 +224,16 @@ const MapComponent: React.FC<MapProps> = ({
                 // Clear tile cache to force refresh with new columns
                 tileCache.current.clear();
 
-
                 // Force map to re-render tiles if map is ready
                 if (mapRef.current && isInitialized) {
                     // Remove and re-add the source to force tile refresh
                     const sourceId = `duckdb-${selectedTable}`;
                     if (mapRef.current.getSource(sourceId)) {
                         // Get existing layers that use this source
-                        const layers = mapRef.current.getStyle().layers?.filter(
-                            layer => 'source' in layer && layer.source === sourceId
-                        ) || [];
+                        const layers =
+                            mapRef.current
+                                .getStyle()
+                                .layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
 
                         // Remove layers
                         layers.forEach(layer => {
@@ -278,34 +274,45 @@ const MapComponent: React.FC<MapProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [geometryColumnName, selectedTable, dbContext]);
 
-
     // Track which tables have been initialized with default styles
     const initializedTablesRef = useRef<Set<string>>(new Set());
 
     // Function to update map layers dynamically
-    const updateMapLayers = useCallback((map: maplibregl.Map) => {
-        updateMapLayersHelper({
-            map,
-            tables: tables || [],
-            selectedTable,
-            tableStyles,
-            extraStyle,
-            isApplyingCustomStyle: isApplyingCustomStyleRef.current,
-            onTableStyleChanged,
-            onExtraStyleChange,
-            initializedTables: initializedTablesRef.current,
-            styleManager: styleManagerRef.current,
-            tileCache: tileCache.current
-        });
+    const updateMapLayers = useCallback(
+        (map: maplibregl.Map) => {
+            updateMapLayersHelper({
+                map,
+                tables: tables || [],
+                selectedTable,
+                tableStyles,
+                extraStyle,
+                isApplyingCustomStyle: isApplyingCustomStyleRef.current,
+                onTableStyleChanged,
+                onExtraStyleChange,
+                initializedTables: initializedTablesRef.current,
+                styleManager: styleManagerRef.current,
+                tileCache: tileCache.current,
+            });
 
-        // Zoom to data bounds when a new table is selected
-        if (selectedTable && connectionRef.current) {
-            setTimeout(() => {
-                fitMapToData(selectedTable, geometryColumnName);
-            }, 500); // Wait a bit for tiles to load
-        }
+            // Zoom to data bounds when a new table is selected
+            if (selectedTable && connectionRef.current) {
+                setTimeout(() => {
+                    fitMapToData(selectedTable, geometryColumnName);
+                }, 500); // Wait a bit for tiles to load
+            }
+        },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, tables, geometryColumnName, dbContext, tableStyles, onTableStyleChanged, extraStyle, onExtraStyleChange]);
+        [
+            selectedTable,
+            tables,
+            geometryColumnName,
+            dbContext,
+            tableStyles,
+            onTableStyleChanged,
+            extraStyle,
+            onExtraStyleChange,
+        ]
+    );
 
     // Function to register DuckDB protocol (extracted for reuse)
     const registerDuckDBProtocol = useCallback(() => {
@@ -337,13 +344,11 @@ const MapComponent: React.FC<MapProps> = ({
                         throw new Error('Database connection is not available');
                     }
 
-
                     const currentColumns = selectedColumnsRef.current || [];
 
                     if (!tableName) {
                         return { data: new Uint8Array() };
                     }
-
 
                     // Build SQL query to get selected columns
                     // Don't pass schema - connection already has schema context
@@ -352,9 +357,8 @@ const MapComponent: React.FC<MapProps> = ({
                         selectedTable: tableName,
                         selectedColumns: currentColumns,
                         geometryColumnName,
-                        schema: null,  // Don't use URL-extracted schema
+                        schema: null, // Don't use URL-extracted schema
                     });
-
 
                     let result;
                     try {
@@ -366,7 +370,6 @@ const MapComponent: React.FC<MapProps> = ({
                         console.error('Tile coordinates:', { z: zxy.z, x: zxy.x, y: zxy.y });
                         return { data: new Uint8Array() };
                     }
-
 
                     if (result.numRows === 0) {
                         tileCache.current.set(cacheKey, new Uint8Array());
@@ -415,69 +418,69 @@ const MapComponent: React.FC<MapProps> = ({
         }
     }, [geometryColumnName]);
 
-
-
     // Function to handle style changes
-    const handleStyleChange = useCallback(async (newStyle: maplibregl.StyleSpecification) => {
-        if (!mapRef.current || !isInitialized) {
-            customStyleRef.current = newStyle;
-            hasCustomStyleRef.current = true;
-            return;
-        }
-
-        try {
-            setIsLoading(true);
-            isApplyingCustomStyleRef.current = true;
-
-            // Check if this is the default style (has osm source and osm-layer)
-            const isDefaultStyle = newStyle.sources?.osm &&
-                                 newStyle.layers?.some(layer => layer.id === 'osm-layer');
-
-            // Fix property references in the style
-            const fixedStyle = processMapStyle(newStyle);
-
-            if (isDefaultStyle) {
-                customStyleRef.current = null;
-                hasCustomStyleRef.current = false;
-            } else {
-                customStyleRef.current = fixedStyle;
+    const handleStyleChange = useCallback(
+        async (newStyle: maplibregl.StyleSpecification) => {
+            if (!mapRef.current || !isInitialized) {
+                customStyleRef.current = newStyle;
                 hasCustomStyleRef.current = true;
+                return;
             }
 
-            // Apply the fixed style without diff to ensure proper layer reloading
-            mapRef.current.setStyle(fixedStyle);
+            try {
+                setIsLoading(true);
+                isApplyingCustomStyleRef.current = true;
 
-            // Notify parent of style update
-            if (onStyleUpdate) {
-                onStyleUpdate(fixedStyle);
-            }
+                // Check if this is the default style (has osm source and osm-layer)
+                const isDefaultStyle =
+                    newStyle.sources?.osm && newStyle.layers?.some(layer => layer.id === 'osm-layer');
 
-            // Wait for style to load, then re-add data layers
-            const handleStyleLoad = () => {
-                setIsLoading(false);
-                isApplyingCustomStyleRef.current = false;
+                // Fix property references in the style
+                const fixedStyle = processMapStyle(newStyle);
 
-                // Update style manager reference
-                if (styleManagerRef.current && mapRef.current) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (styleManagerRef.current as any).map = mapRef.current;
+                if (isDefaultStyle) {
+                    customStyleRef.current = null;
+                    hasCustomStyleRef.current = false;
+                } else {
+                    customStyleRef.current = fixedStyle;
+                    hasCustomStyleRef.current = true;
                 }
 
-                // Re-add data layers after style loads
-                updateMapLayers(mapRef.current!);
+                // Apply the fixed style without diff to ensure proper layer reloading
+                mapRef.current.setStyle(fixedStyle);
 
-                // Remove this event listener
-                mapRef.current?.off('styledata', handleStyleLoad);
-            };
+                // Notify parent of style update
+                if (onStyleUpdate) {
+                    onStyleUpdate(fixedStyle);
+                }
 
-            mapRef.current.on('styledata', handleStyleLoad);
+                // Wait for style to load, then re-add data layers
+                const handleStyleLoad = () => {
+                    setIsLoading(false);
+                    isApplyingCustomStyleRef.current = false;
 
-        } catch (error) {
-            setIsLoading(false);
-            isApplyingCustomStyleRef.current = false;
-            setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }, [updateMapLayers, onStyleUpdate, isInitialized]);
+                    // Update style manager reference
+                    if (styleManagerRef.current && mapRef.current) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (styleManagerRef.current as any).map = mapRef.current;
+                    }
+
+                    // Re-add data layers after style loads
+                    updateMapLayers(mapRef.current!);
+
+                    // Remove this event listener
+                    mapRef.current?.off('styledata', handleStyleLoad);
+                };
+
+                mapRef.current.on('styledata', handleStyleLoad);
+            } catch (error) {
+                setIsLoading(false);
+                isApplyingCustomStyleRef.current = false;
+                setMapError(`Failed to apply new style: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+        [updateMapLayers, onStyleUpdate, isInitialized]
+    );
 
     // Expose style change handler
     useEffect(() => {
@@ -487,7 +490,6 @@ const MapComponent: React.FC<MapProps> = ({
     }, [onStyleChange, handleStyleChange, isInitialized]);
 
     useEffect(() => {
-
         // If map already exists, just update layers and re-register protocol
         if (isInitialized && mapRef.current) {
             // Re-register DuckDB protocol to pick up new geometryColumnName
@@ -504,8 +506,7 @@ const MapComponent: React.FC<MapProps> = ({
                 mapRef.current.triggerRepaint();
 
                 // Check layer detection after a delay to allow tiles to load
-                setTimeout(() => {
-                }, 1000);
+                setTimeout(() => {}, 1000);
             }
             return;
         }
@@ -514,7 +515,6 @@ const MapComponent: React.FC<MapProps> = ({
         if (isApplyingCustomStyleRef.current) {
             return;
         }
-
 
         // Check DuckDB initialization status
         if (dbContext) {
@@ -551,7 +551,6 @@ const MapComponent: React.FC<MapProps> = ({
 
                         // Clear tile cache to force refresh with new columns
                         tileCache.current.clear();
-
                     } catch (error) {
                         console.error('[Map] Failed to auto-detect columns:', error);
                         setDetectedColumns([]);
@@ -566,9 +565,7 @@ const MapComponent: React.FC<MapProps> = ({
                 const defaultStyle = initialStyleRef.current || createDefaultStyle();
 
                 // Fix property references in custom styles before using
-                const styleToUse = customStyleRef.current
-                    ? processMapStyle(customStyleRef.current)
-                    : defaultStyle;
+                const styleToUse = customStyleRef.current ? processMapStyle(customStyleRef.current) : defaultStyle;
 
                 const mapInstance = new maplibregl.Map({
                     container: 'map',
@@ -580,11 +577,10 @@ const MapComponent: React.FC<MapProps> = ({
                     antialias: true,
                     // Try to enable preserveDrawingBuffer for export
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ...(window.location.hostname === 'localhost' && { preserveDrawingBuffer: true } as any)
+                    ...(window.location.hostname === 'localhost' && ({ preserveDrawingBuffer: true } as any)),
                 });
 
                 mapRef.current = mapInstance; // Save map instance
-
 
                 // Process when map loading is complete
                 mapInstance.on('load', () => {
@@ -592,7 +588,6 @@ const MapComponent: React.FC<MapProps> = ({
 
                     // Initialize style manager and notify parent
                     if (!styleManagerRef.current) {
-
                         styleManagerRef.current = new MapStyleManager(mapInstance);
                         onMapReady?.(styleManagerRef.current);
                     }
@@ -607,26 +602,24 @@ const MapComponent: React.FC<MapProps> = ({
                         const features = mapInstance.queryRenderedFeatures(e.point);
 
                         // Filter for DuckDB layers (layer IDs starting with 'duckdb-')
-                        const duckdbFeatures = features.filter(f =>
-                            f.layer?.id?.startsWith('duckdb-')
-                        );
+                        const duckdbFeatures = features.filter(f => f.layer?.id?.startsWith('duckdb-'));
 
                         if (duckdbFeatures.length > 0) {
                             // Use the first DuckDB feature found
                             const event = {
                                 ...e,
-                                features: duckdbFeatures
+                                features: duckdbFeatures,
                             };
-                            handleFeatureClick(event as maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] });
+                            handleFeatureClick(
+                                event as maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
+                            );
                         }
                     });
 
                     // Register hover handlers for cursor change
                     mapInstance.on('mousemove', (e: maplibregl.MapMouseEvent) => {
                         const features = mapInstance.queryRenderedFeatures(e.point);
-                        const hasDuckdbFeature = features.some(f =>
-                            f.layer?.id?.startsWith('duckdb-')
-                        );
+                        const hasDuckdbFeature = features.some(f => f.layer?.id?.startsWith('duckdb-'));
                         mapInstance.getCanvas().style.cursor = hasDuckdbFeature ? 'pointer' : '';
                     });
 
@@ -635,8 +628,7 @@ const MapComponent: React.FC<MapProps> = ({
                         mapInstance.triggerRepaint();
 
                         // Check layer detection after a delay to allow tiles to load
-                        setTimeout(() => {
-                        }, 1000);
+                        setTimeout(() => {}, 1000);
                     }
                 });
 
@@ -652,7 +644,7 @@ const MapComponent: React.FC<MapProps> = ({
                             center: [center.lng, center.lat],
                             zoom,
                             bearing,
-                            pitch
+                            pitch,
                         });
                     };
 
@@ -684,7 +676,7 @@ const MapComponent: React.FC<MapProps> = ({
         };
 
         initMap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dbContext, geometryColumnName]);
 
     // Update layers when tables or selectedTable changes
@@ -692,7 +684,7 @@ const MapComponent: React.FC<MapProps> = ({
         if (mapRef.current && isInitialized) {
             updateMapLayers(mapRef.current);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedTable, tables, effectiveColumns, tableStyles, extraStyle]);
 
     // Separate effect for onMapReady to avoid triggering re-initialization
@@ -714,14 +706,16 @@ const MapComponent: React.FC<MapProps> = ({
 
             {/* Map Controls */}
             {showControls && (
-                <div style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    display: 'flex',
-                    gap: '8px',
-                    zIndex: 1000
-                }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        display: 'flex',
+                        gap: '8px',
+                        zIndex: 1000,
+                    }}
+                >
                     <button
                         onClick={exportMapAsPNG}
                         style={{
@@ -732,7 +726,7 @@ const MapComponent: React.FC<MapProps> = ({
                             borderRadius: '4px',
                             cursor: 'pointer',
                             fontSize: '12px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                         }}
                     >
                         📤 Export PNG
@@ -747,14 +741,13 @@ const MapComponent: React.FC<MapProps> = ({
                             borderRadius: '4px',
                             cursor: 'pointer',
                             fontSize: '12px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                         }}
                     >
                         {showStyleEditor ? '✕ Hide Style Editor' : '🎨 Style Editor'}
                     </button>
                 </div>
             )}
-
 
             {/* Style Editor */}
             {showControls && showStyleEditor && (
@@ -795,7 +788,6 @@ const MapComponent: React.FC<MapProps> = ({
                     Error: {mapError}
                 </div>
             )}
-
         </div>
     );
 };
