@@ -10,7 +10,7 @@ import { ChartConfigForm } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon, CogIcon, EllipsisVerticalIcon, ArrowDownTrayIcon, TrashIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -339,6 +339,104 @@ function ChatPage() {
         setShowChartDropdown(false);
     };
 
+    // Copy chart to clipboard handler
+    const handleCopyChartToClipboard = async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setShowChartDropdown(false);
+                return;
+            }
+
+            // Try canvas (PNG) first
+            const canvasElement = document.querySelector('.vega-embed canvas');
+            if (canvasElement) {
+                const canvas = canvasElement as HTMLCanvasElement;
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from canvas'));
+                        }
+                    }, 'image/png');
+                });
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blobPromise })
+                ]);
+
+                alert('Chart copied to clipboard!');
+                setShowChartDropdown(false);
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = document.querySelector('.vega-embed svg');
+            if (svgElement) {
+                const svg = svgElement as SVGElement;
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            // Create canvas and draw image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.width;
+                            tempCanvas.height = img.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get canvas context'));
+                                return;
+                            }
+
+                            ctx.drawImage(img, 0, 0);
+
+                            // Convert to blob
+                            tempCanvas.toBlob((blob) => {
+                                URL.revokeObjectURL(url);
+                                if (blob) {
+                                    resolve(blob);
+                                } else {
+                                    reject(new Error('Failed to create PNG from SVG'));
+                                }
+                            }, 'image/png');
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Failed to load SVG image'));
+                    };
+                    img.src = url;
+                });
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blobPromise })
+                ]);
+
+                alert('Chart copied to clipboard!');
+                setShowChartDropdown(false);
+                return;
+            }
+
+            alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert('Failed to copy chart to clipboard.');
+        }
+        setShowChartDropdown(false);
+    };
+
     // Remove chart handler
     const handleRemoveChart = () => {
         if (selectedTable && deleteChartFromAI) {
@@ -632,6 +730,20 @@ function ChatPage() {
                                                                         </button>
 
                                                                         <hr className="my-1 border-gray-200" />
+
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                handleCopyChartToClipboard();
+                                                                            }}
+                                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                            type="button"
+                                                                        >
+                                                                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                                                                            Copy to Clipboard
+                                                                        </button>
 
                                                                         <button
                                                                             onClick={(e) => {
