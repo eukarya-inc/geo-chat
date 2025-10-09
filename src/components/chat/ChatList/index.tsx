@@ -42,14 +42,14 @@ export function ChatList({
     onSelectDashboard,
     onDeleteDashboard,
     onRenameDashboard,
-    selectedDashboardId
+    selectedDashboardId,
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
     const [hoveredDashboardId, setHoveredDashboardId] = useState<string | null>(null);
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState<string>('');
-    const [dashboardToDelete, setDashboardToDelete] = useState<{id: string, title: string} | null>(null);
-    const [chatToDelete, setChatToDelete] = useState<{id: string, title: string} | null>(null);
+    const [dashboardToDelete, setDashboardToDelete] = useState<{ id: string; title: string } | null>(null);
+    const [chatToDelete, setChatToDelete] = useState<{ id: string; title: string } | null>(null);
 
     const handleStartEditing = (dashboardId: string, currentTitle: string) => {
         setEditingDashboardId(dashboardId);
@@ -127,24 +127,22 @@ export function ChatList({
                     onClick={() => onCreateChat()}
                     disabled={!isInitialized}
                     className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded transition-colors ${
-                        isInitialized 
-                            ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer' 
+                        isInitialized
+                            ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }`}
                 >
                     <PlusIcon className="w-4 h-4" />
-                    <span className="text-sm font-medium">
-                        {isInitialized ? '新しいチャット' : '初期化中...'}
-                    </span>
+                    <span className="text-sm font-medium">{isInitialized ? '新しいチャット' : '初期化中...'}</span>
                 </button>
-                
+
                 {onCreateDashboard && (
                     <button
                         onClick={() => onCreateDashboard()}
                         disabled={!isInitialized}
                         className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded transition-colors ${
-                            isInitialized 
-                                ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer' 
+                            isInitialized
+                                ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         }`}
                     >
@@ -155,7 +153,7 @@ export function ChatList({
                     </button>
                 )}
             </div>
-            
+
             <div className="flex-1 overflow-y-auto">
                 {/* Chats Section */}
                 <div className="border-b border-gray-200">
@@ -163,12 +161,10 @@ export function ChatList({
                         <h3 className="text-xs font-semibold text-gray-600 uppercase">チャット</h3>
                     </div>
                     {chats.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                            チャットがありません
-                        </div>
+                        <div className="p-4 text-center text-gray-500 text-sm">チャットがありません</div>
                     ) : (
                         <div className="p-2">
-                            {chats.map((chat) => {
+                            {chats.map(chat => {
                                 const isDeleting = chatToDelete && chatToDelete.id === chat.id;
 
                                 return (
@@ -217,9 +213,7 @@ export function ChatList({
                                             >
                                                 <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium truncate">
-                                                        {chat.title}
-                                                    </div>
+                                                    <div className="text-sm font-medium truncate">{chat.title}</div>
                                                     <div className="text-xs text-gray-500">
                                                         {chat.createdAt.toLocaleDateString('ja-JP')}
                                                     </div>
@@ -227,7 +221,7 @@ export function ChatList({
                                                 {hoveredChatId === chat.id && (
                                                     <button
                                                         data-testid="chat-delete-button"
-                                                        onClick={(e) => {
+                                                        onClick={e => {
                                                             e.stopPropagation();
                                                             handleChatDeleteClick(chat.id, chat.title);
                                                         }}
@@ -252,12 +246,10 @@ export function ChatList({
                             <h3 className="text-xs font-semibold text-gray-600 uppercase">ダッシュボード</h3>
                         </div>
                         {dashboards.length === 0 ? (
-                            <div className="p-4 text-center text-gray-500 text-sm">
-                                ダッシュボードがありません
-                            </div>
+                            <div className="p-4 text-center text-gray-500 text-sm">ダッシュボードがありません</div>
                         ) : (
                             <div className="p-2">
-                                {dashboards.map((dashboard) => {
+                                {dashboards.map(dashboard => {
                                     // Show delete confirmation inline for this dashboard
                                     if (dashboardToDelete && dashboardToDelete.id === dashboard.id) {
                                         return (
@@ -301,9 +293,7 @@ export function ChatList({
                                                 selectedDashboardId === dashboard.id
                                                     ? 'bg-green-50 border border-green-200'
                                                     : 'hover:bg-gray-100'
-                                            } ${
-                                                editingDashboardId !== dashboard.id ? 'cursor-pointer' : ''
-                                            }`}
+                                            } ${editingDashboardId !== dashboard.id ? 'cursor-pointer' : ''}`}
                                             onClick={() => {
                                                 if (editingDashboardId !== dashboard.id && onSelectDashboard) {
                                                     onSelectDashboard(dashboard.id);
@@ -320,7 +310,7 @@ export function ChatList({
                                                             <input
                                                                 type="text"
                                                                 value={editingTitle}
-                                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                                onChange={e => setEditingTitle(e.target.value)}
                                                                 onKeyDown={handleKeyDown}
                                                                 onBlur={handleSaveEdit}
                                                                 autoFocus
@@ -330,15 +320,25 @@ export function ChatList({
                                                                 onClick={handleCancelEdit}
                                                                 className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
                                                             >
-                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                <svg
+                                                                    className="w-3 h-3"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={2}
+                                                                        d="M6 18L18 6M6 6l12 12"
+                                                                    />
                                                                 </svg>
                                                             </button>
                                                         </div>
                                                     ) : (
                                                         <div
                                                             className="truncate cursor-pointer hover:bg-green-100 px-1 py-0.5 rounded"
-                                                            onClick={(e) => {
+                                                            onClick={e => {
                                                                 e.stopPropagation(); // Prevent dashboard selection
                                                                 if (onRenameDashboard) {
                                                                     handleStartEditing(dashboard.id, dashboard.title);
@@ -357,7 +357,7 @@ export function ChatList({
                                             {hoveredDashboardId === dashboard.id && onDeleteDashboard && (
                                                 <button
                                                     data-testid="dashboard-delete-button"
-                                                    onClick={(e) => {
+                                                    onClick={e => {
                                                         e.stopPropagation();
                                                         handleDeleteClick(dashboard.id, dashboard.title);
                                                     }}
@@ -374,7 +374,6 @@ export function ChatList({
                     </div>
                 )}
             </div>
-
         </div>
     );
 }

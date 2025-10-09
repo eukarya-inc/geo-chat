@@ -30,9 +30,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
     // Build column selection for the struct
     // Use TRY_CAST to safely convert complex types to VARCHAR (JSON string) for ST_AsMVT compatibility
-    const columnList = selectedColumns.map(col =>
-        `'${col}': TRY_CAST("${col}" AS VARCHAR)`
-    ).join(', ');
+    const columnList = selectedColumns.map(col => `'${col}': TRY_CAST("${col}" AS VARCHAR)`).join(', ');
 
     const structColumns = `{
         'geometry': ST_AsMVTGeom(
@@ -107,24 +105,21 @@ export function processMVTResult(mvtData: unknown): {
         return {
             vectorTile: null,
             cacheData: emptyData,
-            returnData: emptyData
+            returnData: emptyData,
         };
     }
 
     // Create a safe copy to avoid ArrayBuffer detachment issues
     // Handle case where Uint8Array might be a view on a larger buffer
     const safeVectorTile = new Uint8Array(
-        vectorTile.buffer.slice(
-            vectorTile.byteOffset,
-            vectorTile.byteOffset + vectorTile.byteLength
-        )
+        vectorTile.buffer.slice(vectorTile.byteOffset, vectorTile.byteOffset + vectorTile.byteLength)
     );
 
     // Return separate copies for cache and MapLibre to avoid shared buffer issues
     return {
         vectorTile: safeVectorTile,
         cacheData: safeVectorTile,
-        returnData: new Uint8Array(safeVectorTile)
+        returnData: new Uint8Array(safeVectorTile),
     };
 }
 
@@ -132,7 +127,9 @@ export function processMVTResult(mvtData: unknown): {
  * Parse DuckDB tile URL to extract table and tile coordinates
  * Format: duckdb://[schema.]table/{z}/{x}/{y}.mvt
  */
-export function parseDuckDBTileUrl(url: string): { tableSpec: string; tableName: string; zxy: { z: number; x: number; y: number } } | null {
+export function parseDuckDBTileUrl(
+    url: string
+): { tableSpec: string; tableName: string; zxy: { z: number; x: number; y: number } } | null {
     const match = url.match(/^duckdb:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.mvt$/);
     if (!match) {
         console.error('Invalid DuckDB URL format:', url);
