@@ -142,12 +142,21 @@ describe('maplibreExpressionFixer', () => {
         describe('interpolate expressions', () => {
             it('should leave valid interpolate expressions unchanged', () => {
                 const expr = ['interpolate', ['linear'], ['get', 'population'], 0, '#ffffff', 1000000, '#ff0000'];
-                expect(fixMaplibreExpression(expr)).toEqual(expr);
+                const expected = [
+                    'interpolate',
+                    ['linear'],
+                    ['to-number', ['get', 'population']],
+                    0,
+                    '#ffffff',
+                    1000000,
+                    '#ff0000',
+                ];
+                expect(fixMaplibreExpression(expr)).toEqual(expected);
             });
 
             it('should fix get expression in interpolate input', () => {
                 const expr = ['interpolate', ['linear'], ['get', 'value', 0], 0, 'blue', 100, 'red'];
-                const expected = ['interpolate', ['linear'], ['get', 'value'], 0, 'blue', 100, 'red'];
+                const expected = ['interpolate', ['linear'], ['to-number', ['get', 'value']], 0, 'blue', 100, 'red'];
                 expect(fixMaplibreExpression(expr)).toEqual(expected);
             });
 
@@ -166,6 +175,11 @@ describe('maplibreExpressionFixer', () => {
                 expect(consoleWarnSpy).toHaveBeenCalledWith(
                     'Cannot access array element metrics[0].revenue in MapLibre expressions. Using fallback value null instead.'
                 );
+            });
+
+            it('should not wrap interpolate input when already numeric', () => {
+                const expr = ['interpolate', ['linear'], ['to-number', ['get', 'value']], 0, 'blue', 100, 'red'];
+                expect(fixMaplibreExpression(expr)).toEqual(expr);
             });
         });
 
@@ -241,7 +255,7 @@ describe('maplibreExpressionFixer', () => {
                 const expected = [
                     'case',
                     ['all', ['>', ['literal', null], 100], ['<', ['get', 'c'], 50]],
-                    ['interpolate', ['linear'], ['get', 'd'], 0, 'blue', 100, 'red'],
+                    ['interpolate', ['linear'], ['to-number', ['get', 'd']], 0, 'blue', 100, 'red'],
                     'gray',
                 ];
                 expect(fixMaplibreExpression(expr)).toEqual(expected);

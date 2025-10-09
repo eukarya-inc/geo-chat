@@ -188,6 +188,12 @@ function fixInterpolateExpression(expr: unknown[], warnings: string[]): unknown[
     // Fix the input expression (usually a get expression)
     const fixedInput = fixExpressionRecursive(input, warnings);
 
+    // Ensure interpolate domain works with numeric values (vector tiles stringify properties)
+    let numericInput = fixedInput;
+    if (Array.isArray(fixedInput) && fixedInput[0] === 'get') {
+        numericInput = ['to-number', fixedInput];
+    }
+
     // Stops should be alternating input/output values
     const fixedStops = stops.map((stop, index) => {
         // Even indices are input values (numbers), odd indices might be colors or expressions
@@ -199,7 +205,7 @@ function fixInterpolateExpression(expr: unknown[], warnings: string[]): unknown[
         }
     });
 
-    return [op, interpolationType, fixedInput, ...fixedStops];
+    return [op, interpolationType, numericInput, ...fixedStops];
 }
 
 /**

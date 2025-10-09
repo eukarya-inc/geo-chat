@@ -44,7 +44,60 @@ const MapComponent: React.FC<MapProps> = ({
     const tileCache = useRef<Map<string, Uint8Array>>(new Map());
     const selectedTableRef = useRef<string | null>(selectedTable);
     const selectedColumnsRef = useRef<string[] | undefined>(selectedColumns);
+    // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
+    const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+
+    // Store resolved column types under all identifier variants (schema.table, table)
+    const cacheColumnTypes = useCallback(
+        (tableIdentifier: string, typeMap: Record<string, string>) => {
+            if (!tableIdentifier) {
+                return;
+            }
+
+            const keys = new Set<string>();
+            keys.add(tableIdentifier);
+
+            const baseName = tableIdentifier.split('.').pop();
+            if (baseName) {
+                keys.add(baseName);
+            }
+
+            if (schema && baseName) {
+                keys.add(`${schema}.${baseName}`);
+            }
+
+            keys.forEach(key => {
+                columnTypesRef.current[key] = typeMap;
+            });
+        },
+        [schema]
+    );
+
+    const removeCachedColumnTypes = useCallback(
+        (tableIdentifier: string) => {
+            if (!tableIdentifier) {
+                return;
+            }
+
+            const keys = new Set<string>();
+            keys.add(tableIdentifier);
+
+            const baseName = tableIdentifier.split('.').pop();
+            if (baseName) {
+                keys.add(baseName);
+            }
+
+            if (schema && baseName) {
+                keys.add(`${schema}.${baseName}`);
+            }
+
+            keys.forEach(key => {
+                delete columnTypesRef.current[key];
+            });
+        },
+        [schema]
+    );
 
     // Use provided columns or detected columns
     const effectiveColumns = selectedColumns !== undefined ? selectedColumns : detectedColumns;
@@ -199,11 +252,11 @@ const MapComponent: React.FC<MapProps> = ({
         }
     }, []);
 
-    // Auto-detect columns when table or selected columns change
+    // Auto-detect columns when table or selected columns change and maintain column type cache
     useEffect(() => {
-        const detectColumns = async () => {
-            // Only detect if connection exists, table is selected, and no columns are explicitly selected
-            if (!connectionRef.current || !selectedTable || selectedColumns !== undefined) {
+        const updateSchemaInfo = async () => {
+            if (!connectionRef.current || !selectedTable) {
+                columnTypesRef.current = {};
                 return;
             }
 
@@ -213,58 +266,80 @@ const MapComponent: React.FC<MapProps> = ({
                 const result = await connectionRef.current.query(schemaQuery);
                 const schemaData = result.toArray() as unknown as ColumnInfo[];
 
-                // Use helper function to detect display columns
-                const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
+                // Cache column types for vector tile generation
+                const typeMap = schemaData.reduce<Record<string, string>>((acc, column) => {
+                    if (column?.column_name) {
+                        acc[column.column_name] = column.column_type;
+                    }
+                    return acc;
+                }, {});
+                cacheColumnTypes(selectedTable, typeMap);
 
-                setDetectedColumns(filteredColumns);
+                if (selectedColumns === undefined) {
+                    // Use helper function to detect display columns
+                    const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
 
-                // Update the ref immediately for the protocol handler
-                selectedColumnsRef.current = filteredColumns;
+                    setDetectedColumns(filteredColumns);
 
-                // Clear tile cache to force refresh with new columns
-                tileCache.current.clear();
+                    // Update the ref immediately for the protocol handler
+                    selectedColumnsRef.current = filteredColumns;
 
-                // Force map to re-render tiles if map is ready
-                if (mapRef.current && isInitialized) {
-                    // Remove and re-add the source to force tile refresh
-                    const sourceId = `duckdb-${selectedTable}`;
-                    if (mapRef.current.getSource(sourceId)) {
-                        // Get existing layers that use this source
-                        const layers =
-                            mapRef.current
-                                .getStyle()
-                                .layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
+                    // Clear tile cache to force refresh with new columns
+                    tileCache.current.clear();
 
-                        // Remove layers
-                        layers.forEach(layer => {
-                            if (mapRef.current?.getLayer(layer.id)) {
-                                mapRef.current.removeLayer(layer.id);
-                            }
-                        });
-
-                        // Remove source
+                    // Force map to re-render tiles if map is ready
+                    if (mapRef.current && isInitialized) {
+                        // Remove and re-add the source to force tile refresh
+                        const sourceId = `duckdb-${selectedTable}`;
                         if (mapRef.current.getSource(sourceId)) {
-                            mapRef.current.removeSource(sourceId);
-                        }
+                            // Get existing layers that use this source
+                            const layers =
+                                mapRef.current
+                                    .getStyle()
+                                    .layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
 
-                        // Re-add source and layers
-                        setTimeout(() => {
-                            if (mapRef.current) {
-                                // Trigger re-render by changing a style property
-                                mapRef.current.triggerRepaint();
+                            // Remove layers
+                            layers.forEach(layer => {
+                                if (mapRef.current?.getLayer(layer.id)) {
+                                    mapRef.current.removeLayer(layer.id);
+                                }
+                            });
+
+                            // Remove source
+                            if (mapRef.current.getSource(sourceId)) {
+                                mapRef.current.removeSource(sourceId);
                             }
-                        }, 100);
+
+                            // Re-add source and layers
+                            setTimeout(() => {
+                                if (mapRef.current) {
+                                    // Trigger re-render by changing a style property
+                                    mapRef.current.triggerRepaint();
+                                }
+                            }, 100);
+                        }
                     }
                 }
             } catch (error) {
-                console.error('[Map] Failed to auto-detect columns:', error);
-                setDetectedColumns([]);
-                selectedColumnsRef.current = [];
+                console.error('[Map] Failed to fetch schema info:', error);
+                removeCachedColumnTypes(selectedTable);
+                if (selectedColumns === undefined) {
+                    setDetectedColumns([]);
+                    selectedColumnsRef.current = [];
+                }
             }
         };
 
-        detectColumns();
-    }, [selectedTable, selectedColumns, schema, geometryColumnName, isInitialized]);
+        updateSchemaInfo();
+    }, [
+        selectedTable,
+        selectedColumns,
+        schema,
+        geometryColumnName,
+        isInitialized,
+        cacheColumnTypes,
+        removeCachedColumnTypes,
+    ]);
 
     // Re-fit bounds when geometry column changes
     useEffect(() => {
@@ -350,6 +425,48 @@ const MapComponent: React.FC<MapProps> = ({
                         return { data: new Uint8Array() };
                     }
 
+                    let columnTypeMap = columnTypesRef.current[tableName] || columnTypesRef.current[tableSpec];
+
+                    if (!columnTypeMap) {
+                        const describeTargets = new Set<string>();
+                        if (schema) {
+                            describeTargets.add(`${schema}.${tableName}`);
+                        }
+                        describeTargets.add(tableSpec);
+                        describeTargets.add(tableName);
+
+                        let fetchError: unknown = null;
+
+                        for (const target of describeTargets) {
+                            if (!target) {
+                                continue;
+                            }
+
+                            try {
+                                const describeResult = await connectionRef.current.query(`DESCRIBE ${target}`);
+                                const schemaRows = describeResult.toArray() as unknown as ColumnInfo[];
+                                const typeMap = schemaRows.reduce<Record<string, string>>((acc, column) => {
+                                    if (column?.column_name) {
+                                        acc[column.column_name] = column.column_type;
+                                    }
+                                    return acc;
+                                }, {});
+
+                                cacheColumnTypes(target, typeMap);
+
+                                columnTypeMap =
+                                    columnTypesRef.current[tableName] || columnTypesRef.current[tableSpec] || typeMap;
+                                break;
+                            } catch (error) {
+                                fetchError = error;
+                            }
+                        }
+
+                        if (!columnTypeMap && fetchError) {
+                            console.warn('[Map] Unable to fetch column types for vector tile generation:', fetchError);
+                        }
+                    }
+
                     // Build SQL query to get selected columns
                     // Don't pass schema - connection already has schema context
                     const query = generateVectorTileQuery({
@@ -358,6 +475,7 @@ const MapComponent: React.FC<MapProps> = ({
                         selectedColumns: currentColumns,
                         geometryColumnName,
                         schema: null, // Don't use URL-extracted schema
+                        columnTypes: columnTypeMap,
                     });
 
                     let result;
@@ -416,7 +534,7 @@ const MapComponent: React.FC<MapProps> = ({
         } catch {
             // Failed to register protocol
         }
-    }, [geometryColumnName]);
+    }, [geometryColumnName, schema, cacheColumnTypes]);
 
     // Function to handle style changes
     const handleStyleChange = useCallback(
@@ -534,8 +652,8 @@ const MapComponent: React.FC<MapProps> = ({
                     return;
                 }
 
-                // Auto-detect columns after connection is established
-                if (selectedTable && selectedColumns === undefined) {
+                // Fetch schema information after connection is established
+                if (selectedTable) {
                     try {
                         const schemaQuery = schema
                             ? `DESCRIBE ${schema}.${selectedTable}`
@@ -543,18 +661,31 @@ const MapComponent: React.FC<MapProps> = ({
                         const result = await connectionRef.current.query(schemaQuery);
                         const schemaData = result.toArray() as unknown as ColumnInfo[];
 
-                        const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
-                        setDetectedColumns(filteredColumns);
+                        const typeMap = schemaData.reduce<Record<string, string>>((acc, column) => {
+                            if (column?.column_name) {
+                                acc[column.column_name] = column.column_type;
+                            }
+                            return acc;
+                        }, {});
+                        cacheColumnTypes(selectedTable, typeMap);
 
-                        // Update the ref immediately for the protocol handler
-                        selectedColumnsRef.current = filteredColumns;
+                        if (selectedColumns === undefined) {
+                            const filteredColumns = detectDisplayColumns(schemaData, geometryColumnName);
+                            setDetectedColumns(filteredColumns);
 
-                        // Clear tile cache to force refresh with new columns
-                        tileCache.current.clear();
+                            // Update the ref immediately for the protocol handler
+                            selectedColumnsRef.current = filteredColumns;
+
+                            // Clear tile cache to force refresh with new columns
+                            tileCache.current.clear();
+                        }
                     } catch (error) {
                         console.error('[Map] Failed to auto-detect columns:', error);
-                        setDetectedColumns([]);
-                        selectedColumnsRef.current = [];
+                        removeCachedColumnTypes(selectedTable);
+                        if (selectedColumns === undefined) {
+                            setDetectedColumns([]);
+                            selectedColumnsRef.current = [];
+                        }
                     }
                 }
 
