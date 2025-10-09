@@ -9,6 +9,7 @@ import {
     TrashIcon,
     ArrowDownTrayIcon,
     CircleStackIcon,
+    ClipboardDocumentIcon,
 } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
@@ -135,6 +136,103 @@ function ChartDropdownMenu({
         setIsOpen(false);
     };
 
+    const handleCopyToClipboard = async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setIsOpen(false);
+                return;
+            }
+
+            const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+            if (!chartContainer) {
+                alert('Chart not found. Please try again.');
+                setIsOpen(false);
+                return;
+            }
+
+            // Try canvas (PNG) first
+            const canvas = chartContainer.querySelector('canvas');
+            if (canvas) {
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob(blob => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from canvas'));
+                        }
+                    }, 'image/png');
+                });
+
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+                alert('Chart copied to clipboard!');
+                setIsOpen(false);
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = chartContainer.querySelector('svg');
+            if (svgElement) {
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            // Create canvas and draw image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.width;
+                            tempCanvas.height = img.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get canvas context'));
+                                return;
+                            }
+
+                            ctx.drawImage(img, 0, 0);
+
+                            // Convert to blob
+                            tempCanvas.toBlob(blob => {
+                                URL.revokeObjectURL(url);
+                                if (blob) {
+                                    resolve(blob);
+                                } else {
+                                    reject(new Error('Failed to create PNG from SVG'));
+                                }
+                            }, 'image/png');
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Failed to load SVG image'));
+                    };
+                    img.src = url;
+                });
+
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+                alert('Chart copied to clipboard!');
+                setIsOpen(false);
+                return;
+            }
+
+            alert('Chart not found. Please try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+        setIsOpen(false);
+    };
+
     const handleRemove = () => {
         onRemove(vizId);
         setIsOpen(false);
@@ -191,6 +289,20 @@ function ChartDropdownMenu({
                             </button>
 
                             <hr className="my-1 border-gray-200" />
+
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleCopyToClipboard();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                                Copy to Clipboard
+                            </button>
 
                             <button
                                 onClick={e => {
@@ -277,9 +389,7 @@ interface DashboardProps {
     dashboard: Dashboard;
     dbContext: DBContext;
     schemaName: string;
-    availableCharts: Record<string, ChartSpec>;
     onLayoutChange: (layout: Layout[]) => void;
-    onAddVisualization: (chartId: string) => void;
     onRemoveVisualization: (vizId: string) => void;
     onUpdateDashboard: (dashboard: Dashboard) => void;
 }
@@ -288,9 +398,7 @@ export function Dashboard({
     dashboard,
     dbContext,
     schemaName,
-    availableCharts,
     onLayoutChange,
-    onAddVisualization,
     onRemoveVisualization,
     onUpdateDashboard,
 }: DashboardProps) {
@@ -301,41 +409,6 @@ export function Dashboard({
             onLayoutChange(layout);
         },
         [onLayoutChange]
-    );
-
-    const handleAddChart = useCallback(
-        (chartId: string) => {
-            const chart = availableCharts[chartId];
-            if (!chart) return;
-
-            const newVisualization: DashboardVisualization = {
-                id: `viz-${Date.now()}`,
-                type: 'chart',
-                title: chart.title || 'Chart',
-                chartSpec: chart,
-                createdAt: new Date(),
-            };
-
-            const newLayout: Layout = {
-                i: newVisualization.id,
-                x: 0,
-                y: 0,
-                w: 6,
-                h: 4,
-                minW: 3,
-                minH: 2,
-            };
-
-            const updatedDashboard = {
-                ...dashboard,
-                visualizations: [...dashboard.visualizations, newVisualization],
-                layout: [...dashboard.layout, newLayout],
-            };
-
-            onUpdateDashboard(updatedDashboard);
-            onAddVisualization(chartId);
-        },
-        [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]
     );
 
     const handleRemoveVisualization = useCallback(
@@ -367,18 +440,18 @@ export function Dashboard({
                     <div className="flex">
                         <button
                             onClick={() => setActiveTab('charts')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'charts'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                         >
                             <ChartBarIcon className="w-4 h-4" />
-                            Charts
+                            Visualizations
                         </button>
                         <button
                             onClick={() => setActiveTab('layout')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'layout'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -389,7 +462,7 @@ export function Dashboard({
                         </button>
                         <button
                             onClick={() => setActiveTab('plugins')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
                                 activeTab === 'plugins'
                                     ? 'border-blue-500 text-blue-600 bg-blue-50'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -405,33 +478,32 @@ export function Dashboard({
                 <div className="flex-1 overflow-auto p-4">
                     {activeTab === 'charts' && (
                         <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-gray-700">Available Charts</h3>
-                            {Object.entries(availableCharts).map(([chartId, chart]) => (
+                            <h3 className="text-sm font-semibold text-gray-700">Available Visualizations</h3>
+                            {dashboard.visualizations.map(viz => (
                                 <div
-                                    key={chartId}
+                                    key={viz.id}
                                     className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
-                                            <h4 className="text-sm font-medium text-gray-900">
-                                                {chart.title || 'Untitled Chart'}
-                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="text-sm font-medium text-gray-900">
+                                                    {viz.title || 'Untitled Visualization'}
+                                                </h4>
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                                    {viz.type}
+                                                </span>
+                                            </div>
                                             <p className="text-xs text-gray-500 mt-1">
-                                                Created: {chart.timestamp?.toLocaleDateString() || 'Unknown'}
+                                                Created: {viz.createdAt?.toLocaleDateString() || 'Unknown'}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => handleAddChart(chartId)}
-                                            className="ml-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
-                                        >
-                                            Add
-                                        </button>
                                     </div>
                                 </div>
                             ))}
-                            {Object.keys(availableCharts).length === 0 && (
+                            {dashboard.visualizations.length === 0 && (
                                 <p className="text-sm text-gray-500 text-center py-8">
-                                    No charts available. Create charts in the chat to add them here.
+                                    No visualizations available. Export charts or maps from chat to add them here.
                                 </p>
                             )}
                         </div>
