@@ -121,6 +121,13 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
 
     const handleCopyToClipboard = async () => {
         try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setIsOpen(false);
+                return;
+            }
+
             const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
             if (!chartContainer) {
                 alert('Chart not found. Please try again.');
@@ -131,19 +138,20 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             // Try canvas (PNG) first
             const canvas = chartContainer.querySelector('canvas');
             if (canvas) {
-                canvas.toBlob(async (blob) => {
-                    if (blob) {
-                        try {
-                            await navigator.clipboard.write([
-                                new ClipboardItem({ 'image/png': blob })
-                            ]);
-                            alert('Chart copied to clipboard!');
-                        } catch (err) {
-                            console.error('Failed to copy chart to clipboard:', err);
-                            alert('Failed to copy chart to clipboard. Please try downloading instead.');
-                        }
-                    }
+                // Convert canvas to blob using Promise
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    canvas.toBlob((b) => resolve(b), 'image/png');
                 });
+
+                if (!blob) {
+                    throw new Error('Failed to create image from canvas');
+                }
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+
+                alert('Chart copied to clipboard!');
                 setIsOpen(false);
                 return;
             }
@@ -152,30 +160,43 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             const svgElement = chartContainer.querySelector('svg');
             if (svgElement) {
                 const svgData = new XMLSerializer().serializeToString(svgElement);
-                const tempCanvas = document.createElement('canvas');
-                const ctx = tempCanvas.getContext('2d');
-                const img = new Image();
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
 
-                img.onload = async () => {
-                    tempCanvas.width = img.width;
-                    tempCanvas.height = img.height;
-                    ctx?.drawImage(img, 0, 0);
-                    tempCanvas.toBlob(async (blob) => {
-                        if (blob) {
-                            try {
-                                await navigator.clipboard.write([
-                                    new ClipboardItem({ 'image/png': blob })
-                                ]);
-                                alert('Chart copied to clipboard!');
-                            } catch (err) {
-                                console.error('Failed to copy chart to clipboard:', err);
-                                alert('Failed to copy chart to clipboard. Please try downloading instead.');
-                            }
-                        }
+                // Create a promise-based image loading
+                const loadImage = (): Promise<HTMLImageElement> => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = reject;
+                        img.src = url;
                     });
                 };
 
-                img.src = 'data:image/svg+xml;base64,' + btoa(encodeURIComponent(svgData).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                const img = await loadImage();
+                URL.revokeObjectURL(url);
+
+                // Create canvas and draw image
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                const ctx = tempCanvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+
+                ctx.drawImage(img, 0, 0);
+
+                // Convert to blob
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    tempCanvas.toBlob((b) => resolve(b), 'image/png');
+                });
+
+                if (!blob) throw new Error('Failed to create PNG from SVG');
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+
+                alert('Chart copied to clipboard!');
                 setIsOpen(false);
                 return;
             }
@@ -183,7 +204,7 @@ function ChartDropdownMenu({ vizId, vizTitle, chartSpec, dbContext, schema, onRe
             alert('Chart not found. Please try again.');
         } catch (err) {
             console.error('Error copying chart:', err);
-            alert('Failed to copy chart to clipboard.');
+            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
         setIsOpen(false);
     };

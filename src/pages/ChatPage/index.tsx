@@ -342,23 +342,32 @@ function ChatPage() {
     // Copy chart to clipboard handler
     const handleCopyChartToClipboard = async () => {
         try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setShowChartDropdown(false);
+                return;
+            }
+
             // Try canvas (PNG) first
             const canvasElement = document.querySelector('.vega-embed canvas');
             if (canvasElement) {
                 const canvas = canvasElement as HTMLCanvasElement;
-                canvas.toBlob(async (blob) => {
-                    if (blob) {
-                        try {
-                            await navigator.clipboard.write([
-                                new ClipboardItem({ 'image/png': blob })
-                            ]);
-                            alert('Chart copied to clipboard!');
-                        } catch (err) {
-                            console.error('Failed to copy chart to clipboard:', err);
-                            alert('Failed to copy chart to clipboard. Please try downloading instead.');
-                        }
-                    }
+
+                // Convert canvas to blob using Promise
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    canvas.toBlob((b) => resolve(b), 'image/png');
                 });
+
+                if (!blob) {
+                    throw new Error('Failed to create image from canvas');
+                }
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+
+                alert('Chart copied to clipboard!');
                 setShowChartDropdown(false);
                 return;
             }
@@ -368,30 +377,43 @@ function ChatPage() {
             if (svgElement) {
                 const svg = svgElement as SVGElement;
                 const svgData = new XMLSerializer().serializeToString(svg);
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
 
-                img.onload = async () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx?.drawImage(img, 0, 0);
-                    canvas.toBlob(async (blob) => {
-                        if (blob) {
-                            try {
-                                await navigator.clipboard.write([
-                                    new ClipboardItem({ 'image/png': blob })
-                                ]);
-                                alert('Chart copied to clipboard!');
-                            } catch (err) {
-                                console.error('Failed to copy chart to clipboard:', err);
-                                alert('Failed to copy chart to clipboard. Please try downloading instead.');
-                            }
-                        }
+                // Create a promise-based image loading
+                const loadImage = (): Promise<HTMLImageElement> => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = reject;
+                        img.src = url;
                     });
                 };
 
-                img.src = 'data:image/svg+xml;base64,' + btoa(encodeURIComponent(svgData).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                const img = await loadImage();
+                URL.revokeObjectURL(url);
+
+                // Create canvas and draw image
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                const ctx = tempCanvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+
+                ctx.drawImage(img, 0, 0);
+
+                // Convert to blob
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    tempCanvas.toBlob((b) => resolve(b), 'image/png');
+                });
+
+                if (!blob) throw new Error('Failed to create PNG from SVG');
+
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+
+                alert('Chart copied to clipboard!');
                 setShowChartDropdown(false);
                 return;
             }
