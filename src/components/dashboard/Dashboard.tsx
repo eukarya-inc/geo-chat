@@ -261,9 +261,7 @@ interface DashboardProps {
     dashboard: Dashboard;
     dbContext: DBContext;
     schemaName: string;
-    availableCharts: Record<string, ChartSpec>;
     onLayoutChange: (layout: Layout[]) => void;
-    onAddVisualization: (chartId: string) => void;
     onRemoveVisualization: (vizId: string) => void;
     onUpdateDashboard: (dashboard: Dashboard) => void;
 }
@@ -272,9 +270,7 @@ export function Dashboard({
     dashboard,
     dbContext,
     schemaName,
-    availableCharts,
     onLayoutChange,
-    onAddVisualization,
     onRemoveVisualization,
     onUpdateDashboard
 }: DashboardProps) {
@@ -284,38 +280,6 @@ export function Dashboard({
     const handleLayoutChange = useCallback((layout: Layout[]) => {
         onLayoutChange(layout);
     }, [onLayoutChange]);
-
-    const handleAddChart = useCallback((chartId: string) => {
-        const chart = availableCharts[chartId];
-        if (!chart) return;
-
-        const newVisualization: DashboardVisualization = {
-            id: `viz-${Date.now()}`,
-            type: 'chart',
-            title: chart.title || 'Chart',
-            chartSpec: chart,
-            createdAt: new Date()
-        };
-
-        const newLayout: Layout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 4,
-            minW: 3,
-            minH: 2
-        };
-
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout]
-        };
-
-        onUpdateDashboard(updatedDashboard);
-        onAddVisualization(chartId);
-    }, [availableCharts, dashboard, onUpdateDashboard, onAddVisualization]);
 
     const handleRemoveVisualization = useCallback((vizId: string) => {
         onRemoveVisualization(vizId);
@@ -347,7 +311,7 @@ export function Dashboard({
                             }`}
                         >
                             <ChartBarIcon className="w-4 h-4" />
-                            Charts
+                            Visualizations
                         </button>
                         <button
                             onClick={() => setActiveTab('layout')}
@@ -378,33 +342,32 @@ export function Dashboard({
                 <div className="flex-1 overflow-auto p-4">
                     {activeTab === 'charts' && (
                         <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-gray-700">Available Charts</h3>
-                            {Object.entries(availableCharts).map(([chartId, chart]) => (
+                            <h3 className="text-sm font-semibold text-gray-700">Available Visualizations</h3>
+                            {dashboard.visualizations.map((viz) => (
                                 <div
-                                    key={chartId}
+                                    key={viz.id}
                                     className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
-                                            <h4 className="text-sm font-medium text-gray-900">
-                                                {chart.title || 'Untitled Chart'}
-                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="text-sm font-medium text-gray-900">
+                                                    {viz.title || 'Untitled Visualization'}
+                                                </h4>
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                                    {viz.type}
+                                                </span>
+                                            </div>
                                             <p className="text-xs text-gray-500 mt-1">
-                                                Created: {chart.timestamp?.toLocaleDateString() || 'Unknown'}
+                                                Created: {viz.createdAt?.toLocaleDateString() || 'Unknown'}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => handleAddChart(chartId)}
-                                            className="ml-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
-                                        >
-                                            Add
-                                        </button>
                                     </div>
                                 </div>
                             ))}
-                            {Object.keys(availableCharts).length === 0 && (
+                            {dashboard.visualizations.length === 0 && (
                                 <p className="text-sm text-gray-500 text-center py-8">
-                                    No charts available. Create charts in the chat to add them here.
+                                    No visualizations available. Export charts or maps from chat to add them here.
                                 </p>
                             )}
                         </div>

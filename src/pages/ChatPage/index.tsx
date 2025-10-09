@@ -383,11 +383,7 @@ function ChatPage() {
                                 dashboard={currentDashboard}
                                 dbContext={dbContext!}
                                 schemaName={schemaName || 'main'}
-                                availableCharts={getCurrentChatState()?.chartSpecs || {}}
                                 onLayoutChange={(layout) => updateDashboardLayout(selectedDashboardId, layout)}
-                                onAddVisualization={() => {
-                                    // This will be handled by the chart export functionality
-                                }}
                                 onRemoveVisualization={(vizId) => {
                                     if (!selectedDashboardId) {
                                         console.error('No dashboard selected for removal');
