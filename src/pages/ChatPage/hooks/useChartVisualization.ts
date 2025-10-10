@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
@@ -24,13 +24,6 @@ export function useChartVisualization(
     const currentChatState = useAtomValue(currentChatStateAtom);
     const showGraph = useAtomValue(currentTableShowGraphAtom);
     const lastUpdatedTableRef = useRef<string | null>(null);
-    const chartGenerationAttemptedRef = useRef<Set<string>>(new Set());
-
-    // Get persisted deleted tables list from remote state (memoized to prevent re-renders)
-    const chartUserDeleted = useMemo(
-        () => currentChatState?.chartUserDeleted || [],
-        [currentChatState?.chartUserDeleted]
-    );
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -88,15 +81,14 @@ export function useChartVisualization(
         }
     }, [selectedTable, currentChatState?.chartSpecs]);
 
-    // Generate chart automatically when chart tab is clicked for the first time
+    // Generate chart automatically when chart tab is clicked
+    // Always uses auto-generator (not AI) regardless of deletion history
     useEffect(() => {
         const generateChartOnTabClick = async () => {
             // Only generate if:
             // 1. Chart tab is active
             // 2. Table is selected
             // 3. No chart exists yet for this table
-            // 4. Haven't already attempted generation for this table
-            // 5. User hasn't deleted a chart for this table before
             if (activeTab !== 'chart' || !selectedTable || !dbContext || !connection || !schemaName) {
                 return;
             }
@@ -106,21 +98,6 @@ export function useChartVisualization(
             if (existingSpec) {
                 return; // Already have a chart
             }
-
-            // Check if we've already attempted to generate for this table
-            const attemptKey = `${schemaName}-${selectedTable}`;
-            if (chartGenerationAttemptedRef.current.has(attemptKey)) {
-                return; // Already attempted
-            }
-
-            // Check if user has deleted a chart for this table before
-            // If so, don't auto-generate, let them choose via AI
-            if (chartUserDeleted.includes(attemptKey)) {
-                return; // User deleted chart before, show chart type selector
-            }
-
-            // Mark as attempted
-            chartGenerationAttemptedRef.current.add(attemptKey);
 
             // Add a small delay to ensure schema is fully switched
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -164,7 +141,6 @@ export function useChartVisualization(
         schemaName,
         connection,
         currentChatState?.chartSpecs,
-        chartUserDeleted,
         updateChartSpecInState,
     ]);
 
@@ -296,26 +272,16 @@ export function useChartVisualization(
                 setChartSpec(null);
             }
 
-            // Mark this table as user-deleted so auto-generation won't happen again
-            // This ensures user sees chart type selector after deletion
-            const attemptKey = `${schemaName}-${tableName}`;
-            const currentDeleted = currentChatState?.chartUserDeleted || [];
-
-            // Add to deleted list if not already there
-            const updatedDeleted = currentDeleted.includes(attemptKey)
-                ? currentDeleted
-                : [...currentDeleted, attemptKey];
-
             // Update remote state to remove the chart spec
             const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
             delete updatedChartSpecs[tableName];
 
             updateChatState({
                 chartSpecs: updatedChartSpecs,
-                chartUserDeleted: updatedDeleted,
             });
 
             // Graph display is automatically turned off when chartSpec is deleted
+            // Note: Chart will auto-regenerate when chart tab is clicked again
         },
         [dbContext, schemaName, selectedTable, currentChatState, updateChatState]
     );
