@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSetAtom, useAtomValue } from 'jotai';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { generateDefaultCharts } from '../../../utils/autoChartGenerator';
@@ -25,7 +25,12 @@ export function useChartVisualization(
     const showGraph = useAtomValue(currentTableShowGraphAtom);
     const lastUpdatedTableRef = useRef<string | null>(null);
     const chartGenerationAttemptedRef = useRef<Set<string>>(new Set());
-    const chartUserDeletedRef = useRef<Set<string>>(new Set()); // Track tables where user deleted chart
+
+    // Get persisted deleted tables list from remote state (memoized to prevent re-renders)
+    const chartUserDeleted = useMemo(
+        () => currentChatState?.chartUserDeleted || [],
+        [currentChatState?.chartUserDeleted]
+    );
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -110,7 +115,7 @@ export function useChartVisualization(
 
             // Check if user has deleted a chart for this table before
             // If so, don't auto-generate, let them choose via AI
-            if (chartUserDeletedRef.current.has(attemptKey)) {
+            if (chartUserDeleted.includes(attemptKey)) {
                 return; // User deleted chart before, show chart type selector
             }
 
@@ -159,6 +164,7 @@ export function useChartVisualization(
         schemaName,
         connection,
         currentChatState?.chartSpecs,
+        chartUserDeleted,
         updateChartSpecInState,
     ]);
 
@@ -293,7 +299,12 @@ export function useChartVisualization(
             // Mark this table as user-deleted so auto-generation won't happen again
             // This ensures user sees chart type selector after deletion
             const attemptKey = `${schemaName}-${tableName}`;
-            chartUserDeletedRef.current.add(attemptKey);
+            const currentDeleted = currentChatState?.chartUserDeleted || [];
+
+            // Add to deleted list if not already there
+            const updatedDeleted = currentDeleted.includes(attemptKey)
+                ? currentDeleted
+                : [...currentDeleted, attemptKey];
 
             // Update remote state to remove the chart spec
             const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
@@ -301,6 +312,7 @@ export function useChartVisualization(
 
             updateChatState({
                 chartSpecs: updatedChartSpecs,
+                chartUserDeleted: updatedDeleted,
             });
 
             // Graph display is automatically turned off when chartSpec is deleted

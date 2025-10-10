@@ -60,6 +60,7 @@ export interface Chat {
     tables: Record<string, Table>; // Changed from tableHistory array to tables Record
     chartSpecs?: Record<string, ChartSpec>;
     mapSpecs?: Record<string, MapSpec>;
+    chartUserDeleted?: string[]; // List of table keys (schema-table) where user deleted charts
 }
 
 // ChatState is now just an alias for backward compatibility during migration
@@ -93,6 +94,7 @@ export const chatStatesAtom = atom(get => {
             tables: chat.tables,
             chartSpecs: chat.chartSpecs,
             mapSpecs: chat.mapSpecs,
+            chartUserDeleted: chat.chartUserDeleted,
         };
     }
     return states;
