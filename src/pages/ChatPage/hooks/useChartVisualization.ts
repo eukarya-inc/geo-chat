@@ -25,6 +25,7 @@ export function useChartVisualization(
     const showGraph = useAtomValue(currentTableShowGraphAtom);
     const lastUpdatedTableRef = useRef<string | null>(null);
     const chartGenerationAttemptedRef = useRef<Set<string>>(new Set());
+    const chartUserDeletedRef = useRef<Set<string>>(new Set()); // Track tables where user deleted chart
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -90,6 +91,7 @@ export function useChartVisualization(
             // 2. Table is selected
             // 3. No chart exists yet for this table
             // 4. Haven't already attempted generation for this table
+            // 5. User hasn't deleted a chart for this table before
             if (activeTab !== 'chart' || !selectedTable || !dbContext || !connection || !schemaName) {
                 return;
             }
@@ -104,6 +106,12 @@ export function useChartVisualization(
             const attemptKey = `${schemaName}-${selectedTable}`;
             if (chartGenerationAttemptedRef.current.has(attemptKey)) {
                 return; // Already attempted
+            }
+
+            // Check if user has deleted a chart for this table before
+            // If so, don't auto-generate, let them choose via AI
+            if (chartUserDeletedRef.current.has(attemptKey)) {
+                return; // User deleted chart before, show chart type selector
             }
 
             // Mark as attempted
@@ -282,9 +290,10 @@ export function useChartVisualization(
                 setChartSpec(null);
             }
 
-            // Clear the generation attempt flag so chart can be regenerated
+            // Mark this table as user-deleted so auto-generation won't happen again
+            // This ensures user sees chart type selector after deletion
             const attemptKey = `${schemaName}-${tableName}`;
-            chartGenerationAttemptedRef.current.delete(attemptKey);
+            chartUserDeletedRef.current.add(attemptKey);
 
             // Update remote state to remove the chart spec
             const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
