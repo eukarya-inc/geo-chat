@@ -741,10 +741,7 @@ export function Dashboard({
                                     data-viz-id={viz.id}
                                 >
                                     <div className="h-full flex flex-col">
-                                        <div
-                                            className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50"
-                                            onMouseDown={e => e.stopPropagation()}
-                                        >
+                                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
                                             <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
                                             {viz.type === 'chart' && viz.chartSpec && (
                                                 <ChartDropdownMenu
