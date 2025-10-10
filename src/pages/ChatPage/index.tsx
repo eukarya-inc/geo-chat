@@ -674,7 +674,8 @@ function ChatPage() {
                                             )}
 
                                             {/* Chart Tab */}
-                                            {activeTab === 'chart' && selectedTable &&
+                                            {activeTab === 'chart' &&
+                                                selectedTable &&
                                                 (displayChartSpec && connection && selectedChatId ? (
                                                     <div className="h-full overflow-hidden flex flex-col">
                                                         {/* Chart Display Area */}
