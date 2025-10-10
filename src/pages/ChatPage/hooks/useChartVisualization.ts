@@ -282,6 +282,10 @@ export function useChartVisualization(
                 setChartSpec(null);
             }
 
+            // Clear the generation attempt flag so chart can be regenerated
+            const attemptKey = `${schemaName}-${tableName}`;
+            chartGenerationAttemptedRef.current.delete(attemptKey);
+
             // Update remote state to remove the chart spec
             const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
             delete updatedChartSpecs[tableName];
