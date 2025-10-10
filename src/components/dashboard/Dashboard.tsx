@@ -10,6 +10,7 @@ import {
     ArrowDownTrayIcon,
     CircleStackIcon,
     ClipboardDocumentIcon,
+    CameraIcon,
 } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
@@ -374,6 +375,188 @@ function ChartDropdownMenu({
     );
 }
 
+interface MapDropdownMenuProps {
+    vizId: string;
+    vizTitle: string;
+    onRemove: (vizId: string) => void;
+}
+
+function MapDropdownMenu({ vizId, vizTitle, onRemove }: MapDropdownMenuProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const handleSaveMapAsImage = async () => {
+        try {
+            const mapContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+            if (!mapContainer) {
+                alert('Map not found. Please try again.');
+                setIsOpen(false);
+                return;
+            }
+
+            // Find the canvas element within the map container
+            const canvas = mapContainer.querySelector('canvas.maplibregl-canvas, canvas.mapboxgl-canvas');
+            if (canvas instanceof HTMLCanvasElement) {
+                canvas.toBlob(blob => {
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'map'}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    } else {
+                        alert('Failed to export map as image. Please try again.');
+                    }
+                }, 'image/png');
+            } else {
+                alert('Map canvas not found. Please ensure the map is fully loaded and try again.');
+            }
+        } catch (error) {
+            console.error('Error exporting map:', error);
+            alert('Failed to export map as image. Please try again.');
+        }
+        setIsOpen(false);
+    };
+
+    const handleCopyMapToClipboard = async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setIsOpen(false);
+                return;
+            }
+
+            const mapContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
+            if (!mapContainer) {
+                alert('Map not found. Please try again.');
+                setIsOpen(false);
+                return;
+            }
+
+            // Find the canvas element within the map container
+            const canvas = mapContainer.querySelector('canvas.maplibregl-canvas, canvas.mapboxgl-canvas');
+            if (canvas instanceof HTMLCanvasElement) {
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob(blob => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from map canvas'));
+                        }
+                    }, 'image/png');
+                });
+
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+                alert('Map copied to clipboard!');
+                setIsOpen(false);
+                return;
+            }
+
+            alert('Map canvas not found. Please ensure the map is fully loaded and try again.');
+        } catch (err) {
+            console.error('Error copying map:', err);
+            alert(`Failed to copy map to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+        setIsOpen(false);
+    };
+
+    const handleRemove = () => {
+        onRemove(vizId);
+        setIsOpen(false);
+    };
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                onClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsOpen(!isOpen);
+                }}
+                onMouseDown={e => {
+                    e.stopPropagation();
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
+                title="Map options"
+                type="button"
+            >
+                <EllipsisVerticalIcon className="w-4 h-4" />
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
+                    <div className="py-1">
+                        <button
+                            onClick={e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleCopyMapToClipboard();
+                            }}
+                            onMouseDown={e => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                            Copy to Clipboard
+                        </button>
+
+                        <button
+                            onClick={e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSaveMapAsImage();
+                            }}
+                            onMouseDown={e => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <CameraIcon className="w-4 h-4 mr-2" />
+                            Save as Image
+                        </button>
+
+                        <hr className="my-1 border-gray-200" />
+
+                        <button
+                            onClick={e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemove();
+                            }}
+                            onMouseDown={e => e.stopPropagation()}
+                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            type="button"
+                        >
+                            <TrashIcon className="w-4 h-4 mr-2" />
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Re-export for backward compatibility, but use the one from remoteAtoms
 export type DashboardVisualization = DashboardVisualizationType;
 
@@ -558,10 +741,7 @@ export function Dashboard({
                                     data-viz-id={viz.id}
                                 >
                                     <div className="h-full flex flex-col">
-                                        <div
-                                            className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50"
-                                            onMouseDown={e => e.stopPropagation()}
-                                        >
+                                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
                                             <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
                                             {viz.type === 'chart' && viz.chartSpec && (
                                                 <ChartDropdownMenu
@@ -574,25 +754,12 @@ export function Dashboard({
                                                     onUpdateChart={handleUpdateChart}
                                                 />
                                             )}
-                                            {viz.type !== 'chart' && (
-                                                <button
-                                                    onClick={() => handleRemoveVisualization(viz.id)}
-                                                    className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M6 18L18 6M6 6l12 12"
-                                                        />
-                                                    </svg>
-                                                </button>
+                                            {viz.type === 'map' && (
+                                                <MapDropdownMenu
+                                                    vizId={viz.id}
+                                                    vizTitle={viz.title}
+                                                    onRemove={handleRemoveVisualization}
+                                                />
                                             )}
                                         </div>
                                         <div className="flex-1 p-2 overflow-hidden">
