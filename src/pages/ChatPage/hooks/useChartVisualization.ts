@@ -15,7 +15,8 @@ export function useChartVisualization(
     selectedTable: string | null,
     dbContext: DBContext | null,
     schemaName: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
+    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null,
+    activeTab?: string
 ) {
     const [chartSpec, setChartSpec] = useState<ChartSpec | null>(null);
     const updateChatState = useSetAtom(updateChatStateAtom);
@@ -23,6 +24,7 @@ export function useChartVisualization(
     const currentChatState = useAtomValue(currentChatStateAtom);
     const showGraph = useAtomValue(currentTableShowGraphAtom);
     const lastUpdatedTableRef = useRef<string | null>(null);
+    const chartGenerationAttemptedRef = useRef<Set<string>>(new Set());
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -75,10 +77,82 @@ export function useChartVisualization(
                 title: existingSpec.title || `Chart for ${selectedTable}`,
             });
         } else {
-            // Don't generate chart automatically, wait for user to turn on graph
+            // Don't generate chart automatically, wait for user to click chart tab
             setChartSpec(null);
         }
     }, [selectedTable, currentChatState?.chartSpecs]);
+
+    // Generate chart automatically when chart tab is clicked for the first time
+    useEffect(() => {
+        const generateChartOnTabClick = async () => {
+            // Only generate if:
+            // 1. Chart tab is active
+            // 2. Table is selected
+            // 3. No chart exists yet for this table
+            // 4. Haven't already attempted generation for this table
+            if (activeTab !== 'chart' || !selectedTable || !dbContext || !connection || !schemaName) {
+                return;
+            }
+
+            // Check if we already have a chart spec for this table
+            const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
+            if (existingSpec) {
+                return; // Already have a chart
+            }
+
+            // Check if we've already attempted to generate for this table
+            const attemptKey = `${schemaName}-${selectedTable}`;
+            if (chartGenerationAttemptedRef.current.has(attemptKey)) {
+                return; // Already attempted
+            }
+
+            // Mark as attempted
+            chartGenerationAttemptedRef.current.add(attemptKey);
+
+            // Add a small delay to ensure schema is fully switched
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Validate that the table exists in this schema
+            try {
+                const isValid = await dbContext.validateTable(selectedTable, schemaName);
+                if (!isValid) {
+                    return;
+                }
+            } catch {
+                return;
+            }
+
+            try {
+                const defaultCharts = await generateDefaultCharts(selectedTable, dbContext, schemaName);
+
+                if (defaultCharts.length > 0) {
+                    const result = defaultCharts[0];
+                    const newChartSpec: ChartSpec = {
+                        id: `auto-${selectedTable}-${schemaName}-${Date.now()}`,
+                        spec: result.spec,
+                        timestamp: new Date(),
+                        title: result.title,
+                    };
+                    setChartSpec(newChartSpec);
+
+                    // Update chartSpecs in remote state
+                    updateChartSpecInState(selectedTable, newChartSpec);
+                }
+            } catch (error) {
+                console.error('Error generating chart on tab click:', error);
+            }
+        };
+
+        generateChartOnTabClick();
+    }, [
+        activeTab,
+        selectedTable,
+        dbContext,
+        schemaName,
+        connection,
+        currentChatState?.chartSpecs,
+        updateChartSpecInState,
+    ]);
 
     // Generate chart when graph is turned on for the first time
     useEffect(() => {
