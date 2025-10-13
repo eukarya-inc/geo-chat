@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 
@@ -111,6 +111,7 @@ export function ChartConfigForm({
     }, [chartSpec]);
 
     const [config, setConfig] = useState(extractCurrentConfig());
+    const isInitialMount = useRef(true);
 
     // Fetch columns from the current table
     useEffect(() => {
@@ -289,6 +290,12 @@ export function ChartConfigForm({
 
     // Auto-apply changes when enabled (for modal usage)
     useEffect(() => {
+        // Skip the first render to avoid triggering onSpecChange immediately on mount
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
         if (autoApplyChanges && columns.length > 0) {
             const newVegaSpec = generateVegaSpec();
             const updatedSpec: ChartSpec = {
