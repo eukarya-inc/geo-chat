@@ -25,16 +25,18 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 ### Required Workflow
 
 1. **Create a feature branch:**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
 
 2. **Make your changes and commit them**
 
 3. **Push your feature branch:**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
+
+    ```bash
+    git push origin feature/your-feature-name
+    ```
 
 4. **Create a Pull Request on GitHub for review**
 
