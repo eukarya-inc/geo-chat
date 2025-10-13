@@ -112,6 +112,7 @@ export function ChartConfigForm({
 
     const [config, setConfig] = useState(extractCurrentConfig());
     const isInitialMount = useRef(true);
+    const columnsLoadedRef = useRef(false);
 
     // Fetch columns from the current table
     useEffect(() => {
@@ -124,6 +125,8 @@ export function ChartConfigForm({
                     try {
                         const cols = await dbContext.getTableColumns(tableMatch[1], schema);
                         setColumns(cols);
+                        // Mark that columns have finished loading
+                        columnsLoadedRef.current = true;
                     } catch (error) {
                         console.error('Error fetching columns:', error);
                     }
@@ -293,6 +296,13 @@ export function ChartConfigForm({
         // Skip the first render to avoid triggering onSpecChange immediately on mount
         if (isInitialMount.current) {
             isInitialMount.current = false;
+            return;
+        }
+
+        // Skip if columns just loaded (first time columns populated)
+        // This prevents re-render when columns are fetched asynchronously
+        if (columnsLoadedRef.current && columns.length > 0) {
+            columnsLoadedRef.current = false; // Reset after handling first load
             return;
         }
 
