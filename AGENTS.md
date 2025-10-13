@@ -16,6 +16,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:unit` - Run unit tests
 - `npm run preview` - Preview built application
 
+## Git Workflow and Branch Protection
+
+**CRITICAL: Never push directly to the main branch**
+
+This repository has a pre-push hook that prevents direct pushes to main. All changes must go through feature branches and pull requests.
+
+### Required Workflow
+
+1. **Create a feature branch:**
+
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+
+2. **Make your changes and commit them**
+
+3. **Push your feature branch:**
+
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+
+4. **Create a Pull Request on GitHub for review**
+
+The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
+
 ## IMPORTANT: Always Run Format Check, Lint, Build and Test After Changes
 
 After making any code changes, you MUST run:
