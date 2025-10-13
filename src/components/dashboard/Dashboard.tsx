@@ -12,6 +12,7 @@ import {
     ClipboardDocumentIcon,
     CameraIcon,
     PhotoIcon,
+    XMarkIcon,
 } from '@heroicons/react/24/outline';
 import html2canvas from 'html2canvas';
 import VegaLiteChart from '../chart/VegaLiteChart';
@@ -665,6 +666,32 @@ export function Dashboard({
                     canvases.forEach(canvas => {
                         canvas.style.display = 'block';
                     });
+
+                    // Fix oklch and other modern CSS color functions that html2canvas doesn't support
+                    // by adding a style override to convert them to RGB
+                    const style = clonedDoc.createElement('style');
+                    style.textContent = `
+                        * {
+                            color: inherit !important;
+                            background-color: transparent !important;
+                            border-color: inherit !important;
+                        }
+                        .bg-white { background-color: #ffffff !important; }
+                        .bg-gray-50 { background-color: #f9fafb !important; }
+                        .bg-gray-100 { background-color: #f3f4f6 !important; }
+                        .bg-gray-200 { background-color: #e5e7eb !important; }
+                        .bg-gray-300 { background-color: #d1d5db !important; }
+                        .bg-blue-50 { background-color: #eff6ff !important; }
+                        .text-gray-500 { color: #6b7280 !important; }
+                        .text-gray-600 { color: #4b5563 !important; }
+                        .text-gray-700 { color: #374151 !important; }
+                        .text-gray-900 { color: #111827 !important; }
+                        .text-blue-600 { color: #2563eb !important; }
+                        .border-gray-200 { border-color: #e5e7eb !important; }
+                        .border-gray-300 { border-color: #d1d5db !important; }
+                        .border-blue-500 { border-color: #3b82f6 !important; }
+                    `;
+                    clonedDoc.head.appendChild(style);
                 },
             });
 
@@ -808,12 +835,12 @@ export function Dashboard({
                                 setShowMenu(!showMenu);
                             }}
                             disabled={isExporting}
-                            className={`p-2.5 rounded-lg shadow-lg transition-all duration-200 ${
+                            className={`p-2.5 rounded-lg shadow-lg transition-all duration-300 ${
                                 isExporting
                                     ? 'bg-gray-400 cursor-not-allowed'
                                     : 'bg-white hover:bg-gray-50 cursor-pointer border border-gray-200'
-                            }`}
-                            title="Dashboard options"
+                            } ${showMenu ? 'rotate-90' : 'rotate-0'}`}
+                            title={showMenu ? 'Close menu' : 'Dashboard options'}
                         >
                             {isExporting ? (
                                 <svg
@@ -837,19 +864,30 @@ export function Dashboard({
                                     ></path>
                                 </svg>
                             ) : (
-                                <svg
-                                    className="w-5 h-5 text-gray-600"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 6h16M4 12h16M4 18h16"
+                                <div className="relative w-5 h-5">
+                                    {/* Hamburger Icon */}
+                                    <svg
+                                        className={`absolute inset-0 w-5 h-5 text-gray-600 transition-all duration-300 ${
+                                            showMenu ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'
+                                        }`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M4 6h16M4 12h16M4 18h16"
+                                        />
+                                    </svg>
+                                    {/* Close (X) Icon */}
+                                    <XMarkIcon
+                                        className={`absolute inset-0 w-5 h-5 text-gray-600 transition-all duration-300 ${
+                                            showMenu ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 rotate-90 scale-0'
+                                        }`}
                                     />
-                                </svg>
+                                </div>
                             )}
                         </button>
 
