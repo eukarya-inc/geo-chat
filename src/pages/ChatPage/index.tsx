@@ -221,6 +221,16 @@ function ChatPage() {
         }
     }, [activeTab, configuredChartSpec, selectedTable, updateChartFromAI]);
 
+    // Persist configured chart changes when closing configuration panel
+    useEffect(() => {
+        // When closing config panel, save configured changes to remote state
+        if (!showChartConfig && configuredChartSpec && selectedTable && updateChartFromAI) {
+            updateChartFromAI(selectedTable, configuredChartSpec.spec);
+            // Clear local configured state since it's now in remote state
+            setConfiguredChartSpec(null);
+        }
+    }, [showChartConfig, configuredChartSpec, selectedTable, updateChartFromAI]);
+
     // Determine which chart spec to display - prefer configured version
     const displayChartSpec = configuredChartSpec || chartSpec;
 
@@ -808,9 +818,9 @@ function ChatPage() {
                                                                     className="overflow-auto p-3"
                                                                     style={{ height: '100%' }}
                                                                 >
-                                                                    {chartSpec && (
+                                                                    {displayChartSpec && (
                                                                         <ChartConfigForm
-                                                                            chartSpec={chartSpec}
+                                                                            chartSpec={displayChartSpec}
                                                                             dbContext={dbContext}
                                                                             schema={schemaName || 'main'}
                                                                             onSpecChange={handleChartSpecChange}
@@ -820,7 +830,7 @@ function ChatPage() {
                                                                             onSave={() => {
                                                                                 // Show confirmation dialog before saving
                                                                                 const chartTitle =
-                                                                                    chartSpec.title || 'chart';
+                                                                                    displayChartSpec.title || 'chart';
                                                                                 const chartElement =
                                                                                     document.querySelector(
                                                                                         '.vega-embed canvas, .vega-embed svg'
