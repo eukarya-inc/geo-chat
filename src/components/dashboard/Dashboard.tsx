@@ -11,7 +11,9 @@ import {
     CircleStackIcon,
     ClipboardDocumentIcon,
     CameraIcon,
+    PhotoIcon,
 } from '@heroicons/react/24/outline';
+import html2canvas from 'html2canvas';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -586,6 +588,8 @@ export function Dashboard({
     onUpdateDashboard,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
+    const [isExporting, setIsExporting] = useState(false);
+    const dashboardRef = useRef<HTMLDivElement>(null);
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
@@ -613,6 +617,49 @@ export function Dashboard({
         },
         [dashboard, onUpdateDashboard]
     );
+
+    const handleExportDashboard = async () => {
+        if (!dashboardRef.current || dashboard.visualizations.length === 0) {
+            alert('No visualizations to export. Please add some visualizations first.');
+            return;
+        }
+
+        setIsExporting(true);
+
+        try {
+            // Wait a bit for any animations to complete
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Capture the dashboard area
+            const canvas = await html2canvas(dashboardRef.current, {
+                backgroundColor: '#f9fafb', // Match bg-gray-50
+                scale: 2, // Higher quality
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+            });
+
+            // Convert canvas to blob and download
+            canvas.toBlob(blob => {
+                if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const fileName = `${dashboard.title.replace(/[^a-z0-9]/gi, '_') || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
+                    a.href = url;
+                    a.download = fileName;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } else {
+                    alert('Failed to export dashboard. Please try again.');
+                }
+                setIsExporting(false);
+            }, 'image/png');
+        } catch (error) {
+            console.error('Error exporting dashboard:', error);
+            alert('Failed to export dashboard. Please try again.');
+            setIsExporting(false);
+        }
+    };
 
     return (
         <div className="flex h-full">
@@ -720,8 +767,55 @@ export function Dashboard({
             </div>
 
             {/* Right Side - Grid Layout */}
-            <div className="flex-1 h-full overflow-auto bg-gray-50">
-                <div className="p-4 h-full">
+            <div className="flex-1 h-full overflow-auto bg-gray-50 relative">
+                {/* Export Button - Floating in top right */}
+                {dashboard.visualizations.length > 0 && (
+                    <div className="absolute top-4 right-4 z-10">
+                        <button
+                            onClick={handleExportDashboard}
+                            disabled={isExporting}
+                            className={`group flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all duration-200 ${
+                                isExporting
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:from-purple-600 hover:via-pink-600 hover:to-orange-600 cursor-pointer'
+                            } text-white font-medium text-sm`}
+                            title={isExporting ? 'Exporting...' : 'Export dashboard as image'}
+                        >
+                            {isExporting ? (
+                                <>
+                                    <svg
+                                        className="animate-spin h-5 w-5"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        ></circle>
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        ></path>
+                                    </svg>
+                                    <span>Exporting...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <PhotoIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    <span>Export Dashboard</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
+
+                <div className="p-4 h-full" ref={dashboardRef}>
                     {dashboard.visualizations.length > 0 ? (
                         <ResponsiveGridLayout
                             className="layout"
