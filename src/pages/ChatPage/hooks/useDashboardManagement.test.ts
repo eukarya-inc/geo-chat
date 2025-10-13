@@ -70,26 +70,28 @@ describe('useDashboardManagement', () => {
         });
 
         // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
+        await new Promise(resolve => setTimeout(resolve, 10));
 
         act(() => {
             dashboard2 = result.current.createDashboard('Dashboard 2');
         });
 
-        if (dashboard1 && dashboard2) {
-            // Verify both dashboards exist
-            expect(result.current.dashboards[dashboard1.id]).toBeDefined();
-            expect(result.current.dashboards[dashboard2.id]).toBeDefined();
+        // Ensure dashboards were created
+        expect(dashboard1).toBeDefined();
+        expect(dashboard2).toBeDefined();
 
-            // Delete the first dashboard
-            act(() => {
-                result.current.deleteDashboard(dashboard1!.id);
-            });
+        // Verify both dashboards exist
+        expect(result.current.dashboards[dashboard1!.id]).toBeDefined();
+        expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
 
-            // First dashboard should be deleted, second should remain
-            expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
-            expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
-        }
+        // Delete the first dashboard
+        act(() => {
+            result.current.deleteDashboard(dashboard1!.id);
+        });
+
+        // First dashboard should be deleted, second should remain
+        expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
+        expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
     });
 
     it('should handle deleting non-existent dashboard gracefully', () => {
@@ -187,19 +189,21 @@ describe('useDashboardManagement', () => {
         });
 
         // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
+        await new Promise(resolve => setTimeout(resolve, 10));
 
         act(() => {
             dashboard2 = result.current.createDashboard('Dashboard 2');
         });
 
+        // Ensure dashboards were created
+        expect(dashboard1).toBeDefined();
+        expect(dashboard2).toBeDefined();
+
         const allDashboards = result.current.getAllDashboards();
 
         expect(allDashboards).toHaveLength(2);
-        if (dashboard1 && dashboard2) {
-            expect(allDashboards).toContain(dashboard1);
-            expect(allDashboards).toContain(dashboard2);
-        }
+        expect(allDashboards).toContain(dashboard1);
+        expect(allDashboards).toContain(dashboard2);
     });
 
     it('should get specific dashboard by id', () => {

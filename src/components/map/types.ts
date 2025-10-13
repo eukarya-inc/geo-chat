@@ -58,4 +58,5 @@ export interface MapProps {
     onTableStyleChanged?: (tableName: string, style: TableStyle) => void;
     onExtraStyleChange?: (style: ExtraStyle) => void;
     showControls?: boolean; // Whether to show export and style editor controls (default: true)
+    preserveDrawingBuffer?: boolean; // Enable canvas export (default: false, true for dashboards)
 }

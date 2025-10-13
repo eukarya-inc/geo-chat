@@ -14,7 +14,6 @@ import {
     PhotoIcon,
     XMarkIcon,
 } from '@heroicons/react/24/outline';
-import html2canvas from 'html2canvas';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -648,69 +647,182 @@ export function Dashboard({
         setIsExporting(true);
 
         try {
-            // Wait for any animations and rendering to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for rendering to complete - longer wait for maps to finish loading tiles
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // Capture the dashboard area with improved settings
-            const canvas = await html2canvas(dashboardRef.current, {
-                backgroundColor: '#f9fafb', // Match bg-gray-50
-                scale: 2, // Higher quality
-                logging: true, // Enable logging for debugging
-                useCORS: true,
-                allowTaint: true,
-                foreignObjectRendering: false, // Disable for better compatibility
-                imageTimeout: 15000, // Longer timeout for maps
-                onclone: clonedDoc => {
-                    // Ensure all canvases are visible in the clone
-                    const canvases = clonedDoc.querySelectorAll('canvas');
-                    canvases.forEach(canvas => {
-                        canvas.style.display = 'block';
-                    });
+            // Find the grid layout container
+            const gridLayout = dashboardRef.current.querySelector('.react-grid-layout');
+            if (!gridLayout) {
+                throw new Error('Grid layout not found');
+            }
 
-                    // Fix oklch and other modern CSS color functions that html2canvas doesn't support
-                    // by adding a style override to convert them to RGB
-                    const style = clonedDoc.createElement('style');
-                    style.textContent = `
-                        * {
-                            color: inherit !important;
-                            background-color: transparent !important;
-                            border-color: inherit !important;
-                        }
-                        .bg-white { background-color: #ffffff !important; }
-                        .bg-gray-50 { background-color: #f9fafb !important; }
-                        .bg-gray-100 { background-color: #f3f4f6 !important; }
-                        .bg-gray-200 { background-color: #e5e7eb !important; }
-                        .bg-gray-300 { background-color: #d1d5db !important; }
-                        .bg-blue-50 { background-color: #eff6ff !important; }
-                        .text-gray-500 { color: #6b7280 !important; }
-                        .text-gray-600 { color: #4b5563 !important; }
-                        .text-gray-700 { color: #374151 !important; }
-                        .text-gray-900 { color: #111827 !important; }
-                        .text-blue-600 { color: #2563eb !important; }
-                        .border-gray-200 { border-color: #e5e7eb !important; }
-                        .border-gray-300 { border-color: #d1d5db !important; }
-                        .border-blue-500 { border-color: #3b82f6 !important; }
-                    `;
-                    clonedDoc.head.appendChild(style);
-                },
+            // Get all grid items and their bounding boxes
+            const gridItems = gridLayout.querySelectorAll('.react-grid-item');
+            const dashboardRect = dashboardRef.current.getBoundingClientRect();
+
+            // Calculate canvas dimensions
+            let maxRight = 0;
+            let maxBottom = 0;
+            gridItems.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                maxRight = Math.max(maxRight, rect.right - dashboardRect.left);
+                maxBottom = Math.max(maxBottom, rect.bottom - dashboardRect.top);
             });
 
-            // Convert canvas to blob and download
-            canvas.toBlob(blob => {
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    const fileName = `${dashboard.title.replace(/[^a-z0-9]/gi, '_') || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
-                    a.href = url;
-                    a.download = fileName;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    alert('Dashboard exported successfully!');
+            const canvasWidth = Math.ceil(maxRight + 32); // Add padding
+            const canvasHeight = Math.ceil(maxBottom + 32);
+            const scale = 2; // For high quality export
+
+            // Create canvas for final composite
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = canvasWidth * scale;
+            finalCanvas.height = canvasHeight * scale;
+            const ctx = finalCanvas.getContext('2d');
+            if (!ctx) throw new Error('Could not get canvas context');
+
+            // Set scale and fill background
+            ctx.scale(scale, scale);
+            ctx.fillStyle = '#f9fafb'; // Match bg-gray-50
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // Capture and composite each visualization
+            for (const viz of dashboard.visualizations) {
+                const container = document.querySelector(`[data-viz-id="${viz.id}"]`);
+                if (!container) continue;
+
+                const containerRect = container.getBoundingClientRect();
+                const x = containerRect.left - dashboardRect.left;
+                const y = containerRect.top - dashboardRect.top;
+                const width = containerRect.width;
+                const height = containerRect.height;
+
+                // Draw container background and border
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(x, y, width, height);
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, width, height);
+
+                // Draw title bar
+                ctx.fillStyle = '#f9fafb';
+                ctx.fillRect(x, y, width, 38);
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.beginPath();
+                ctx.moveTo(x, y + 38);
+                ctx.lineTo(x + width, y + 38);
+                ctx.stroke();
+
+                // Draw title text
+                ctx.fillStyle = '#111827';
+                ctx.font = '14px system-ui, -apple-system, sans-serif';
+                ctx.fillText(viz.title, x + 12, y + 24);
+
+                // Get the canvas element (different selectors for charts vs maps)
+                let vizCanvas: HTMLCanvasElement | null = null;
+
+                if (viz.type === 'map') {
+                    // For maps, specifically look for MapLibre canvas
+                    vizCanvas = container.querySelector(
+                        'canvas.maplibregl-canvas, canvas.mapboxgl-canvas'
+                    ) as HTMLCanvasElement | null;
                 } else {
-                    alert('Failed to export dashboard. Please try again.');
+                    // For charts, any canvas will do
+                    vizCanvas = container.querySelector('canvas') as HTMLCanvasElement | null;
                 }
-                setIsExporting(false);
-            }, 'image/png');
+
+                if (vizCanvas instanceof HTMLCanvasElement) {
+                    try {
+                        // Get the canvas position
+                        const vizRect = vizCanvas.getBoundingClientRect();
+                        const vizX = vizRect.left - dashboardRect.left;
+                        const vizY = vizRect.top - dashboardRect.top;
+
+                        console.log(`Capturing ${viz.type}:`, {
+                            id: viz.id,
+                            width: vizCanvas.width,
+                            height: vizCanvas.height,
+                            displayWidth: vizRect.width,
+                            displayHeight: vizRect.height,
+                            hasMaplibreClass: vizCanvas.classList.contains('maplibregl-canvas'),
+                        });
+
+                        // Check if canvas has actual dimensions
+                        if (vizCanvas.width === 0 || vizCanvas.height === 0) {
+                            console.warn(`Canvas has zero dimensions for ${viz.type}`);
+                            ctx.fillStyle = '#f3f4f6';
+                            ctx.fillRect(vizX, vizY, vizRect.width, vizRect.height);
+                            ctx.fillStyle = '#9ca3af';
+                            ctx.font = '12px system-ui';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`Map not rendered`, vizX + vizRect.width / 2, vizY + vizRect.height / 2);
+                            continue;
+                        }
+
+                        // For MapLibre canvases, verify they're ready
+                        if (viz.type === 'map') {
+                            // Check if the canvas appears to have content by sampling a pixel
+                            const testCtx = document.createElement('canvas').getContext('2d');
+                            if (testCtx) {
+                                testCtx.canvas.width = 1;
+                                testCtx.canvas.height = 1;
+                                try {
+                                    testCtx.drawImage(vizCanvas, 0, 0, 1, 1);
+                                    const pixelData = testCtx.getImageData(0, 0, 1, 1).data;
+                                    const isBlank = pixelData[3] === 0; // Check alpha channel
+                                    console.log(`Map canvas blank check:`, {
+                                        isBlank,
+                                        pixelData: Array.from(pixelData),
+                                    });
+                                } catch (err) {
+                                    console.warn('Could not test canvas content:', err);
+                                }
+                            }
+                        }
+
+                        // Draw the visualization canvas
+                        console.log(`Drawing canvas at position (${vizX}, ${vizY})`);
+                        ctx.drawImage(vizCanvas, vizX, vizY, vizRect.width, vizRect.height);
+                        console.log(`Successfully drew ${viz.type} canvas`);
+                    } catch (err) {
+                        console.error(`Could not capture ${viz.type} canvas:`, err);
+                        // Draw error placeholder
+                        const vizRect = vizCanvas.getBoundingClientRect();
+                        const vizX = vizRect.left - dashboardRect.left;
+                        const vizY = vizRect.top - dashboardRect.top;
+                        ctx.fillStyle = '#fee2e2';
+                        ctx.fillRect(vizX, vizY, vizRect.width, vizRect.height);
+                        ctx.fillStyle = '#991b1b';
+                        ctx.font = '12px system-ui';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(
+                            `Failed to capture ${viz.type}`,
+                            vizX + vizRect.width / 2,
+                            vizY + vizRect.height / 2
+                        );
+                    }
+                }
+            }
+
+            // Convert to blob and download
+            finalCanvas.toBlob(
+                blob => {
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        const fileName = `${dashboard.title.replace(/[^a-z0-9]/gi, '_') || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
+                        a.href = url;
+                        a.download = fileName;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        alert('Dashboard exported successfully!');
+                    } else {
+                        alert('Failed to export dashboard. Please try again.');
+                    }
+                    setIsExporting(false);
+                },
+                'image/png',
+                1.0
+            );
         } catch (error) {
             console.error('Error exporting dashboard:', error);
             alert(`Failed to export dashboard: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -982,6 +1094,7 @@ export function Dashboard({
                                                         tableStyles={viz.mapSpec?.tableStyles}
                                                         initialStyle={viz.mapSpec?.style}
                                                         showControls={false}
+                                                        preserveDrawingBuffer={true}
                                                     />
                                                 </div>
                                             ) : (

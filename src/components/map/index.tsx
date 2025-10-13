@@ -33,6 +33,7 @@ const MapComponent: React.FC<MapProps> = ({
     onTableStyleChanged,
     onExtraStyleChange,
     showControls = true,
+    preserveDrawingBuffer = false,
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -47,6 +48,8 @@ const MapComponent: React.FC<MapProps> = ({
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
     const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+    // Generate unique container ID for each map instance
+    const containerIdRef = useRef<string>(`map-${Math.random().toString(36).substring(2, 11)}`);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -699,16 +702,15 @@ const MapComponent: React.FC<MapProps> = ({
                 const styleToUse = customStyleRef.current ? processMapStyle(customStyleRef.current) : defaultStyle;
 
                 const mapInstance = new maplibregl.Map({
-                    container: 'map',
+                    container: containerIdRef.current,
                     zoom: initialViewState?.zoom ?? 5, // Initial zoom level
                     center: initialViewState?.center ?? [139.7482, 35.6591], // Coordinates near Tokyo
                     bearing: initialViewState?.bearing ?? 0,
                     pitch: initialViewState?.pitch ?? 0,
                     style: styleToUse,
-                    antialias: true,
-                    // Try to enable preserveDrawingBuffer for export
+                    // preserveDrawingBuffer is not in MapLibre types but is supported
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ...(window.location.hostname === 'localhost' && ({ preserveDrawingBuffer: true } as any)),
+                    ...(preserveDrawingBuffer && ({ preserveDrawingBuffer: true } as any)),
                 });
 
                 mapRef.current = mapInstance; // Save map instance
@@ -828,7 +830,7 @@ const MapComponent: React.FC<MapProps> = ({
     return (
         <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
             <div
-                id="map"
+                id={containerIdRef.current}
                 style={{
                     width: '100%',
                     height: '100%',
