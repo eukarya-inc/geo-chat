@@ -589,7 +589,9 @@ export function Dashboard({
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
     const [isExporting, setIsExporting] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
     const dashboardRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
@@ -618,25 +620,52 @@ export function Dashboard({
         [dashboard, onUpdateDashboard]
     );
 
+    // Close menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setShowMenu(false);
+            }
+        }
+
+        if (showMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showMenu]);
+
     const handleExportDashboard = async () => {
         if (!dashboardRef.current || dashboard.visualizations.length === 0) {
             alert('No visualizations to export. Please add some visualizations first.');
             return;
         }
 
+        setShowMenu(false);
         setIsExporting(true);
 
         try {
-            // Wait a bit for any animations to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait for any animations and rendering to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Capture the dashboard area
+            // Capture the dashboard area with improved settings
             const canvas = await html2canvas(dashboardRef.current, {
                 backgroundColor: '#f9fafb', // Match bg-gray-50
                 scale: 2, // Higher quality
-                logging: false,
+                logging: true, // Enable logging for debugging
                 useCORS: true,
                 allowTaint: true,
+                foreignObjectRendering: false, // Disable for better compatibility
+                imageTimeout: 15000, // Longer timeout for maps
+                onclone: clonedDoc => {
+                    // Ensure all canvases are visible in the clone
+                    const canvases = clonedDoc.querySelectorAll('canvas');
+                    canvases.forEach(canvas => {
+                        canvas.style.display = 'block';
+                    });
+                },
             });
 
             // Convert canvas to blob and download
@@ -649,6 +678,7 @@ export function Dashboard({
                     a.download = fileName;
                     a.click();
                     URL.revokeObjectURL(url);
+                    alert('Dashboard exported successfully!');
                 } else {
                     alert('Failed to export dashboard. Please try again.');
                 }
@@ -656,7 +686,7 @@ export function Dashboard({
             }, 'image/png');
         } catch (error) {
             console.error('Error exporting dashboard:', error);
-            alert('Failed to export dashboard. Please try again.');
+            alert(`Failed to export dashboard: ${error instanceof Error ? error.message : 'Unknown error'}`);
             setIsExporting(false);
         }
     };
@@ -768,50 +798,83 @@ export function Dashboard({
 
             {/* Right Side - Grid Layout */}
             <div className="flex-1 h-full overflow-auto bg-gray-50 relative">
-                {/* Export Button - Floating in top right */}
+                {/* Hamburger Menu - Floating in top right */}
                 {dashboard.visualizations.length > 0 && (
-                    <div className="absolute top-4 right-4 z-10">
+                    <div className="absolute top-4 right-4 z-10" ref={menuRef}>
                         <button
-                            onClick={handleExportDashboard}
+                            onClick={e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowMenu(!showMenu);
+                            }}
                             disabled={isExporting}
-                            className={`group flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all duration-200 ${
+                            className={`p-2.5 rounded-lg shadow-lg transition-all duration-200 ${
                                 isExporting
                                     ? 'bg-gray-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:from-purple-600 hover:via-pink-600 hover:to-orange-600 cursor-pointer'
-                            } text-white font-medium text-sm`}
-                            title={isExporting ? 'Exporting...' : 'Export dashboard as image'}
+                                    : 'bg-white hover:bg-gray-50 cursor-pointer border border-gray-200'
+                            }`}
+                            title="Dashboard options"
                         >
                             {isExporting ? (
-                                <>
-                                    <svg
-                                        className="animate-spin h-5 w-5"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <circle
-                                            className="opacity-25"
-                                            cx="12"
-                                            cy="12"
-                                            r="10"
-                                            stroke="currentColor"
-                                            strokeWidth="4"
-                                        ></circle>
-                                        <path
-                                            className="opacity-75"
-                                            fill="currentColor"
-                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                        ></path>
-                                    </svg>
-                                    <span>Exporting...</span>
-                                </>
+                                <svg
+                                    className="animate-spin h-5 w-5 text-gray-600"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                </svg>
                             ) : (
-                                <>
-                                    <PhotoIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    <span>Export Dashboard</span>
-                                </>
+                                <svg
+                                    className="w-5 h-5 text-gray-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 6h16M4 12h16M4 18h16"
+                                    />
+                                </svg>
                             )}
                         </button>
+
+                        {/* Dropdown Menu */}
+                        {showMenu && !isExporting && (
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg">
+                                <div className="py-1">
+                                    <button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleExportDashboard();
+                                        }}
+                                        className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                        type="button"
+                                    >
+                                        <PhotoIcon className="w-4 h-4 mr-3 text-gray-500" />
+                                        <div className="flex-1 text-left">
+                                            <div className="font-medium">Export Dashboard</div>
+                                            <div className="text-xs text-gray-500">Save as PNG image</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
