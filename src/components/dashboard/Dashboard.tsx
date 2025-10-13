@@ -11,9 +11,7 @@ import {
     CircleStackIcon,
     ClipboardDocumentIcon,
     CameraIcon,
-    PhotoIcon,
 } from '@heroicons/react/24/outline';
-import html2canvas from 'html2canvas';
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal } from '../chart';
 import Map from '../map';
@@ -588,10 +586,6 @@ export function Dashboard({
     onUpdateDashboard,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
-    const [isExporting, setIsExporting] = useState(false);
-    const [showMenu, setShowMenu] = useState(false);
-    const dashboardRef = useRef<HTMLDivElement>(null);
-    const menuRef = useRef<HTMLDivElement>(null);
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
@@ -619,77 +613,6 @@ export function Dashboard({
         },
         [dashboard, onUpdateDashboard]
     );
-
-    // Close menu when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setShowMenu(false);
-            }
-        }
-
-        if (showMenu) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [showMenu]);
-
-    const handleExportDashboard = async () => {
-        if (!dashboardRef.current || dashboard.visualizations.length === 0) {
-            alert('No visualizations to export. Please add some visualizations first.');
-            return;
-        }
-
-        setShowMenu(false);
-        setIsExporting(true);
-
-        try {
-            // Wait for any animations and rendering to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Capture the dashboard area with improved settings
-            const canvas = await html2canvas(dashboardRef.current, {
-                backgroundColor: '#f9fafb', // Match bg-gray-50
-                scale: 2, // Higher quality
-                logging: true, // Enable logging for debugging
-                useCORS: true,
-                allowTaint: true,
-                foreignObjectRendering: false, // Disable for better compatibility
-                imageTimeout: 15000, // Longer timeout for maps
-                onclone: clonedDoc => {
-                    // Ensure all canvases are visible in the clone
-                    const canvases = clonedDoc.querySelectorAll('canvas');
-                    canvases.forEach(canvas => {
-                        canvas.style.display = 'block';
-                    });
-                },
-            });
-
-            // Convert canvas to blob and download
-            canvas.toBlob(blob => {
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    const fileName = `${dashboard.title.replace(/[^a-z0-9]/gi, '_') || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
-                    a.href = url;
-                    a.download = fileName;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    alert('Dashboard exported successfully!');
-                } else {
-                    alert('Failed to export dashboard. Please try again.');
-                }
-                setIsExporting(false);
-            }, 'image/png');
-        } catch (error) {
-            console.error('Error exporting dashboard:', error);
-            alert(`Failed to export dashboard: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            setIsExporting(false);
-        }
-    };
 
     return (
         <div className="flex h-full">
@@ -797,88 +720,8 @@ export function Dashboard({
             </div>
 
             {/* Right Side - Grid Layout */}
-            <div className="flex-1 h-full overflow-auto bg-gray-50 relative">
-                {/* Hamburger Menu - Floating in top right */}
-                {dashboard.visualizations.length > 0 && (
-                    <div className="absolute top-4 right-4 z-10" ref={menuRef}>
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowMenu(!showMenu);
-                            }}
-                            disabled={isExporting}
-                            className={`p-2.5 rounded-lg shadow-lg transition-all duration-200 ${
-                                isExporting
-                                    ? 'bg-gray-400 cursor-not-allowed'
-                                    : 'bg-white hover:bg-gray-50 cursor-pointer border border-gray-200'
-                            }`}
-                            title="Dashboard options"
-                        >
-                            {isExporting ? (
-                                <svg
-                                    className="animate-spin h-5 w-5 text-gray-600"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                </svg>
-                            ) : (
-                                <svg
-                                    className="w-5 h-5 text-gray-600"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                </svg>
-                            )}
-                        </button>
-
-                        {/* Dropdown Menu */}
-                        {showMenu && !isExporting && (
-                            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <div className="py-1">
-                                    <button
-                                        onClick={e => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleExportDashboard();
-                                        }}
-                                        className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                        type="button"
-                                    >
-                                        <PhotoIcon className="w-4 h-4 mr-3 text-gray-500" />
-                                        <div className="flex-1 text-left">
-                                            <div className="font-medium">Export Dashboard</div>
-                                            <div className="text-xs text-gray-500">Save as PNG image</div>
-                                        </div>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div className="p-4 h-full" ref={dashboardRef}>
+            <div className="flex-1 h-full overflow-auto bg-gray-50">
+                <div className="p-4 h-full">
                     {dashboard.visualizations.length > 0 ? (
                         <ResponsiveGridLayout
                             className="layout"
