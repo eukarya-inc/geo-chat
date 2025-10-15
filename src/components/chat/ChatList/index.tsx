@@ -21,6 +21,7 @@ interface ChatListProps {
     onSelectChat: (chatId: string) => void;
     onCreateChat: () => void | Promise<void>;
     onDeleteChat: (chatId: string) => void | Promise<void>;
+    onRenameChat?: (chatId: string, newName: string) => void;
     isInitialized?: boolean;
     dashboards?: Dashboard[];
     onCreateDashboard?: () => void;
@@ -36,6 +37,7 @@ export function ChatList({
     onSelectChat,
     onCreateChat,
     onDeleteChat,
+    onRenameChat,
     isInitialized = false,
     dashboards = [],
     onCreateDashboard,
@@ -46,25 +48,35 @@ export function ChatList({
 }: ChatListProps) {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
     const [hoveredDashboardId, setHoveredDashboardId] = useState<string | null>(null);
+    const [editingChatId, setEditingChatId] = useState<string | null>(null);
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState<string>('');
     const [dashboardToDelete, setDashboardToDelete] = useState<{ id: string; title: string } | null>(null);
     const [chatToDelete, setChatToDelete] = useState<{ id: string; title: string } | null>(null);
 
-    const handleStartEditing = (dashboardId: string, currentTitle: string) => {
+    const handleStartEditingChat = (chatId: string, currentTitle: string) => {
+        setEditingChatId(chatId);
+        setEditingTitle(currentTitle);
+    };
+
+    const handleStartEditingDashboard = (dashboardId: string, currentTitle: string) => {
         setEditingDashboardId(dashboardId);
         setEditingTitle(currentTitle);
     };
 
     const handleSaveEdit = () => {
-        if (editingDashboardId && onRenameDashboard && editingTitle.trim()) {
+        if (editingChatId && onRenameChat && editingTitle.trim()) {
+            onRenameChat(editingChatId, editingTitle.trim());
+        } else if (editingDashboardId && onRenameDashboard && editingTitle.trim()) {
             onRenameDashboard(editingDashboardId, editingTitle.trim());
         }
+        setEditingChatId(null);
         setEditingDashboardId(null);
         setEditingTitle('');
     };
 
     const handleCancelEdit = () => {
+        setEditingChatId(null);
         setEditingDashboardId(null);
         setEditingTitle('');
     };
@@ -202,18 +214,67 @@ export function ChatList({
                                         {/* Normal chat display */}
                                         {!isDeleting && (
                                             <div
-                                                className={`group relative flex items-center gap-2 p-3 rounded cursor-pointer transition-colors ${
+                                                className={`group relative flex items-center gap-2 p-3 rounded transition-colors ${
                                                     selectedChatId === chat.id && !selectedDashboardId
                                                         ? 'bg-blue-50 border border-blue-200'
                                                         : 'hover:bg-gray-100'
-                                                }`}
-                                                onClick={() => onSelectChat(chat.id)}
+                                                } ${editingChatId !== chat.id ? 'cursor-pointer' : ''}`}
+                                                onClick={() => {
+                                                    if (editingChatId !== chat.id) {
+                                                        onSelectChat(chat.id);
+                                                    }
+                                                }}
                                                 onMouseEnter={() => setHoveredChatId(chat.id)}
                                                 onMouseLeave={() => setHoveredChatId(null)}
                                             >
                                                 <ChartBarIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium truncate">{chat.title}</div>
+                                                    <div className="text-sm font-medium">
+                                                        {editingChatId === chat.id ? (
+                                                            <div className="flex items-center gap-1">
+                                                                <input
+                                                                    type="text"
+                                                                    value={editingTitle}
+                                                                    onChange={e => setEditingTitle(e.target.value)}
+                                                                    onKeyDown={handleKeyDown}
+                                                                    onBlur={handleSaveEdit}
+                                                                    autoFocus
+                                                                    className="flex-1 px-1 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                />
+                                                                <button
+                                                                    onClick={handleCancelEdit}
+                                                                    className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                                                >
+                                                                    <svg
+                                                                        className="w-3 h-3"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={2}
+                                                                            d="M6 18L18 6M6 6l12 12"
+                                                                        />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div
+                                                                className="truncate cursor-pointer hover:bg-blue-100 px-1 py-0.5 rounded"
+                                                                onClick={e => {
+                                                                    e.stopPropagation(); // Prevent chat selection
+                                                                    if (onRenameChat) {
+                                                                        handleStartEditingChat(chat.id, chat.title);
+                                                                    }
+                                                                }}
+                                                                title="Click to edit name"
+                                                            >
+                                                                {chat.title}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                     <div className="text-xs text-gray-500">
                                                         {chat.createdAt.toLocaleDateString('ja-JP')}
                                                     </div>
@@ -341,7 +402,10 @@ export function ChatList({
                                                             onClick={e => {
                                                                 e.stopPropagation(); // Prevent dashboard selection
                                                                 if (onRenameDashboard) {
-                                                                    handleStartEditing(dashboard.id, dashboard.title);
+                                                                    handleStartEditingDashboard(
+                                                                        dashboard.id,
+                                                                        dashboard.title
+                                                                    );
                                                                 }
                                                             }}
                                                             title="Click to edit name"

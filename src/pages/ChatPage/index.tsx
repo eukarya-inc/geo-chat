@@ -62,8 +62,16 @@ function ChatPage() {
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
 
     // Chat management with Jotai (needs to be first for chats state)
-    const { chats, selectedChatId, createNewChat, deleteChat, selectChat, updateChatMessages, getCurrentChatState } =
-        useChatManagement(dbContext);
+    const {
+        chats,
+        selectedChatId,
+        createNewChat,
+        deleteChat,
+        renameChat,
+        selectChat,
+        updateChatMessages,
+        getCurrentChatState,
+    } = useChatManagement(dbContext);
 
     // Convert chatId to schemaName at the top level
     const schemaName = chatIdToSchemaName(selectedChatId);
@@ -459,6 +467,7 @@ function ChatPage() {
                         onSelectChat={handleSelectChat}
                         onCreateChat={createNewChat}
                         onDeleteChat={deleteChat}
+                        onRenameChat={renameChat}
                         isInitialized={!!dbContext}
                         dashboards={getAllDashboards()}
                         onCreateDashboard={handleCreateDashboard}
