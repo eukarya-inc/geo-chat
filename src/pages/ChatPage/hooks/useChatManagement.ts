@@ -6,6 +6,7 @@ import {
     currentChatAtom,
     createChatAtom,
     deleteChatAtom,
+    renameChatAtom,
     selectChatAtom,
     updateMessagesAtom,
     updateChatStateAtom,
@@ -25,6 +26,7 @@ export function useChatManagement(dbContext: DBContext | null) {
     const currentChatState = useAtomValue(currentChatStateAtom);
     const createChat = useSetAtom(createChatAtom);
     const deleteChat = useSetAtom(deleteChatAtom);
+    const renameChat = useSetAtom(renameChatAtom);
     const selectChat = useSetAtom(selectChatAtom);
     const updateMessages = useSetAtom(updateMessagesAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
@@ -155,6 +157,11 @@ export function useChatManagement(dbContext: DBContext | null) {
         selectChat(chatId);
     };
 
+    // Handle chat rename
+    const renameChatHandler = (chatId: string, newTitle: string) => {
+        renameChat({ chatId, newTitle });
+    };
+
     // Update chat state (for compatibility with existing code)
     const updateChatStateWrapper = useCallback(
         (updates: Partial<ChatState>) => {
@@ -197,6 +204,7 @@ export function useChatManagement(dbContext: DBContext | null) {
         currentChat: currentChatWithState,
         createNewChat,
         deleteChat: deleteChatHandler,
+        renameChat: renameChatHandler,
         selectChat: selectChatHandler,
         updateChatMessages,
         updateChatState: updateChatStateWrapper,
