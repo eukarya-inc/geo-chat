@@ -31,13 +31,18 @@ export async function generateDefaultCharts(
         // Determine the best chart type based on column types
         let chart: ChartGenerationResult | null = null;
 
+        // Helper function to capitalize first character
+        const capitalizeTableName = (name: string) => {
+            return name.charAt(0).toUpperCase() + name.slice(1);
+        };
+
         // 1. If we have temporal + numeric, create time series
         if (temporalColumns.length > 0 && numericColumns.length > 0) {
             const timeColumn = temporalColumns[0];
             const valueColumn = numericColumns[0];
 
             chart = {
-                title: `${tableName} - Time Series`,
+                title: capitalizeTableName(tableName),
                 spec: {
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${valueColumn.name} over time`,
@@ -71,7 +76,7 @@ export async function generateDefaultCharts(
             const valueColumn = numericColumns[0];
 
             chart = {
-                title: `${tableName} - Bar Chart`,
+                title: capitalizeTableName(tableName),
                 spec: {
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${valueColumn.name} by ${categoryColumn.name}`,
@@ -102,7 +107,7 @@ export async function generateDefaultCharts(
             const yColumn = numericColumns[1];
 
             chart = {
-                title: `${tableName} - Scatter Plot`,
+                title: capitalizeTableName(tableName),
                 spec: {
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${xColumn.name} vs ${yColumn.name}`,
@@ -148,7 +153,7 @@ export async function generateDefaultCharts(
             );
 
             chart = {
-                title: `${tableName} - Values`,
+                title: capitalizeTableName(tableName),
                 spec: {
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: column.name,
@@ -184,7 +189,7 @@ export async function generateDefaultCharts(
             const column = categoricalColumns[0];
 
             chart = {
-                title: `${tableName} - Categories`,
+                title: capitalizeTableName(tableName),
                 spec: {
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: column.name,
