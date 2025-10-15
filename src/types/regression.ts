@@ -32,6 +32,7 @@ export interface RegressionAnalysisSuccess {
     regression: RegressionResult;
     columnSummaries: Record<string, ColumnSummary>;
     warnings?: string[];
+    suggestions?: string[];
 }
 
 export interface RegressionAnalysisError {

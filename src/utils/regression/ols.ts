@@ -228,10 +228,16 @@ export function olsRegression(X: number[][], y: number[], options: RegressionOpt
             const maxX = Math.max(...predictorValues);
 
             const slope = betas[idx];
-            const line = [
-                { x: minX, y: intercept + slope * minX },
-                { x: maxX, y: intercept + slope * maxX },
-            ];
+
+            // Calculate y values for regression line, handling non-finite values
+            const yAtMin = intercept + slope * minX;
+            const yAtMax = intercept + slope * maxX;
+
+            // Only include regression line if both points are finite
+            const line: Array<{ x: number; y: number }> = [];
+            if (Number.isFinite(yAtMin) && Number.isFinite(yAtMax) && Number.isFinite(minX) && Number.isFinite(maxX)) {
+                line.push({ x: minX, y: yAtMin }, { x: maxX, y: yAtMax });
+            }
 
             plotSeries.push({
                 predictor: name,

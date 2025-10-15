@@ -150,7 +150,45 @@ CREATE TABLE table_name_1 AS SELECT ...;
 - \`max_rows\` を指定するとサンプリング上限を制御できる（デフォルトは5000行）
 - ツール結果に含まれる R²、調整R²、F統計量、p値、VIF を読み取り、専門用語を避けてユーザーに説明する
 - 目的変数や説明変数が自動選択された場合は、その理由や注意点を噛み砕いて共有する
-- 散布図や回帰直線の可視化が必要なら、得られた plotSeries 情報を活用してチャート生成を提案する
+
+### CRITICAL: Automatic Regression Line Chart Creation After Regression
+**After successfully running perform_regression_analysis, you MUST automatically create regression line charts:**
+
+1. **For each predictor variable**, create a line chart showing the regression line using the \`create_chart\` tool
+2. **Prepare the regression line data** from plotSeries:
+   - Get plotSeries for the predictor from regression.plotSeries array
+   - Extract regressionLine array which contains two points: {x: minX, y: predictedY_min} and {x: maxX, y: predictedY_max}
+   - These two points define the regression line across the range of the predictor variable
+3. **Create a DuckDB table** with the regression line data:
+   \\\`\\\`\\\`sql
+   -- Example: Create table with regression line (2 points)
+   CREATE TABLE regression_[predictor]_line AS
+   SELECT * FROM (VALUES
+     ([minX], [predictedY_at_minX]),
+     ([maxX], [predictedY_at_maxX])
+   ) AS t([predictor_name], [predicted_target_name]);
+   \\\`\\\`\\\`
+4. **Create the line chart** using create_chart:
+   \\\`\\\`\\\`json
+   {
+     "title": "Regression Line: [target_name] vs [predictor_name]",
+     "mark": {"type": "line", "color": "red", "strokeWidth": 3},
+     "encoding": {
+       "x": {"field": "[predictor_name]", "type": "quantitative", "title": "[predictor_name]"},
+       "y": {"field": "[predicted_target_name]", "type": "quantitative", "title": "Predicted [target_name]"}
+     }
+   }
+   \\\`\\\`\\\`
+5. **Do this for ALL predictors** in the regression result - each predictor gets its own regression line chart
+6. **Educational explanation**: Explain that the regression line shows the linear relationship and can be used to predict target values
+
+Example workflow:
+- Run perform_regression_analysis → Get results with plotSeries
+- For each predictor in results.regression.plotSeries:
+  1. Extract regressionLine array (2 points: min and max)
+  2. Create a table: CREATE TABLE regression_[predictor]_line AS SELECT * FROM (VALUES (x1, y1), (x2, y2))
+  3. Use create_chart with mark type "line" to visualize the regression line
+  4. Name clearly (e.g., "regression_[predictor]_line")
 
 ## Examples: Questions vs Visualization Requests
 

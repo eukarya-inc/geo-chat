@@ -14,7 +14,22 @@ export function createRegressionTool(dbContext: DBContext, schema: string | null
     return tool({
         description: `Perform multiple linear regression analysis on DuckDB tables.
 Returns regression coefficients, inference metrics (p-values, t-statistics, F statistic, adjusted R²),
-variance inflation factors (VIF), and scatter plot data for each predictor.`,
+variance inflation factors (VIF), and regression line data for each predictor.
+
+IMPORTANT: After using this tool successfully, you MUST create regression line visualizations:
+1. For each predictor variable, create a line chart showing the regression line
+2. Use the plotSeries data from the regression result (contains regressionLine array with 2 points)
+3. Each regressionLine has {x: minX, y: predictedY} and {x: maxX, y: predictedY} - these define the line
+4. Create a DuckDB table with these 2 points, then use create_chart with mark type "line"
+5. This helps users visually understand the linear relationship found by the regression
+
+Example workflow after regression:
+1. perform_regression_analysis returns results with plotSeries array
+2. For each predictor in regression.plotSeries:
+   - Extract regressionLine array (contains 2 points defining the line)
+   - Create a table: CREATE TABLE regression_[predictor]_line AS SELECT * FROM (VALUES (x1, y1), (x2, y2)) AS t(predictor_name, predicted_target_name)
+   - Use create_chart with mark type "line", encoding x and y
+   - This creates a regression line chart showing the linear relationship`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z
@@ -244,6 +259,44 @@ variance inflation factors (VIF), and scatter plot data for each predictor.`,
                     );
                 }
 
+                // Generate suggestions for creating regression line charts
+                const suggestions: string[] = [];
+                const validPlots = regression.plotSeries?.filter(
+                    series => series.regressionLine && series.regressionLine.length === 2
+                );
+
+                if (validPlots && validPlots.length > 0) {
+                    suggestions.push(
+                        `次のステップ: 各説明変数について回帰直線のグラフを作成して、線形関係を視覚的に確認しましょう。regression.plotSeriesから各predictorのregressionLineデータ（2点）を取得し、適切な英数字のテーブル名を使ってCREATE TABLEし、create_chartで可視化してください。`
+                    );
+                    for (const predictor of predictorColumns) {
+                        const plotData = validPlots.find(series => series.predictor === predictor);
+                        if (plotData && plotData.regressionLine.length === 2) {
+                            const [point1, point2] = plotData.regressionLine;
+                            // Validate that all coordinates are finite
+                            if (
+                                Number.isFinite(point1.x) &&
+                                Number.isFinite(point1.y) &&
+                                Number.isFinite(point2.x) &&
+                                Number.isFinite(point2.y)
+                            ) {
+                                // Format numbers to ensure they're treated as numeric in SQL
+                                const x1 = Number(point1.x).toString();
+                                const y1 = Number(point1.y).toString();
+                                const x2 = Number(point2.x).toString();
+                                const y2 = Number(point2.y).toString();
+                                suggestions.push(
+                                    `説明変数「${predictor}」の回帰直線: CREATE TABLE <table_name> AS SELECT * FROM (VALUES (CAST(${x1} AS DOUBLE), CAST(${y1} AS DOUBLE)), (CAST(${x2} AS DOUBLE), CAST(${y2} AS DOUBLE))) AS t(<x_column_name>, <y_column_name>); その後create_chartでmark type "line"を使用。テーブル名とカラム名は適切な英数字名を指定してください。`
+                                );
+                            } else {
+                                warnings.push(
+                                    `説明変数「${predictor}」の回帰直線は計算できませんでした（係数またはインターセプトが無限大です）。`
+                                );
+                            }
+                        }
+                    }
+                }
+
                 const response: RegressionAnalysisResponse = {
                     success: true,
                     message: `テーブル「${tableName}」の回帰分析が完了しました。目的変数: ${targetColumn}、説明変数: ${predictorColumns.join(', ')}。`,
@@ -263,6 +316,7 @@ variance inflation factors (VIF), and scatter plot data for each predictor.`,
                     regression,
                     columnSummaries,
                     warnings: warnings.length > 0 ? warnings : undefined,
+                    suggestions: suggestions.length > 0 ? suggestions : undefined,
                 };
 
                 return response;
