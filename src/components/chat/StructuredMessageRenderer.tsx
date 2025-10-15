@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
+import type { RegressionAnalysisResponse, ColumnSummary } from '../../types/regression';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
@@ -196,6 +197,32 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'perform_regression_analysis') {
+                const input = block.input as {
+                    table_name: string;
+                    target_column?: string;
+                    explanatory_columns?: string[];
+                    max_rows?: number;
+                };
+                return (
+                    <CollapsibleSection
+                        key={index}
+                        title={`📈 **回帰分析を実行中: ${input.table_name}**`}
+                        defaultOpen={false}
+                    >
+                        <div className="p-2 text-xs space-y-1 text-gray-600">
+                            <div>目的変数: {input.target_column ?? '自動選択'}</div>
+                            <div>
+                                説明変数:{' '}
+                                {input.explanatory_columns && input.explanatory_columns.length > 0
+                                    ? input.explanatory_columns.join(', ')
+                                    : '自動選択'}
+                            </div>
+                            {input.max_rows ? <div>最大行数: {input.max_rows.toLocaleString()}</div> : null}
+                        </div>
+                    </CollapsibleSection>
+                );
+            }
             if (block.name === 'update_map_style_for_table') {
                 const input = block.input as {
                     table_name: string;
@@ -357,6 +384,11 @@ const renderContentBlock = (
                         />
                     );
                 }
+            }
+
+            if (block.name === 'perform_regression_analysis') {
+                const result = block.result as RegressionAnalysisResponse;
+                return renderRegressionToolResult(result, index);
             }
 
             // Handle get_map_style_for_table tool results
@@ -535,6 +567,200 @@ const renderContentBlock = (
             return null;
     }
 };
+
+function renderRegressionToolResult(result: RegressionAnalysisResponse | undefined, key: number): React.ReactNode {
+    if (!result) {
+        return (
+            <CollapsibleSection key={key} title="❌ **回帰分析の結果を取得できませんでした**" defaultOpen={false}>
+                <div className="p-2 text-xs text-red-600">結果オブジェクトが未定義です。</div>
+            </CollapsibleSection>
+        );
+    }
+
+    if (!result.success) {
+        return (
+            <CollapsibleSection key={key} title="❌ **回帰分析に失敗しました**" defaultOpen>
+                <div className="p-2 text-xs space-y-1 text-red-600">
+                    <div>{result.message}</div>
+                    {result.warnings && result.warnings.length > 0 ? (
+                        <ul className="list-disc list-inside text-red-500">
+                            {result.warnings.map((warning, idx) => (
+                                <li key={idx}>{warning}</li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </div>
+            </CollapsibleSection>
+        );
+    }
+
+    const { regression, targetColumn, predictorColumns, dataInfo, autoSelection, columnSummaries, warnings } = result;
+    const orderedColumns = [targetColumn, ...predictorColumns];
+    const columnSummaryRows = orderedColumns
+        .map(column => columnSummaries[column])
+        .filter((summary): summary is ColumnSummary => Boolean(summary));
+
+    return (
+        <CollapsibleSection key={key} title={`📈 **回帰分析結果: ${targetColumn}**`} defaultOpen>
+            <div className="p-2 text-xs space-y-3 text-gray-700">
+                <div className="space-y-1">
+                    <div className="font-semibold text-gray-800">モデル概要</div>
+                    <div>
+                        目的変数: <span className="font-medium">{targetColumn}</span>
+                        {autoSelection.target ? <span className="text-amber-600 ml-1">（自動選択）</span> : null}
+                    </div>
+                    <div className="leading-relaxed">
+                        説明変数: <span className="font-medium">{predictorColumns.join(', ')}</span>
+                        {autoSelection.predictors ? <span className="text-amber-600 ml-1">（自動選択）</span> : null}
+                    </div>
+                    <div className="leading-relaxed">
+                        使用行数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}
+                        {formatInteger(dataInfo.totalRows)}（最大 {formatInteger(dataInfo.samplingLimit)} 行、除外{' '}
+                        {formatInteger(dataInfo.skippedRows)} 行）
+                    </div>
+                    <div className="leading-relaxed">
+                        回帰式:{' '}
+                        <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-800">{regression.equation}</code>
+                    </div>
+                </div>
+
+                <div className="space-y-1">
+                    <div className="font-semibold text-gray-800">統計量</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
+                        <div>R²: {formatRegressionNumber(regression.r2)}</div>
+                        <div>調整R²: {formatRegressionNumber(regression.adjustedR2)}</div>
+                        <div>F統計量: {formatRegressionNumber(regression.fStatistic)}</div>
+                        <div>自由度（モデル）: {formatInteger(regression.dfModel)}</div>
+                        <div>自由度（残差）: {formatInteger(regression.dfResidual)}</div>
+                        <div>残差標準誤差: {formatRegressionNumber(regression.residualStandardError)}</div>
+                    </div>
+                </div>
+
+                <div className="space-y-1">
+                    <div className="font-semibold text-gray-800">係数と検定結果</div>
+                    <div className="overflow-x-auto border border-gray-200 rounded">
+                        <table className="min-w-[560px] table-fixed border-collapse">
+                            <thead className="bg-gray-100 text-gray-700">
+                                <tr>
+                                    <th className="py-1 px-2 text-left font-semibold">変数</th>
+                                    <th className="py-1 px-2 text-right font-semibold">係数</th>
+                                    <th className="py-1 px-2 text-right font-semibold">標準誤差</th>
+                                    <th className="py-1 px-2 text-right font-semibold">t値</th>
+                                    <th className="py-1 px-2 text-right font-semibold">p値</th>
+                                    <th className="py-1 px-2 text-right font-semibold">VIF</th>
+                                    <th className="py-1 px-2 text-right font-semibold">相関係数</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="border-t border-gray-200">
+                                    <td className="py-1 px-2 text-left">切片</td>
+                                    <td className="py-1 px-2 text-right">
+                                        {formatRegressionNumber(regression.coefficients.intercept)}
+                                    </td>
+                                    <td className="py-1 px-2 text-right">—</td>
+                                    <td className="py-1 px-2 text-right">—</td>
+                                    <td className="py-1 px-2 text-right">—</td>
+                                    <td className="py-1 px-2 text-right">—</td>
+                                    <td className="py-1 px-2 text-right">—</td>
+                                </tr>
+                                {regression.metricsPerPredictor.map(metric => (
+                                    <tr key={metric.name} className="border-t border-gray-200">
+                                        <td className="py-1 px-2 text-left">{metric.name}</td>
+                                        <td className="py-1 px-2 text-right">{formatRegressionNumber(metric.beta)}</td>
+                                        <td className="py-1 px-2 text-right">
+                                            {formatRegressionNumber(metric.standardError)}
+                                        </td>
+                                        <td className="py-1 px-2 text-right">
+                                            {formatRegressionNumber(metric.tStatistic)}
+                                        </td>
+                                        <td className="py-1 px-2 text-right">{formatPValue(metric.pValue)}</td>
+                                        <td className="py-1 px-2 text-right">
+                                            {formatRegressionNumber(metric.vif ?? Number.NaN)}
+                                        </td>
+                                        <td className="py-1 px-2 text-right">
+                                            {formatRegressionNumber(metric.correlation)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {columnSummaryRows.length > 0 ? (
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">カラム統計</div>
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-[520px] table-fixed border-collapse">
+                                <thead className="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th className="py-1 px-2 text-left font-semibold">カラム</th>
+                                        <th className="py-1 px-2 text-right font-semibold">件数</th>
+                                        <th className="py-1 px-2 text-right font-semibold">平均</th>
+                                        <th className="py-1 px-2 text-right font-semibold">最小</th>
+                                        <th className="py-1 px-2 text-right font-semibold">最大</th>
+                                        <th className="py-1 px-2 text-right font-semibold">標準偏差</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {columnSummaryRows.map(summary => (
+                                        <tr key={summary.column} className="border-t border-gray-200">
+                                            <td className="py-1 px-2 text-left">{summary.column}</td>
+                                            <td className="py-1 px-2 text-right">{formatInteger(summary.count)}</td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(summary.mean)}
+                                            </td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(summary.min)}
+                                            </td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(summary.max)}
+                                            </td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(summary.stdDev)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : null}
+
+                {warnings && warnings.length > 0 ? (
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">注意事項</div>
+                        <ul className="list-disc list-inside text-amber-600">
+                            {warnings.map((warning, idx) => (
+                                <li key={idx}>{warning}</li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : null}
+            </div>
+        </CollapsibleSection>
+    );
+}
+
+function formatRegressionNumber(value: number, digits = 4): string {
+    if (!Number.isFinite(value)) return '—';
+    const absValue = Math.abs(value);
+    if (absValue !== 0 && (absValue >= 10 ** digits || absValue < 10 ** -digits)) {
+        return value.toExponential(2);
+    }
+    return Number(value.toFixed(digits)).toString();
+}
+
+function formatPValue(value: number): string {
+    if (!Number.isFinite(value)) return '—';
+    if (value < 0.0001) return '<0.0001';
+    return value.toPrecision(3);
+}
+
+function formatInteger(value: number): string {
+    if (!Number.isFinite(value)) return '—';
+    return Math.round(value).toLocaleString();
+}
 
 export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps> = ({
     message,

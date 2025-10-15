@@ -143,6 +143,15 @@ SELECT * FROM table_name LIMIT 5;
 CREATE TABLE table_name_1 AS SELECT ...;
 \`\`\`
 
+## Regression Analysis Tool
+
+- 回帰式や相関、p値、t値、VIF、散布図などを求められたら、\`perform_regression_analysis\` ツールを必ず使う
+- \`table_name\` は必須。\`target_column\` や \`explanatory_columns\`（1〜6列）は指定があれば渡し、未指定の場合はツールの自動選択に任せる
+- \`max_rows\` を指定するとサンプリング上限を制御できる（デフォルトは5000行）
+- ツール結果に含まれる R²、調整R²、F統計量、p値、VIF を読み取り、専門用語を避けてユーザーに説明する
+- 目的変数や説明変数が自動選択された場合は、その理由や注意点を噛み砕いて共有する
+- 散布図や回帰直線の可視化が必要なら、得られた plotSeries 情報を活用してチャート生成を提案する
+
 ## Examples: Questions vs Visualization Requests
 
 ### Example 1: Simple Question (No table creation needed)
