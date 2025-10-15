@@ -614,6 +614,7 @@ export default function AIChat({
                                                             selectedTable={selectedTable}
                                                             onTableSelect={onTableSelect}
                                                             hideToolCalls={false}
+                                                            isLoadingMessage={isLoadingMessage}
                                                             onPromptClick={handlePromptSelection}
                                                         />
                                                     </div>
@@ -631,6 +632,7 @@ export default function AIChat({
                                                                 selectedTable={selectedTable}
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={false}
+                                                                isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
                                                             />
                                                             {isCurrentlyLoading &&
@@ -652,6 +654,7 @@ export default function AIChat({
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={true}
                                                                 isStreaming={isCurrentlyLoading ? true : false}
+                                                                isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
                                                             />
                                                         </div>

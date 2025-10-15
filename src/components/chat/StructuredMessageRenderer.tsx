@@ -8,6 +8,7 @@ import type { VegaChartSpec } from '../../types/chart';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
+import { CopyButton } from './CopyButton';
 import { isTableCreatedOnlyMessage, removeMetadataMarkers } from './utils';
 
 interface StructuredMessageRendererProps {
@@ -19,6 +20,7 @@ interface StructuredMessageRendererProps {
     hideToolCalls?: boolean;
     isStreaming?: boolean;
     onPromptClick?: (promptText: string) => void;
+    isLoadingMessage?: boolean;
 }
 
 interface CollapsibleSectionProps {
@@ -78,7 +80,8 @@ const renderContentBlock = (
     index: number,
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
-    onPromptClick?: (promptText: string) => void
+    onPromptClick?: (promptText: string) => void,
+    isLoadingMessage?: boolean
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -107,6 +110,9 @@ const renderContentBlock = (
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                     {beforeText}
                                 </ReactMarkdown>
+                                <div className="mt-2 flex">
+                                    <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
+                                </div>
                             </div>
                         );
                     }
@@ -132,6 +138,9 @@ const renderContentBlock = (
                             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                 {remainingText}
                             </ReactMarkdown>
+                            <div className="mt-2 flex">
+                                <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
+                            </div>
                         </div>
                     );
                 }
@@ -151,6 +160,11 @@ const renderContentBlock = (
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {cleanedText}
                     </ReactMarkdown>
+                    {!isLoadingMessage && (
+                        <div className="mt-2 flex">
+                            <CopyButton onCopy={() => navigator.clipboard.writeText(cleanedText)} />
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -544,6 +558,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     hideToolCalls = false,
     isStreaming = false,
     onPromptClick,
+    isLoadingMessage = false,
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -610,7 +625,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             <div className={className}>
                 {/* Render existing structured content blocks */}
                 {filteredContent.map((block, index) =>
-                    renderContentBlock(block, index, selectedTable, onTableSelect, onPromptClick)
+                    renderContentBlock(block, index, selectedTable, onTableSelect, onPromptClick, isLoadingMessage)
                 )}
 
                 {/* Render streaming text if present */}
