@@ -114,6 +114,25 @@ export const deleteChatAtom = atom(null, (get, set, chatId: string) => {
     });
 });
 
+// Rename chat (updates remote state)
+export const renameChatAtom = atom(null, (get, set, { chatId, newTitle }: { chatId: string; newTitle: string }) => {
+    const remoteState = get(remoteStateAtom);
+    const chat = remoteState.chats[chatId];
+
+    if (!chat) return;
+
+    set(remoteStateAtom, {
+        ...remoteState,
+        chats: {
+            ...remoteState.chats,
+            [chatId]: {
+                ...chat,
+                title: newTitle,
+            },
+        },
+    });
+});
+
 // Select table (updates current chat)
 export const selectTableAtom = atom(null, (get, set, tableName: string | null) => {
     const remoteState = get(remoteStateAtom);
