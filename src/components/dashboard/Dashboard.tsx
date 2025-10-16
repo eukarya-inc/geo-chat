@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
 import {
     ChartBarIcon,
@@ -353,24 +354,30 @@ function ChartDropdownMenu({
                 )}
             </div>
 
-            {/* Configuration Modal */}
-            <ChartConfigModal
-                isOpen={isConfigModalOpen}
-                onClose={() => setIsConfigModalOpen(false)}
-                chartSpec={chartSpec}
-                dbContext={dbContext}
-                schema={schema}
-                onUpdateChart={onUpdateChart}
-                vizId={vizId}
-            />
+            {/* Configuration Modal - Render in portal to avoid being clipped */}
+            {createPortal(
+                <ChartConfigModal
+                    isOpen={isConfigModalOpen}
+                    onClose={() => setIsConfigModalOpen(false)}
+                    chartSpec={chartSpec}
+                    dbContext={dbContext}
+                    schema={schema}
+                    onUpdateChart={onUpdateChart}
+                    vizId={vizId}
+                />,
+                document.body
+            )}
 
-            {/* Data Source Modal */}
-            <DataSourceModal
-                isOpen={isDataSourceModalOpen}
-                onClose={() => setIsDataSourceModalOpen(false)}
-                chartSpec={chartSpec}
-                onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
-            />
+            {/* Data Source Modal - Render in portal to avoid being clipped */}
+            {createPortal(
+                <DataSourceModal
+                    isOpen={isDataSourceModalOpen}
+                    onClose={() => setIsDataSourceModalOpen(false)}
+                    chartSpec={chartSpec}
+                    onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
+                />,
+                document.body
+            )}
         </>
     );
 }
