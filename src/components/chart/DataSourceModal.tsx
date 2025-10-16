@@ -144,7 +144,7 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
     };
 
     return (
-        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-[2000]">
+        <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-[2000]">
             <div className="bg-white rounded-lg shadow-xl max-w-3xl max-h-[80vh] w-full mx-4 flex flex-col">
                 {/* Modal Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200">
