@@ -53,7 +53,7 @@ export function ChartTypeIconGrid({
     }> = [
         {
             type: 'line',
-            label: 'Line Chart',
+            label: '折れ線グラフ',
             icon: (
                 <svg
                     width={svgSize}
@@ -69,7 +69,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'bar',
-            label: 'Bar Chart',
+            label: '棒グラフ',
             icon: (
                 <svg
                     width={svgSize}
@@ -85,7 +85,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'pie',
-            label: 'Pie Chart',
+            label: '円グラフ',
             icon: (
                 <svg
                     width={svgSize}
@@ -102,7 +102,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'scatter',
-            label: 'Scatter Plot',
+            label: '散布図',
             icon: (
                 <svg
                     width={svgSize}
@@ -122,7 +122,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'histogram',
-            label: 'Histogram',
+            label: 'ヒストグラム',
             icon: (
                 <svg
                     width={svgSize}
@@ -138,7 +138,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'box',
-            label: 'Box Plot',
+            label: '箱ひげ図',
             icon: (
                 <svg
                     width={svgSize}
@@ -155,7 +155,7 @@ export function ChartTypeIconGrid({
         },
         {
             type: 'heatmap',
-            label: 'Heatmap',
+            label: 'ヒートマップ',
             icon: (
                 <svg
                     width={svgSize}
