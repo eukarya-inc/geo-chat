@@ -7,7 +7,7 @@ import type { MapSpec } from '../../store/remoteAtoms';
 import type { MapStyleManager } from './mapStyleManager';
 import html2canvas from 'html2canvas';
 import { VisualizationHeader } from '../common/VisualizationHeader';
-import { createCopyButton, createExportButton, createStyleEditorButton } from '../common/VisualizationToolButtons';
+import { createCopyButton, createExportButton } from '../common/VisualizationToolButtons';
 
 interface MapPanelProps {
     title?: string;
@@ -104,10 +104,6 @@ export function MapPanel({
     };
 
     const toolButtons = [
-        createStyleEditorButton({
-            onOpenStyleEditor: () => setIsStyleModalOpen(true),
-            type: 'map',
-        }),
         createCopyButton({ onCopy: handleCopyMapToClipboard }),
         ...(showExportButton && onExport
             ? [
