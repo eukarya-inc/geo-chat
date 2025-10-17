@@ -149,7 +149,7 @@ export function ChartDropdownMenu({
         if (canvasElement) {
             const canvas = canvasElement as HTMLCanvasElement;
             const link = document.createElement('a');
-            link.download = `${chartTitle.replace(/[^a-z0-9]/gi, '_')}.png`;
+            link.download = `${chartTitle}.png`;
             link.href = canvas.toDataURL();
             link.click();
             return;
@@ -172,7 +172,7 @@ export function ChartDropdownMenu({
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${chartTitle.replace(/[^a-z0-9]/gi, '_')}.svg`;
+            a.download = `${chartTitle}.svg`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (error) {
