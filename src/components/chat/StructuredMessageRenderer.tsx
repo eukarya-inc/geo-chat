@@ -96,6 +96,9 @@ const renderContentBlock = (
                 .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
                 .trim();
 
+            // Check if this is a final message (final conclusion)
+            const isFinalMessage = block.text.includes('<!--FINAL_MESSAGE-->');
+
             // Check for table created markers in text
             const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
             const tableMatches = Array.from(cleanedText.matchAll(tableCreatedRegex));
@@ -114,9 +117,11 @@ const renderContentBlock = (
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                     {beforeText}
                                 </ReactMarkdown>
-                                <div className="mt-2 flex">
-                                    <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
-                                </div>
+                                {isFinalMessage && (
+                                    <div className="mt-2 flex">
+                                        <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
+                                    </div>
+                                )}
                             </div>
                         );
                     }
@@ -144,9 +149,11 @@ const renderContentBlock = (
                             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                 {remainingText}
                             </ReactMarkdown>
-                            <div className="mt-2 flex">
-                                <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
-                            </div>
+                            {isFinalMessage && (
+                                <div className="mt-2 flex">
+                                    <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
+                                </div>
+                            )}
                         </div>
                     );
                 }
@@ -166,7 +173,7 @@ const renderContentBlock = (
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {cleanedText}
                     </ReactMarkdown>
-                    {!isLoadingMessage && (
+                    {!isLoadingMessage && isFinalMessage && (
                         <div className="mt-2 flex">
                             <CopyButton onCopy={() => navigator.clipboard.writeText(cleanedText)} />
                         </div>
