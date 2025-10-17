@@ -4,6 +4,7 @@ import {
     CogIcon,
     EllipsisVerticalIcon,
     ArrowDownTrayIcon,
+    ArrowUpTrayIcon,
     TrashIcon,
     ClipboardDocumentIcon,
     CodeBracketIcon,
@@ -21,10 +22,14 @@ interface ChartDropdownMenuProps {
     onDataSourceOpen?: () => void;
     onJsonSourceOpen?: () => void;
     onRemove?: () => void;
+    onExport?: () => void;
     showConfigButton?: boolean;
     showDataSourceButton?: boolean;
     showJsonSourceButton?: boolean;
     showRemoveButton?: boolean;
+    showExportButton?: boolean;
+    isExportDisabled?: boolean;
+    exportTooltip?: string;
 }
 
 export function ChartDropdownMenu({
@@ -36,10 +41,14 @@ export function ChartDropdownMenu({
     onDataSourceOpen,
     onJsonSourceOpen,
     onRemove,
+    onExport,
     showConfigButton = true,
     showDataSourceButton = true,
     showJsonSourceButton = true,
     showRemoveButton = true,
+    showExportButton = true,
+    isExportDisabled = false,
+    exportTooltip,
 }: ChartDropdownMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -261,7 +270,7 @@ export function ChartDropdownMenu({
                                         setIsOpen(false);
                                     }}
                                     onMouseDown={e => e.stopPropagation()}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                     type="button"
                                 >
                                     <CogIcon className="w-4 h-4 mr-2" />
@@ -278,7 +287,7 @@ export function ChartDropdownMenu({
                                         setIsOpen(false);
                                     }}
                                     onMouseDown={e => e.stopPropagation()}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                     type="button"
                                 >
                                     <CodeBracketIcon className="w-4 h-4 mr-2" />
@@ -295,7 +304,7 @@ export function ChartDropdownMenu({
                                         setIsOpen(false);
                                     }}
                                     onMouseDown={e => e.stopPropagation()}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                     type="button"
                                 >
                                     <CodeBracketIcon className="w-4 h-4 mr-2" />
@@ -314,7 +323,7 @@ export function ChartDropdownMenu({
                                     handleCopyToClipboard();
                                 }}
                                 onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                 type="button"
                             >
                                 <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
@@ -328,7 +337,7 @@ export function ChartDropdownMenu({
                                     handleSaveAsPNG();
                                 }}
                                 onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                 type="button"
                             >
                                 <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
@@ -342,12 +351,41 @@ export function ChartDropdownMenu({
                                     handleSaveAsSVG();
                                 }}
                                 onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                 type="button"
                             >
                                 <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
                                 SVGとして保存
                             </button>
+
+                            {showExportButton && onExport && (
+                                <>
+                                    <hr className="my-1 border-gray-200" />
+
+                                    <button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (!isExportDisabled) {
+                                                onExport();
+                                                setIsOpen(false);
+                                            }
+                                        }}
+                                        onMouseDown={e => e.stopPropagation()}
+                                        className={`flex items-center w-full px-4 py-2 text-sm text-left transition-colors ${
+                                            isExportDisabled
+                                                ? 'text-gray-400 cursor-not-allowed'
+                                                : 'text-gray-700 hover:bg-gray-100 cursor-pointer'
+                                        }`}
+                                        title={exportTooltip}
+                                        disabled={isExportDisabled}
+                                        type="button"
+                                    >
+                                        <ArrowUpTrayIcon className="w-4 h-4 mr-2" />
+                                        ダッシュボードにエクスポート
+                                    </button>
+                                </>
+                            )}
 
                             {showRemoveButton && onRemove && (
                                 <>
@@ -361,7 +399,7 @@ export function ChartDropdownMenu({
                                             setIsOpen(false);
                                         }}
                                         onMouseDown={e => e.stopPropagation()}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                                         type="button"
                                     >
                                         <TrashIcon className="w-4 h-4 mr-2" />

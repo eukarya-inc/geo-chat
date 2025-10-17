@@ -9,14 +9,6 @@ interface ChartConfigFormProps {
     onSpecChange: (newSpec: ChartSpec) => void;
     showApplyButton?: boolean; // Optional prop to control apply button visibility
     autoApplyChanges?: boolean; // Optional prop to control automatic onSpecChange calls
-    showExportButton?: boolean; // Optional prop to show export button
-    onExport?: () => void; // Export handler
-    isExportDisabled?: boolean; // Whether export is disabled
-    exportTooltip?: string; // Export button tooltip
-    showSaveButton?: boolean; // Optional prop to show save button
-    onSave?: () => void; // Save handler
-    isSaveDisabled?: boolean; // Whether save is disabled
-    saveTooltip?: string; // Save button tooltip
 }
 
 export function ChartConfigForm({
@@ -26,18 +18,9 @@ export function ChartConfigForm({
     onSpecChange,
     showApplyButton = true,
     autoApplyChanges = false,
-    showExportButton = false,
-    onExport,
-    isExportDisabled = false,
-    exportTooltip = 'Export chart',
-    showSaveButton = false,
-    onSave,
-    isSaveDisabled = false,
-    saveTooltip = 'Save chart as image',
 }: ChartConfigFormProps) {
     const [columns, setColumns] = useState<Array<{ name: string; type: string }>>([]);
     const [hoveredChart, setHoveredChart] = useState<string | null>(null);
-    const [hoveredButton, setHoveredButton] = useState<string | null>(null);
 
     // Extract current configuration from the existing chart spec
     const extractCurrentConfig = useCallback(() => {
@@ -808,150 +791,6 @@ export function ChartConfigForm({
                                 </div>
                             )}
                         </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                        {/* Save Icon */}
-                        {showSaveButton && (
-                            <div style={{ position: 'relative' }}>
-                                <button
-                                    onClick={onSave}
-                                    disabled={isSaveDisabled}
-                                    onMouseEnter={() => setHoveredButton('save')}
-                                    onMouseLeave={() => setHoveredButton(null)}
-                                    title={saveTooltip}
-                                    style={{
-                                        padding: '4px',
-                                        border: '1px solid #e5e7eb',
-                                        backgroundColor: 'white',
-                                        borderRadius: '4px',
-                                        cursor: !isSaveDisabled ? 'pointer' : 'not-allowed',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '40px',
-                                        opacity: isSaveDisabled ? 0.5 : 1,
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                                        <polyline points="17,21 17,13 7,13 7,21" />
-                                        <polyline points="7,3 7,8 15,8" />
-                                    </svg>
-                                </button>
-                                {hoveredButton === 'save' && !isSaveDisabled && (
-                                    <div
-                                        style={{
-                                            position: 'absolute',
-                                            top: '-30px',
-                                            left: '50%',
-                                            transform: 'translateX(-50%)',
-                                            backgroundColor: '#374151',
-                                            color: 'white',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            fontSize: '0.75em',
-                                            whiteSpace: 'nowrap',
-                                            zIndex: 1000,
-                                            pointerEvents: 'none',
-                                        }}
-                                    >
-                                        Save as image
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                top: '100%',
-                                                left: '50%',
-                                                transform: 'translateX(-50%)',
-                                                width: 0,
-                                                height: 0,
-                                                borderLeft: '4px solid transparent',
-                                                borderRight: '4px solid transparent',
-                                                borderTop: '4px solid #374151',
-                                            }}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Export Icon */}
-                        {showExportButton && (
-                            <div style={{ position: 'relative' }}>
-                                <button
-                                    onClick={onExport}
-                                    disabled={isExportDisabled}
-                                    onMouseEnter={() => setHoveredButton('export')}
-                                    onMouseLeave={() => setHoveredButton(null)}
-                                    title={exportTooltip}
-                                    style={{
-                                        padding: '4px',
-                                        border: '1px solid #e5e7eb',
-                                        backgroundColor: 'white',
-                                        borderRadius: '4px',
-                                        cursor: !isExportDisabled ? 'pointer' : 'not-allowed',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '40px',
-                                        opacity: isExportDisabled ? 0.5 : 1,
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="17,8 12,3 7,8" />
-                                        <line x1="12" y1="3" x2="12" y2="15" stroke="#3b82f6" />
-                                    </svg>
-                                </button>
-                                {hoveredButton === 'export' && !isExportDisabled && (
-                                    <div
-                                        style={{
-                                            position: 'absolute',
-                                            top: '-30px',
-                                            left: '50%',
-                                            transform: 'translateX(-50%)',
-                                            backgroundColor: '#374151',
-                                            color: 'white',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            fontSize: '0.75em',
-                                            whiteSpace: 'nowrap',
-                                            zIndex: 1000,
-                                            pointerEvents: 'none',
-                                        }}
-                                    >
-                                        Export to dashboard
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                top: '100%',
-                                                left: '50%',
-                                                transform: 'translateX(-50%)',
-                                                width: 0,
-                                                height: 0,
-                                                borderLeft: '4px solid transparent',
-                                                borderRight: '4px solid transparent',
-                                                borderTop: '4px solid #374151',
-                                            }}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

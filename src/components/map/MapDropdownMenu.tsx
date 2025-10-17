@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     EllipsisVerticalIcon,
+    ArrowUpTrayIcon,
     TrashIcon,
     ClipboardDocumentIcon,
     CameraIcon,
@@ -13,7 +14,11 @@ interface MapDropdownMenuProps {
     vizId?: string;
     vizTitle?: string;
     onRemove?: () => void;
+    onExport?: () => void;
     showRemoveButton?: boolean;
+    showExportButton?: boolean;
+    isExportDisabled?: boolean;
+    exportTooltip?: string;
     onOpenStyleEditor?: () => void;
 }
 
@@ -21,7 +26,11 @@ export function MapDropdownMenu({
     vizId,
     vizTitle,
     onRemove,
+    onExport,
     showRemoveButton = true,
+    showExportButton = true,
+    isExportDisabled = false,
+    exportTooltip,
     onOpenStyleEditor,
 }: MapDropdownMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -243,6 +252,35 @@ export function MapDropdownMenu({
                                     <PaintBrushIcon className="w-4 h-4 mr-2" />
                                     スタイルエディタ
                                 </button>
+                            )}
+
+                            {showExportButton && onExport && (
+                                <>
+                                    <hr className="my-1 border-gray-200" />
+
+                                    <button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (!isExportDisabled) {
+                                                onExport();
+                                                setIsOpen(false);
+                                            }
+                                        }}
+                                        onMouseDown={e => e.stopPropagation()}
+                                        className={`flex items-center w-full px-4 py-2 text-sm text-left transition-colors ${
+                                            isExportDisabled
+                                                ? 'text-gray-400 cursor-not-allowed'
+                                                : 'text-gray-700 hover:bg-gray-100 cursor-pointer'
+                                        }`}
+                                        title={exportTooltip}
+                                        disabled={isExportDisabled}
+                                        type="button"
+                                    >
+                                        <ArrowUpTrayIcon className="w-4 h-4 mr-2" />
+                                        ダッシュボードにエクスポート
+                                    </button>
+                                </>
                             )}
 
                             {showRemoveButton && onRemove && (

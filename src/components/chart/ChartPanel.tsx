@@ -31,11 +31,8 @@ interface ChartPanelProps {
     // Additional config form props
     autoApplyChanges?: boolean;
     showApplyButton?: boolean;
-    showSaveButton?: boolean;
-    onSave?: () => void;
-    isSaveDisabled?: boolean;
-    saveTooltip?: string;
-    showExportButton?: boolean;
+    // Menu export button
+    showMenuExportButton?: boolean;
     onExport?: () => void;
     isExportDisabled?: boolean;
     exportTooltip?: string;
@@ -59,11 +56,7 @@ export function ChartPanel({
     onCloseConfigPanel,
     autoApplyChanges = true,
     showApplyButton = false,
-    showSaveButton = true,
-    onSave,
-    isSaveDisabled = false,
-    saveTooltip,
-    showExportButton = true,
+    showMenuExportButton = true,
     onExport,
     isExportDisabled = false,
     exportTooltip,
@@ -123,8 +116,12 @@ export function ChartPanel({
                         onDataSourceOpen={handleDataSourceOpen}
                         onJsonSourceOpen={handleJsonSourceOpen}
                         onRemove={onRemove}
+                        onExport={onExport}
                         showDataSourceButton={showDataSourceButton}
                         showRemoveButton={showRemoveButton}
+                        showExportButton={showMenuExportButton}
+                        isExportDisabled={isExportDisabled}
+                        exportTooltip={exportTooltip}
                     />
                 </div>
 
@@ -165,14 +162,6 @@ export function ChartPanel({
                                 onSpecChange={onSpecChange}
                                 autoApplyChanges={autoApplyChanges}
                                 showApplyButton={showApplyButton}
-                                showSaveButton={showSaveButton}
-                                onSave={onSave}
-                                isSaveDisabled={isSaveDisabled}
-                                saveTooltip={saveTooltip}
-                                showExportButton={showExportButton}
-                                onExport={onExport}
-                                isExportDisabled={isExportDisabled}
-                                exportTooltip={exportTooltip}
                             />
                         )}
                     </div>
