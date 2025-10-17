@@ -10,6 +10,12 @@ interface ChartSpecModalProps {
     onApply?: (newSpec: VegaChartSpec) => void;
 }
 
+// Helper function to move 'data' property to the end of the object
+function moveDataToEnd(spec: VegaChartSpec): VegaChartSpec {
+    const { data, ...rest } = spec;
+    return { ...rest, ...(data ? { data } : {}) } as VegaChartSpec;
+}
+
 export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }: ChartSpecModalProps) {
     const [jsonText, setJsonText] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -22,17 +28,17 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
             if (vegaView) {
                 try {
                     const dataValues = vegaView.data('source_0') || [];
-                    const specWithData = {
+                    const specWithData = moveDataToEnd({
                         ...chartSpec,
                         data: { values: dataValues },
-                    };
+                    });
                     setJsonText(JSON.stringify(specWithData, null, 2));
                 } catch (err) {
                     console.error('Error getting data from Vega View:', err);
-                    setJsonText(JSON.stringify(chartSpec, null, 2));
+                    setJsonText(JSON.stringify(moveDataToEnd(chartSpec), null, 2));
                 }
             } else {
-                setJsonText(JSON.stringify(chartSpec, null, 2));
+                setJsonText(JSON.stringify(moveDataToEnd(chartSpec), null, 2));
             }
             setError(null);
             setHasChanges(false);
@@ -63,7 +69,6 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
             if (onApply) {
                 onApply(parsedSpec);
                 setHasChanges(false);
-                alert('変更を適用しました！');
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Invalid JSON');
@@ -71,7 +76,7 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
     };
 
     const handleReset = () => {
-        setJsonText(JSON.stringify(chartSpec, null, 2));
+        setJsonText(JSON.stringify(moveDataToEnd(chartSpec), null, 2));
         setError(null);
         setHasChanges(false);
     };
@@ -97,7 +102,7 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/30" onClick={onClose} />
             <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
