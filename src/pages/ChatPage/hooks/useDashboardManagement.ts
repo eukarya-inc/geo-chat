@@ -8,25 +8,29 @@ export function useDashboardManagement() {
 
     const createDashboard = useCallback(
         (title?: string): Dashboard => {
-            const newDashboard: Dashboard = {
-                id: `dashboard-${Date.now()}`,
-                title: title || `Dashboard ${Object.keys(remoteState.dashboards).length + 1}`,
-                createdAt: new Date(),
-                visualizations: [],
-                layout: [],
-            };
+            let newDashboard: Dashboard | null = null;
 
-            setRemoteState(prev => ({
-                ...prev,
-                dashboards: {
-                    ...prev.dashboards,
-                    [newDashboard.id]: newDashboard,
-                },
-            }));
+            setRemoteState(prev => {
+                newDashboard = {
+                    id: `dashboard-${Date.now()}`,
+                    title: title || `Dashboard ${Object.keys(prev.dashboards).length + 1}`,
+                    createdAt: new Date(),
+                    visualizations: [],
+                    layout: [],
+                };
 
-            return newDashboard;
+                return {
+                    ...prev,
+                    dashboards: {
+                        ...prev.dashboards,
+                        [newDashboard.id]: newDashboard,
+                    },
+                };
+            });
+
+            return newDashboard!;
         },
-        [remoteState.dashboards, setRemoteState]
+        [setRemoteState]
     );
 
     const updateDashboard = useCallback(
