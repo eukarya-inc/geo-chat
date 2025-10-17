@@ -115,7 +115,6 @@ export function Dashboard({
                 <div className="flex-1 overflow-auto p-4">
                     {activeTab === 'charts' && (
                         <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-gray-700">Available Visualizations</h3>
                             {dashboard.visualizations.map(viz => {
                                 const isOnDashboard = shownVisualizationIds.has(viz.id);
                                 return (
@@ -195,6 +194,7 @@ export function Dashboard({
                             isDraggable={true}
                             isResizable={true}
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
+                            draggableCancel="button"
                         >
                             {shownVisualizations.map(viz => (
                                 <div
