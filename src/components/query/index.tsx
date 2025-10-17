@@ -15,10 +15,17 @@ interface TableSQLDisplayProps {
     schema?: string | null;
 }
 
+interface ColumnSchema {
+    column_name: string;
+    column_type: string;
+    null: string;
+}
+
 export default function TableSQLDisplay({ tableName, dbContext, schema }: TableSQLDisplayProps) {
     const [sqlEntry, setSqlEntry] = useState<SQLHistoryEntry | undefined>(undefined);
     const [showVisualization, setShowVisualization] = useState(false);
     const [showMerged, setShowMerged] = useState(false);
+    const [tableSchema, setTableSchema] = useState<ColumnSchema[]>([]);
 
     const chatState = useAtomValue(currentChatStateAtom);
     const mergedSql = useMemo(() => {
@@ -35,12 +42,29 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
     useEffect(() => {
         if (!tableName || !dbContext) {
             setSqlEntry(undefined);
+            setTableSchema([]);
             return;
         }
 
         // Get the SQL for the current table
         const entry = dbContext.getSQLHistory().getTableSQL(tableName, schema);
         setSqlEntry(entry);
+
+        // Get table schema
+        const fetchSchema = async () => {
+            try {
+                const conn = await dbContext.createManagedConnection(schema ?? null);
+                const schemaQuery = schema ? `DESCRIBE ${schema}.${tableName}` : `DESCRIBE ${tableName}`;
+                const result = await conn.query(schemaQuery);
+                const schemaData = result.toArray() as unknown as ColumnSchema[];
+                setTableSchema(schemaData);
+            } catch (error) {
+                console.error('Failed to fetch table schema:', error);
+                setTableSchema([]);
+            }
+        };
+
+        fetchSchema();
 
         // Subscribe to SQL history changes
         const unsubscribe = dbContext.getSQLHistory().subscribe(() => {
@@ -119,6 +143,35 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {sqlEntry.explanation}
                     </ReactMarkdown>
+                </div>
+            )}
+
+            {/* Schema Information */}
+            {tableSchema.length > 0 && (
+                <div className="mt-3">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">テーブルスキーマ</h4>
+                    <div className="bg-white border border-gray-300 rounded p-3">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-200">
+                                        <th className="text-left py-1.5 px-2 font-semibold text-gray-700">カラム名</th>
+                                        <th className="text-left py-1.5 px-2 font-semibold text-gray-700">型</th>
+                                        <th className="text-left py-1.5 px-2 font-semibold text-gray-700">NULL許可</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {tableSchema.map((col, index) => (
+                                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                                            <td className="py-1.5 px-2 text-gray-800 font-mono">{col.column_name}</td>
+                                            <td className="py-1.5 px-2 text-gray-600 font-mono">{col.column_type}</td>
+                                            <td className="py-1.5 px-2 text-gray-600">{col.null}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             )}
         </>
