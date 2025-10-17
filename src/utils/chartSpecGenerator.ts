@@ -1,7 +1,7 @@
 import type { DBContext } from '../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../types/chart';
 
-export type ChartType = 'bar' | 'horizontal-bar' | 'line' | 'pie' | 'map';
+export type ChartType = 'scatter' | 'line' | 'bar' | 'histogram' | 'pie' | 'heatmap' | 'box';
 
 interface ChartGenerationResult {
     spec: VegaChartSpec;
@@ -38,20 +38,10 @@ export async function generateChartByType(
         };
 
         switch (chartType) {
-            case 'bar':
-                return generateBarChart(
+            case 'scatter':
+                return generateScatterChart(
                     qualifiedTableName,
                     columnNames,
-                    categoricalColumns,
-                    numericColumns,
-                    capitalizeTableName(tableName)
-                );
-
-            case 'horizontal-bar':
-                return generateHorizontalBarChart(
-                    qualifiedTableName,
-                    columnNames,
-                    categoricalColumns,
                     numericColumns,
                     capitalizeTableName(tableName)
                 );
@@ -66,8 +56,43 @@ export async function generateChartByType(
                     capitalizeTableName(tableName)
                 );
 
+            case 'bar':
+                return generateBarChart(
+                    qualifiedTableName,
+                    columnNames,
+                    categoricalColumns,
+                    numericColumns,
+                    capitalizeTableName(tableName)
+                );
+
+            case 'histogram':
+                return generateHistogramChart(
+                    qualifiedTableName,
+                    columnNames,
+                    numericColumns,
+                    capitalizeTableName(tableName)
+                );
+
             case 'pie':
                 return generatePieChart(
+                    qualifiedTableName,
+                    columnNames,
+                    categoricalColumns,
+                    numericColumns,
+                    capitalizeTableName(tableName)
+                );
+
+            case 'heatmap':
+                return generateHeatmapChart(
+                    qualifiedTableName,
+                    columnNames,
+                    categoricalColumns,
+                    numericColumns,
+                    capitalizeTableName(tableName)
+                );
+
+            case 'box':
+                return generateBoxChart(
                     qualifiedTableName,
                     columnNames,
                     categoricalColumns,
@@ -156,38 +181,37 @@ function generateBarChart(
     return null;
 }
 
-function generateHorizontalBarChart(
+function generateScatterChart(
     tableName: string,
     columnNames: string,
-    categoricalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
     title: string
 ): ChartGenerationResult | null {
-    // Prefer categorical + numeric for horizontal bar chart
-    if (categoricalColumns.length > 0 && numericColumns.length > 0) {
-        const categoryColumn = categoricalColumns[0];
-        const valueColumn = numericColumns[0];
+    // Need at least 2 numeric columns for scatter
+    if (numericColumns.length >= 2) {
+        const xColumn = numericColumns[0];
+        const yColumn = numericColumns[1];
 
         return {
             title,
             spec: {
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-                title: `${valueColumn.name} by ${categoryColumn.name}`,
+                title: `${yColumn.name} vs ${xColumn.name}`,
                 data: {
                     sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
                     values: [],
                 },
-                mark: 'bar',
+                mark: { type: 'circle', size: 60, opacity: 0.7 },
                 encoding: {
-                    y: {
-                        field: categoryColumn.name,
-                        type: 'nominal',
-                        title: categoryColumn.name,
-                    },
                     x: {
-                        field: valueColumn.name,
+                        field: xColumn.name,
                         type: 'quantitative',
-                        title: valueColumn.name,
+                        title: xColumn.name,
+                    },
+                    y: {
+                        field: yColumn.name,
+                        type: 'quantitative',
+                        title: yColumn.name,
                     },
                 },
                 height: 400,
@@ -195,30 +219,134 @@ function generateHorizontalBarChart(
         };
     }
 
-    // Fallback: count by categorical (horizontal)
-    if (categoricalColumns.length > 0) {
-        const column = categoricalColumns[0];
+    return null;
+}
+
+function generateHistogramChart(
+    tableName: string,
+    columnNames: string,
+    numericColumns: { name: string; type: string }[],
+    title: string
+): ChartGenerationResult | null {
+    // Need at least 1 numeric column for histogram
+    if (numericColumns.length > 0) {
+        const column = numericColumns[0];
+
         return {
             title,
             spec: {
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-                title: `Count by ${column.name}`,
+                title: `Distribution of ${column.name}`,
                 data: {
                     sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
                     values: [],
                 },
                 mark: 'bar',
                 encoding: {
-                    y: {
+                    x: {
                         field: column.name,
-                        type: 'nominal',
+                        type: 'quantitative',
+                        bin: true,
                         title: column.name,
                     },
-                    x: {
+                    y: {
                         aggregate: 'count',
                         type: 'quantitative',
                         title: 'Count',
                     },
+                },
+                height: 400,
+            },
+        };
+    }
+
+    return null;
+}
+
+function generateHeatmapChart(
+    tableName: string,
+    columnNames: string,
+    categoricalColumns: { name: string; type: string }[],
+    numericColumns: { name: string; type: string }[],
+    title: string
+): ChartGenerationResult | null {
+    // Need at least 2 categorical columns for heatmap
+    if (categoricalColumns.length >= 2) {
+        const xColumn = categoricalColumns[0];
+        const yColumn = categoricalColumns[1];
+
+        return {
+            title,
+            spec: {
+                $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+                title: `Heatmap: ${yColumn.name} vs ${xColumn.name}`,
+                data: {
+                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
+                    values: [],
+                },
+                mark: 'rect',
+                encoding: {
+                    x: {
+                        field: xColumn.name,
+                        type: 'nominal',
+                        title: xColumn.name,
+                    },
+                    y: {
+                        field: yColumn.name,
+                        type: 'nominal',
+                        title: yColumn.name,
+                    },
+                    color: {
+                        aggregate: 'count',
+                        type: 'quantitative',
+                        title: 'Count',
+                    },
+                },
+                height: 400,
+            },
+        };
+    }
+
+    return null;
+}
+
+function generateBoxChart(
+    tableName: string,
+    columnNames: string,
+    categoricalColumns: { name: string; type: string }[],
+    numericColumns: { name: string; type: string }[],
+    title: string
+): ChartGenerationResult | null {
+    // Need at least 1 numeric column for box plot
+    if (numericColumns.length > 0) {
+        const valueColumn = numericColumns[0];
+        const categoryColumn = categoricalColumns.length > 0 ? categoricalColumns[0] : null;
+
+        return {
+            title,
+            spec: {
+                $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+                title: categoryColumn
+                    ? `Distribution of ${valueColumn.name} by ${categoryColumn.name}`
+                    : `Distribution of ${valueColumn.name}`,
+                data: {
+                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
+                    values: [],
+                },
+                mark: { type: 'boxplot', extent: 'min-max' },
+                encoding: {
+                    y: {
+                        field: valueColumn.name,
+                        type: 'quantitative',
+                        title: valueColumn.name,
+                    },
+                    ...(categoryColumn && {
+                        x: {
+                            field: categoryColumn.name,
+                            type: 'nominal',
+                            title: categoryColumn.name,
+                        },
+                    }),
                 },
                 height: 400,
             },
