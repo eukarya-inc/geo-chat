@@ -24,6 +24,7 @@ interface ChartPanelProps {
     onRemove?: () => void;
     onSpecChange?: (newSpec: ChartSpec) => void;
     showDataSourceButton?: boolean;
+    showRemoveButton?: boolean;
     // For panel mode
     showConfigPanel?: boolean;
     onCloseConfigPanel?: () => void;
@@ -53,6 +54,7 @@ export function ChartPanel({
     onRemove,
     onSpecChange,
     showDataSourceButton = false,
+    showRemoveButton = true,
     showConfigPanel = false,
     onCloseConfigPanel,
     autoApplyChanges = true,
@@ -122,6 +124,7 @@ export function ChartPanel({
                         onJsonSourceOpen={handleJsonSourceOpen}
                         onRemove={onRemove}
                         showDataSourceButton={showDataSourceButton}
+                        showRemoveButton={showRemoveButton}
                     />
                 </div>
 

@@ -6,7 +6,7 @@ import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import { ChartSpecModal, ChartPanel } from '../../components/chart';
-import Map from '../../components/map';
+import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
 import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
@@ -109,7 +109,8 @@ function ChatPage() {
         getDashboard,
         getAllDashboards,
         updateDashboardLayout,
-        removeVisualizationFromDashboard,
+        hideVisualizationFromDashboard,
+        showVisualizationOnDashboard,
         renameDashboard,
     } = useDashboardManagement();
 
@@ -329,7 +330,14 @@ function ChatPage() {
                                             console.error('No dashboard selected for removal');
                                             return;
                                         }
-                                        removeVisualizationFromDashboard(selectedDashboardId, vizId);
+                                        hideVisualizationFromDashboard(selectedDashboardId, vizId);
+                                    }}
+                                    onAddVisualization={vizId => {
+                                        if (!selectedDashboardId) {
+                                            console.error('No dashboard selected for adding visualization');
+                                            return;
+                                        }
+                                        showVisualizationOnDashboard(selectedDashboardId, vizId);
                                     }}
                                     onUpdateDashboard={updateDashboard}
                                 />
@@ -628,15 +636,15 @@ function ChatPage() {
                                             {activeTab === 'map' && connection && selectedTable && (
                                                 <div className="h-full overflow-hidden flex flex-col">
                                                     <div className="flex-1 overflow-hidden">
-                                                        <Map
+                                                        <MapPanel
+                                                            title={selectedTable}
+                                                            tableName={selectedTable}
+                                                            geometryColumn={selectedGeometryColumn}
                                                             dbContext={dbContext}
-                                                            schema={schemaName}
-                                                            selectedTable={selectedTable}
-                                                            selectedColumns={undefined}
-                                                            geometryColumnName={selectedGeometryColumn}
-                                                            tableStyles={tableStyles}
-                                                            initialStyle={mapStyle}
-                                                            onTableStyleChanged={updateTableStyle}
+                                                            schema={schemaName || undefined}
+                                                            mapSpec={{ tableStyles, style: mapStyle }}
+                                                            showControls={true}
+                                                            showRemoveButton={false}
                                                         />
                                                     </div>
                                                     <div className="flex justify-end p-3 border-t border-gray-200 bg-white">

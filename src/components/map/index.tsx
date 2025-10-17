@@ -23,7 +23,7 @@ const MapComponent: React.FC<MapProps> = ({
     onMapReady,
     onStyleChange,
     mapStyleManager,
-    geometryColumnName = 'geometry',
+    geometryColumnName,
     onViewStateChange,
     initialViewState,
     initialStyle,
@@ -343,7 +343,14 @@ const MapComponent: React.FC<MapProps> = ({
 
     // Re-fit bounds when geometry column changes
     useEffect(() => {
-        if (selectedTable && geometryColumnName && mapRef.current && connectionRef.current && isInitialized) {
+        // Only fit to data if geometryColumnName is explicitly provided
+        if (
+            selectedTable &&
+            geometryColumnName !== undefined &&
+            mapRef.current &&
+            connectionRef.current &&
+            isInitialized
+        ) {
             fitMapToData(selectedTable, geometryColumnName);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -369,8 +376,8 @@ const MapComponent: React.FC<MapProps> = ({
                 tileCache: tileCache.current,
             });
 
-            // Zoom to data bounds when a new table is selected
-            if (selectedTable && connectionRef.current) {
+            // Zoom to data bounds when a new table is selected (only if geometryColumnName is provided)
+            if (selectedTable && geometryColumnName !== undefined && connectionRef.current) {
                 setTimeout(() => {
                     fitMapToData(selectedTable, geometryColumnName);
                 }, 500); // Wait a bit for tiles to load
@@ -705,10 +712,10 @@ const MapComponent: React.FC<MapProps> = ({
                     bearing: initialViewState?.bearing ?? 0,
                     pitch: initialViewState?.pitch ?? 0,
                     style: styleToUse,
-                    antialias: true,
-                    // Try to enable preserveDrawingBuffer for export
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ...(window.location.hostname === 'localhost' && ({ preserveDrawingBuffer: true } as any)),
+                    // Enable preserveDrawingBuffer for image export
+                    canvasContextAttributes: {
+                        preserveDrawingBuffer: true,
+                    },
                 });
 
                 mapRef.current = mapInstance; // Save map instance
