@@ -21,14 +21,14 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
             // If we have a Vega View, get the final spec with data from it
             if (vegaView) {
                 try {
-                    const finalSpec = vegaView.getState().data;
+                    const dataValues = vegaView.data('source_0') || [];
                     const specWithData = {
                         ...chartSpec,
-                        data: { values: finalSpec.source_0 || [] },
+                        data: { values: dataValues },
                     };
                     setJsonText(JSON.stringify(specWithData, null, 2));
-                } catch {
-                    // Fallback to original spec if we can't get data from View
+                } catch (err) {
+                    console.error('Error getting data from Vega View:', err);
                     setJsonText(JSON.stringify(chartSpec, null, 2));
                 }
             } else {
