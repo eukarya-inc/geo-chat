@@ -3,6 +3,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import { ChartConfigForm } from './ChartConfigForm';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { generateChartSpec, type ChartConfig, type ColumnInfo } from '../../lib/chart/chartSpecGenerator';
 
 interface ChartConfigModalProps {
     isOpen: boolean;
@@ -41,9 +42,17 @@ export function ChartConfigModal({
 
     if (!isOpen) return null;
 
-    const handleSpecChange = (newSpec: ChartSpec) => {
+    const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
+        // Generate new spec from config
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec);
+        const updatedSpec: ChartSpec = {
+            ...chartSpec,
+            title: config.title as string,
+            spec: newVegaSpec,
+            timestamp: new Date(),
+        };
         // Auto-apply changes immediately
-        onUpdateChart(vizId, newSpec);
+        onUpdateChart(vizId, updatedSpec);
     };
 
     return (
@@ -63,7 +72,7 @@ export function ChartConfigModal({
                         chartSpec={chartSpec}
                         dbContext={dbContext}
                         schema={schema}
-                        onSpecChange={handleSpecChange}
+                        onConfigChange={handleConfigChange}
                         showApplyButton={false}
                         autoApplyChanges={true}
                     />

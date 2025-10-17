@@ -2,22 +2,22 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartTypeIconGrid, ChartTypeOption } from './ChartTypeIconGrid';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { generateChartSpec, type ChartConfig } from '../../lib/chart/chartSpecGenerator';
+import type { ChartConfig, ColumnInfo } from '../../lib/chart/chartSpecGenerator';
 
 interface ChartConfigFormProps {
     chartSpec: ChartSpec;
     dbContext: DBContext;
     schema: string;
-    onSpecChange: (newSpec: ChartSpec) => void;
+    onConfigChange: (config: ChartConfig, columns: ColumnInfo[]) => void;
     showApplyButton?: boolean; // Optional prop to control apply button visibility
-    autoApplyChanges?: boolean; // Optional prop to control automatic onSpecChange calls
+    autoApplyChanges?: boolean; // Optional prop to control automatic config updates
 }
 
 export function ChartConfigForm({
     chartSpec,
     dbContext,
     schema,
-    onSpecChange,
+    onConfigChange,
     showApplyButton = true,
     autoApplyChanges = false,
 }: ChartConfigFormProps) {
@@ -129,8 +129,8 @@ export function ChartConfigForm({
                 col.type.toLowerCase().includes('decimal')
         );
 
-    // Generate proper Vega-Lite spec based on configuration
-    const generateVegaSpec = useCallback(() => {
+    // Create chart config object
+    const createChartConfig = useCallback((): ChartConfig | null => {
         // Extract table name from the chart spec SQL if available
         let tableName = '';
         if (chartSpec.spec.data && 'sql' in chartSpec.spec.data && chartSpec.spec.data.sql) {
@@ -142,11 +142,10 @@ export function ChartConfigForm({
         }
 
         if (!tableName) {
-            return chartSpec.spec; // Return original if no table name
+            return null;
         }
 
-        // Create config object for generateChartSpec
-        const chartConfig: ChartConfig = {
+        return {
             tableName,
             plotType: config.plotType,
             xField: config.xField,
@@ -157,27 +156,19 @@ export function ChartConfigForm({
             width: 400,
             height: 300,
         };
-
-        return generateChartSpec(chartConfig, columns, chartSpec.spec);
-    }, [config, columns, chartSpec.spec]);
+    }, [config, chartSpec.spec]);
 
     // Handle manual apply of configuration changes
     const handleApplyChanges = () => {
-        if (columns.length > 0) {
-            const newVegaSpec = generateVegaSpec();
-            const updatedSpec: ChartSpec = {
-                ...chartSpec,
-                title: config.title, // Update the chart spec title
-                spec: newVegaSpec as ChartSpec['spec'],
-                timestamp: new Date(),
-            };
-            onSpecChange(updatedSpec);
+        const chartConfig = createChartConfig();
+        if (chartConfig) {
+            onConfigChange(chartConfig, columns);
         }
     };
 
     // Auto-apply changes when enabled (for modal usage)
     useEffect(() => {
-        // Skip the first render to avoid triggering onSpecChange immediately on mount
+        // Skip the first render to avoid triggering onChange immediately on mount
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
@@ -191,17 +182,13 @@ export function ChartConfigForm({
         }
 
         if (autoApplyChanges && columns.length > 0) {
-            const newVegaSpec = generateVegaSpec();
-            const updatedSpec: ChartSpec = {
-                id: chartSpec.id, // Keep the same ID
-                title: config.title,
-                spec: newVegaSpec as ChartSpec['spec'],
-                timestamp: new Date(),
-            };
-            onSpecChange(updatedSpec);
+            const chartConfig = createChartConfig();
+            if (chartConfig) {
+                onConfigChange(chartConfig, columns);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [config, columns, autoApplyChanges]); // Removed chartSpec, generateVegaSpec, onSpecChange to avoid infinite loop
+    }, [config, columns, autoApplyChanges]);
 
     return (
         <div>
