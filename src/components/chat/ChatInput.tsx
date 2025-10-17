@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { PlusIcon, PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/outline';
+import { extractDataUrl } from '../../utils/tableCreation';
 
 interface ChatInputProps {
     value: string;
@@ -257,12 +258,25 @@ export default function ChatInput({
                 }
             }
 
+            // Handle Enter key for single-line URL submission
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
+                const trimmedValue = value.trim();
+                const isSingleLine = !trimmedValue.includes('\n');
+                const isUrl = extractDataUrl(trimmedValue) !== null;
+
+                if (isSingleLine && isUrl) {
+                    e.preventDefault();
+                    onSubmit(e);
+                    return;
+                }
+            }
+
             // Call original onKeyDown if provided and autocomplete didn't handle the event
             if (onKeyDown) {
                 onKeyDown(e);
             }
         },
-        [autocomplete, filteredItems, selectItem, onKeyDown]
+        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, onSubmit]
     );
 
     // Scroll selected item into view
