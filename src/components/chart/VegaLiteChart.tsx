@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { ChartSpec, VegaChartSpec } from '../../types/chart';
+import type { View } from 'vega';
 
 import type { TopLevelSpec } from 'vega-lite';
 
@@ -13,6 +14,7 @@ interface VegaLiteChartProps {
     enableActions?: boolean;
     configOnly?: boolean;
     onSpecChange?: (newSpec: ChartSpec) => void;
+    onViewReady?: (view: View | null) => void;
 }
 
 interface ColumnInfo {
@@ -28,6 +30,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     enableActions = false,
     configOnly = false,
     onSpecChange,
+    onViewReady,
 }) => {
     const [data, setData] = useState<Record<string, unknown>[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,6 +55,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
 
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
     const [prevSchema, setPrevSchema] = useState(schema);
+    const vegaViewRef = useRef<View | null>(null);
 
     // Clear data and config when schema changes
     useEffect(() => {
@@ -867,31 +871,11 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         >
             {/* Chart Header with Controls */}
             {showHeader && (
-                <div
-                    style={{
-                        borderBottom: '1px solid #dee2e6',
-                        padding: '8px 12px',
-                        backgroundColor: '#f8f9fa',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        overflow: 'visible',
-                    }}
-                >
-                    <div style={{ fontSize: '0.9em', fontWeight: 'bold', color: '#495057' }}>
-                        {String(config.title) || 'Interactive Chart'}
-                    </div>
+                <div className="border-b border-gray-300 px-3 py-2 bg-gray-50 flex justify-between items-center overflow-visible">
+                    <div className="text-sm font-bold text-gray-700">{String(config.title) || 'Interactive Chart'}</div>
                     <button
                         onClick={() => setShowConfig(!showConfig)}
-                        style={{
-                            background: 'none',
-                            border: '1px solid #6c757d',
-                            borderRadius: '3px',
-                            padding: '4px 8px',
-                            fontSize: '0.8em',
-                            cursor: 'pointer',
-                            color: '#6c757d',
-                        }}
+                        className="bg-transparent border border-gray-500 rounded px-2 py-1 text-xs cursor-pointer text-gray-600 hover:bg-gray-100"
                     >
                         {showConfig ? '✕ Hide Settings' : '⚙️ Configure'}
                     </button>
@@ -1150,7 +1134,14 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
 
             {/* Chart */}
             <div style={{ padding: '0', overflow: 'visible' }}>
-                <VegaLite spec={finalSpec} actions={showHeader || enableActions} />
+                <VegaLite
+                    spec={finalSpec}
+                    actions={showHeader || enableActions}
+                    onNewView={(view: View) => {
+                        vegaViewRef.current = view;
+                        onViewReady?.(view);
+                    }}
+                />
             </div>
         </div>
     );
@@ -1165,6 +1156,7 @@ export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
         prevProps.showHeader === nextProps.showHeader &&
         prevProps.enableActions === nextProps.enableActions &&
         prevProps.configOnly === nextProps.configOnly &&
-        prevProps.onSpecChange === nextProps.onSpecChange
+        prevProps.onSpecChange === nextProps.onSpecChange &&
+        prevProps.onViewReady === nextProps.onViewReady
     );
 });
