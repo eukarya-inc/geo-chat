@@ -439,6 +439,10 @@ export default function AIChat({
                 target: { value: promptText },
             } as React.ChangeEvent<HTMLTextAreaElement>;
             handleInputChange(changeEvent);
+            // Focus on textarea after setting the prompt
+            setTimeout(() => {
+                textareaRef.current?.focus();
+            }, 0);
         }
     };
 
