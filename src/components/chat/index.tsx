@@ -11,6 +11,7 @@ import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../map';
 import { isTableCreatedOnlyMessage } from './utils';
+import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -61,6 +62,8 @@ export default function AIChat({
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const promptSuggestionAbortRef = useRef<AbortController | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [tableGeometries, setTableGeometries] = useState<Record<string, boolean>>({});
+    const checkedTablesRef = useRef<Set<string>>(new Set());
 
     const effectiveChatId = chatId || 'default';
 
@@ -129,6 +132,44 @@ export default function AIChat({
 
         return groups;
     }, [messages]);
+
+    const chartSpecs = useMemo(() => {
+        return getCurrentChatState?.()?.chartSpecs || {};
+    }, [getCurrentChatState]);
+
+    // Analyze geometry columns for all tables
+    useEffect(() => {
+        const checkTableGeometry = async () => {
+            const chatState = getCurrentChatState?.();
+            if (!chatState?.tables || !dbContext) return;
+
+            const tables = Object.values(chatState.tables);
+            for (const table of tables) {
+                // Skip if we already checked this table
+                if (checkedTablesRef.current.has(table.tableName)) continue;
+
+                // Mark as checked to prevent duplicate checks
+                checkedTablesRef.current.add(table.tableName);
+
+                try {
+                    const result = await analyzeTableGeometry(dbContext, table.tableName, table.schema || null);
+                    setTableGeometries(prev => ({
+                        ...prev,
+                        [table.tableName]: result.hasGeometry,
+                    }));
+                } catch (error) {
+                    console.error(`Failed to analyze geometry for table ${table.tableName}:`, error);
+                    // Set to false on error
+                    setTableGeometries(prev => ({
+                        ...prev,
+                        [table.tableName]: false,
+                    }));
+                }
+            }
+        };
+
+        checkTableGeometry();
+    }, [getCurrentChatState, dbContext]);
 
     const toggleGroupCollapse = (groupIndex: number) => {
         setManuallyToggledGroups(prev => {
@@ -515,6 +556,8 @@ export default function AIChat({
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                         onPromptClick={handlePromptSelection}
+                                        chartSpecs={chartSpecs}
+                                        tableGeometries={tableGeometries}
                                     />
                                 </div>
                             ) : (
@@ -534,6 +577,8 @@ export default function AIChat({
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                                 onPromptClick={handlePromptSelection}
+                                                chartSpecs={chartSpecs}
+                                                tableGeometries={tableGeometries}
                                             />
                                         </div>
                                     </div>
@@ -620,6 +665,8 @@ export default function AIChat({
                                                             hideToolCalls={false}
                                                             isLoadingMessage={isLoadingMessage}
                                                             onPromptClick={handlePromptSelection}
+                                                            chartSpecs={chartSpecs}
+                                                            tableGeometries={tableGeometries}
                                                         />
                                                     </div>
                                                 );
@@ -638,6 +685,8 @@ export default function AIChat({
                                                                 hideToolCalls={false}
                                                                 isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
+                                                                chartSpecs={chartSpecs}
+                                                                tableGeometries={tableGeometries}
                                                             />
                                                             {isCurrentlyLoading &&
                                                                 group.assistantMessage.streaming !== undefined && (
@@ -660,6 +709,8 @@ export default function AIChat({
                                                                 isStreaming={isCurrentlyLoading ? true : false}
                                                                 isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
+                                                                chartSpecs={chartSpecs}
+                                                                tableGeometries={tableGeometries}
                                                             />
                                                         </div>
                                                     )}
