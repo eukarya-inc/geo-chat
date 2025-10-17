@@ -62,6 +62,7 @@ function ChatPage() {
         renameChat,
         selectChat,
         updateChatMessages,
+        updateChatState,
         getCurrentChatState,
     } = useChatManagement(dbContext);
 
@@ -69,7 +70,10 @@ function ChatPage() {
     const schemaName = chatIdToSchemaName(selectedChatId);
 
     // Schema management (uses chats state from above)
-    const { connection } = useSchemaManagement(dbContext, schemaName, chats);
+    const { connection } = useSchemaManagement(dbContext, schemaName, chats, cleanedChartSpecs => {
+        // Update the chat state with cleaned chartSpecs when orphaned specs are removed
+        updateChatState({ chartSpecs: cleanedChartSpecs });
+    });
 
     // Table selection
     const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName, connection);
