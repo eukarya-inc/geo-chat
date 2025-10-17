@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import type { VegaChartSpec } from '../../types/chart';
+import type { VegaChartSpec, ChartSpec } from '../../types/chart';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
@@ -21,6 +21,8 @@ interface StructuredMessageRendererProps {
     isStreaming?: boolean;
     onPromptClick?: (promptText: string) => void;
     isLoadingMessage?: boolean;
+    chartSpecs?: Record<string, ChartSpec>;
+    tableGeometries?: Record<string, boolean>;
 }
 
 interface CollapsibleSectionProps {
@@ -81,7 +83,9 @@ const renderContentBlock = (
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
     onPromptClick?: (promptText: string) => void,
-    isLoadingMessage?: boolean
+    isLoadingMessage?: boolean,
+    chartSpecs?: Record<string, ChartSpec>,
+    tableGeometries?: Record<string, boolean>
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -124,6 +128,8 @@ const renderContentBlock = (
                             tableName={tableName}
                             isSelected={selectedTable === tableName}
                             onClick={() => onTableSelect?.(tableName)}
+                            hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
+                            hasGeometry={tableGeometries?.[tableName] || false}
                         />
                     );
 
@@ -450,6 +456,8 @@ const renderContentBlock = (
                                 tableName={tableCreated}
                                 isSelected={selectedTable === tableCreated}
                                 onClick={() => onTableSelect?.(tableCreated)}
+                                hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                hasGeometry={tableGeometries?.[tableCreated] || false}
                             />
                         );
                     }
@@ -468,6 +476,8 @@ const renderContentBlock = (
                                 tableName={tableCreated}
                                 isSelected={selectedTable === tableCreated}
                                 onClick={() => onTableSelect?.(tableCreated)}
+                                hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                hasGeometry={tableGeometries?.[tableCreated] || false}
                             />
                         );
                     }
@@ -536,6 +546,8 @@ const renderContentBlock = (
                                     tableName={tableCreated}
                                     isSelected={selectedTable === tableCreated}
                                     onClick={() => onTableSelect?.(tableCreated)}
+                                    hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                    hasGeometry={tableGeometries?.[tableCreated] || false}
                                 />
                             )}
                         </CollapsibleSection>
@@ -559,6 +571,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     isStreaming = false,
     onPromptClick,
     isLoadingMessage = false,
+    chartSpecs,
+    tableGeometries,
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -625,7 +639,16 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             <div className={className}>
                 {/* Render existing structured content blocks */}
                 {filteredContent.map((block, index) =>
-                    renderContentBlock(block, index, selectedTable, onTableSelect, onPromptClick, isLoadingMessage)
+                    renderContentBlock(
+                        block,
+                        index,
+                        selectedTable,
+                        onTableSelect,
+                        onPromptClick,
+                        isLoadingMessage,
+                        chartSpecs,
+                        tableGeometries
+                    )
                 )}
 
                 {/* Render streaming text if present */}
@@ -688,6 +711,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     tableName={tableName}
                     isSelected={selectedTable === tableName}
                     onClick={() => onTableSelect?.(tableName)}
+                    hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
+                    hasGeometry={tableGeometries?.[tableName] || false}
                 />
             );
 
