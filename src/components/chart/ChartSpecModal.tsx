@@ -202,12 +202,6 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
                                 変更を適用
                             </button>
                         )}
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                        >
-                            閉じる
-                        </button>
                     </div>
                 </div>
             </div>
