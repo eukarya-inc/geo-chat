@@ -198,6 +198,8 @@ export function ChartPanel({
             title: config.title as string,
             spec: newVegaSpec,
             timestamp: new Date(),
+            // Preserve AI generated spec
+            aiGeneratedSpec: chartSpec.aiGeneratedSpec,
         };
         onSpecChange(updatedSpec);
     };
@@ -336,7 +338,15 @@ export function ChartPanel({
                             onClose={() => setIsChartSpecModalOpen(false)}
                             chartSpec={chartSpec.spec}
                             vegaView={vegaViewRef}
-                            onApply={newSpec => onSpecChange({ ...chartSpec, spec: newSpec })}
+                            aiGeneratedSpec={chartSpec.aiGeneratedSpec}
+                            onApply={newSpec =>
+                                onSpecChange({
+                                    ...chartSpec,
+                                    spec: newSpec,
+                                    timestamp: new Date(),
+                                    aiGeneratedSpec: chartSpec.aiGeneratedSpec,
+                                })
+                            }
                         />,
                         document.body
                     )}

@@ -149,6 +149,22 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
         }
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const target = e.currentTarget;
+            const start = target.selectionStart;
+            const end = target.selectionEnd;
+            const newText = jsonText.substring(0, start) + '  ' + jsonText.substring(end);
+            setJsonText(newText);
+            setHasChanges(true);
+            // Set cursor position after the inserted spaces
+            setTimeout(() => {
+                target.selectionStart = target.selectionEnd = start + 2;
+            }, 0);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -179,6 +195,7 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
                     <textarea
                         value={jsonText}
                         onChange={e => handleJsonChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         onClick={e => e.stopPropagation()}
                         onMouseDown={e => e.stopPropagation()}
                         className={`w-full h-full font-mono text-sm p-4 rounded-lg border resize-none ${

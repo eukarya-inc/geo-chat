@@ -80,12 +80,16 @@ export function generateChartSpec(
             ? { ...existingMark, type: markType }
             : { type: markType };
 
+    // Remove width/height from initialSpec to avoid conflicts
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { width: _width, height: _height, ...restInitialSpec } = initialSpec as unknown as Record<string, unknown>;
+
     const baseSpec: Record<string, unknown> = {
-        ...initialSpec,
+        ...restInitialSpec,
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
         title: config.title || `${config.plotType.charAt(0).toUpperCase() + config.plotType.slice(1)} Chart`,
-        width: config.width,
-        height: config.height,
+        width: config.width || 'container',
+        height: config.height || 'container',
         mark,
         data: {
             sql: `SELECT * FROM ${config.tableName} LIMIT 1000`,
