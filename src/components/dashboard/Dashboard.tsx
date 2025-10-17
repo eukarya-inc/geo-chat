@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, MapIcon } from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
 import { MapPanel } from '../map';
 import type { ChartSpec } from '../../types/chart';
@@ -41,7 +41,7 @@ export function Dashboard({
     onAddVisualization,
     onUpdateDashboard,
 }: DashboardProps) {
-    const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
+    const [activeTab, setActiveTab] = useState<'charts' | 'layout'>('charts');
 
     // Determine which visualizations are shown on dashboard
     const shownVisualizationIds = new Set(dashboard.layout.map(item => item.i));
@@ -102,17 +102,6 @@ export function Dashboard({
                         >
                             <CogIcon className="w-4 h-4" />
                             Layout
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('plugins')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
-                                activeTab === 'plugins'
-                                    ? 'border-blue-500 text-blue-600 bg-blue-50'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                        >
-                            <PuzzlePieceIcon className="w-4 h-4" />
-                            Plugins
                         </button>
                     </div>
                 </div>
@@ -181,15 +170,6 @@ export function Dashboard({
                                     <p className="text-sm text-gray-500">60px (default)</p>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'plugins' && (
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-gray-700">Plugin Settings</h3>
-                            <p className="text-sm text-gray-500">
-                                Plugins functionality will be available in future updates.
-                            </p>
                         </div>
                     )}
                 </div>
