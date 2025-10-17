@@ -79,6 +79,30 @@ export function createDuckDBTool(
                     }
                 }
 
+                // For CREATE TABLE, get table list before execution to detect newly created table
+                const tablesBefore: string[] = sqlType.isCreateTable
+                    ? await (async () => {
+                          try {
+                              return await dbContext.getTables(schema);
+                          } catch (err) {
+                              console.warn('[DuckDB Tool] Failed to get tables before CREATE TABLE:', err);
+                              return [];
+                          }
+                      })()
+                    : [];
+
+                // For DROP TABLE, get table list before execution to detect dropped table
+                const tablesBeforeDrop: string[] = sqlType.isDropTable
+                    ? await (async () => {
+                          try {
+                              return await dbContext.getTables(schema);
+                          } catch (err) {
+                              console.warn('[DuckDB Tool] Failed to get tables before DROP TABLE:', err);
+                              return [];
+                          }
+                      })()
+                    : [];
+
                 // Execute query directly without auto-adding LIMIT
                 // AI_RETURN_LIMIT will still truncate results for token cost control
                 const executeSql = sql;
@@ -108,65 +132,89 @@ export function createDuckDBTool(
                 if (sqlType.isTableOperation) {
                     // Checkpoint is already handled by executeQuery for DDL operations
 
-                    // Extract table name from CREATE TABLE statements
+                    // Detect newly created table by comparing table lists
                     if (sqlType.isCreateTable) {
-                        const tableNameMatch = sql.match(
-                            /CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i
-                        );
-                        if (tableNameMatch) {
-                            createdTableName = tableNameMatch[2];
+                        try {
+                            const tablesAfter = await dbContext.getTables(schema);
+                            const newTables = tablesAfter.filter(t => !tablesBefore.includes(t));
 
-                            // Format SQL for both explanation and storage
-                            const formattedSQL = formatSQL(sql);
+                            if (newTables.length > 0) {
+                                // Take the first new table (there should only be one from a single CREATE TABLE)
+                                createdTableName = newTables[0];
+                                console.log(`[DuckDB Tool] Detected newly created table: ${createdTableName}`);
 
-                            // Generate explanation for CREATE TABLE using formatted SQL
-                            if (apiKey) {
-                                sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
+                                // Format SQL for both explanation and storage
+                                const formattedSQL = formatSQL(sql);
+
+                                // Generate explanation for CREATE TABLE using formatted SQL
+                                if (apiKey) {
+                                    sqlExplanation = await generateSQLExplanation(formattedSQL, apiKey);
+                                }
+
+                                // Record the CREATE TABLE SQL in history with explanation
+                                if (dbContext) {
+                                    dbContext
+                                        .getSQLHistory()
+                                        .recordCreateTable(
+                                            createdTableName,
+                                            formattedSQL,
+                                            'ai-chat',
+                                            sqlExplanation,
+                                            schema
+                                        );
+                                }
+                            } else {
+                                console.warn('[DuckDB Tool] CREATE TABLE executed but no new table detected');
                             }
-
-                            // Record the CREATE TABLE SQL in history with explanation
-                            if (dbContext) {
-                                dbContext
-                                    .getSQLHistory()
-                                    .recordCreateTable(
-                                        createdTableName,
-                                        formattedSQL,
-                                        'ai-chat',
-                                        sqlExplanation,
-                                        schema
-                                    );
-                            }
+                        } catch (err) {
+                            console.error('[DuckDB Tool] Failed to detect created table:', err);
                         }
                     }
 
-                    // Handle DROP TABLE statements
+                    // Detect dropped table by comparing table lists
                     if (sqlType.isDropTable) {
-                        const dropTableNameMatch = sql.match(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:[\w.]+\.)?(\w+)/i);
-                        if (dropTableNameMatch) {
-                            const droppedTableName = dropTableNameMatch[1];
+                        try {
+                            const tablesAfterDrop = await dbContext.getTables(schema);
+                            const droppedTables = tablesBeforeDrop.filter(t => !tablesAfterDrop.includes(t));
 
-                            // Delete associated chart and map specs
-                            if (onChartDelete) {
-                                try {
-                                    await onChartDelete(droppedTableName);
-                                    console.log(
-                                        `[DuckDB Tool] Deleted chart spec for dropped table: ${droppedTableName}`
-                                    );
-                                } catch (error) {
-                                    console.error(`Failed to delete chart spec for table ${droppedTableName}:`, error);
-                                }
-                            }
+                            if (droppedTables.length > 0) {
+                                // Take the first dropped table (there should only be one from a single DROP TABLE)
+                                const droppedTableName = droppedTables[0];
+                                console.log(`[DuckDB Tool] Detected dropped table: ${droppedTableName}`);
 
-                            if (onMapStyleDelete) {
-                                try {
-                                    await onMapStyleDelete(droppedTableName);
-                                    console.log(
-                                        `[DuckDB Tool] Deleted map style for dropped table: ${droppedTableName}`
-                                    );
-                                } catch (error) {
-                                    console.error(`Failed to delete map style for table ${droppedTableName}:`, error);
+                                // Delete associated chart and map specs
+                                if (onChartDelete) {
+                                    try {
+                                        await onChartDelete(droppedTableName);
+                                        console.log(
+                                            `[DuckDB Tool] Deleted chart spec for dropped table: ${droppedTableName}`
+                                        );
+                                    } catch (error) {
+                                        console.error(
+                                            `Failed to delete chart spec for table ${droppedTableName}:`,
+                                            error
+                                        );
+                                    }
                                 }
+
+                                if (onMapStyleDelete) {
+                                    try {
+                                        await onMapStyleDelete(droppedTableName);
+                                        console.log(
+                                            `[DuckDB Tool] Deleted map style for dropped table: ${droppedTableName}`
+                                        );
+                                    } catch (error) {
+                                        console.error(
+                                            `Failed to delete map style for table ${droppedTableName}:`,
+                                            error
+                                        );
+                                    }
+                                }
+                            } else {
+                                console.warn('[DuckDB Tool] DROP TABLE executed but no dropped table detected');
                             }
+                        } catch (err) {
+                            console.error('[DuckDB Tool] Failed to detect dropped table:', err);
                         }
                     }
 
