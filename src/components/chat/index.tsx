@@ -691,10 +691,11 @@ export default function AIChat({
                     onKeyDown={handleKeyPress}
                     dbContext={dbContext}
                     textareaRef={textareaRef}
-                    placeholder="質問してみましょう（@でテーブル名を補完）"
+                    placeholder="質問してみましょう（@でテーブル名、#でフィールド名を補完）"
                     className="w-full p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
                     schemaName={schemaName}
+                    selectedTable={selectedTable}
                 />
                 <div className="flex justify-between">
                     {remoteFileComponent && (
