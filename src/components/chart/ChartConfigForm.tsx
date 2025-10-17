@@ -84,6 +84,24 @@ export function ChartConfigForm({
             }
         }
 
+        // Extract width and height from spec
+        let width = 400;
+        let height = 300;
+        let autoResize = true;
+
+        if ('width' in spec) {
+            if (spec.width === 'container') {
+                autoResize = true;
+            } else if (typeof spec.width === 'number') {
+                width = spec.width;
+                autoResize = false;
+            }
+        }
+
+        if ('height' in spec && typeof spec.height === 'number' && autoResize === false) {
+            height = spec.height;
+        }
+
         return {
             plotType,
             xField,
@@ -91,6 +109,9 @@ export function ChartConfigForm({
             colorField,
             sizeField,
             title: chartSpec.title || 'Chart',
+            width,
+            height,
+            autoResize,
         };
     }, [chartSpec]);
 
@@ -153,8 +174,8 @@ export function ChartConfigForm({
             colorField: config.colorField,
             sizeField: config.sizeField,
             title: config.title,
-            width: undefined,
-            height: undefined,
+            width: config.autoResize ? 'container' : config.width,
+            height: config.autoResize ? 'container' : config.height,
         };
     }, [config, chartSpec.spec]);
 
@@ -355,6 +376,68 @@ export function ChartConfigForm({
                     }}
                 />
             </div>
+
+            {/* Auto Resize Checkbox */}
+            <div style={{ marginBottom: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.75em', cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        checked={config.autoResize}
+                        onChange={e => setConfig(prev => ({ ...prev, autoResize: e.target.checked }))}
+                        style={{ marginRight: '6px' }}
+                    />
+                    <span style={{ fontWeight: 'bold' }}>Auto Resize</span>
+                </label>
+            </div>
+
+            {/* Width and Height Fields */}
+            {!config.autoResize && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    {/* Width Field */}
+                    <div>
+                        <label
+                            style={{ display: 'block', marginBottom: '2px', fontSize: '0.75em', fontWeight: 'bold' }}
+                        >
+                            Width:
+                        </label>
+                        <input
+                            type="number"
+                            value={config.width}
+                            onChange={e => setConfig(prev => ({ ...prev, width: Number(e.target.value) }))}
+                            min="100"
+                            style={{
+                                width: '100%',
+                                padding: '4px',
+                                fontSize: '0.75em',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                            }}
+                        />
+                    </div>
+
+                    {/* Height Field */}
+                    <div>
+                        <label
+                            style={{ display: 'block', marginBottom: '2px', fontSize: '0.75em', fontWeight: 'bold' }}
+                        >
+                            Height:
+                        </label>
+                        <input
+                            type="number"
+                            value={config.height}
+                            onChange={e => setConfig(prev => ({ ...prev, height: Number(e.target.value) }))}
+                            min="100"
+                            style={{
+                                width: '100%',
+                                padding: '4px',
+                                fontSize: '0.75em',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Apply Changes Button */}
             {showApplyButton && (
