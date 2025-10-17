@@ -243,8 +243,8 @@ export function ChartDropdownMenu({
                 onMouseDown={e => {
                     e.stopPropagation();
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
-                title="Chart options"
+                className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
+                title="グラフオプション"
                 type="button"
             >
                 <EllipsisVerticalIcon className="w-5 h-5" />
