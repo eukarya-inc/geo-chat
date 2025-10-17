@@ -1,17 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import {
-    ChartBarIcon,
-    CogIcon,
-    PuzzlePieceIcon,
-    MapIcon,
-    EllipsisVerticalIcon,
-    TrashIcon,
-    ClipboardDocumentIcon,
-    CameraIcon,
-} from '@heroicons/react/24/outline';
+import { ChartBarIcon, CogIcon, PuzzlePieceIcon, MapIcon } from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
-import Map from '../map';
+import { MapPanel } from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
@@ -19,188 +10,6 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
-
-interface MapDropdownMenuProps {
-    vizId: string;
-    vizTitle: string;
-    onRemove: (vizId: string) => void;
-}
-
-function MapDropdownMenu({ vizId, vizTitle, onRemove }: MapDropdownMenuProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        }
-
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isOpen]);
-
-    const handleSaveMapAsImage = async () => {
-        try {
-            const mapContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
-            if (!mapContainer) {
-                alert('Map not found. Please try again.');
-                setIsOpen(false);
-                return;
-            }
-
-            // Find the canvas element within the map container
-            const canvas = mapContainer.querySelector('canvas.maplibregl-canvas, canvas.mapboxgl-canvas');
-            if (canvas instanceof HTMLCanvasElement) {
-                canvas.toBlob(blob => {
-                    if (blob) {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'map'}.png`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                    } else {
-                        alert('Failed to export map as image. Please try again.');
-                    }
-                }, 'image/png');
-            } else {
-                alert('Map canvas not found. Please ensure the map is fully loaded and try again.');
-            }
-        } catch (error) {
-            console.error('Error exporting map:', error);
-            alert('Failed to export map as image. Please try again.');
-        }
-        setIsOpen(false);
-    };
-
-    const handleCopyMapToClipboard = async () => {
-        try {
-            // Check if Clipboard API is available
-            if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
-                setIsOpen(false);
-                return;
-            }
-
-            const mapContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
-            if (!mapContainer) {
-                alert('Map not found. Please try again.');
-                setIsOpen(false);
-                return;
-            }
-
-            // Find the canvas element within the map container
-            const canvas = mapContainer.querySelector('canvas.maplibregl-canvas, canvas.mapboxgl-canvas');
-            if (canvas instanceof HTMLCanvasElement) {
-                // Safari requires ClipboardItem to be created synchronously with a Promise
-                const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob(blob => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Failed to create image from map canvas'));
-                        }
-                    }, 'image/png');
-                });
-
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Map copied to clipboard!');
-                setIsOpen(false);
-                return;
-            }
-
-            alert('Map canvas not found. Please ensure the map is fully loaded and try again.');
-        } catch (err) {
-            console.error('Error copying map:', err);
-            alert(`Failed to copy map to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-        setIsOpen(false);
-    };
-
-    const handleRemove = () => {
-        onRemove(vizId);
-        setIsOpen(false);
-    };
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsOpen(!isOpen);
-                }}
-                onMouseDown={e => {
-                    e.stopPropagation();
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
-                title="Map options"
-                type="button"
-            >
-                <EllipsisVerticalIcon className="w-4 h-4" />
-            </button>
-
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                    <div className="py-1">
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleCopyMapToClipboard();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                            Copy to Clipboard
-                        </button>
-
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleSaveMapAsImage();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <CameraIcon className="w-4 h-4 mr-2" />
-                            Save as Image
-                        </button>
-
-                        <hr className="my-1 border-gray-200" />
-
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleRemove();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <TrashIcon className="w-4 h-4 mr-2" />
-                            Remove
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
 
 // Re-export for backward compatibility, but use the one from remoteAtoms
 export type DashboardVisualization = DashboardVisualizationType;
@@ -219,6 +28,7 @@ interface DashboardProps {
     schemaName: string;
     onLayoutChange: (layout: Layout[]) => void;
     onRemoveVisualization: (vizId: string) => void;
+    onAddVisualization: (vizId: string) => void;
     onUpdateDashboard: (dashboard: Dashboard) => void;
 }
 
@@ -228,9 +38,14 @@ export function Dashboard({
     schemaName,
     onLayoutChange,
     onRemoveVisualization,
+    onAddVisualization,
     onUpdateDashboard,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<'charts' | 'layout' | 'plugins'>('charts');
+
+    // Determine which visualizations are shown on dashboard
+    const shownVisualizationIds = new Set(dashboard.layout.map(item => item.i));
+    const shownVisualizations = dashboard.visualizations.filter(viz => shownVisualizationIds.has(viz.id));
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
@@ -307,28 +122,44 @@ export function Dashboard({
                     {activeTab === 'charts' && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-700">Available Visualizations</h3>
-                            {dashboard.visualizations.map(viz => (
-                                <div
-                                    key={viz.id}
-                                    className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="text-sm font-medium text-gray-900">
-                                                    {viz.title || 'Untitled Visualization'}
-                                                </h4>
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                                    {viz.type}
-                                                </span>
+                            {dashboard.visualizations.map(viz => {
+                                const isOnDashboard = shownVisualizationIds.has(viz.id);
+                                return (
+                                    <div
+                                        key={viz.id}
+                                        className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                        {viz.title || 'Untitled Visualization'}
+                                                    </h4>
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
+                                                        {viz.type}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Created: {viz.createdAt?.toLocaleDateString() || 'Unknown'}
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Created: {viz.createdAt?.toLocaleDateString() || 'Unknown'}
-                                            </p>
+                                            {isOnDashboard ? (
+                                                <span className="text-xs text-green-600 font-medium flex-shrink-0">
+                                                    ✓ Added
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => onAddVisualization(viz.id)}
+                                                    className="px-3 py-1 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded transition-colors flex-shrink-0"
+                                                    title="Add to dashboard"
+                                                >
+                                                    Add
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {dashboard.visualizations.length === 0 && (
                                 <p className="text-sm text-gray-500 text-center py-8">
                                     No visualizations available. Export charts or maps from chat to add them here.
@@ -367,7 +198,7 @@ export function Dashboard({
             {/* Right Side - Grid Layout */}
             <div className="flex-1 h-full overflow-auto bg-gray-50">
                 <div className="p-4 h-full">
-                    {dashboard.visualizations.length > 0 ? (
+                    {shownVisualizations.length > 0 ? (
                         <ResponsiveGridLayout
                             className="layout"
                             layouts={{ lg: dashboard.layout }}
@@ -379,7 +210,7 @@ export function Dashboard({
                             isResizable={true}
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
                         >
-                            {dashboard.visualizations.map(viz => (
+                            {shownVisualizations.map(viz => (
                                 <div
                                     key={viz.id}
                                     className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
@@ -397,35 +228,17 @@ export function Dashboard({
                                             showDataSourceButton={true}
                                         />
                                     ) : viz.type === 'map' && viz.tableName ? (
-                                        <div className="h-full flex flex-col">
-                                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                    {viz.title}
-                                                </h4>
-                                                <MapDropdownMenu
-                                                    vizId={viz.id}
-                                                    vizTitle={viz.title}
-                                                    onRemove={handleRemoveVisualization}
-                                                />
-                                            </div>
-                                            <div className="flex-1 p-2 overflow-hidden">
-                                                <div
-                                                    className="h-full"
-                                                    onMouseDown={e => e.stopPropagation()}
-                                                    onTouchStart={e => e.stopPropagation()}
-                                                >
-                                                    <Map
-                                                        dbContext={dbContext}
-                                                        schema={schemaName}
-                                                        selectedTable={viz.tableName}
-                                                        geometryColumnName={viz.geometryColumn}
-                                                        tableStyles={viz.mapSpec?.tableStyles}
-                                                        initialStyle={viz.mapSpec?.style}
-                                                        showControls={false}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <MapPanel
+                                            title={viz.title}
+                                            tableName={viz.tableName}
+                                            geometryColumn={viz.geometryColumn}
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                            mapSpec={viz.mapSpec}
+                                            showControls={false}
+                                            onRemove={() => handleRemoveVisualization(viz.id)}
+                                            vizId={viz.id}
+                                        />
                                     ) : (
                                         <div className="h-full flex flex-col">
                                             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">

@@ -157,6 +157,68 @@ export function useDashboardManagement() {
         [remoteState.dashboards, updateDashboard]
     );
 
+    const hideVisualizationFromDashboard = useCallback(
+        (dashboardId: string, visualizationId: string) => {
+            const dashboard = remoteState.dashboards[dashboardId];
+            if (!dashboard) {
+                console.error('Dashboard not found:', dashboardId);
+                return;
+            }
+
+            // Only remove from layout, keep in visualizations array
+            const updatedDashboard: Dashboard = {
+                ...dashboard,
+                layout: dashboard.layout.filter(item => item.i !== visualizationId),
+            };
+
+            updateDashboard(updatedDashboard);
+        },
+        [remoteState.dashboards, updateDashboard]
+    );
+
+    const showVisualizationOnDashboard = useCallback(
+        (dashboardId: string, visualizationId: string, layoutOverride?: Partial<Layout>) => {
+            const dashboard = remoteState.dashboards[dashboardId];
+            if (!dashboard) {
+                console.error('Dashboard not found:', dashboardId);
+                return;
+            }
+
+            // Check if already in layout
+            if (dashboard.layout.some(item => item.i === visualizationId)) {
+                console.warn('Visualization already on dashboard:', visualizationId);
+                return;
+            }
+
+            // Find the visualization to determine default size
+            const viz = dashboard.visualizations.find(v => v.id === visualizationId);
+            if (!viz) {
+                console.error('Visualization not found:', visualizationId);
+                return;
+            }
+
+            // Create default layout based on visualization type
+            const defaultLayout: Layout = {
+                i: visualizationId,
+                x: 0,
+                y: Infinity, // Put at bottom
+                w: viz.type === 'map' ? 8 : 6,
+                h: viz.type === 'map' ? 6 : 4,
+                minW: viz.type === 'map' ? 4 : 3,
+                minH: viz.type === 'map' ? 3 : 2,
+                ...layoutOverride,
+            };
+
+            const updatedDashboard: Dashboard = {
+                ...dashboard,
+                layout: [...dashboard.layout, defaultLayout],
+            };
+
+            updateDashboard(updatedDashboard);
+        },
+        [remoteState.dashboards, updateDashboard]
+    );
+
     return {
         dashboards: remoteState.dashboards,
         createDashboard,
@@ -164,6 +226,8 @@ export function useDashboardManagement() {
         deleteDashboard,
         addVisualizationToDashboard,
         removeVisualizationFromDashboard,
+        hideVisualizationFromDashboard,
+        showVisualizationOnDashboard,
         updateDashboardLayout,
         getDashboard,
         getAllDashboards,

@@ -9,7 +9,7 @@ export interface QueryParams {
     };
     selectedTable: string;
     selectedColumns: string[];
-    geometryColumnName: string;
+    geometryColumnName?: string;
     schema?: string | null;
     columnTypes?: Record<string, string>;
 }
