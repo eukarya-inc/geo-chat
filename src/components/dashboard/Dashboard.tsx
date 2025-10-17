@@ -8,14 +8,11 @@ import {
     MapIcon,
     EllipsisVerticalIcon,
     TrashIcon,
-    ArrowDownTrayIcon,
-    CircleStackIcon,
     ClipboardDocumentIcon,
     CameraIcon,
-    CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
-import { ChartConfigModal, DataSourceModal, JsonSourceModal } from '../chart';
+import { ChartConfigModal, DataSourceModal, JsonSourceModal, ChartDropdownMenu } from '../chart';
 import Map from '../map';
 import type { ChartSpec, VegaChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
@@ -53,9 +50,8 @@ function ChartWithView({ vizId, chartSpec, dbContext, schema }: ChartWithViewPro
     );
 }
 
-interface ChartDropdownMenuProps {
+interface DashboardChartMenuProps {
     vizId: string;
-    vizTitle: string;
     chartSpec: ChartSpec;
     dbContext: DBContext;
     schema: string;
@@ -63,337 +59,23 @@ interface ChartDropdownMenuProps {
     onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
 }
 
-function ChartDropdownMenu({
-    vizId,
-    vizTitle,
-    chartSpec,
-    dbContext,
-    schema,
-    onRemove,
-    onUpdateChart,
-}: ChartDropdownMenuProps) {
-    const [isOpen, setIsOpen] = useState(false);
+function DashboardChartMenu({ vizId, chartSpec, dbContext, schema, onRemove, onUpdateChart }: DashboardChartMenuProps) {
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [isDataSourceModalOpen, setIsDataSourceModalOpen] = useState(false);
     const [isJsonSourceModalOpen, setIsJsonSourceModalOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        }
-
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isOpen]);
-
-    const handleVegaConfigureOpen = () => {
-        setIsConfigModalOpen(true);
-        setIsOpen(false);
-    };
-
-    const handleDataSourceOpen = () => {
-        setIsDataSourceModalOpen(true);
-        setIsOpen(false);
-    };
-
-    const handleJsonSourceOpen = () => {
-        setIsJsonSourceModalOpen(true);
-        setIsOpen(false);
-    };
-
-    const handleVegaSaveAsPNG = () => {
-        // Use HTML5 canvas to capture the chart as PNG
-        const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
-        if (chartContainer) {
-            const canvas = chartContainer.querySelector('canvas');
-            if (canvas) {
-                try {
-                    canvas.toBlob(blob => {
-                        if (blob) {
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.png`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                        } else {
-                            alert('Failed to export chart as PNG. Please try again.');
-                        }
-                    }, 'image/png');
-                } catch (error) {
-                    console.error('Error exporting PNG:', error);
-                    alert('Failed to export chart as PNG. Please try again.');
-                }
-            } else {
-                alert('Chart canvas not found. Please try again.');
-            }
-        }
-        setIsOpen(false);
-    };
-
-    const handleVegaSaveAsSVG = async () => {
-        // Use Vega View's toSVG() method for high-quality SVG export
-        const vegaView = vegaViewsMap[vizId];
-        if (!vegaView) {
-            alert('Chart not ready. Please try again in a moment.');
-            setIsOpen(false);
-            return;
-        }
-
-        try {
-            const svgString = await vegaView.toSVG();
-            const blob = new Blob([svgString], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.svg`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Error exporting SVG:', error);
-            alert('Failed to export chart as SVG. Please try again.');
-        }
-        setIsOpen(false);
-    };
-
-    const handleCopyToClipboard = async () => {
-        try {
-            // Check if Clipboard API is available
-            if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
-                setIsOpen(false);
-                return;
-            }
-
-            const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
-            if (!chartContainer) {
-                alert('Chart not found. Please try again.');
-                setIsOpen(false);
-                return;
-            }
-
-            // Try canvas (PNG) first
-            const canvas = chartContainer.querySelector('canvas');
-            if (canvas) {
-                // Safari requires ClipboardItem to be created synchronously with a Promise
-                const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob(blob => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Failed to create image from canvas'));
-                        }
-                    }, 'image/png');
-                });
-
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
-                setIsOpen(false);
-                return;
-            }
-
-            // Try SVG - convert to PNG for clipboard
-            const svgElement = chartContainer.querySelector('svg');
-            if (svgElement) {
-                const svgData = new XMLSerializer().serializeToString(svgElement);
-                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-                const url = URL.createObjectURL(svgBlob);
-
-                // Safari requires ClipboardItem to be created synchronously with a Promise
-                const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        try {
-                            // Create canvas and draw image
-                            const tempCanvas = document.createElement('canvas');
-                            tempCanvas.width = img.width;
-                            tempCanvas.height = img.height;
-                            const ctx = tempCanvas.getContext('2d');
-                            if (!ctx) {
-                                reject(new Error('Failed to get canvas context'));
-                                return;
-                            }
-
-                            ctx.drawImage(img, 0, 0);
-
-                            // Convert to blob
-                            tempCanvas.toBlob(blob => {
-                                URL.revokeObjectURL(url);
-                                if (blob) {
-                                    resolve(blob);
-                                } else {
-                                    reject(new Error('Failed to create PNG from SVG'));
-                                }
-                            }, 'image/png');
-                        } catch (error) {
-                            URL.revokeObjectURL(url);
-                            reject(error);
-                        }
-                    };
-                    img.onerror = () => {
-                        URL.revokeObjectURL(url);
-                        reject(new Error('Failed to load SVG image'));
-                    };
-                    img.src = url;
-                });
-
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
-                setIsOpen(false);
-                return;
-            }
-
-            alert('Chart not found. Please try again.');
-        } catch (err) {
-            console.error('Error copying chart:', err);
-            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-        setIsOpen(false);
-    };
-
-    const handleRemove = () => {
-        onRemove(vizId);
-        setIsOpen(false);
-    };
 
     return (
         <>
-            <div className="relative" ref={dropdownRef}>
-                <button
-                    onClick={e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsOpen(!isOpen);
-                    }}
-                    onMouseDown={e => {
-                        e.stopPropagation();
-                    }}
-                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
-                    title="Chart options"
-                    type="button"
-                >
-                    <EllipsisVerticalIcon className="w-4 h-4" />
-                </button>
-
-                {isOpen && (
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                        <div className="py-1">
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleVegaConfigureOpen();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <ChartBarIcon className="w-4 h-4 mr-2" />
-                                Edit Chart Style
-                            </button>
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleDataSourceOpen();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <CircleStackIcon className="w-4 h-4 mr-2" />
-                                Edit Data Source
-                            </button>
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleJsonSourceOpen();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <CodeBracketIcon className="w-4 h-4 mr-2" />
-                                View JSON Source
-                            </button>
-
-                            <hr className="my-1 border-gray-200" />
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleCopyToClipboard();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                                Copy to Clipboard
-                            </button>
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleVegaSaveAsPNG();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                Save as PNG
-                            </button>
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleVegaSaveAsSVG();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                Save as SVG
-                            </button>
-
-                            <hr className="my-1 border-gray-200" />
-
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleRemove();
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <TrashIcon className="w-4 h-4 mr-2" />
-                                Remove
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
+            <ChartDropdownMenu
+                chartSpec={chartSpec}
+                vegaView={vegaViewsMap[vizId]}
+                dbContext={dbContext}
+                schema={schema}
+                onConfigOpen={() => setIsConfigModalOpen(true)}
+                onDataSourceOpen={() => setIsDataSourceModalOpen(true)}
+                onJsonSourceOpen={() => setIsJsonSourceModalOpen(true)}
+                onRemove={() => onRemove(vizId)}
+            />
 
             {/* Configuration Modal - Render in portal to avoid being clipped */}
             {createPortal(
@@ -804,9 +486,8 @@ export function Dashboard({
                                         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
                                             <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
                                             {viz.type === 'chart' && viz.chartSpec && (
-                                                <ChartDropdownMenu
+                                                <DashboardChartMenu
                                                     vizId={viz.id}
-                                                    vizTitle={viz.title}
                                                     chartSpec={viz.chartSpec}
                                                     dbContext={dbContext}
                                                     schema={schemaName}
