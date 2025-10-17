@@ -54,60 +54,11 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     const [error, setError] = useState<string | null>(null);
     const loadingWindowsRef = useRef(new Set<string>());
     const containerRef = useRef<HTMLDivElement>(null);
-    const [containerWidth, setContainerWidth] = useState(800);
     const [sortColumn, setSortColumn] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
 
-    // Track container width
-    useEffect(() => {
-        const observer = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                setContainerWidth(entry.contentRect.width);
-            }
-        });
-
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
-        }
-
-        return () => {
-            observer.disconnect();
-        };
-    }, []);
-
-    // Update column widths when container width or columns change
-    useEffect(() => {
-        if (columns.length > 0 && containerWidth > 0) {
-            const minColumnWidth = 100;
-            const maxColumnWidth = 200;
-            // Calculate width but cap it at maxColumnWidth (exclude row number column from calculation)
-            const dataColumnCount = columns.length - 1; // Subtract 1 for row number column
-            const calculatedWidth = Math.min(
-                maxColumnWidth,
-                Math.max(minColumnWidth, Math.floor(containerWidth / Math.max(1, dataColumnCount)))
-            );
-
-            const updatedColumns = columns.map(col => {
-                // Keep row number column at fixed width
-                if (col.id === '__row_number__') {
-                    return col;
-                }
-                return {
-                    ...col,
-                    width: calculatedWidth,
-                };
-            });
-
-            // Only update if width actually changed to avoid infinite loop
-            // Check second column (first data column) since first is row number
-            const firstDataCol = columns[1];
-            const firstWidth = firstDataCol && 'width' in firstDataCol ? firstDataCol.width : undefined;
-            if (firstWidth !== calculatedWidth) {
-                setColumns(updatedColumns);
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [containerWidth, columns.length]); // Note: only depend on columns.length, not columns itself to avoid infinite loop
+    // Note: Removed automatic column width adjustment on container resize
+    // Column widths are now calculated based on content and can be manually resized by users
 
     // Reset cache when sort changes
     useEffect(() => {
@@ -129,14 +80,20 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             try {
                 const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
 
-                // Calculate initial column width based on container width
-                const minColumnWidth = 100;
-                const maxColumnWidth = 200;
-                const currentContainerWidth = containerRef.current?.offsetWidth || containerWidth;
-                const calculatedWidth = Math.min(
-                    maxColumnWidth,
-                    Math.max(minColumnWidth, Math.floor(currentContainerWidth / initialData.columns.length))
-                );
+                // Function to estimate text width (approximate)
+                const estimateTextWidth = (text: string): number => {
+                    let width = 0;
+                    for (let i = 0; i < text.length; i++) {
+                        const char = text.charCodeAt(i);
+                        // Japanese characters and full-width characters are wider
+                        if (char > 0x3000) {
+                            width += 12; // ~12px per Japanese character
+                        } else {
+                            width += 8; // ~8px per ASCII character
+                        }
+                    }
+                    return width;
+                };
 
                 // Add row number column as the first column
                 const rowNumberColumn: GridColumn = {
@@ -145,21 +102,43 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                     width: 60,
                 };
 
-                const dataColumns: GridColumn[] = initialData.columns.map((col: { name: string; type: string }) => {
-                    // Format column title with name and type
-                    let title = col.name;
-                    if (sortColumn === col.name) {
-                        title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
-                    }
-                    // Add type info on a new line (using newline character)
-                    title += `\n(${col.type})`;
+                const dataColumns: GridColumn[] = initialData.columns.map(
+                    (col: { name: string; type: string }, colIndex: number) => {
+                        // Format column title with name
+                        let title = col.name;
+                        if (sortColumn === col.name) {
+                            title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
+                        }
 
-                    return {
-                        id: col.name,
-                        title,
-                        width: calculatedWidth,
-                    };
-                });
+                        // Calculate width based on column name
+                        let maxTextWidth = estimateTextWidth(col.name);
+
+                        // Check sample data values to get max text width
+                        for (let rowIndex = 0; rowIndex < Math.min(initialData.arrowTable.numRows, 100); rowIndex++) {
+                            const value = getValueFromArrowTable(initialData.arrowTable, rowIndex, colIndex, col.type);
+                            if (value !== null) {
+                                const valueStr = String(value);
+                                // Only check first 50 characters to avoid very long values
+                                const textWidth = estimateTextWidth(valueStr.slice(0, 50));
+                                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                            }
+                        }
+
+                        // Add padding (16px for cell padding + some margin)
+                        const calculatedWidth = maxTextWidth + 32;
+
+                        // Apply min and max constraints
+                        const minColumnWidth = 80;
+                        const maxColumnWidth = 400;
+                        const finalWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, calculatedWidth));
+
+                        return {
+                            id: col.name,
+                            title,
+                            width: finalWidth,
+                        };
+                    }
+                );
 
                 const gridColumns: GridColumn[] = [rowNumberColumn, ...dataColumns];
 
@@ -223,7 +202,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         };
 
         loadInitialData();
-    }, [connection, tableName, arrowCache, dbContext, containerWidth, sortColumn, sortDirection]);
+    }, [connection, tableName, arrowCache, dbContext, sortColumn, sortDirection]);
 
     const loadDataWindow = useCallback(
         async (startRow: number) => {
@@ -391,9 +370,6 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                     return col;
                 }
 
-                // Get the column type from columnTypes
-                const colType = columnTypes[col.id || ''] || '';
-
                 // Build the title with column name
                 let title = '';
 
@@ -406,11 +382,6 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                     title = col.id;
                 } else {
                     title = col.title || '';
-                }
-
-                // Add type info on a new line if we have it
-                if (colType) {
-                    title += `\n(${colType})`;
                 }
 
                 return { ...col, title };
