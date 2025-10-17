@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { getTableInfo, formatTableInfoForAI } from '../../utils/tableInfo';
+import { createTableFromUrl as createTableFromUrlUtil } from '../../utils/tableCreation';
 
 interface RemoteFileProps {
     dbContext: DBContext;
@@ -53,23 +53,15 @@ const RemoteFile: React.FC<RemoteFileProps> = ({ dbContext, schema = null, onTab
         setIsCreatingTable(true);
 
         try {
-            // Use the new dbContext method to create the table
-            const tableName = await dbContext.createTableFromUrl(targetUrl, schema);
+            // Use the shared utility function to create the table
+            const { tableName, message } = await createTableFromUrlUtil(targetUrl, dbContext, schema);
 
             setError(null);
             setUrl('');
 
-            // Get detailed table information for AI context
-            const tableInfo = await getTableInfo(dbContext, tableName, schema);
-            const tableInfoText = formatTableInfoForAI(tableInfo);
-
-            // Create message with both marker and detailed info
-            // The marker is for backward compatibility and the info is for AI context
-            const tableMessage = `<!--TABLE_CREATED:${tableName}--><!--TABLE_INFO_START-->\n${tableInfoText}\n<!--TABLE_INFO_END-->`;
-
             if (onSendMessage) {
                 // Send the table message for all cases (both Example and regular Create Table)
-                onSendMessage(tableMessage);
+                onSendMessage(message);
             }
 
             onTableCreated?.(tableName);
