@@ -18,8 +18,9 @@ export interface ChartConfig {
     colorField: string;
     sizeField: string;
     title: unknown;
-    width: unknown;
-    height: unknown;
+    width: number | 'container' | undefined;
+    height: number | 'container' | undefined;
+    autoResize?: boolean;
 }
 
 // Helper function to determine field type based on column metadata
