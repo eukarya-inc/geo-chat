@@ -79,7 +79,6 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
 
             map.setStyle(parsedStyle);
             setHasChanges(false);
-            alert('スタイルを適用しました！');
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : '不明なエラー';
             setError(`スタイルの適用に失敗しました: ${errorMessage}`);
@@ -133,7 +132,6 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
             setJsonText(JSON.stringify(defaultStyle, null, 2));
             setHasChanges(false);
             setError(null);
-            alert('デフォルトスタイルにリセットしました！');
         } catch {
             setError('デフォルトスタイルへのリセットに失敗しました');
         } finally {
@@ -155,7 +153,7 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/30" onClick={onClose} />
             <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
