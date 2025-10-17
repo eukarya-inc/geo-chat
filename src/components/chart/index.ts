@@ -4,4 +4,5 @@ export { DataSourceModal } from './DataSourceModal';
 export { ChartSpecModal } from './ChartSpecModal';
 export { ChartDropdownMenu } from './ChartDropdownMenu';
 export { ChartPanel } from './ChartPanel';
+export { ChartTypeSelector } from './ChartTypeSelector';
 export { default as VegaLiteChart } from './VegaLiteChart';
