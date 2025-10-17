@@ -5,12 +5,11 @@ import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
-import VegaLiteChart from '../../components/chart/VegaLiteChart';
-import { ChartConfigForm, JsonSourceModal, ChartDropdownMenu } from '../../components/chart';
+import { ChartSpecModal, ChartPanel } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
@@ -38,7 +37,7 @@ function ChatPage() {
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
     const [showChartConfig, setShowChartConfig] = useState(false);
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
-    const [showJsonSourceModal, setShowJsonSourceModal] = useState(false);
+    const [showChartSpecModal, setShowChartSpecModal] = useState(false);
     const chatPageVegaViewRef = useRef<View | null>(null);
 
     // Enable state synchronization
@@ -530,174 +529,90 @@ function ChatPage() {
                                             {activeTab === 'chart' &&
                                                 selectedTable &&
                                                 (displayChartSpec && connection && selectedChatId ? (
-                                                    <div className="h-full overflow-hidden flex flex-col">
-                                                        {/* Chart Display Area */}
-                                                        <div
-                                                            className={`${showChartConfig ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}
-                                                        >
-                                                            {/* Chart Title Bar with Menu */}
-                                                            <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                                                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                                    {displayChartSpec.title || 'Chart'}
-                                                                </h4>
-                                                                <ChartDropdownMenu
-                                                                    chartSpec={displayChartSpec}
-                                                                    vegaView={chatPageVegaViewRef.current}
-                                                                    dbContext={dbContext}
-                                                                    schema={schemaName ?? undefined}
-                                                                    onConfigOpen={() =>
-                                                                        setShowChartConfig(!showChartConfig)
-                                                                    }
-                                                                    onJsonSourceOpen={() =>
-                                                                        setShowJsonSourceModal(true)
-                                                                    }
-                                                                    onRemove={() => {
-                                                                        if (selectedTable && deleteChartFromAI) {
-                                                                            deleteChartFromAI(selectedTable);
-                                                                            setConfiguredChartSpec(null);
-                                                                            setShowChartConfig(false);
-                                                                        }
-                                                                    }}
-                                                                    showDataSourceButton={false}
-                                                                />
-                                                            </div>
+                                                    <ChartPanel
+                                                        chartSpec={displayChartSpec}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName || 'main'}
+                                                        configMode="panel"
+                                                        onViewReady={view => {
+                                                            chatPageVegaViewRef.current = view;
+                                                        }}
+                                                        onConfigOpen={() => setShowChartConfig(!showChartConfig)}
+                                                        onJsonSourceOpen={() => setShowChartSpecModal(true)}
+                                                        onRemove={() => {
+                                                            if (selectedTable && deleteChartFromAI) {
+                                                                deleteChartFromAI(selectedTable);
+                                                                setConfiguredChartSpec(null);
+                                                                setShowChartConfig(false);
+                                                            }
+                                                        }}
+                                                        onSpecChange={handleChartSpecChange}
+                                                        showConfigPanel={showChartConfig}
+                                                        onCloseConfigPanel={() => setShowChartConfig(false)}
+                                                        autoApplyChanges={true}
+                                                        showApplyButton={false}
+                                                        showSaveButton={true}
+                                                        onSave={() => {
+                                                            // Show confirmation dialog before saving
+                                                            const chartTitle = displayChartSpec.title || 'chart';
+                                                            const chartElement = document.querySelector(
+                                                                '.vega-embed canvas, .vega-embed svg'
+                                                            );
 
-                                                            {/* Chart Content */}
-                                                            <div className="flex-1 overflow-auto p-4">
-                                                                <VegaLiteChart
-                                                                    key={`${schemaName}-${displayChartSpec.id}`}
-                                                                    spec={displayChartSpec.spec}
-                                                                    dbContext={dbContext}
-                                                                    schema={schemaName}
-                                                                    showHeader={false}
-                                                                    enableActions={false}
-                                                                    onViewReady={view => {
-                                                                        chatPageVegaViewRef.current = view;
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
+                                                            if (!chartElement) {
+                                                                alert(
+                                                                    'Chart not found. Please make sure the chart is displayed.'
+                                                                );
+                                                                return;
+                                                            }
 
-                                                        {/* Configuration Panel - Horizontal Split */}
-                                                        {showChartConfig && (
-                                                            <div
-                                                                className="border-t border-gray-200 bg-white"
-                                                                style={{ height: '280px' }}
-                                                            >
-                                                                {/* Configuration Panel Header */}
-                                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
-                                                                    <h5 className="text-sm font-medium text-gray-900">
-                                                                        Chart Configuration
-                                                                    </h5>
-                                                                    <button
-                                                                        onClick={() => setShowChartConfig(false)}
-                                                                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors rounded-md hover:bg-gray-200"
-                                                                        title="Close configuration panel"
-                                                                        type="button"
-                                                                    >
-                                                                        <XMarkIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                </div>
-                                                                <div
-                                                                    className="overflow-auto p-3"
-                                                                    style={{ height: 'calc(100% - 41px)' }}
-                                                                >
-                                                                    {displayChartSpec && (
-                                                                        <ChartConfigForm
-                                                                            chartSpec={displayChartSpec}
-                                                                            dbContext={dbContext}
-                                                                            schema={schemaName || 'main'}
-                                                                            onSpecChange={handleChartSpecChange}
-                                                                            autoApplyChanges={true}
-                                                                            showApplyButton={false}
-                                                                            showSaveButton={true}
-                                                                            onSave={() => {
-                                                                                // Show confirmation dialog before saving
-                                                                                const chartTitle =
-                                                                                    displayChartSpec.title || 'chart';
-                                                                                const chartElement =
-                                                                                    document.querySelector(
-                                                                                        '.vega-embed canvas, .vega-embed svg'
-                                                                                    );
+                                                            const format =
+                                                                chartElement.tagName === 'CANVAS' ? 'PNG' : 'SVG';
+                                                            const confirmed = window.confirm(
+                                                                `Do you want to save "${chartTitle}" as ${format} image?\n\nThis will download the file to your computer.`
+                                                            );
 
-                                                                                if (!chartElement) {
-                                                                                    alert(
-                                                                                        'Chart not found. Please make sure the chart is displayed.'
-                                                                                    );
-                                                                                    return;
-                                                                                }
-
-                                                                                const format =
-                                                                                    chartElement.tagName === 'CANVAS'
-                                                                                        ? 'PNG'
-                                                                                        : 'SVG';
-                                                                                const confirmed = window.confirm(
-                                                                                    `Do you want to save "${chartTitle}" as ${format} image?\n\nThis will download the file to your computer.`
-                                                                                );
-
-                                                                                if (confirmed) {
-                                                                                    // Proceed with save
-                                                                                    if (
-                                                                                        chartElement.tagName ===
-                                                                                        'CANVAS'
-                                                                                    ) {
-                                                                                        // Save as PNG
-                                                                                        const canvas =
-                                                                                            chartElement as HTMLCanvasElement;
-                                                                                        const link =
-                                                                                            document.createElement('a');
-                                                                                        link.download = `${chartTitle}.png`;
-                                                                                        link.href = canvas.toDataURL();
-                                                                                        link.click();
-                                                                                    } else if (
-                                                                                        chartElement.tagName === 'svg'
-                                                                                    ) {
-                                                                                        // Save as SVG
-                                                                                        const svg =
-                                                                                            chartElement as SVGElement;
-                                                                                        const serializer =
-                                                                                            new XMLSerializer();
-                                                                                        const svgString =
-                                                                                            serializer.serializeToString(
-                                                                                                svg
-                                                                                            );
-                                                                                        const blob = new Blob(
-                                                                                            [svgString],
-                                                                                            { type: 'image/svg+xml' }
-                                                                                        );
-                                                                                        const link =
-                                                                                            document.createElement('a');
-                                                                                        link.download = `${chartTitle}.svg`;
-                                                                                        link.href =
-                                                                                            URL.createObjectURL(blob);
-                                                                                        link.click();
-                                                                                        URL.revokeObjectURL(link.href);
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                            isSaveDisabled={false}
-                                                                            saveTooltip="Save chart as PNG or SVG image"
-                                                                            showExportButton={true}
-                                                                            onExport={() => {
-                                                                                if (getAllDashboards().length > 0) {
-                                                                                    setExportType('chart');
-                                                                                    setShowExportModal(true);
-                                                                                }
-                                                                            }}
-                                                                            isExportDisabled={
-                                                                                getAllDashboards().length === 0
-                                                                            }
-                                                                            exportTooltip={
-                                                                                getAllDashboards().length > 0
-                                                                                    ? 'Export this chart to a dashboard'
-                                                                                    : '⚠️ No dashboards available - Create a dashboard first to export charts'
-                                                                            }
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                            if (confirmed) {
+                                                                // Proceed with save
+                                                                if (chartElement.tagName === 'CANVAS') {
+                                                                    // Save as PNG
+                                                                    const canvas = chartElement as HTMLCanvasElement;
+                                                                    const link = document.createElement('a');
+                                                                    link.download = `${chartTitle}.png`;
+                                                                    link.href = canvas.toDataURL();
+                                                                    link.click();
+                                                                } else if (chartElement.tagName === 'svg') {
+                                                                    // Save as SVG
+                                                                    const svg = chartElement as SVGElement;
+                                                                    const serializer = new XMLSerializer();
+                                                                    const svgString = serializer.serializeToString(svg);
+                                                                    const blob = new Blob([svgString], {
+                                                                        type: 'image/svg+xml',
+                                                                    });
+                                                                    const link = document.createElement('a');
+                                                                    link.download = `${chartTitle}.svg`;
+                                                                    link.href = URL.createObjectURL(blob);
+                                                                    link.click();
+                                                                    URL.revokeObjectURL(link.href);
+                                                                }
+                                                            }
+                                                        }}
+                                                        isSaveDisabled={false}
+                                                        saveTooltip="Save chart as PNG or SVG image"
+                                                        showExportButton={true}
+                                                        onExport={() => {
+                                                            if (getAllDashboards().length > 0) {
+                                                                setExportType('chart');
+                                                                setShowExportModal(true);
+                                                            }
+                                                        }}
+                                                        isExportDisabled={getAllDashboards().length === 0}
+                                                        exportTooltip={
+                                                            getAllDashboards().length > 0
+                                                                ? 'Export this chart to a dashboard'
+                                                                : '⚠️ No dashboards available - Create a dashboard first to export charts'
+                                                        }
+                                                    />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
                                                         <div className="text-center text-gray-500">
@@ -776,11 +691,11 @@ function ChatPage() {
                 lastSelectedDashboard={lastSelectedExportDashboard}
             />
 
-            {/* JSON Source Modal */}
+            {/* Chart Spec Modal */}
             {displayChartSpec && (
-                <JsonSourceModal
-                    isOpen={showJsonSourceModal}
-                    onClose={() => setShowJsonSourceModal(false)}
+                <ChartSpecModal
+                    isOpen={showChartSpecModal}
+                    onClose={() => setShowChartSpecModal(false)}
                     chartSpec={displayChartSpec.spec}
                     vegaView={chatPageVegaViewRef.current}
                     onApply={newSpec => {

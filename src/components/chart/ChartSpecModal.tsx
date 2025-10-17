@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 
-interface JsonSourceModalProps {
+interface ChartSpecModalProps {
     isOpen: boolean;
     onClose: () => void;
     chartSpec: VegaChartSpec;
@@ -10,7 +10,7 @@ interface JsonSourceModalProps {
     onApply?: (newSpec: VegaChartSpec) => void;
 }
 
-export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply }: JsonSourceModalProps) {
+export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }: ChartSpecModalProps) {
     const [jsonText, setJsonText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
@@ -54,7 +54,7 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
 
     const handleCopy = () => {
         navigator.clipboard.writeText(jsonText);
-        alert('JSON copied to clipboard!');
+        alert('JSONをクリップボードにコピーしました！');
     };
 
     const handleApply = () => {
@@ -63,7 +63,7 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
             if (onApply) {
                 onApply(parsedSpec);
                 setHasChanges(false);
-                alert('Changes applied successfully!');
+                alert('変更を適用しました！');
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Invalid JSON');
@@ -101,8 +101,8 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
             <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900">JSON Source</h3>
-                        {hasChanges && <p className="text-xs text-orange-600 mt-1">You have unsaved changes</p>}
+                        <h3 className="text-lg font-semibold text-gray-900">グラフ仕様</h3>
+                        {hasChanges && <p className="text-xs text-orange-600 mt-1">未保存の変更があります</p>}
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
                         <svg
@@ -136,7 +136,7 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
                     />
                     {error && (
                         <div className="mt-2 p-3 bg-red-100 border border-red-300 rounded-lg">
-                            <p className="text-sm text-red-800 font-medium">Validation Error:</p>
+                            <p className="text-sm text-red-800 font-medium">検証エラー:</p>
                             <p className="text-xs text-red-700 mt-1">{error}</p>
                         </div>
                     )}
@@ -149,7 +149,7 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
                                 onClick={handleReset}
                                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                             >
-                                Reset
+                                リセット
                             </button>
                         )}
                     </div>
@@ -162,15 +162,15 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                     : 'bg-green-600 text-white hover:bg-green-700'
                             }`}
-                            title="Open this specification in the Vega Editor"
+                            title="Vegaエディタで開く"
                         >
-                            Open in Vega Editor
+                            Vegaエディタで開く
                         </button>
                         <button
                             onClick={handleCopy}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                         >
-                            Copy JSON
+                            JSONをコピー
                         </button>
                         {onApply && (
                             <button
@@ -182,14 +182,14 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply 
                                         : 'bg-blue-600 text-white hover:bg-blue-700'
                                 }`}
                             >
-                                Apply Changes
+                                変更を適用
                             </button>
                         )}
                         <button
                             onClick={onClose}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                         >
-                            Close
+                            閉じる
                         </button>
                     </div>
                 </div>

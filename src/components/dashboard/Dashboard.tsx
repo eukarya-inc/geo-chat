@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
 import {
     ChartBarIcon,
@@ -11,111 +10,15 @@ import {
     ClipboardDocumentIcon,
     CameraIcon,
 } from '@heroicons/react/24/outline';
-import VegaLiteChart from '../chart/VegaLiteChart';
-import { ChartConfigModal, DataSourceModal, JsonSourceModal, ChartDropdownMenu } from '../chart';
+import { ChartPanel } from '../chart';
 import Map from '../map';
-import type { ChartSpec, VegaChartSpec } from '../../types/chart';
+import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
-import type { View } from 'vega';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
-
-// Global object to store Vega Views by vizId
-const vegaViewsMap: Record<string, View | null> = {};
-
-interface ChartWithViewProps {
-    vizId: string;
-    chartSpec: VegaChartSpec;
-    dbContext: DBContext;
-    schema: string;
-}
-
-function ChartWithView({ vizId, chartSpec, dbContext, schema }: ChartWithViewProps) {
-    return (
-        <div className="h-full dashboard-chart-container">
-            <VegaLiteChart
-                spec={chartSpec}
-                dbContext={dbContext}
-                schema={schema}
-                showHeader={false}
-                enableActions={false}
-                onViewReady={view => {
-                    vegaViewsMap[vizId] = view;
-                }}
-            />
-        </div>
-    );
-}
-
-interface DashboardChartMenuProps {
-    vizId: string;
-    chartSpec: ChartSpec;
-    dbContext: DBContext;
-    schema: string;
-    onRemove: (vizId: string) => void;
-    onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
-}
-
-function DashboardChartMenu({ vizId, chartSpec, dbContext, schema, onRemove, onUpdateChart }: DashboardChartMenuProps) {
-    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [isDataSourceModalOpen, setIsDataSourceModalOpen] = useState(false);
-    const [isJsonSourceModalOpen, setIsJsonSourceModalOpen] = useState(false);
-
-    return (
-        <>
-            <ChartDropdownMenu
-                chartSpec={chartSpec}
-                vegaView={vegaViewsMap[vizId]}
-                dbContext={dbContext}
-                schema={schema}
-                onConfigOpen={() => setIsConfigModalOpen(true)}
-                onDataSourceOpen={() => setIsDataSourceModalOpen(true)}
-                onJsonSourceOpen={() => setIsJsonSourceModalOpen(true)}
-                onRemove={() => onRemove(vizId)}
-            />
-
-            {/* Configuration Modal - Render in portal to avoid being clipped */}
-            {createPortal(
-                <ChartConfigModal
-                    isOpen={isConfigModalOpen}
-                    onClose={() => setIsConfigModalOpen(false)}
-                    chartSpec={chartSpec}
-                    dbContext={dbContext}
-                    schema={schema}
-                    onUpdateChart={onUpdateChart}
-                    vizId={vizId}
-                />,
-                document.body
-            )}
-
-            {/* Data Source Modal - Render in portal to avoid being clipped */}
-            {createPortal(
-                <DataSourceModal
-                    isOpen={isDataSourceModalOpen}
-                    onClose={() => setIsDataSourceModalOpen(false)}
-                    chartSpec={chartSpec}
-                    onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
-                />,
-                document.body
-            )}
-
-            {/* JSON Source Modal - Render in portal to avoid being clipped */}
-            {createPortal(
-                <JsonSourceModal
-                    isOpen={isJsonSourceModalOpen}
-                    onClose={() => setIsJsonSourceModalOpen(false)}
-                    chartSpec={chartSpec.spec}
-                    vegaView={vegaViewsMap[vizId]}
-                    onApply={newSpec => onUpdateChart(vizId, { ...chartSpec, spec: newSpec })}
-                />,
-                document.body
-            )}
-        </>
-    );
-}
 
 interface MapDropdownMenuProps {
     vizId: string;
@@ -482,36 +385,30 @@ export function Dashboard({
                                     className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
                                     data-viz-id={viz.id}
                                 >
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                            <h4 className="text-sm font-medium text-gray-900 truncate">{viz.title}</h4>
-                                            {viz.type === 'chart' && viz.chartSpec && (
-                                                <DashboardChartMenu
-                                                    vizId={viz.id}
-                                                    chartSpec={viz.chartSpec}
-                                                    dbContext={dbContext}
-                                                    schema={schemaName}
-                                                    onRemove={handleRemoveVisualization}
-                                                    onUpdateChart={handleUpdateChart}
-                                                />
-                                            )}
-                                            {viz.type === 'map' && (
+                                    {viz.type === 'chart' && viz.chartSpec ? (
+                                        <ChartPanel
+                                            chartSpec={viz.chartSpec}
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                            configMode="modal"
+                                            vizId={viz.id}
+                                            onRemove={() => handleRemoveVisualization(viz.id)}
+                                            onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
+                                            showDataSourceButton={true}
+                                        />
+                                    ) : viz.type === 'map' && viz.tableName ? (
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
+                                                <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                    {viz.title}
+                                                </h4>
                                                 <MapDropdownMenu
                                                     vizId={viz.id}
                                                     vizTitle={viz.title}
                                                     onRemove={handleRemoveVisualization}
                                                 />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 p-2 overflow-hidden">
-                                            {viz.type === 'chart' && viz.chartSpec ? (
-                                                <ChartWithView
-                                                    vizId={viz.id}
-                                                    chartSpec={viz.chartSpec.spec}
-                                                    dbContext={dbContext}
-                                                    schema={schemaName}
-                                                />
-                                            ) : viz.type === 'map' && viz.tableName ? (
+                                            </div>
+                                            <div className="flex-1 p-2 overflow-hidden">
                                                 <div
                                                     className="h-full"
                                                     onMouseDown={e => e.stopPropagation()}
@@ -527,7 +424,16 @@ export function Dashboard({
                                                         showControls={false}
                                                     />
                                                 </div>
-                                            ) : (
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
+                                                <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                    {viz.title}
+                                                </h4>
+                                            </div>
+                                            <div className="flex-1 p-2 overflow-hidden">
                                                 <div className="h-full flex items-center justify-center text-gray-500">
                                                     <div className="text-center">
                                                         <div className="mb-2">
@@ -552,9 +458,9 @@ export function Dashboard({
                                                         )}
                                                     </div>
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             ))}
                         </ResponsiveGridLayout>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     CogIcon,
     EllipsisVerticalIcon,
@@ -41,12 +42,30 @@ export function ChartDropdownMenu({
     showRemoveButton = true,
 }: ChartDropdownMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+    const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Calculate menu position when opened
+    useEffect(() => {
+        if (isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setMenuPosition({
+                top: rect.bottom + window.scrollY,
+                left: rect.right + window.scrollX - 224, // 224px is menu width (w-56 = 14rem = 224px)
+            });
+        }
+    }, [isOpen]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (
+                buttonRef.current &&
+                !buttonRef.current.contains(event.target as Node) &&
+                dropdownRef.current &&
+                !dropdownRef.current.contains(event.target as Node)
+            ) {
                 setIsOpen(false);
             }
         }
@@ -204,8 +223,9 @@ export function ChartDropdownMenu({
     };
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <>
             <button
+                ref={buttonRef}
                 onClick={e => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -221,129 +241,138 @@ export function ChartDropdownMenu({
                 <EllipsisVerticalIcon className="w-5 h-5" />
             </button>
 
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                    <div className="py-1">
-                        {showConfigButton && onConfigOpen && dbContext && schema && (
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onConfigOpen();
-                                    setIsOpen(false);
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <CogIcon className="w-4 h-4 mr-2" />
-                                Edit Chart Style
-                            </button>
-                        )}
-
-                        {showDataSourceButton && onDataSourceOpen && (
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onDataSourceOpen();
-                                    setIsOpen(false);
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <CodeBracketIcon className="w-4 h-4 mr-2" />
-                                Edit Data Source
-                            </button>
-                        )}
-
-                        {showJsonSourceButton && onJsonSourceOpen && (
-                            <button
-                                onClick={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onJsonSourceOpen();
-                                    setIsOpen(false);
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                type="button"
-                            >
-                                <CodeBracketIcon className="w-4 h-4 mr-2" />
-                                View JSON Source
-                            </button>
-                        )}
-
-                        {(showConfigButton || showDataSourceButton || showJsonSourceButton) && (
-                            <hr className="my-1 border-gray-200" />
-                        )}
-
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleCopyToClipboard();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                            Copy to Clipboard
-                        </button>
-
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleSaveAsPNG();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as PNG
-                        </button>
-
-                        <button
-                            onClick={e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleSaveAsSVG();
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                            type="button"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                            Save as SVG
-                        </button>
-
-                        {showRemoveButton && onRemove && (
-                            <>
-                                <hr className="my-1 border-gray-200" />
-
+            {isOpen &&
+                createPortal(
+                    <div
+                        ref={dropdownRef}
+                        className="fixed w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[10000]"
+                        style={{
+                            top: `${menuPosition.top}px`,
+                            left: `${menuPosition.left}px`,
+                        }}
+                    >
+                        <div className="py-1">
+                            {showConfigButton && onConfigOpen && dbContext && schema && (
                                 <button
                                     onClick={e => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        onRemove();
+                                        onConfigOpen();
                                         setIsOpen(false);
                                     }}
                                     onMouseDown={e => e.stopPropagation()}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                     type="button"
                                 >
-                                    <TrashIcon className="w-4 h-4 mr-2" />
-                                    Remove Chart
+                                    <CogIcon className="w-4 h-4 mr-2" />
+                                    グラフスタイルを編集
                                 </button>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
+                            )}
+
+                            {showDataSourceButton && onDataSourceOpen && (
+                                <button
+                                    onClick={e => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onDataSourceOpen();
+                                        setIsOpen(false);
+                                    }}
+                                    onMouseDown={e => e.stopPropagation()}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    type="button"
+                                >
+                                    <CodeBracketIcon className="w-4 h-4 mr-2" />
+                                    データソースを編集
+                                </button>
+                            )}
+
+                            {showJsonSourceButton && onJsonSourceOpen && (
+                                <button
+                                    onClick={e => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onJsonSourceOpen();
+                                        setIsOpen(false);
+                                    }}
+                                    onMouseDown={e => e.stopPropagation()}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    type="button"
+                                >
+                                    <CodeBracketIcon className="w-4 h-4 mr-2" />
+                                    グラフ仕様を表示
+                                </button>
+                            )}
+
+                            {(showConfigButton || showDataSourceButton || showJsonSourceButton) && (
+                                <hr className="my-1 border-gray-200" />
+                            )}
+
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleCopyToClipboard();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                                クリップボードにコピー
+                            </button>
+
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSaveAsPNG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                PNGとして保存
+                            </button>
+
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSaveAsSVG();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                SVGとして保存
+                            </button>
+
+                            {showRemoveButton && onRemove && (
+                                <>
+                                    <hr className="my-1 border-gray-200" />
+
+                                    <button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            onRemove();
+                                            setIsOpen(false);
+                                        }}
+                                        onMouseDown={e => e.stopPropagation()}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                        type="button"
+                                    >
+                                        <TrashIcon className="w-4 h-4 mr-2" />
+                                        グラフを削除
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>,
+                    document.body
+                )}
+        </>
     );
 }
