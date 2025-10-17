@@ -61,7 +61,7 @@ export function MapDropdownMenu({
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    const filename = vizTitle ? `${vizTitle.replace(/[^a-z0-9]/gi, '_')}.png` : 'map.png';
+                    const filename = vizTitle ? `${vizTitle}.png` : 'map.png';
                     a.download = filename;
                     a.click();
                     URL.revokeObjectURL(url);
