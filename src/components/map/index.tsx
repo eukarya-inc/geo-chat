@@ -828,7 +828,7 @@ const MapComponent: React.FC<MapProps> = ({
     }, [onMapReady, isInitialized]);
 
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <div
                 id="map"
                 style={{
