@@ -56,7 +56,7 @@ export function MapPanel({
         try {
             // Check if Clipboard API is available
             if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                console.error('Clipboard API is not supported');
                 return;
             }
 
@@ -72,7 +72,7 @@ export function MapPanel({
             }
 
             if (!mapContainer) {
-                alert('Map not found. Please try again.');
+                console.error('Map container not found');
                 return;
             }
 
@@ -95,16 +95,15 @@ export function MapPanel({
             });
 
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-            alert('Map copied to clipboard!');
         } catch (err) {
             console.error('Error copying map:', err);
-            alert(`Failed to copy map to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
     };
 
     const toolButtons = [
-        createCopyButton({ onCopy: handleCopyMapToClipboard }),
+        createCopyButton({
+            onCopy: handleCopyMapToClipboard,
+        }),
         ...(showExportButton && onExport
             ? [
                   createExportButton({

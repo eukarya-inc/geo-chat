@@ -79,7 +79,7 @@ export function ChartPanel({
         try {
             // Check if Clipboard API is available
             if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                console.error('Clipboard API is not supported');
                 return;
             }
 
@@ -102,8 +102,6 @@ export function ChartPanel({
                 });
 
                 await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
                 return;
             }
 
@@ -156,15 +154,12 @@ export function ChartPanel({
                 });
 
                 await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
                 return;
             }
 
-            alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+            console.error('Chart element not found');
         } catch (err) {
             console.error('Error copying chart:', err);
-            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
     };
 
@@ -202,7 +197,9 @@ export function ChartPanel({
                   }),
               ]
             : []),
-        createCopyButton({ onCopy: handleCopyToClipboard }),
+        createCopyButton({
+            onCopy: handleCopyToClipboard,
+        }),
         ...(showMenuExportButton && onExport
             ? [
                   createExportButton({

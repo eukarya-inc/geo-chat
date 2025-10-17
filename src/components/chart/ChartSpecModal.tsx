@@ -20,6 +20,7 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
     const [jsonText, setJsonText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
+    const [copyButtonText, setCopyButtonText] = useState('JSONをコピー');
 
     // Initialize JSON text when modal opens or chartSpec changes
     useEffect(() => {
@@ -58,9 +59,20 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
         }
     };
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(jsonText);
-        alert('JSONをクリップボードにコピーしました！');
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(jsonText);
+            setCopyButtonText('コピーしました！');
+            setTimeout(() => {
+                setCopyButtonText('JSONをコピー');
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            setCopyButtonText('コピー失敗');
+            setTimeout(() => {
+                setCopyButtonText('JSONをコピー');
+            }, 2000);
+        }
     };
 
     const handleApply = () => {
@@ -175,7 +187,7 @@ export function ChartSpecModal({ isOpen, onClose, chartSpec, vegaView, onApply }
                             onClick={handleCopy}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                         >
-                            JSONをコピー
+                            {copyButtonText}
                         </button>
                         {onApply && (
                             <button
