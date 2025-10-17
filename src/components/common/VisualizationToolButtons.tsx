@@ -1,15 +1,26 @@
-import { ClipboardDocumentIcon, ArrowUpTrayIcon, PaintBrushIcon, CogIcon } from '@heroicons/react/24/outline';
+import {
+    ClipboardDocumentIcon,
+    ArrowUpTrayIcon,
+    PaintBrushIcon,
+    CogIcon,
+    CheckIcon,
+} from '@heroicons/react/24/outline';
 import type { ToolButton } from './VisualizationHeader';
 
 interface CopyButtonProps {
     onCopy: () => void;
+    title?: string;
 }
 
-export function createCopyButton({ onCopy }: CopyButtonProps): ToolButton {
+export function createCopyButton({ onCopy, title }: CopyButtonProps): ToolButton {
     return {
         icon: <ClipboardDocumentIcon className="w-5 h-5" />,
         onClick: onCopy,
-        title: 'クリップボードにコピー',
+        title: title || 'クリップボードにコピー',
+        // Temporary feedback after copy
+        temporaryIcon: <CheckIcon className="w-5 h-5 text-green-500" />,
+        temporaryTitle: 'コピーしました！',
+        temporaryDuration: 1500,
     };
 }
 
@@ -30,6 +41,10 @@ export function createExportButton({ onExport, disabled = false, tooltip }: Expo
                 ? 'text-gray-300 cursor-not-allowed'
                 : 'text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100'
         }`,
+        // Temporary feedback after export
+        temporaryIcon: <CheckIcon className="w-5 h-5 text-green-500" />,
+        temporaryTitle: 'エクスポートしました！',
+        temporaryDuration: 1500,
     };
 }
 

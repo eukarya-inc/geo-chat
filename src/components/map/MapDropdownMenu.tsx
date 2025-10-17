@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
     ArrowUpTrayIcon,
     TrashIcon,
@@ -29,6 +30,7 @@ export function MapDropdownMenu({
     isExportDisabled = false,
     onOpenStyleEditor,
 }: MapDropdownMenuProps) {
+    const [copyButtonText, setCopyButtonText] = useState('クリップボードにコピー');
     const handleSaveMapAsImage = async () => {
         try {
             let mapContainer: Element | null = null;
@@ -77,7 +79,10 @@ export function MapDropdownMenu({
         try {
             // Check if Clipboard API is available
             if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                setCopyButtonText('クリップボードAPIが未対応');
+                setTimeout(() => {
+                    setCopyButtonText('クリップボードにコピー');
+                }, 2000);
                 return;
             }
 
@@ -93,7 +98,10 @@ export function MapDropdownMenu({
             }
 
             if (!mapContainer) {
-                alert('Map not found. Please try again.');
+                setCopyButtonText('地図が見つかりません');
+                setTimeout(() => {
+                    setCopyButtonText('クリップボードにコピー');
+                }, 2000);
                 return;
             }
 
@@ -117,16 +125,22 @@ export function MapDropdownMenu({
 
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
 
-            alert('Map copied to clipboard!');
+            setCopyButtonText('コピーしました！');
+            setTimeout(() => {
+                setCopyButtonText('クリップボードにコピー');
+            }, 2000);
         } catch (err) {
             console.error('Error copying map:', err);
-            alert(`Failed to copy map to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            setCopyButtonText('コピー失敗');
+            setTimeout(() => {
+                setCopyButtonText('クリップボードにコピー');
+            }, 2000);
         }
     };
 
     const menuItems: DropdownMenuItem[] = [
         {
-            title: 'クリップボードにコピー',
+            title: copyButtonText,
             icon: <ClipboardDocumentIcon className="w-4 h-4" />,
             onClick: handleCopyMapToClipboard,
         },
