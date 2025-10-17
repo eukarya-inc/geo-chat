@@ -48,8 +48,14 @@ function shouldStringifyColumn(columnType?: string | null): boolean {
  */
 export function generateVectorTileQuery(params: QueryParams): string {
     const { zxy, selectedTable, selectedColumns, geometryColumnName, columnTypes } = params;
+
+    // geometryColumnName is required - throw error if not provided
+    if (!geometryColumnName) {
+        throw new Error('geometryColumnName is required for vector tile generation');
+    }
+
     const simplify = calculateSimplifyTolerance(zxy.z);
-    const geomCol = geometryColumnName || 'geometry';
+    const geomCol = geometryColumnName;
 
     // Don't use schema-qualified table name - connection already has schema context
     const qualifiedTableName = selectedTable;

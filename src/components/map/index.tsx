@@ -4,12 +4,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapStyleManager } from './mapStyleManager';
 import { detectDisplayColumns, type ColumnInfo } from '../../utils/duckdb';
-import MapStyleEditor from './MapStyleEditor';
 import { parseDuckDBTileUrl, generateVectorTileQuery, processMVTResult } from './utils/mvt';
 import { processMapStyle } from './utils/style';
 import { updateMapLayers as updateMapLayersHelper } from './utils/layerOperations';
 import type { MapProps } from './types';
-import { exportMapAsPNG as exportMapAsPNGHelper, generatePopupContent, createDefaultStyle } from './utils/mapHelpers';
+import { generatePopupContent, createDefaultStyle } from './utils/mapHelpers';
 
 // Re-export types for convenience
 export type { ViewState, VectorTileLayer, TableStyle, ExtraStyle, MapProps } from './types';
@@ -22,7 +21,6 @@ const MapComponent: React.FC<MapProps> = ({
     selectedColumns,
     onMapReady,
     onStyleChange,
-    mapStyleManager,
     geometryColumnName,
     onViewStateChange,
     initialViewState,
@@ -32,11 +30,9 @@ const MapComponent: React.FC<MapProps> = ({
     extraStyle,
     onTableStyleChanged,
     onExtraStyleChange,
-    showControls = true,
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [showStyleEditor, setShowStyleEditor] = useState<boolean>(false);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
@@ -160,12 +156,6 @@ const MapComponent: React.FC<MapProps> = ({
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveColumns, selectedTable, isInitialized, geometryColumnName]);
-
-    // Export functions
-    const exportMapAsPNG = useCallback(async () => {
-        if (!mapRef.current) return;
-        await exportMapAsPNGHelper(mapRef.current);
-    }, []);
 
     // Define popup ref inside the component
     const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -429,6 +419,11 @@ const MapComponent: React.FC<MapProps> = ({
                     const currentColumns = selectedColumnsRef.current || [];
 
                     if (!tableName) {
+                        return { data: new Uint8Array() };
+                    }
+
+                    // Return empty tile if no geometry column is specified
+                    if (!geometryColumnName) {
                         return { data: new Uint8Array() };
                     }
 
@@ -842,59 +837,6 @@ const MapComponent: React.FC<MapProps> = ({
                 }}
             ></div>
 
-            {/* Map Controls */}
-            {showControls && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '10px',
-                        left: '10px',
-                        display: 'flex',
-                        gap: '8px',
-                        zIndex: 1000,
-                    }}
-                >
-                    <button
-                        onClick={exportMapAsPNG}
-                        style={{
-                            padding: '8px 12px',
-                            backgroundColor: '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                        }}
-                    >
-                        📤 Export PNG
-                    </button>
-                    <button
-                        onClick={() => setShowStyleEditor(!showStyleEditor)}
-                        style={{
-                            padding: '8px 12px',
-                            backgroundColor: '#28a745',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                        }}
-                    >
-                        {showStyleEditor ? '✕ Hide Style Editor' : '🎨 Style Editor'}
-                    </button>
-                </div>
-            )}
-
-            {/* Style Editor */}
-            {showControls && showStyleEditor && (
-                <MapStyleEditor
-                    styleManager={mapStyleManager || styleManagerRef.current}
-                    onStyleChange={handleStyleChange}
-                    onClose={() => setShowStyleEditor(false)}
-                />
-            )}
             {isLoading && (
                 <div
                     style={{

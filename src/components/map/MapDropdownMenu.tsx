@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { EllipsisVerticalIcon, TrashIcon, ClipboardDocumentIcon, CameraIcon } from '@heroicons/react/24/outline';
+import {
+    EllipsisVerticalIcon,
+    TrashIcon,
+    ClipboardDocumentIcon,
+    CameraIcon,
+    PaintBrushIcon,
+} from '@heroicons/react/24/outline';
 import html2canvas from 'html2canvas';
 
 interface MapDropdownMenuProps {
@@ -8,9 +14,16 @@ interface MapDropdownMenuProps {
     vizTitle?: string;
     onRemove?: () => void;
     showRemoveButton?: boolean;
+    onOpenStyleEditor?: () => void;
 }
 
-export function MapDropdownMenu({ vizId, vizTitle, onRemove, showRemoveButton = true }: MapDropdownMenuProps) {
+export function MapDropdownMenu({
+    vizId,
+    vizTitle,
+    onRemove,
+    showRemoveButton = true,
+    onOpenStyleEditor,
+}: MapDropdownMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -214,6 +227,23 @@ export function MapDropdownMenu({ vizId, vizTitle, onRemove, showRemoveButton = 
                                 <CameraIcon className="w-4 h-4 mr-2" />
                                 画像として保存
                             </button>
+
+                            {onOpenStyleEditor && (
+                                <button
+                                    onClick={e => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onOpenStyleEditor();
+                                        setIsOpen(false);
+                                    }}
+                                    onMouseDown={e => e.stopPropagation()}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    type="button"
+                                >
+                                    <PaintBrushIcon className="w-4 h-4 mr-2" />
+                                    スタイルエディタ
+                                </button>
+                            )}
 
                             {showRemoveButton && onRemove && (
                                 <>

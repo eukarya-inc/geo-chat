@@ -235,7 +235,6 @@ export function Dashboard({
                                             dbContext={dbContext}
                                             schema={schemaName}
                                             mapSpec={viz.mapSpec}
-                                            showControls={false}
                                             onRemove={() => handleRemoveVisualization(viz.id)}
                                             vizId={viz.id}
                                         />

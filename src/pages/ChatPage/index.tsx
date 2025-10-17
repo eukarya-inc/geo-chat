@@ -88,8 +88,7 @@ function ChatPage() {
         selectedTable,
         dbContext,
         schemaName,
-        connection,
-        activeTab
+        connection
     );
 
     // Message handling
@@ -258,7 +257,7 @@ function ChatPage() {
             title: `${selectedTable} Map`,
             mapSpec: mapSpec,
             tableName: selectedTable,
-            geometryColumn: selectedGeometryColumn || 'geometry',
+            geometryColumn: selectedGeometryColumn,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
         };
@@ -493,7 +492,12 @@ function ChatPage() {
                                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                     }`}
                                                 >
-                                                    グラフ
+                                                    <span className="flex items-center gap-1.5">
+                                                        グラフ
+                                                        {displayChartSpec && (
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                        )}
+                                                    </span>
                                                 </button>
                                                 <button
                                                     onClick={() => setActiveTab('map')}
@@ -503,7 +507,12 @@ function ChatPage() {
                                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                     }`}
                                                 >
-                                                    地図
+                                                    <span className="flex items-center gap-1.5">
+                                                        地図
+                                                        {selectedGeometryColumn && (
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                        )}
+                                                    </span>
                                                 </button>
                                             </div>
                                         </div>
@@ -624,10 +633,24 @@ function ChatPage() {
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
                                                         <div className="text-center text-gray-500">
-                                                            <p>Generating chart...</p>
-                                                            <p className="text-sm mt-2">
-                                                                Chart will appear automatically
+                                                            <p className="mb-4">このテーブルにはグラフがありません</p>
+                                                            <p className="text-sm mb-4">
+                                                                AIチャットでグラフを作成するよう依頼してください
                                                             </p>
+                                                            <button
+                                                                onClick={() => {
+                                                                    // Focus on AI chat input
+                                                                    const chatInput = document.querySelector(
+                                                                        'textarea[placeholder*="message"]'
+                                                                    ) as HTMLTextAreaElement;
+                                                                    if (chatInput) {
+                                                                        chatInput.focus();
+                                                                    }
+                                                                }}
+                                                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                                            >
+                                                                AIチャットでグラフを作成
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -643,7 +666,6 @@ function ChatPage() {
                                                             dbContext={dbContext}
                                                             schema={schemaName || undefined}
                                                             mapSpec={{ tableStyles, style: mapStyle }}
-                                                            showControls={true}
                                                             showRemoveButton={false}
                                                         />
                                                     </div>

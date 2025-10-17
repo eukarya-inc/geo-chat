@@ -47,7 +47,6 @@ export interface MapProps {
     selectedColumns?: string[];
     onMapReady?: (styleManager: MapStyleManager) => void;
     onStyleChange?: (styleChanger: (style: StyleSpecification) => void) => void;
-    mapStyleManager?: MapStyleManager;
     geometryColumnName?: string;
     onViewStateChange?: (viewState: ViewState) => void;
     initialViewState?: ViewState;
@@ -57,5 +56,4 @@ export interface MapProps {
     extraStyle?: ExtraStyle;
     onTableStyleChanged?: (tableName: string, style: TableStyle) => void;
     onExtraStyleChange?: (style: ExtraStyle) => void;
-    showControls?: boolean; // Whether to show export and style editor controls (default: true)
 }
