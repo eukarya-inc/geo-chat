@@ -5,11 +5,13 @@ import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
-import { ChartSpecModal, ChartPanel } from '../../components/chart';
+import { ChartSpecModal, ChartPanel, ChartTypeSelector } from '../../components/chart';
 import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ArrowUpTrayIcon, MapIcon } from '@heroicons/react/24/outline';
+import { generateChartByType } from '../../utils/chartSpecGenerator';
+import type { ChartType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
@@ -286,6 +288,33 @@ function ChatPage() {
 
         // Automatically switch to the dashboard view to show the newly added map
         handleSelectDashboard(dashboardId);
+    };
+
+    // Chart type selection handler
+    const handleChartTypeSelect = async (chartType: ChartType) => {
+        if (!selectedTable || !dbContext || !updateChartFromAI) {
+            return;
+        }
+
+        // Handle map type separately
+        if (chartType === 'map') {
+            setActiveTab('map');
+            return;
+        }
+
+        try {
+            const result = await generateChartByType(chartType, selectedTable, dbContext, schemaName);
+            if (result) {
+                updateChartFromAI(selectedTable, result.spec);
+                // Automatically open the chart configuration panel
+                setShowChartConfig(true);
+            } else {
+                alert('Failed to generate chart. Please make sure the table has appropriate data for this chart type.');
+            }
+        } catch (error) {
+            console.error('Error generating chart:', error);
+            alert('An error occurred while generating the chart.');
+        }
     };
 
     return (
@@ -632,68 +661,73 @@ function ChatPage() {
                                                     />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <div className="text-center text-gray-500">
-                                                            <p className="mb-4">このテーブルにはグラフがありません</p>
-                                                            <p className="text-sm mb-4">
-                                                                AIチャットでグラフを作成するよう依頼してください
-                                                            </p>
-                                                            <button
-                                                                onClick={() => {
-                                                                    // Focus on AI chat input
-                                                                    const chatInput = document.querySelector(
-                                                                        'textarea[placeholder*="message"]'
-                                                                    ) as HTMLTextAreaElement;
-                                                                    if (chatInput) {
-                                                                        chatInput.focus();
-                                                                    }
-                                                                }}
-                                                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                                            >
-                                                                AIチャットでグラフを作成
-                                                            </button>
-                                                        </div>
+                                                        <ChartTypeSelector onSelectType={handleChartTypeSelect} />
                                                     </div>
                                                 ))}
 
                                             {/* Map Tab */}
-                                            {activeTab === 'map' && connection && selectedTable && (
-                                                <div className="h-full overflow-hidden flex flex-col">
-                                                    <div className="flex-1 overflow-hidden">
-                                                        <MapPanel
-                                                            title={selectedTable}
-                                                            tableName={selectedTable}
-                                                            geometryColumn={selectedGeometryColumn}
-                                                            dbContext={dbContext}
-                                                            schema={schemaName || undefined}
-                                                            mapSpec={{ tableStyles, style: mapStyle }}
-                                                            showRemoveButton={false}
-                                                        />
-                                                    </div>
-                                                    <div className="flex justify-end p-3 border-t border-gray-200 bg-white">
-                                                        <button
-                                                            onClick={() => {
-                                                                if (getAllDashboards().length > 0) {
-                                                                    setExportType('map');
-                                                                    setShowExportModal(true);
+                                            {activeTab === 'map' &&
+                                                connection &&
+                                                selectedTable &&
+                                                (selectedGeometryColumn ? (
+                                                    <div className="h-full overflow-hidden flex flex-col">
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <MapPanel
+                                                                title={selectedTable}
+                                                                tableName={selectedTable}
+                                                                geometryColumn={selectedGeometryColumn}
+                                                                dbContext={dbContext}
+                                                                schema={schemaName || undefined}
+                                                                mapSpec={{ tableStyles, style: mapStyle }}
+                                                                showRemoveButton={false}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-end p-3 border-t border-gray-200 bg-white">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (getAllDashboards().length > 0) {
+                                                                        setExportType('map');
+                                                                        setShowExportModal(true);
+                                                                    }
+                                                                }}
+                                                                disabled={getAllDashboards().length === 0}
+                                                                className={`p-2 rounded-full transition-colors shadow-lg ${
+                                                                    getAllDashboards().length > 0
+                                                                        ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                                }`}
+                                                                title={
+                                                                    getAllDashboards().length > 0
+                                                                        ? 'Export map visualization'
+                                                                        : 'Create a dashboard first to export visualizations'
                                                                 }
-                                                            }}
-                                                            disabled={getAllDashboards().length === 0}
-                                                            className={`p-2 rounded-full transition-colors shadow-lg ${
-                                                                getAllDashboards().length > 0
-                                                                    ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                            }`}
-                                                            title={
-                                                                getAllDashboards().length > 0
-                                                                    ? 'Export map visualization'
-                                                                    : 'Create a dashboard first to export visualizations'
-                                                            }
-                                                        >
-                                                            <ArrowUpTrayIcon className="w-5 h-5" />
-                                                        </button>
+                                                            >
+                                                                <ArrowUpTrayIcon className="w-5 h-5" />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                ) : (
+                                                    <div className="h-full flex items-center justify-center bg-gray-50">
+                                                        <div className="text-center text-gray-500 max-w-md">
+                                                            <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                                                            <p className="text-lg mb-4">
+                                                                ジオメトリカラムが存在しません
+                                                            </p>
+                                                            <p className="text-sm mb-2">
+                                                                地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
+                                                            </p>
+                                                            <p className="text-sm mb-4">以下の方法をお試しください：</p>
+                                                            <ul className="text-sm text-left mb-4 space-y-2">
+                                                                <li>• ジオメトリ情報を含むデータを読み込む</li>
+                                                                <li>
+                                                                    •
+                                                                    緯度経度カラムからジオメトリを生成するようAIに依頼する
+                                                                </li>
+                                                                <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                         </div>
                                     </>
                                 )}
