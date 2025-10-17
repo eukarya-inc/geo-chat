@@ -5,8 +5,9 @@ import { MapStyleModal } from './MapStyleModal';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { MapSpec } from '../../store/remoteAtoms';
 import type { MapStyleManager } from './mapStyleManager';
-import { ClipboardDocumentIcon, ArrowUpTrayIcon, PaintBrushIcon } from '@heroicons/react/24/outline';
 import html2canvas from 'html2canvas';
+import { VisualizationHeader } from '../common/VisualizationHeader';
+import { createCopyButton, createExportButton, createStyleEditorButton } from '../common/VisualizationToolButtons';
 
 interface MapPanelProps {
     title?: string;
@@ -102,47 +103,34 @@ export function MapPanel({
         }
     };
 
+    const toolButtons = [
+        createStyleEditorButton({
+            onOpenStyleEditor: () => setIsStyleModalOpen(true),
+            type: 'map',
+        }),
+        createCopyButton({ onCopy: handleCopyMapToClipboard }),
+        ...(showExportButton && onExport
+            ? [
+                  createExportButton({
+                      onExport: () => {
+                          if (!isExportDisabled) {
+                              onExport();
+                          }
+                      },
+                      disabled: isExportDisabled,
+                      tooltip: exportTooltip,
+                  }),
+              ]
+            : []),
+    ];
+
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {/* Map Title Bar with Menu */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                <h4 className="text-sm font-medium text-gray-900 truncate">{title || tableName || 'Map'}</h4>
-                <div className="flex items-center gap-0.5">
-                    <button
-                        onClick={handleCopyMapToClipboard}
-                        className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
-                        title="クリップボードにコピー"
-                        type="button"
-                    >
-                        <ClipboardDocumentIcon className="w-5 h-5" />
-                    </button>
-                    {showExportButton && onExport && (
-                        <button
-                            onClick={() => {
-                                if (!isExportDisabled) {
-                                    onExport();
-                                }
-                            }}
-                            className={`transition-colors p-2 rounded ${
-                                isExportDisabled
-                                    ? 'text-gray-300 cursor-not-allowed'
-                                    : 'text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100'
-                            }`}
-                            title={exportTooltip || 'ダッシュボードにエクスポート'}
-                            disabled={isExportDisabled}
-                            type="button"
-                        >
-                            <ArrowUpTrayIcon className="w-5 h-5" />
-                        </button>
-                    )}
-                    <button
-                        onClick={() => setIsStyleModalOpen(true)}
-                        className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
-                        title="地図スタイルを編集"
-                        type="button"
-                    >
-                        <PaintBrushIcon className="w-5 h-5" />
-                    </button>
+            <VisualizationHeader
+                title={title || tableName || 'Map'}
+                toolButtons={toolButtons}
+                menu={
                     <MapDropdownMenu
                         vizId={vizId}
                         vizTitle={title || tableName}
@@ -151,11 +139,10 @@ export function MapPanel({
                         showRemoveButton={showRemoveButton}
                         showExportButton={showExportButton}
                         isExportDisabled={isExportDisabled}
-                        exportTooltip={exportTooltip}
                         onOpenStyleEditor={() => setIsStyleModalOpen(true)}
                     />
-                </div>
-            </div>
+                }
+            />
 
             {/* Map Content */}
             <div className="flex-1 overflow-hidden">

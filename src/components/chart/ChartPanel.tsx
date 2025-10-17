@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { XMarkIcon, ClipboardDocumentIcon, ArrowUpTrayIcon, CogIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from './VegaLiteChart';
 import { ChartConfigForm } from './ChartConfigForm';
 import { ChartDropdownMenu } from './ChartDropdownMenu';
@@ -10,6 +10,8 @@ import { ChartSpecModal } from './ChartSpecModal';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { View } from 'vega';
+import { VisualizationHeader } from '../common/VisualizationHeader';
+import { createCopyButton, createExportButton, createStyleEditorButton } from '../common/VisualizationToolButtons';
 
 interface ChartPanelProps {
     chartSpec: ChartSpec;
@@ -191,6 +193,31 @@ export function ChartPanel({
         }
     };
 
+    const toolButtons = [
+        ...((configMode === 'modal' && dbContext && schema) || (onConfigOpen && dbContext && schema)
+            ? [
+                  createStyleEditorButton({
+                      onOpenStyleEditor: handleConfigOpen,
+                      type: 'chart',
+                  }),
+              ]
+            : []),
+        createCopyButton({ onCopy: handleCopyToClipboard }),
+        ...(showMenuExportButton && onExport
+            ? [
+                  createExportButton({
+                      onExport: () => {
+                          if (!isExportDisabled) {
+                              onExport();
+                          }
+                      },
+                      disabled: isExportDisabled,
+                      tooltip: exportTooltip,
+                  }),
+              ]
+            : []),
+    ];
+
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {/* Chart Display Area */}
@@ -198,46 +225,10 @@ export function ChartPanel({
                 className={`${configMode === 'panel' && showConfigPanel ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}
             >
                 {/* Chart Title Bar with Menu */}
-                <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">{chartSpec.title || 'Chart'}</h4>
-                    <div className="flex items-center gap-0.5">
-                        <button
-                            onClick={handleCopyToClipboard}
-                            className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
-                            title="クリップボードにコピー"
-                            type="button"
-                        >
-                            <ClipboardDocumentIcon className="w-5 h-5" />
-                        </button>
-                        {showMenuExportButton && onExport && (
-                            <button
-                                onClick={() => {
-                                    if (!isExportDisabled) {
-                                        onExport();
-                                    }
-                                }}
-                                className={`transition-colors p-2 rounded ${
-                                    isExportDisabled
-                                        ? 'text-gray-300 cursor-not-allowed'
-                                        : 'text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100'
-                                }`}
-                                title={exportTooltip || 'ダッシュボードにエクスポート'}
-                                disabled={isExportDisabled}
-                                type="button"
-                            >
-                                <ArrowUpTrayIcon className="w-5 h-5" />
-                            </button>
-                        )}
-                        {((configMode === 'modal' && dbContext && schema) || (onConfigOpen && dbContext && schema)) && (
-                            <button
-                                onClick={handleConfigOpen}
-                                className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
-                                title="グラフスタイルを編集"
-                                type="button"
-                            >
-                                <CogIcon className="w-5 h-5" />
-                            </button>
-                        )}
+                <VisualizationHeader
+                    title={chartSpec.title || 'Chart'}
+                    toolButtons={toolButtons}
+                    menu={
                         <ChartDropdownMenu
                             chartSpec={chartSpec}
                             vegaView={vegaViewRef}
@@ -252,10 +243,9 @@ export function ChartPanel({
                             showRemoveButton={showRemoveButton}
                             showExportButton={showMenuExportButton}
                             isExportDisabled={isExportDisabled}
-                            exportTooltip={exportTooltip}
                         />
-                    </div>
-                </div>
+                    }
+                />
 
                 {/* Chart Content */}
                 <div className="flex-1 overflow-auto p-4">
