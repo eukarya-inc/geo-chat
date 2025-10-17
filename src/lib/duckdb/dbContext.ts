@@ -553,10 +553,22 @@ class DatabaseContext implements DBContext {
         const conn = await this.connect(sanitizedSchema);
         try {
             const result = await conn.query(sql);
+
+            // Extract column type information from Arrow schema
+            const columnTypes = new Map<string, string>();
+            if (result.schema && result.schema.fields) {
+                for (const field of result.schema.fields) {
+                    // Get the field name and type
+                    const fieldName = field.name;
+                    const fieldType = field.type?.toString() || '';
+                    columnTypes.set(fieldName, fieldType);
+                }
+            }
+
             // Convert Arrow format data to JavaScript objects
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = result.toArray().map((row: any) => {
-                return convertArrowToJS(row);
+                return convertArrowToJS(row, columnTypes);
             });
 
             // For DDL operations, force checkpoint to ensure changes are persisted

@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { VegaLite } from 'react-vega';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { ChartSpec, VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
-
 import type { TopLevelSpec } from 'vega-lite';
+import { generateChartSpec, type ColumnInfo } from '../../lib/chart/chartSpecGenerator';
 
 interface VegaLiteChartProps {
     spec: VegaChartSpec;
@@ -15,11 +15,6 @@ interface VegaLiteChartProps {
     configOnly?: boolean;
     onSpecChange?: (newSpec: ChartSpec) => void;
     onViewReady?: (view: View | null) => void;
-}
-
-interface ColumnInfo {
-    name: string;
-    type: string;
 }
 
 const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
@@ -56,6 +51,8 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
     const [prevSchema, setPrevSchema] = useState(schema);
     const vegaViewRef = useRef<View | null>(null);
+    const isInitialSpecUpdateRef = useRef(false);
+    const isInitialColumnsLoadRef = useRef(true);
 
     // Clear data and config when schema changes
     useEffect(() => {
@@ -76,12 +73,19 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                 width: 600,
                 height: 400,
             });
+            // Reset columns load flag
+            isInitialColumnsLoadRef.current = true;
             setPrevSchema(schema);
         }
     }, [schema, prevSchema]);
 
     // Update internal state when specWithSQL changes
     useEffect(() => {
+        // Set flag to prevent generateSpec from being called when initialSpec changes
+        isInitialSpecUpdateRef.current = true;
+        // Reset columns load flag for new spec
+        isInitialColumnsLoadRef.current = true;
+
         setCurrentSpec(initialSpec);
         setConfig({
             tableName: extractTableName(initialSpec),
@@ -326,188 +330,26 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         fetchColumns();
     }, [dbContext, config.tableName, schema]);
 
-    // Generate new spec based on configuration
+    // Generate new spec based on configuration using the external function
     const generateSpec = useCallback((): VegaChartSpec => {
-        if (!config.tableName || !config.plotType) return initialSpec;
-
-        const getFieldType = (fieldName: string): 'quantitative' | 'ordinal' | 'nominal' | 'temporal' => {
-            const column = columns.find((col: ColumnInfo) => col.name === fieldName);
-            if (!column) return 'nominal';
-
-            const type = column.type.toLowerCase();
-            if (type.includes('int') || type.includes('double') || type.includes('real') || type.includes('decimal')) {
-                return 'quantitative';
-            }
-            if (type.includes('date') || type.includes('time')) {
-                return 'temporal';
-            }
-            return 'nominal';
-        };
-
-        // Don't use schema-qualified table name - let dbContext handle schema context
-        const tableName = config.tableName;
-
-        const baseSpec = {
-            $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-            title: config.title || `${config.plotType.charAt(0).toUpperCase() + config.plotType.slice(1)} Chart`,
-            width: config.width,
-            height: config.height,
-            // Preserve autosize and padding from initial spec if present
-            ...('autosize' in initialSpec && initialSpec.autosize ? { autosize: initialSpec.autosize } : {}),
-            ...('padding' in initialSpec && initialSpec.padding !== undefined ? { padding: initialSpec.padding } : {}),
-            data: {
-                sql: `SELECT * FROM ${tableName} LIMIT 1000`,
-                values: [], // Placeholder, will be replaced with fetched data
-            },
-            config: {
-                view: { stroke: null },
-                axis: { grid: true },
-                // legend: { orient: 'right' }
-            },
-        };
-
-        let spec: VegaChartSpec | undefined = undefined;
-
-        try {
-            switch (config.plotType) {
-                case 'scatter':
-                    if (!config.xField || !config.yField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: {
-                            type: 'circle',
-                            size: 60,
-                            opacity: 0.7,
-                        },
-                        encoding: {
-                            x: { field: config.xField, type: getFieldType(config.xField) },
-                            y: { field: config.yField, type: getFieldType(config.yField) },
-                            ...(config.sizeField
-                                ? { size: { field: config.sizeField, type: getFieldType(config.sizeField) } }
-                                : {}),
-                            ...(config.colorField
-                                ? { color: { field: config.colorField, type: getFieldType(config.colorField) } }
-                                : {}),
-                        },
-                    };
-                    break;
-
-                case 'line':
-                    if (!config.xField || !config.yField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: { type: 'line', point: true, strokeWidth: 2 },
-                        encoding: {
-                            x: { field: config.xField, type: getFieldType(config.xField) },
-                            y: { field: config.yField, type: getFieldType(config.yField) },
-                            ...(config.colorField
-                                ? { color: { field: config.colorField, type: getFieldType(config.colorField) } }
-                                : {}),
-                        },
-                    };
-                    break;
-
-                case 'bar':
-                    if (!config.xField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: 'bar',
-                        encoding: config.yField
-                            ? {
-                                  x: { field: config.xField, type: getFieldType(config.xField) },
-                                  y: { field: config.yField, type: getFieldType(config.yField), aggregate: 'mean' },
-                                  ...(config.colorField
-                                      ? { color: { field: config.colorField, type: getFieldType(config.colorField) } }
-                                      : {}),
-                              }
-                            : {
-                                  x: { field: config.xField, type: getFieldType(config.xField) },
-                                  y: { aggregate: 'count' },
-                                  ...(config.colorField
-                                      ? { color: { field: config.colorField, type: getFieldType(config.colorField) } }
-                                      : {}),
-                              },
-                    };
-                    break;
-
-                case 'histogram':
-                    if (!config.xField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: 'bar',
-                        encoding: {
-                            x: { field: config.xField, type: getFieldType(config.xField), bin: true },
-                            y: { aggregate: 'count' },
-                        },
-                    };
-                    break;
-
-                case 'pie':
-                    if (!config.xField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: { type: 'arc', innerRadius: 0 },
-                        encoding: config.yField
-                            ? {
-                                  theta: { field: config.yField, type: getFieldType(config.yField), aggregate: 'sum' },
-                                  color: { field: config.xField, type: getFieldType(config.xField) },
-                              }
-                            : {
-                                  theta: { aggregate: 'count' },
-                                  color: { field: config.xField, type: getFieldType(config.xField) },
-                              },
-                    };
-                    break;
-
-                case 'heatmap':
-                    if (!config.xField || !config.yField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: 'rect',
-                        encoding: {
-                            x: { field: config.xField, type: getFieldType(config.xField) },
-                            y: { field: config.yField, type: getFieldType(config.yField) },
-                            color: { aggregate: 'count', type: 'quantitative' },
-                        },
-                    };
-                    break;
-
-                case 'box':
-                    if (!config.yField) return initialSpec;
-                    spec = {
-                        ...baseSpec,
-                        mark: { type: 'boxplot', extent: 'min-max' },
-                        encoding: {
-                            y: { field: config.yField, type: getFieldType(config.yField) },
-                            ...(config.xField
-                                ? { x: { field: config.xField, type: getFieldType(config.xField) } }
-                                : {}),
-                        },
-                    };
-                    break;
-
-                default:
-                    return initialSpec;
-            }
-
-            // Add tooltip -> later we can implement this
-            // const tooltipFields = [config.xField, config.yField, config.colorField, config.sizeField].filter(Boolean);
-            // if (tooltipFields.length > 0 && baseSpec.encoding) {
-            //   baseSpec.encoding.tooltip = {
-            //     field: tooltipFields[0],
-            //     type: getFieldType(tooltipFields[0]!)
-            //   };
-            // }
-
-            return spec || initialSpec;
-        } catch (error) {
-            console.error('Error generating spec:', error);
-            return initialSpec;
-        }
+        return generateChartSpec(config, columns, initialSpec);
     }, [config, columns, initialSpec]);
 
     // Update spec when configuration changes
     useEffect(() => {
+        // Skip generateSpec if initialSpec was just updated (to preserve AI-generated specs)
+        if (isInitialSpecUpdateRef.current) {
+            isInitialSpecUpdateRef.current = false;
+            return;
+        }
+
+        // Skip generateSpec on initial columns load (when config panel opens)
+        // Only regenerate when config is actually changed by user
+        if (isInitialColumnsLoadRef.current && columns.length > 0) {
+            isInitialColumnsLoadRef.current = false;
+            return;
+        }
+
         if (columns.length > 0) {
             const newSpec = generateSpec();
             setCurrentSpec(prevSpec => {
@@ -586,6 +428,17 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                 col.type.toLowerCase().includes('decimal')
         );
 
+    // Create final spec with data values, ensuring it's valid TopLevelSpec
+    // Memoize to prevent unnecessary re-renders in VegaLite component
+    // This must be before any conditional returns to follow React Hooks rules
+    const finalSpec: TopLevelSpec = useMemo(
+        () => ({
+            ...currentSpec,
+            data: { values: data },
+        }),
+        [currentSpec, data]
+    );
+
     if (loading) {
         return (
             <div
@@ -623,11 +476,26 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         );
     }
 
-    // Create final spec with data values, ensuring it's valid TopLevelSpec
-    const finalSpec: TopLevelSpec = {
-        ...currentSpec,
-        data: { values: data },
-    };
+    if (currentSpec.data && ('sql' in currentSpec.data && currentSpec.data.sql && data.length === 0 || data.values.length === 0) && !loading) {
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height:
+                        ('height' in currentSpec && typeof currentSpec.height === 'number'
+                            ? currentSpec.height
+                            : undefined) || 300,
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #dee2e6',
+                    borderRadius: '4px',
+                }}
+            >
+                <div style={{ color: '#6c757d' }}>No data available</div>
+            </div>
+        );
+    }
 
     // If configOnly is true, return only the configuration panel
     if (configOnly) {
