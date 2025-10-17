@@ -5,13 +5,12 @@ import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
-import { ChartSpecModal, ChartPanel, ChartTypeSelector } from '../../components/chart';
+import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
 import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
 import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
-import type { ChartType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
@@ -291,14 +290,8 @@ function ChatPage() {
     };
 
     // Chart type selection handler
-    const handleChartTypeSelect = async (chartType: ChartType) => {
+    const handleChartTypeSelect = async (chartType: ChartTypeOption) => {
         if (!selectedTable || !dbContext || !updateChartFromAI) {
-            return;
-        }
-
-        // Handle map type separately
-        if (chartType === 'map') {
-            setActiveTab('map');
             return;
         }
 
@@ -597,6 +590,19 @@ function ChatPage() {
                                                         onCloseConfigPanel={() => setShowChartConfig(false)}
                                                         autoApplyChanges={true}
                                                         showApplyButton={false}
+                                                        showMenuExportButton={true}
+                                                        onExport={() => {
+                                                            if (getAllDashboards().length > 0) {
+                                                                setExportType('chart');
+                                                                setShowExportModal(true);
+                                                            }
+                                                        }}
+                                                        isExportDisabled={getAllDashboards().length === 0}
+                                                        exportTooltip={
+                                                            getAllDashboards().length > 0
+                                                                ? 'このグラフをダッシュボードにエクスポート'
+                                                                : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
+                                                        }
                                                     />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
@@ -627,8 +633,8 @@ function ChatPage() {
                                                         isExportDisabled={getAllDashboards().length === 0}
                                                         exportTooltip={
                                                             getAllDashboards().length > 0
-                                                                ? 'Export this map to a dashboard'
-                                                                : '⚠️ No dashboards available - Create a dashboard first to export maps'
+                                                                ? 'この地図をダッシュボードにエクスポート'
+                                                                : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
                                                         }
                                                     />
                                                 ) : (

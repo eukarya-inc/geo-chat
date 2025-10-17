@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ClipboardDocumentIcon, ArrowUpTrayIcon, CogIcon } from '@heroicons/react/24/outline';
 import VegaLiteChart from './VegaLiteChart';
 import { ChartConfigForm } from './ChartConfigForm';
 import { ChartDropdownMenu } from './ChartDropdownMenu';
@@ -73,6 +73,99 @@ export function ChartPanel({
         onViewReady?.(view);
     };
 
+    const handleCopyToClipboard = async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
+                return;
+            }
+
+            // Try canvas (PNG) first
+            const canvasElement = document.querySelector(
+                '.vega-embed canvas, .dashboard-chart-container canvas, canvas.vega-chart'
+            );
+            if (canvasElement) {
+                const canvas = canvasElement as HTMLCanvasElement;
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    canvas.toBlob(blob => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image from canvas'));
+                        }
+                    }, 'image/png');
+                });
+
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+                alert('Chart copied to clipboard!');
+                return;
+            }
+
+            // Try SVG - convert to PNG for clipboard
+            const svgElement = document.querySelector(
+                '.vega-embed svg, .dashboard-chart-container svg, svg.vega-chart'
+            );
+            if (svgElement) {
+                const svg = svgElement as SVGElement;
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                // Safari requires ClipboardItem to be created synchronously with a Promise
+                const blobPromise = new Promise<Blob>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            // Create canvas and draw image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.width;
+                            tempCanvas.height = img.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get canvas context'));
+                                return;
+                            }
+
+                            ctx.drawImage(img, 0, 0);
+
+                            // Convert to blob
+                            tempCanvas.toBlob(blob => {
+                                URL.revokeObjectURL(url);
+                                if (blob) {
+                                    resolve(blob);
+                                } else {
+                                    reject(new Error('Failed to create PNG from SVG'));
+                                }
+                            }, 'image/png');
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Failed to load SVG image'));
+                    };
+                    img.src = url;
+                });
+
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+                alert('Chart copied to clipboard!');
+                return;
+            }
+
+            alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+        } catch (err) {
+            console.error('Error copying chart:', err);
+            alert(`Failed to copy chart to clipboard: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+    };
+
     // Handle modal opening - use internal state for modal mode, callback for panel mode
     const handleConfigOpen = () => {
         if (configMode === 'modal') {
@@ -107,22 +200,61 @@ export function ChartPanel({
                 {/* Chart Title Bar with Menu */}
                 <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     <h4 className="text-sm font-medium text-gray-900 truncate">{chartSpec.title || 'Chart'}</h4>
-                    <ChartDropdownMenu
-                        chartSpec={chartSpec}
-                        vegaView={vegaViewRef}
-                        dbContext={dbContext}
-                        schema={schema}
-                        onConfigOpen={handleConfigOpen}
-                        onDataSourceOpen={handleDataSourceOpen}
-                        onJsonSourceOpen={handleJsonSourceOpen}
-                        onRemove={onRemove}
-                        onExport={onExport}
-                        showDataSourceButton={showDataSourceButton}
-                        showRemoveButton={showRemoveButton}
-                        showExportButton={showMenuExportButton}
-                        isExportDisabled={isExportDisabled}
-                        exportTooltip={exportTooltip}
-                    />
+                    <div className="flex items-center gap-0.5">
+                        <button
+                            onClick={handleCopyToClipboard}
+                            className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
+                            title="クリップボードにコピー"
+                            type="button"
+                        >
+                            <ClipboardDocumentIcon className="w-5 h-5" />
+                        </button>
+                        {showMenuExportButton && onExport && (
+                            <button
+                                onClick={() => {
+                                    if (!isExportDisabled) {
+                                        onExport();
+                                    }
+                                }}
+                                className={`transition-colors p-2 rounded ${
+                                    isExportDisabled
+                                        ? 'text-gray-300 cursor-not-allowed'
+                                        : 'text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100'
+                                }`}
+                                title={exportTooltip || 'ダッシュボードにエクスポート'}
+                                disabled={isExportDisabled}
+                                type="button"
+                            >
+                                <ArrowUpTrayIcon className="w-5 h-5" />
+                            </button>
+                        )}
+                        {((configMode === 'modal' && dbContext && schema) || (onConfigOpen && dbContext && schema)) && (
+                            <button
+                                onClick={handleConfigOpen}
+                                className="text-gray-400 hover:text-gray-600 transition-colors p-2 cursor-pointer rounded hover:bg-gray-100"
+                                title="グラフスタイルを編集"
+                                type="button"
+                            >
+                                <CogIcon className="w-5 h-5" />
+                            </button>
+                        )}
+                        <ChartDropdownMenu
+                            chartSpec={chartSpec}
+                            vegaView={vegaViewRef}
+                            dbContext={dbContext}
+                            schema={schema}
+                            onConfigOpen={handleConfigOpen}
+                            onDataSourceOpen={handleDataSourceOpen}
+                            onJsonSourceOpen={handleJsonSourceOpen}
+                            onRemove={onRemove}
+                            onExport={onExport}
+                            showDataSourceButton={showDataSourceButton}
+                            showRemoveButton={showRemoveButton}
+                            showExportButton={showMenuExportButton}
+                            isExportDisabled={isExportDisabled}
+                            exportTooltip={exportTooltip}
+                        />
+                    </div>
                 </div>
 
                 {/* Chart Content */}
