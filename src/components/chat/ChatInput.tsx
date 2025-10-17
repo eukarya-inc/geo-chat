@@ -9,7 +9,6 @@ interface ChatInputProps {
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     placeholder?: string;
     className?: string;
-    rows?: number;
     schemaName?: string | null;
     selectedTable?: string | null;
 }
@@ -30,7 +29,6 @@ export default function ChatInput({
     textareaRef,
     placeholder,
     className,
-    rows = 2,
     schemaName,
     selectedTable,
 }: ChatInputProps) {
@@ -258,7 +256,7 @@ export default function ChatInput({
     }, [autocomplete.selectedIndex, autocomplete.isOpen]);
 
     return (
-        <div ref={containerRef} className="relative">
+        <div ref={containerRef} className="relative h-full">
             <textarea
                 ref={textareaRef}
                 value={value}
@@ -267,7 +265,7 @@ export default function ChatInput({
                 onBlur={handleBlur}
                 placeholder={placeholder}
                 className={className}
-                rows={rows}
+                style={{ height: '100%', display: 'block' }}
             />
 
             {autocomplete.isOpen && filteredItems.length > 0 && (
