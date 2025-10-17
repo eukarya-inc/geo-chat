@@ -28,6 +28,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
     const [prevSchema, setPrevSchema] = useState(schema);
     const vegaViewRef = useRef<View | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
     // Clear data when schema changes
     useEffect(() => {
@@ -76,6 +77,43 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
             return prev;
         });
     }, [initialSpec]);
+
+    // Observe container size changes and resize Vega view
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (vegaViewRef.current) {
+                // Use requestAnimationFrame to avoid resize loop
+                requestAnimationFrame(() => {
+                    vegaViewRef.current?.resize();
+                });
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, []);
+
+    // Listen for window resize events (for grid layout resize)
+    useEffect(() => {
+        const handleWindowResize = () => {
+            if (vegaViewRef.current) {
+                requestAnimationFrame(() => {
+                    vegaViewRef.current?.resize();
+                });
+            }
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+
+        return () => {
+            window.removeEventListener('resize', handleWindowResize);
+        };
+    }, []);
 
     // Fetch data when spec changes
     useEffect(() => {
@@ -153,10 +191,15 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
 
     return (
         <div
+            ref={containerRef}
             style={{
+                width: '100%',
+                height: '100%',
                 border: showHeader ? '1px solid #dee2e6' : 'none',
                 borderRadius: showHeader ? '4px' : '0',
                 backgroundColor: 'white',
+                display: 'flex',
+                flexDirection: 'column',
             }}
         >
             {/* Chart Header */}
@@ -169,7 +212,17 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
             )}
 
             {/* Chart */}
-            <div style={{ padding: '0', overflow: 'visible' }}>
+            <div
+                style={{
+                    flex: 1,
+                    padding: '0',
+                    overflow: 'visible',
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}
+            >
                 <VegaLite
                     spec={finalSpec}
                     actions={showHeader || enableActions}
@@ -177,6 +230,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                         vegaViewRef.current = view;
                         onViewReady?.(view);
                     }}
+                    style={{ width: '100%', height: '100%' }}
                 />
             </div>
         </div>

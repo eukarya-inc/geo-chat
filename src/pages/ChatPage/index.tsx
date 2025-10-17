@@ -745,6 +745,7 @@ function ChatPage() {
                     onClose={() => setShowChartSpecModal(false)}
                     chartSpec={displayChartSpec.spec}
                     vegaView={chatPageVegaViewRef.current}
+                    aiGeneratedSpec={displayChartSpec.aiGeneratedSpec}
                     onApply={newSpec => {
                         if (selectedTable && updateChartFromAI) {
                             updateChartFromAI(selectedTable, newSpec);

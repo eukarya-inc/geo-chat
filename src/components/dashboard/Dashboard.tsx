@@ -54,6 +54,11 @@ export function Dashboard({
         [onLayoutChange]
     );
 
+    const handleResizeStop = useCallback(() => {
+        // Dispatch resize event to trigger chart resize
+        window.dispatchEvent(new Event('resize'));
+    }, []);
+
     const handleRemoveVisualization = useCallback(
         (vizId: string) => {
             onRemoveVisualization(vizId);
@@ -186,6 +191,7 @@ export function Dashboard({
                             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
                             rowHeight={60}
                             onLayoutChange={handleLayoutChange}
+                            onResizeStop={handleResizeStop}
                             isDraggable={true}
                             isResizable={true}
                             resizeHandles={['se', 'sw', 'ne', 'nw']}
@@ -195,6 +201,7 @@ export function Dashboard({
                                     key={viz.id}
                                     className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
                                     data-viz-id={viz.id}
+                                    style={{ height: '100%' }}
                                 >
                                     {viz.type === 'chart' && viz.chartSpec ? (
                                         <ChartPanel

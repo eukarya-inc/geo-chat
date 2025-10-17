@@ -49,6 +49,7 @@ export function useChartVisualization(
                             spec: spec.spec,
                             timestamp: spec.timestamp,
                             title: spec.title,
+                            aiGeneratedSpec: spec.aiGeneratedSpec,
                         },
                     },
                 });
@@ -73,6 +74,7 @@ export function useChartVisualization(
                 spec: existingSpec.spec,
                 timestamp: existingSpec.timestamp,
                 title: existingSpec.title || `Chart for ${selectedTable}`,
+                aiGeneratedSpec: existingSpec.aiGeneratedSpec,
             });
         } else {
             // Don't generate chart automatically, wait for user to click chart tab
@@ -119,6 +121,7 @@ export function useChartVisualization(
                         spec: result.spec,
                         timestamp: new Date(),
                         title: result.title,
+                        aiGeneratedSpec: result.spec, // Save as AI generated spec
                     };
                     setChartSpec(newChartSpec);
 
@@ -160,6 +163,9 @@ export function useChartVisualization(
                 throw new Error(`Table "${tableName}" does not exist in schema "${schemaName}"`);
             }
 
+            // Get existing chart spec to preserve aiGeneratedSpec if it exists
+            const existingSpec = currentChatState?.chartSpecs?.[tableName];
+
             // Create new chart spec
             const newChartSpec: ChartSpec = {
                 id: `ai-chart-${tableName}-${Date.now()}`,
@@ -171,6 +177,9 @@ export function useChartVisualization(
                         : (typeof spec.title === 'object' && spec.title && 'text' in spec.title
                               ? String(spec.title.text)
                               : undefined) || `Chart for ${tableName}`,
+                // If this is a new AI generation (no existing spec or no aiGeneratedSpec), save as original
+                // Otherwise, preserve the existing aiGeneratedSpec
+                aiGeneratedSpec: existingSpec?.aiGeneratedSpec || spec,
             };
 
             // Update local state if this is the currently selected table
@@ -187,6 +196,7 @@ export function useChartVisualization(
                         spec: newChartSpec.spec,
                         timestamp: newChartSpec.timestamp,
                         title: newChartSpec.title,
+                        aiGeneratedSpec: newChartSpec.aiGeneratedSpec,
                     },
                 },
             });

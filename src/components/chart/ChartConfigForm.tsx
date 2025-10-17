@@ -153,8 +153,8 @@ export function ChartConfigForm({
             colorField: config.colorField,
             sizeField: config.sizeField,
             title: config.title,
-            width: 400,
-            height: 300,
+            width: undefined,
+            height: undefined,
         };
     }, [config, chartSpec.spec]);
 

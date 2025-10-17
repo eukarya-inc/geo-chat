@@ -143,7 +143,8 @@ function generateBarChart(
                         title: valueColumn.name,
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -173,7 +174,8 @@ function generateBarChart(
                         title: 'Count',
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -214,7 +216,8 @@ function generateScatterChart(
                         title: yColumn.name,
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -255,7 +258,8 @@ function generateHistogramChart(
                         title: 'Count',
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -302,7 +306,8 @@ function generateHeatmapChart(
                         title: 'Count',
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -348,7 +353,8 @@ function generateBoxChart(
                         },
                     }),
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -394,7 +400,8 @@ function generateLineChart(
                         title: valueColumn.name,
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -429,7 +436,8 @@ function generateLineChart(
                         title: valueColumn.name,
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -475,7 +483,8 @@ function generatePieChart(
                         },
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }
@@ -509,7 +518,8 @@ function generatePieChart(
                         },
                     },
                 },
-                height: 400,
+                width: 'container',
+                height: 'container',
             },
         };
     }

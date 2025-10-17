@@ -276,15 +276,22 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         return field;
     };
 
+    // Remove width/height from aiSpec if present
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+    const { width: _width, height: _height, ...restAiSpec } = aiSpec as any;
+
     // Ensure required Vega-Lite schema
     const processedSpec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-        ...aiSpec,
+        ...restAiSpec,
         // Add data with SQL query
         data: {
             sql: `SELECT * FROM ${tableName} LIMIT 1000`,
             values: [],
         },
+        // Set responsive container sizing
+        width: 'container',
+        height: 'container',
     } as VegaChartSpec;
 
     // Ensure title exists - prefer user-provided title over generated one
