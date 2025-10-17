@@ -18,6 +18,7 @@ import {
     ArrowDownTrayIcon,
     TrashIcon,
     ClipboardDocumentIcon,
+    XMarkIcon,
 } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
@@ -61,8 +62,16 @@ function ChatPage() {
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
 
     // Chat management with Jotai (needs to be first for chats state)
-    const { chats, selectedChatId, createNewChat, deleteChat, selectChat, updateChatMessages, getCurrentChatState } =
-        useChatManagement(dbContext);
+    const {
+        chats,
+        selectedChatId,
+        createNewChat,
+        deleteChat,
+        renameChat,
+        selectChat,
+        updateChatMessages,
+        getCurrentChatState,
+    } = useChatManagement(dbContext);
 
     // Convert chatId to schemaName at the top level
     const schemaName = chatIdToSchemaName(selectedChatId);
@@ -88,7 +97,8 @@ function ChatPage() {
         selectedTable,
         dbContext,
         schemaName,
-        connection
+        connection,
+        activeTab
     );
 
     // Message handling
@@ -219,6 +229,16 @@ function ChatPage() {
             setConfiguredChartSpec(null);
         }
     }, [activeTab, configuredChartSpec, selectedTable, updateChartFromAI]);
+
+    // Persist configured chart changes when closing configuration panel
+    useEffect(() => {
+        // When closing config panel, save configured changes to remote state
+        if (!showChartConfig && configuredChartSpec && selectedTable && updateChartFromAI) {
+            updateChartFromAI(selectedTable, configuredChartSpec.spec);
+            // Clear local configured state since it's now in remote state
+            setConfiguredChartSpec(null);
+        }
+    }, [showChartConfig, configuredChartSpec, selectedTable, updateChartFromAI]);
 
     // Determine which chart spec to display - prefer configured version
     const displayChartSpec = configuredChartSpec || chartSpec;
@@ -447,6 +467,7 @@ function ChatPage() {
                         onSelectChat={handleSelectChat}
                         onCreateChat={createNewChat}
                         onDeleteChat={deleteChat}
+                        onRenameChat={renameChat}
                         isInitialized={!!dbContext}
                         dashboards={getAllDashboards()}
                         onCreateDashboard={handleCreateDashboard}
@@ -674,6 +695,7 @@ function ChatPage() {
 
                                             {/* Chart Tab */}
                                             {activeTab === 'chart' &&
+                                                selectedTable &&
                                                 (displayChartSpec && connection && selectedChatId ? (
                                                     <div className="h-full overflow-hidden flex flex-col">
                                                         {/* Chart Display Area */}
@@ -802,13 +824,27 @@ function ChatPage() {
                                                                 className="border-t border-gray-200 bg-white"
                                                                 style={{ height: '280px' }}
                                                             >
+                                                                {/* Configuration Panel Header */}
+                                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
+                                                                    <h5 className="text-sm font-medium text-gray-900">
+                                                                        Chart Configuration
+                                                                    </h5>
+                                                                    <button
+                                                                        onClick={() => setShowChartConfig(false)}
+                                                                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors rounded-md hover:bg-gray-200"
+                                                                        title="Close configuration panel"
+                                                                        type="button"
+                                                                    >
+                                                                        <XMarkIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                </div>
                                                                 <div
                                                                     className="overflow-auto p-3"
-                                                                    style={{ height: '100%' }}
+                                                                    style={{ height: 'calc(100% - 41px)' }}
                                                                 >
-                                                                    {chartSpec && (
+                                                                    {displayChartSpec && (
                                                                         <ChartConfigForm
-                                                                            chartSpec={chartSpec}
+                                                                            chartSpec={displayChartSpec}
                                                                             dbContext={dbContext}
                                                                             schema={schemaName || 'main'}
                                                                             onSpecChange={handleChartSpecChange}
@@ -818,7 +854,7 @@ function ChatPage() {
                                                                             onSave={() => {
                                                                                 // Show confirmation dialog before saving
                                                                                 const chartTitle =
-                                                                                    chartSpec.title || 'chart';
+                                                                                    displayChartSpec.title || 'chart';
                                                                                 const chartElement =
                                                                                     document.querySelector(
                                                                                         '.vega-embed canvas, .vega-embed svg'
@@ -904,140 +940,11 @@ function ChatPage() {
                                                     </div>
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <div className="text-center">
-                                                            <h3 className="text-lg font-normal text-gray-600 mb-8">
-                                                                Choose a visual to start
-                                                            </h3>
-                                                            <div className="flex items-center justify-center gap-4">
-                                                                {/* Bar Chart Icon */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (sendMessageRef.current) {
-                                                                            sendMessageRef.current(
-                                                                                `Create a bar chart for ${selectedTable} table data`
-                                                                            );
-                                                                        }
-                                                                    }}
-                                                                    className="p-4 hover:bg-gray-200 rounded-lg transition-colors group cursor-pointer"
-                                                                    title="Bar Chart"
-                                                                >
-                                                                    <svg
-                                                                        className="w-8 h-8 text-gray-600 group-hover:text-gray-800"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-
-                                                                {/* Table Icon */}
-                                                                <button
-                                                                    onClick={() => setActiveTab('table')}
-                                                                    className="p-4 hover:bg-gray-200 rounded-lg transition-colors group cursor-pointer"
-                                                                    title="Table View"
-                                                                >
-                                                                    <svg
-                                                                        className="w-8 h-8 text-gray-600 group-hover:text-gray-800"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M3 10h18M3 14h18m-9-4v8m-7 0V4a1 1 0 011-1h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1z"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-
-                                                                {/* Line Chart Icon */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (sendMessageRef.current) {
-                                                                            sendMessageRef.current(
-                                                                                `Create a line chart for ${selectedTable} table data`
-                                                                            );
-                                                                        }
-                                                                    }}
-                                                                    className="p-4 hover:bg-gray-200 rounded-lg transition-colors group cursor-pointer"
-                                                                    title="Line Chart"
-                                                                >
-                                                                    <svg
-                                                                        className="w-8 h-8 text-gray-600 group-hover:text-gray-800"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-
-                                                                {/* Pie Chart Icon */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (sendMessageRef.current) {
-                                                                            sendMessageRef.current(
-                                                                                `Create a pie chart for ${selectedTable} table data`
-                                                                            );
-                                                                        }
-                                                                    }}
-                                                                    className="p-4 hover:bg-gray-200 rounded-lg transition-colors group cursor-pointer"
-                                                                    title="Pie Chart"
-                                                                >
-                                                                    <svg
-                                                                        className="w-8 h-8 text-gray-600 group-hover:text-gray-800"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
-                                                                        />
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-
-                                                                {/* Map Icon */}
-                                                                <button
-                                                                    onClick={() => setActiveTab('map')}
-                                                                    className="p-4 hover:bg-gray-200 rounded-lg transition-colors group cursor-pointer"
-                                                                    title="Map View"
-                                                                >
-                                                                    <svg
-                                                                        className="w-8 h-8 text-gray-600 group-hover:text-gray-800"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            strokeWidth={1.5}
-                                                                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
+                                                        <div className="text-center text-gray-500">
+                                                            <p>Generating chart...</p>
+                                                            <p className="text-sm mt-2">
+                                                                Chart will appear automatically
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 ))}
