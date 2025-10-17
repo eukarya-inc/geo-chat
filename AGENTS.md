@@ -42,24 +42,28 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Format Check, Lint, Build and Test After Changes
+## IMPORTANT: Always Run Format, Lint, Build and Test After Changes
 
 After making any code changes, you MUST run:
 
 ```bash
-npm run format:check && npm run lint && npm run build && npm test
+npm run check
 ```
 
 This ensures:
 
-1. Code matches the project's Prettier formatting rules
+1. Code is automatically formatted with Prettier
 2. ESLint passes without errors or warnings
 3. TypeScript compilation succeeds
 4. The build process completes without errors
 5. All tests pass
 6. No regressions are introduced
 
-If lint, build or tests fail, fix the issues before considering the task complete.
+**Important notes:**
+
+- The `check` script runs: format (error-only) → lint (quiet) → build (silent) → test (silent)
+- Output is suppressed on success; only errors are shown to save context
+- If any step fails, the command chain stops and shows the error
 
 ## Critical Implementation Details
 
@@ -193,19 +197,21 @@ Use regular unit tests (`.test.ts`) when testing:
 - Avoid dataset-specific code - keep implementations generic and reusable.
 - When handling JSON data, ensure the approach works for any JSON structure, not just specific schemas.
 
-## ⚠️ CRITICAL: Always Run Lint Before Completion
+## ⚠️ CRITICAL: Always Run Check Before Completion
 
 **IMPORTANT**: After making any code changes and before considering your task complete, you MUST run:
 
 ```bash
-npm run lint
+npm run check
 ```
 
 This ensures:
 
+- Code is automatically formatted with Prettier
 - Code follows the project's style guidelines
 - No syntax errors or warnings
-- Consistent formatting across the codebase
-- ESLint rules are satisfied
+- TypeScript compilation succeeds
+- All tests pass
+- No regressions are introduced
 
-If lint errors occur, fix them before marking the task as complete. The linter may automatically fix some issues, which will modify files - this is expected and desired behavior.
+The check command runs all validation steps quietly, only showing errors to save context.

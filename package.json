@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite --host 0.0.0.0",
         "build": "tsc -b && vite build",
+        "build:nocheck": "vite build",
         "format": "prettier --write --ignore-unknown .",
         "format:check": "prettier --check --ignore-unknown .",
         "lint": "eslint .",
@@ -14,7 +15,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:browser": "vitest run --project=browser",
-        "test:unit": "vitest run --project=unit"
+        "test:unit": "vitest run --project=unit",
+        "check": "prettier --write --log-level error . && eslint --quiet . && npm run typecheck && npm run build:nocheck > /dev/null 2>&1 && npm test > /dev/null 2>&1"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^1.2.12",
