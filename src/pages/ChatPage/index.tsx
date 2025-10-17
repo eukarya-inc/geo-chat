@@ -310,6 +310,11 @@ function ChatPage() {
         }
     };
 
+    // Check if current chat has any messages
+    const currentChatMessages = getCurrentChatState()?.messages || [];
+    const hasMessages = currentChatMessages.length > 0;
+    const isEmptyChat = selectedChatId && !hasMessages;
+
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
@@ -364,6 +369,53 @@ function ChatPage() {
                                 />
                             );
                         })()}
+                    </div>
+                ) : isEmptyChat ? (
+                    /* Empty Chat Mode - Centered Input */
+                    <div className="flex-1 h-full flex items-center justify-center p-4">
+                        <div className="w-full max-w-3xl -mt-32">
+                            {!isLoadingApiKey && dbContext && selectedChatId && (
+                                <AIChat
+                                    dbContext={dbContext}
+                                    apiKey={apiKey}
+                                    chatId={selectedChatId}
+                                    schemaName={schemaName}
+                                    onMessagesChange={handleMessagesChange}
+                                    updateChatMessages={updateChatMessages}
+                                    onSendMessageReady={handleSendMessageReady}
+                                    selectedTable={selectedTable}
+                                    onTableSelect={handleTableSelection}
+                                    onChartUpdate={updateChartFromAI}
+                                    onChartDelete={deleteChartFromAI}
+                                    getCurrentChatState={getCurrentChatState}
+                                    onMapStyleUpdate={async (
+                                        tableName: string,
+                                        style: import('../../components/map').TableStyle
+                                    ) => {
+                                        updateTableStyle(tableName, style);
+                                    }}
+                                    onMapStyleDelete={async (tableName: string) => {
+                                        deleteTableStyle(tableName);
+                                    }}
+                                    onConversationCompleted={syncImmediately}
+                                    remoteFileComponent={onClose => (
+                                        <RemoteFile
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                            onTableCreated={(tableName: string) => {
+                                                handleTableSelection(tableName);
+                                                if (dbContext) {
+                                                    dbContext.notifyTableChange(tableName, schemaName);
+                                                }
+                                                onClose();
+                                            }}
+                                            onSendMessage={sendMessageRef.current || undefined}
+                                        />
+                                    )}
+                                    emptyMode={true}
+                                />
+                            )}
+                        </div>
                     </div>
                 ) : (
                     /* Chat Mode - Split View */
