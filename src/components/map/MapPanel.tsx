@@ -14,7 +14,11 @@ interface MapPanelProps {
     schema?: string;
     mapSpec?: MapSpec;
     onRemove?: () => void;
+    onExport?: () => void;
     showRemoveButton?: boolean;
+    showExportButton?: boolean;
+    isExportDisabled?: boolean;
+    exportTooltip?: string;
     vizId?: string;
 }
 
@@ -26,7 +30,11 @@ export function MapPanel({
     schema,
     mapSpec,
     onRemove,
+    onExport,
     showRemoveButton = true,
+    showExportButton = true,
+    isExportDisabled = false,
+    exportTooltip,
     vizId,
 }: MapPanelProps) {
     const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
@@ -50,7 +58,11 @@ export function MapPanel({
                     vizId={vizId}
                     vizTitle={title || tableName}
                     onRemove={onRemove}
+                    onExport={onExport}
                     showRemoveButton={showRemoveButton}
+                    showExportButton={showExportButton}
+                    isExportDisabled={isExportDisabled}
+                    exportTooltip={exportTooltip}
                     onOpenStyleEditor={() => setIsStyleModalOpen(true)}
                 />
             </div>

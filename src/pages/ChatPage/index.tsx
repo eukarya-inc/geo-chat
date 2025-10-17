@@ -9,7 +9,7 @@ import { ChartSpecModal, ChartPanel, ChartTypeSelector } from '../../components/
 import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import { TableCellsIcon, ArrowUpTrayIcon, MapIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
@@ -597,67 +597,6 @@ function ChatPage() {
                                                         onCloseConfigPanel={() => setShowChartConfig(false)}
                                                         autoApplyChanges={true}
                                                         showApplyButton={false}
-                                                        showSaveButton={true}
-                                                        onSave={() => {
-                                                            // Show confirmation dialog before saving
-                                                            const chartTitle = displayChartSpec.title || 'chart';
-                                                            const chartElement = document.querySelector(
-                                                                '.vega-embed canvas, .vega-embed svg'
-                                                            );
-
-                                                            if (!chartElement) {
-                                                                alert(
-                                                                    'Chart not found. Please make sure the chart is displayed.'
-                                                                );
-                                                                return;
-                                                            }
-
-                                                            const format =
-                                                                chartElement.tagName === 'CANVAS' ? 'PNG' : 'SVG';
-                                                            const confirmed = window.confirm(
-                                                                `Do you want to save "${chartTitle}" as ${format} image?\n\nThis will download the file to your computer.`
-                                                            );
-
-                                                            if (confirmed) {
-                                                                // Proceed with save
-                                                                if (chartElement.tagName === 'CANVAS') {
-                                                                    // Save as PNG
-                                                                    const canvas = chartElement as HTMLCanvasElement;
-                                                                    const link = document.createElement('a');
-                                                                    link.download = `${chartTitle}.png`;
-                                                                    link.href = canvas.toDataURL();
-                                                                    link.click();
-                                                                } else if (chartElement.tagName === 'svg') {
-                                                                    // Save as SVG
-                                                                    const svg = chartElement as SVGElement;
-                                                                    const serializer = new XMLSerializer();
-                                                                    const svgString = serializer.serializeToString(svg);
-                                                                    const blob = new Blob([svgString], {
-                                                                        type: 'image/svg+xml',
-                                                                    });
-                                                                    const link = document.createElement('a');
-                                                                    link.download = `${chartTitle}.svg`;
-                                                                    link.href = URL.createObjectURL(blob);
-                                                                    link.click();
-                                                                    URL.revokeObjectURL(link.href);
-                                                                }
-                                                            }
-                                                        }}
-                                                        isSaveDisabled={false}
-                                                        saveTooltip="Save chart as PNG or SVG image"
-                                                        showExportButton={true}
-                                                        onExport={() => {
-                                                            if (getAllDashboards().length > 0) {
-                                                                setExportType('chart');
-                                                                setShowExportModal(true);
-                                                            }
-                                                        }}
-                                                        isExportDisabled={getAllDashboards().length === 0}
-                                                        exportTooltip={
-                                                            getAllDashboards().length > 0
-                                                                ? 'Export this chart to a dashboard'
-                                                                : '⚠️ No dashboards available - Create a dashboard first to export charts'
-                                                        }
                                                     />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
@@ -670,42 +609,28 @@ function ChatPage() {
                                                 connection &&
                                                 selectedTable &&
                                                 (selectedGeometryColumn ? (
-                                                    <div className="h-full overflow-hidden flex flex-col">
-                                                        <div className="flex-1 overflow-hidden">
-                                                            <MapPanel
-                                                                title={selectedTable}
-                                                                tableName={selectedTable}
-                                                                geometryColumn={selectedGeometryColumn}
-                                                                dbContext={dbContext}
-                                                                schema={schemaName || undefined}
-                                                                mapSpec={{ tableStyles, style: mapStyle }}
-                                                                showRemoveButton={false}
-                                                            />
-                                                        </div>
-                                                        <div className="flex justify-end p-3 border-t border-gray-200 bg-white">
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (getAllDashboards().length > 0) {
-                                                                        setExportType('map');
-                                                                        setShowExportModal(true);
-                                                                    }
-                                                                }}
-                                                                disabled={getAllDashboards().length === 0}
-                                                                className={`p-2 rounded-full transition-colors shadow-lg ${
-                                                                    getAllDashboards().length > 0
-                                                                        ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                                }`}
-                                                                title={
-                                                                    getAllDashboards().length > 0
-                                                                        ? 'Export map visualization'
-                                                                        : 'Create a dashboard first to export visualizations'
-                                                                }
-                                                            >
-                                                                <ArrowUpTrayIcon className="w-5 h-5" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                                                    <MapPanel
+                                                        title={selectedTable}
+                                                        tableName={selectedTable}
+                                                        geometryColumn={selectedGeometryColumn}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName || undefined}
+                                                        mapSpec={{ tableStyles, style: mapStyle }}
+                                                        showRemoveButton={false}
+                                                        onExport={() => {
+                                                            if (getAllDashboards().length > 0) {
+                                                                setExportType('map');
+                                                                setShowExportModal(true);
+                                                            }
+                                                        }}
+                                                        showExportButton={true}
+                                                        isExportDisabled={getAllDashboards().length === 0}
+                                                        exportTooltip={
+                                                            getAllDashboards().length > 0
+                                                                ? 'Export this map to a dashboard'
+                                                                : '⚠️ No dashboards available - Create a dashboard first to export maps'
+                                                        }
+                                                    />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
                                                         <div className="text-center text-gray-500 max-w-md">
