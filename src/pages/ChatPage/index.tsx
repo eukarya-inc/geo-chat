@@ -22,6 +22,7 @@ import {
     CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
+import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
@@ -50,6 +51,7 @@ function ChatPage() {
     const [showChartDropdown, setShowChartDropdown] = useState(false);
     const [showJsonSourceModal, setShowJsonSourceModal] = useState(false);
     const chartDropdownRef = useRef<HTMLDivElement>(null);
+    const chatPageVegaViewRef = useRef<View | null>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -316,7 +318,7 @@ function ChatPage() {
         };
     }, [showChartDropdown]);
 
-    // Chart download handler - automatically detects PNG or SVG
+    // Chart download handler - PNG export
     const handleDownloadChart = () => {
         const chartTitle = displayChartSpec?.title || 'chart';
 
@@ -332,25 +334,42 @@ function ChatPage() {
             return;
         }
 
-        // Try SVG if canvas not found
+        // Try SVG if canvas not found - convert to PNG
         const svgElement = document.querySelector('.vega-embed svg');
         if (svgElement) {
-            const svg = svgElement as SVGElement;
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svg);
-            const blob = new Blob([svgString], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.download = `${chartTitle}.svg`;
-            link.href = url;
-            link.click();
-            URL.revokeObjectURL(url);
+            alert('This chart uses SVG rendering. Please use "Save as SVG" option instead.');
             setShowChartDropdown(false);
             return;
         }
 
         // If neither found
         alert('Chart not found. Please ensure the chart is fully rendered and try again.');
+        setShowChartDropdown(false);
+    };
+
+    // SVG export handler using Vega View
+    const handleDownloadChartAsSVG = async () => {
+        const vegaView = chatPageVegaViewRef.current;
+        if (!vegaView) {
+            alert('Chart not ready. Please try again in a moment.');
+            setShowChartDropdown(false);
+            return;
+        }
+
+        try {
+            const chartTitle = displayChartSpec?.title || 'chart';
+            const svgString = await vegaView.toSVG();
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${chartTitle.replace(/[^a-z0-9]/gi, '_')}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting SVG:', error);
+            alert('Failed to export chart as SVG. Please try again.');
+        }
         setShowChartDropdown(false);
     };
 
@@ -799,7 +818,23 @@ function ChatPage() {
                                                                                         type="button"
                                                                                     >
                                                                                         <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                                                                        Save as Image
+                                                                                        Save as PNG
+                                                                                    </button>
+
+                                                                                    <button
+                                                                                        onClick={e => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            handleDownloadChartAsSVG();
+                                                                                        }}
+                                                                                        onMouseDown={e =>
+                                                                                            e.stopPropagation()
+                                                                                        }
+                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                                        type="button"
+                                                                                    >
+                                                                                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                                                                                        Save as SVG
                                                                                     </button>
 
                                                                                     <hr className="my-1 border-gray-200" />
@@ -835,6 +870,9 @@ function ChatPage() {
                                                                     schema={schemaName}
                                                                     showHeader={false}
                                                                     enableActions={false}
+                                                                    onViewReady={view => {
+                                                                        chatPageVegaViewRef.current = view;
+                                                                    }}
                                                                 />
                                                             </div>
                                                         </div>
@@ -1043,6 +1081,7 @@ function ChatPage() {
                     isOpen={showJsonSourceModal}
                     onClose={() => setShowJsonSourceModal(false)}
                     chartSpec={displayChartSpec.spec}
+                    vegaView={chatPageVegaViewRef.current}
                     onApply={newSpec => {
                         if (selectedTable && updateChartFromAI) {
                             updateChartFromAI(selectedTable, newSpec);

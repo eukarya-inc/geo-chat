@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import type { VegaChartSpec } from '../../types/chart';
+import type { View } from 'vega';
 
 interface JsonSourceModalProps {
     isOpen: boolean;
     onClose: () => void;
     chartSpec: VegaChartSpec;
+    vegaView?: View | null;
     onApply?: (newSpec: VegaChartSpec) => void;
 }
 
-export function JsonSourceModal({ isOpen, onClose, chartSpec, onApply }: JsonSourceModalProps) {
+export function JsonSourceModal({ isOpen, onClose, chartSpec, vegaView, onApply }: JsonSourceModalProps) {
     const [jsonText, setJsonText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
@@ -16,11 +18,26 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, onApply }: JsonSou
     // Initialize JSON text when modal opens or chartSpec changes
     useEffect(() => {
         if (isOpen) {
-            setJsonText(JSON.stringify(chartSpec, null, 2));
+            // If we have a Vega View, get the final spec with data from it
+            if (vegaView) {
+                try {
+                    const finalSpec = vegaView.getState().data;
+                    const specWithData = {
+                        ...chartSpec,
+                        data: { values: finalSpec.source_0 || [] },
+                    };
+                    setJsonText(JSON.stringify(specWithData, null, 2));
+                } catch {
+                    // Fallback to original spec if we can't get data from View
+                    setJsonText(JSON.stringify(chartSpec, null, 2));
+                }
+            } else {
+                setJsonText(JSON.stringify(chartSpec, null, 2));
+            }
             setError(null);
             setHasChanges(false);
         }
-    }, [isOpen, chartSpec]);
+    }, [isOpen, chartSpec, vegaView]);
 
     const handleJsonChange = (newText: string) => {
         setJsonText(newText);
@@ -57,6 +74,23 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, onApply }: JsonSou
         setJsonText(JSON.stringify(chartSpec, null, 2));
         setError(null);
         setHasChanges(false);
+    };
+
+    const handleOpenInVegaEditor = () => {
+        try {
+            const spec = JSON.parse(jsonText);
+            // Remove the data.sql property and keep data.values for Vega Editor
+            const editorSpec = {
+                ...spec,
+                data: spec.data && 'values' in spec.data ? { values: spec.data.values } : spec.data,
+            };
+            const specString = JSON.stringify(editorSpec);
+            const encodedSpec = encodeURIComponent(specString);
+            const vegaEditorUrl = `https://vega.github.io/editor/#/url/vega-lite/${encodedSpec}`;
+            window.open(vegaEditorUrl, '_blank');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Invalid JSON');
+        }
     };
 
     if (!isOpen) return null;
@@ -120,6 +154,18 @@ export function JsonSourceModal({ isOpen, onClose, chartSpec, onApply }: JsonSou
                         )}
                     </div>
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleOpenInVegaEditor}
+                            disabled={!!error}
+                            className={`px-4 py-2 rounded-lg transition-colors ${
+                                error
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                            title="Open this specification in the Vega Editor"
+                        >
+                            Open in Vega Editor
+                        </button>
                         <button
                             onClick={handleCopy}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"

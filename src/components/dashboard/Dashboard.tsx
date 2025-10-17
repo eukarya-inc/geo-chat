@@ -17,13 +17,41 @@ import {
 import VegaLiteChart from '../chart/VegaLiteChart';
 import { ChartConfigModal, DataSourceModal, JsonSourceModal } from '../chart';
 import Map from '../map';
-import type { ChartSpec } from '../../types/chart';
+import type { ChartSpec, VegaChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
+import type { View } from 'vega';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
+
+// Global object to store Vega Views by vizId
+const vegaViewsMap: Record<string, View | null> = {};
+
+interface ChartWithViewProps {
+    vizId: string;
+    chartSpec: VegaChartSpec;
+    dbContext: DBContext;
+    schema: string;
+}
+
+function ChartWithView({ vizId, chartSpec, dbContext, schema }: ChartWithViewProps) {
+    return (
+        <div className="h-full dashboard-chart-container">
+            <VegaLiteChart
+                spec={chartSpec}
+                dbContext={dbContext}
+                schema={schema}
+                showHeader={false}
+                enableActions={false}
+                onViewReady={view => {
+                    vegaViewsMap[vizId] = view;
+                }}
+            />
+        </div>
+    );
+}
 
 interface ChartDropdownMenuProps {
     vizId: string;
@@ -112,35 +140,27 @@ function ChartDropdownMenu({
         setIsOpen(false);
     };
 
-    const handleVegaSaveAsSVG = () => {
-        // For SVG export, we need to access the Vega view
-        const chartContainer = document.querySelector(`[data-viz-id="${vizId}"]`);
-        if (chartContainer) {
-            // Try to find the Vega view in various ways
-            const vegaContainer = chartContainer.querySelector('[class*="vega"]');
-            if (vegaContainer) {
-                // Try to get SVG content directly from the DOM
-                const svgElement = vegaContainer.querySelector('svg');
-                if (svgElement) {
-                    try {
-                        const svgData = new XMLSerializer().serializeToString(svgElement);
-                        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
-                        const url = URL.createObjectURL(svgBlob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.svg`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                    } catch (error) {
-                        console.error('Error exporting SVG:', error);
-                        alert('Failed to export chart as SVG. Please try again.');
-                    }
-                } else {
-                    alert('SVG element not found. Please try PNG export instead.');
-                }
-            } else {
-                alert('Chart not found. Please try again.');
-            }
+    const handleVegaSaveAsSVG = async () => {
+        // Use Vega View's toSVG() method for high-quality SVG export
+        const vegaView = vegaViewsMap[vizId];
+        if (!vegaView) {
+            alert('Chart not ready. Please try again in a moment.');
+            setIsOpen(false);
+            return;
+        }
+
+        try {
+            const svgString = await vegaView.toSVG();
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${vizTitle.replace(/[^a-z0-9]/gi, '_') || 'chart'}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting SVG:', error);
+            alert('Failed to export chart as SVG. Please try again.');
         }
         setIsOpen(false);
     };
@@ -406,6 +426,7 @@ function ChartDropdownMenu({
                     isOpen={isJsonSourceModalOpen}
                     onClose={() => setIsJsonSourceModalOpen(false)}
                     chartSpec={chartSpec.spec}
+                    vegaView={vegaViewsMap[vizId]}
                     onApply={newSpec => onUpdateChart(vizId, { ...chartSpec, spec: newSpec })}
                 />,
                 document.body
@@ -803,15 +824,12 @@ export function Dashboard({
                                         </div>
                                         <div className="flex-1 p-2 overflow-hidden">
                                             {viz.type === 'chart' && viz.chartSpec ? (
-                                                <div className="h-full dashboard-chart-container">
-                                                    <VegaLiteChart
-                                                        spec={viz.chartSpec.spec}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName}
-                                                        showHeader={false}
-                                                        enableActions={false}
-                                                    />
-                                                </div>
+                                                <ChartWithView
+                                                    vizId={viz.id}
+                                                    chartSpec={viz.chartSpec.spec}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName}
+                                                />
                                             ) : viz.type === 'map' && viz.tableName ? (
                                                 <div
                                                     className="h-full"
