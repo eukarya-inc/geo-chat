@@ -5,13 +5,14 @@ import StructuredMessageRenderer from './StructuredMessageRenderer';
 import ChatInput from './ChatInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
-import { PlusIcon, ChevronDownIcon, ChevronRightIcon, PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { generatePromptSuggestions } from '../../lib/ai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../map';
 import { isTableCreatedOnlyMessage } from './utils';
 import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
+import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -57,9 +58,6 @@ export default function AIChat({
     const lastScrollTimeRef = useRef<number>(0);
     const userHasScrolledRef = useRef<boolean>(false);
     const isProgrammaticScrollRef = useRef<boolean>(false);
-    const [showPopup, setShowPopup] = useState(false);
-    const popupRef = useRef<HTMLDivElement>(null);
-    const buttonRef = useRef<HTMLButtonElement>(null);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const promptSuggestionAbortRef = useRef<AbortController | null>(null);
@@ -68,6 +66,7 @@ export default function AIChat({
     const checkedTablesRef = useRef<Set<string>>(new Set());
     const [isMultiline, setIsMultiline] = useState(false);
     const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
+    const [isCreatingTable, setIsCreatingTable] = useState(false);
 
     const effectiveChatId = chatId || 'default';
 
@@ -93,21 +92,73 @@ export default function AIChat({
         }, 500);
     }, []);
 
-    const { messages, isLoading, isAnyLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } =
-        useAIChat({
-            chatId: effectiveChatId,
-            schema: schemaName,
-            dbContext,
-            apiKey,
-            selectedTable,
-            onMessagesChange: handleMessagesChange,
-            onChartUpdate,
-            onChartDelete,
-            getCurrentChatState,
-            onMapStyleUpdate,
-            onMapStyleDelete,
-            onConversationCompleted,
-        });
+    const {
+        messages,
+        isLoading,
+        isAnyLoading,
+        input,
+        handleInputChange,
+        handleSubmit: originalHandleSubmit,
+        handleStop,
+        sendMessage,
+    } = useAIChat({
+        chatId: effectiveChatId,
+        schema: schemaName,
+        dbContext,
+        apiKey,
+        selectedTable,
+        onMessagesChange: handleMessagesChange,
+        onChartUpdate,
+        onChartDelete,
+        getCurrentChatState,
+        onMapStyleUpdate,
+        onMapStyleDelete,
+        onConversationCompleted,
+    });
+
+    // Wrap handleSubmit to detect and handle URLs
+    const handleSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+
+            const trimmedInput = input.trim();
+            if (!trimmedInput) return;
+
+            // Check if input is a URL
+            const dataUrl = extractDataUrl(trimmedInput);
+
+            if (dataUrl) {
+                if (!dbContext) {
+                    console.error('DBContext is not available');
+                    return;
+                }
+
+                setIsCreatingTable(true);
+                try {
+                    // Create table from URL
+                    const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
+
+                    // Clear input
+                    const changeEvent = {
+                        target: { value: '' },
+                    } as React.ChangeEvent<HTMLTextAreaElement>;
+                    handleInputChange(changeEvent);
+
+                    // Send the table message
+                    sendMessage(message);
+                } catch (error) {
+                    console.error('Failed to create table from URL:', error);
+                    // Show error to user - you might want to add error state handling here
+                } finally {
+                    setIsCreatingTable(false);
+                }
+            } else {
+                // Regular message, use original handler
+                await originalHandleSubmit(e);
+            }
+        },
+        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit]
+    );
 
     // Focus textarea on mount
     useEffect(() => {
@@ -556,39 +607,9 @@ export default function AIChat({
         }
     };
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (
-                showPopup &&
-                popupRef.current &&
-                buttonRef.current &&
-                !popupRef.current.contains(event.target as Node) &&
-                !buttonRef.current.contains(event.target as Node)
-            ) {
-                setShowPopup(false);
-            }
-        };
-
-        if (showPopup) {
-            document.addEventListener('mousedown', handleClickOutside);
-            return () => {
-                document.removeEventListener('mousedown', handleClickOutside);
-            };
-        }
-    }, [showPopup]);
-
     const handleKeyPress = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
-            handleSubmit(e);
-        }
-    };
-
-    const handleButtonClick = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (isLoading) {
-            handleStop();
-        } else {
             handleSubmit(e);
         }
     };
@@ -598,168 +619,32 @@ export default function AIChat({
         return (
             <div className="flex flex-col gap-8 items-center">
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
-                <form
-                    onSubmit={e => {
-                        userHasScrolledRef.current = false;
-                        handleSubmit(e);
-                    }}
-                    className={`flex gap-2 flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'flex-col rounded-3xl' : 'items-center rounded-full'}`}
+                <div
+                    className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
                 >
-                    {!isMultiline && remoteFileComponent && (
-                        <div className="relative">
-                            <button
-                                ref={buttonRef}
-                                type="button"
-                                onClick={() => setShowPopup(!showPopup)}
-                                className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
-                                title="データを読み込む"
-                            >
-                                <PlusIcon className="w-5 h-5" />
-                            </button>
-
-                            {showPopup && (
-                                <div
-                                    ref={popupRef}
-                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                    style={{ width: '500px', maxHeight: '400px' }}
-                                >
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowPopup(false)}
-                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M6 18L18 6M6 6l12 12"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                            {remoteFileComponent(() => setShowPopup(false))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <div className={isMultiline ? 'w-full' : 'flex-1'}>
-                        <div style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}>
-                            <ChatInput
-                                value={input}
-                                onChange={handleInputChange}
-                                onKeyDown={handleKeyPress}
-                                dbContext={dbContext}
-                                textareaRef={textareaRef}
-                                placeholder="質問してみましょう"
-                                className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                                schemaName={schemaName}
-                                selectedTable={selectedTable}
-                            />
-                        </div>
-                    </div>
-
-                    {isMultiline ? (
-                        <div className="flex justify-between">
-                            {remoteFileComponent && (
-                                <div className="relative">
-                                    <button
-                                        ref={buttonRef}
-                                        type="button"
-                                        onClick={() => setShowPopup(!showPopup)}
-                                        className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
-                                        title="データを読み込む"
-                                    >
-                                        <PlusIcon className="w-5 h-5" />
-                                    </button>
-
-                                    {showPopup && (
-                                        <div
-                                            ref={popupRef}
-                                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                            style={{ width: '500px', maxHeight: '400px' }}
-                                        >
-                                            <div className="relative">
-                                                <button
-                                                    onClick={() => setShowPopup(false)}
-                                                    className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M6 18L18 6M6 6l12 12"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                                <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                                    {remoteFileComponent(() => setShowPopup(false))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleButtonClick}
-                                disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                                className={`p-2 rounded-full transition-colors duration-200 ${
-                                    isLoading
-                                        ? 'text-red-600 hover:bg-red-50'
-                                        : !input.trim() || isAnyLoading
-                                          ? 'text-gray-400 cursor-not-allowed'
-                                          : 'text-blue-600 hover:bg-blue-50'
-                                } focus:outline-none`}
-                                title={
-                                    isLoading
-                                        ? '停止'
-                                        : !isLoading && isAnyLoading
-                                          ? '他のチャットが処理中です'
-                                          : '送信'
-                                }
-                            >
-                                {isLoading ? (
-                                    <StopIcon className="w-5 h-5" />
-                                ) : (
-                                    <PaperAirplaneIcon className="w-5 h-5" />
-                                )}
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={handleButtonClick}
-                            disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                            className={`p-2 rounded-full transition-colors duration-200 ${
-                                isLoading
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : !input.trim() || isAnyLoading
-                                      ? 'text-gray-400 cursor-not-allowed'
-                                      : 'text-blue-600 hover:bg-blue-50'
-                            } focus:outline-none`}
-                            title={
-                                isLoading ? '停止' : !isLoading && isAnyLoading ? '他のチャットが処理中です' : '送信'
-                            }
-                        >
-                            {isLoading ? <StopIcon className="w-5 h-5" /> : <PaperAirplaneIcon className="w-5 h-5" />}
-                        </button>
-                    )}
-                </form>
+                    <ChatInput
+                        value={input}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyPress}
+                        onSubmit={e => {
+                            userHasScrolledRef.current = false;
+                            handleSubmit(e);
+                        }}
+                        onStop={handleStop}
+                        dbContext={dbContext}
+                        textareaRef={textareaRef}
+                        placeholder="質問するか、データのURLを貼り付けてみましょう"
+                        className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                        schemaName={schemaName}
+                        selectedTable={selectedTable}
+                        isMultiline={isMultiline}
+                        textareaHeight={textareaHeight}
+                        isLoading={isLoading}
+                        isCreatingTable={isCreatingTable}
+                        isAnyLoading={isAnyLoading}
+                        remoteFileComponent={remoteFileComponent}
+                    />
+                </div>
             </div>
         );
     }
@@ -967,154 +852,31 @@ export default function AIChat({
                 <div ref={messagesEndRef} />
             </div>
 
-            <form
-                onSubmit={e => {
-                    // Reset scroll tracking when sending a new message
-                    userHasScrolledRef.current = false;
-                    handleSubmit(e);
-                }}
-                className={`flex gap-2 flex-shrink-0 bg-white border border-gray-300 rounded-md p-2 ${isMultiline ? 'flex-col' : 'items-center'}`}
-            >
-                {!isMultiline && remoteFileComponent && (
-                    <div className="relative">
-                        <button
-                            ref={buttonRef}
-                            type="button"
-                            onClick={() => setShowPopup(!showPopup)}
-                            className="p-2 text-gray-700 rounded hover:bg-gray-100 transition-colors focus:outline-none"
-                            title="データを読み込む"
-                        >
-                            <PlusIcon className="w-5 h-5" />
-                        </button>
-
-                        {showPopup && (
-                            <div
-                                ref={popupRef}
-                                className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                style={{ width: '500px', maxHeight: '400px' }}
-                            >
-                                <div className="relative">
-                                    <button
-                                        onClick={() => setShowPopup(false)}
-                                        className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M6 18L18 6M6 6l12 12"
-                                            />
-                                        </svg>
-                                    </button>
-                                    <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                        {remoteFileComponent(() => setShowPopup(false))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div className={isMultiline ? 'w-full' : 'flex-1'}>
-                    <div style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}>
-                        <ChatInput
-                            value={input}
-                            onChange={handleInputChange}
-                            onKeyDown={handleKeyPress}
-                            dbContext={dbContext}
-                            textareaRef={textareaRef}
-                            placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
-                            className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                            schemaName={schemaName}
-                            selectedTable={selectedTable}
-                        />
-                    </div>
-                </div>
-
-                {isMultiline ? (
-                    <div className="flex justify-between">
-                        {remoteFileComponent && (
-                            <div className="relative">
-                                <button
-                                    ref={buttonRef}
-                                    type="button"
-                                    onClick={() => setShowPopup(!showPopup)}
-                                    className="p-2 text-gray-700 rounded hover:bg-gray-100 transition-colors focus:outline-none"
-                                    title="データを読み込む"
-                                >
-                                    <PlusIcon className="w-5 h-5" />
-                                </button>
-
-                                {showPopup && (
-                                    <div
-                                        ref={popupRef}
-                                        className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                        style={{ width: '500px', maxHeight: '400px' }}
-                                    >
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => setShowPopup(false)}
-                                                className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                            >
-                                                <svg
-                                                    className="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M6 18L18 6M6 6l12 12"
-                                                    />
-                                                </svg>
-                                            </button>
-                                            <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                                {remoteFileComponent(() => setShowPopup(false))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={handleButtonClick}
-                            disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                            className={`p-2 rounded-full transition-colors duration-200 ${
-                                isLoading
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : !input.trim() || isAnyLoading
-                                      ? 'text-gray-400 cursor-not-allowed'
-                                      : 'text-blue-600 hover:bg-blue-50'
-                            } focus:outline-none`}
-                            title={
-                                isLoading ? '停止' : !isLoading && isAnyLoading ? '他のチャットが処理中です' : '送信'
-                            }
-                        >
-                            {isLoading ? <StopIcon className="w-5 h-5" /> : <PaperAirplaneIcon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={handleButtonClick}
-                        disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                        className={`p-2 rounded transition-colors duration-200 ${
-                            isLoading
-                                ? 'text-red-600 hover:bg-red-50'
-                                : !input.trim() || isAnyLoading
-                                  ? 'text-gray-400 cursor-not-allowed'
-                                  : 'text-blue-600 hover:bg-blue-50'
-                        } focus:outline-none`}
-                        title={isLoading ? '停止' : !isLoading && isAnyLoading ? '他のチャットが処理中です' : '送信'}
-                    >
-                        {isLoading ? <StopIcon className="w-5 h-5" /> : <PaperAirplaneIcon className="w-5 h-5" />}
-                    </button>
-                )}
-            </form>
+            <div className={`flex-shrink-0 bg-white border border-gray-300 rounded-md p-2`}>
+                <ChatInput
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyPress}
+                    onSubmit={e => {
+                        // Reset scroll tracking when sending a new message
+                        userHasScrolledRef.current = false;
+                        handleSubmit(e);
+                    }}
+                    onStop={handleStop}
+                    dbContext={dbContext}
+                    textareaRef={textareaRef}
+                    placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
+                    className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                    schemaName={schemaName}
+                    selectedTable={selectedTable}
+                    isMultiline={isMultiline}
+                    textareaHeight={textareaHeight}
+                    isLoading={isLoading}
+                    isCreatingTable={isCreatingTable}
+                    isAnyLoading={isAnyLoading}
+                    remoteFileComponent={remoteFileComponent}
+                />
+            </div>
         </div>
     );
 }
