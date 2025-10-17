@@ -6,7 +6,7 @@ import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import VegaLiteChart from '../../components/chart/VegaLiteChart';
-import { ChartConfigForm } from '../../components/chart';
+import { ChartConfigForm, JsonSourceModal } from '../../components/chart';
 import Map from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
@@ -19,6 +19,7 @@ import {
     TrashIcon,
     ClipboardDocumentIcon,
     XMarkIcon,
+    CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import type { ChartSpec } from '../../types/chart';
 import { useStoreSync } from '../../store/sync';
@@ -47,6 +48,7 @@ function ChatPage() {
     const [showChartConfig, setShowChartConfig] = useState(false);
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
     const [showChartDropdown, setShowChartDropdown] = useState(false);
+    const [showJsonSourceModal, setShowJsonSourceModal] = useState(false);
     const chartDropdownRef = useRef<HTMLDivElement>(null);
 
     // Enable state synchronization
@@ -747,6 +749,25 @@ function ChatPage() {
                                                                                         Chart Configuration
                                                                                     </button>
 
+                                                                                    <button
+                                                                                        onClick={e => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setShowJsonSourceModal(
+                                                                                                true
+                                                                                            );
+                                                                                            setShowChartDropdown(false);
+                                                                                        }}
+                                                                                        onMouseDown={e =>
+                                                                                            e.stopPropagation()
+                                                                                        }
+                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                                                        type="button"
+                                                                                    >
+                                                                                        <CodeBracketIcon className="w-4 h-4 mr-2" />
+                                                                                        View JSON Source
+                                                                                    </button>
+
                                                                                     <hr className="my-1 border-gray-200" />
 
                                                                                     <button
@@ -1015,6 +1036,20 @@ function ChatPage() {
                 type={exportType}
                 lastSelectedDashboard={lastSelectedExportDashboard}
             />
+
+            {/* JSON Source Modal */}
+            {displayChartSpec && (
+                <JsonSourceModal
+                    isOpen={showJsonSourceModal}
+                    onClose={() => setShowJsonSourceModal(false)}
+                    chartSpec={displayChartSpec.spec}
+                    onApply={newSpec => {
+                        if (selectedTable && updateChartFromAI) {
+                            updateChartFromAI(selectedTable, newSpec);
+                        }
+                    }}
+                />
+            )}
         </>
     );
 }

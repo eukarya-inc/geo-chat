@@ -12,9 +12,10 @@ import {
     CircleStackIcon,
     ClipboardDocumentIcon,
     CameraIcon,
+    CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import VegaLiteChart from '../chart/VegaLiteChart';
-import { ChartConfigModal, DataSourceModal } from '../chart';
+import { ChartConfigModal, DataSourceModal, JsonSourceModal } from '../chart';
 import Map from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
@@ -46,6 +47,7 @@ function ChartDropdownMenu({
     const [isOpen, setIsOpen] = useState(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [isDataSourceModalOpen, setIsDataSourceModalOpen] = useState(false);
+    const [isJsonSourceModalOpen, setIsJsonSourceModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Close dropdown when clicking outside
@@ -72,6 +74,11 @@ function ChartDropdownMenu({
 
     const handleDataSourceOpen = () => {
         setIsDataSourceModalOpen(true);
+        setIsOpen(false);
+    };
+
+    const handleJsonSourceOpen = () => {
+        setIsJsonSourceModalOpen(true);
         setIsOpen(false);
     };
 
@@ -290,6 +297,20 @@ function ChartDropdownMenu({
                                 Edit Data Source
                             </button>
 
+                            <button
+                                onClick={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleJsonSourceOpen();
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                type="button"
+                            >
+                                <CodeBracketIcon className="w-4 h-4 mr-2" />
+                                View JSON Source
+                            </button>
+
                             <hr className="my-1 border-gray-200" />
 
                             <button
@@ -375,6 +396,17 @@ function ChartDropdownMenu({
                     onClose={() => setIsDataSourceModalOpen(false)}
                     chartSpec={chartSpec}
                     onUpdateChart={newSpec => onUpdateChart(vizId, newSpec)}
+                />,
+                document.body
+            )}
+
+            {/* JSON Source Modal - Render in portal to avoid being clipped */}
+            {createPortal(
+                <JsonSourceModal
+                    isOpen={isJsonSourceModalOpen}
+                    onClose={() => setIsJsonSourceModalOpen(false)}
+                    chartSpec={chartSpec.spec}
+                    onApply={newSpec => onUpdateChart(vizId, { ...chartSpec, spec: newSpec })}
                 />,
                 document.body
             )}
