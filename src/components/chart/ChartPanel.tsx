@@ -12,6 +12,7 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { View } from 'vega';
 import { VisualizationHeader } from '../common/VisualizationHeader';
 import { createCopyButton, createExportButton, createStyleEditorButton } from '../common/VisualizationToolButtons';
+import { generateChartSpec, type ChartConfig, type ColumnInfo } from '../../lib/chart/chartSpecGenerator';
 
 interface ChartPanelProps {
     chartSpec: ChartSpec;
@@ -188,6 +189,19 @@ export function ChartPanel({
         }
     };
 
+    const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
+        if (!onSpecChange) return;
+        // Generate new spec from config
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec);
+        const updatedSpec: ChartSpec = {
+            ...chartSpec,
+            title: config.title as string,
+            spec: newVegaSpec,
+            timestamp: new Date(),
+        };
+        onSpecChange(updatedSpec);
+    };
+
     const toolButtons = [
         ...((configMode === 'modal' && dbContext && schema) || (onConfigOpen && dbContext && schema)
             ? [
@@ -278,7 +292,7 @@ export function ChartPanel({
                                 chartSpec={chartSpec}
                                 dbContext={dbContext}
                                 schema={schema}
-                                onSpecChange={onSpecChange}
+                                onConfigChange={handleConfigChange}
                                 autoApplyChanges={autoApplyChanges}
                                 showApplyButton={showApplyButton}
                             />
