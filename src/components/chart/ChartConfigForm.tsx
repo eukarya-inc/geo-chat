@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartTypeIconGrid, ChartTypeOption } from './ChartTypeIconGrid';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { generateChartSpec, type ChartConfig } from '../../lib/chart/chartSpecGenerator';
 
 interface ChartConfigFormProps {
     chartSpec: ChartSpec;
@@ -130,134 +131,34 @@ export function ChartConfigForm({
 
     // Generate proper Vega-Lite spec based on configuration
     const generateVegaSpec = useCallback(() => {
-        if (!config.xField && !['bar', 'histogram'].includes(config.plotType)) {
-            return chartSpec.spec; // Return original if no valid config
+        // Extract table name from the chart spec SQL if available
+        let tableName = '';
+        if (chartSpec.spec.data && 'sql' in chartSpec.spec.data && chartSpec.spec.data.sql) {
+            const sql = chartSpec.spec.data.sql;
+            const tableMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
+            if (tableMatch) {
+                tableName = tableMatch[1];
+            }
         }
 
-        const getFieldType = (fieldName: string): 'quantitative' | 'ordinal' | 'nominal' | 'temporal' => {
-            const column = columns.find(col => col.name === fieldName);
-            if (!column) return 'nominal';
+        if (!tableName) {
+            return chartSpec.spec; // Return original if no table name
+        }
 
-            const type = column.type.toLowerCase();
-            if (type.includes('int') || type.includes('double') || type.includes('real') || type.includes('decimal')) {
-                return 'quantitative';
-            }
-            if (type.includes('date') || type.includes('time')) {
-                return 'temporal';
-            }
-            return 'nominal';
-        };
-
-        // Preserve original data source and use config title
-        const baseSpec = {
-            $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-            title: config.title, // Use title from config
+        // Create config object for generateChartSpec
+        const chartConfig: ChartConfig = {
+            tableName,
+            plotType: config.plotType,
+            xField: config.xField,
+            yField: config.yField,
+            colorField: config.colorField,
+            sizeField: config.sizeField,
+            title: config.title,
             width: 400,
             height: 300,
-            data: chartSpec.spec.data, // Keep original data source
-            config: {
-                view: { stroke: null },
-                axis: { grid: true },
-            },
         };
 
-        const newSpec: Record<string, unknown> = { ...baseSpec };
-
-        switch (config.plotType) {
-            case 'scatter':
-                if (!config.xField || !config.yField) break;
-                newSpec.mark = { type: 'circle', size: 60, opacity: 0.7 };
-                newSpec.encoding = {
-                    x: { field: config.xField, type: getFieldType(config.xField) },
-                    y: { field: config.yField, type: getFieldType(config.yField) },
-                    ...(config.colorField && {
-                        color: { field: config.colorField, type: getFieldType(config.colorField) },
-                    }),
-                    ...(config.sizeField && {
-                        size: { field: config.sizeField, type: getFieldType(config.sizeField) },
-                    }),
-                };
-                break;
-
-            case 'line':
-                if (!config.xField || !config.yField) break;
-                newSpec.mark = { type: 'line', point: true, strokeWidth: 2 };
-                newSpec.encoding = {
-                    x: { field: config.xField, type: getFieldType(config.xField) },
-                    y: { field: config.yField, type: getFieldType(config.yField) },
-                    ...(config.colorField && {
-                        color: { field: config.colorField, type: getFieldType(config.colorField) },
-                    }),
-                };
-                break;
-
-            case 'bar':
-                if (!config.xField) break;
-                newSpec.mark = 'bar';
-                newSpec.encoding = config.yField
-                    ? {
-                          x: { field: config.xField, type: getFieldType(config.xField) },
-                          y: { field: config.yField, type: getFieldType(config.yField), aggregate: 'mean' },
-                          ...(config.colorField && {
-                              color: { field: config.colorField, type: getFieldType(config.colorField) },
-                          }),
-                      }
-                    : {
-                          x: { field: config.xField, type: getFieldType(config.xField) },
-                          y: { aggregate: 'count' },
-                          ...(config.colorField && {
-                              color: { field: config.colorField, type: getFieldType(config.colorField) },
-                          }),
-                      };
-                break;
-
-            case 'histogram':
-                if (!config.xField) break;
-                newSpec.mark = 'bar';
-                newSpec.encoding = {
-                    x: { field: config.xField, type: getFieldType(config.xField), bin: true },
-                    y: { aggregate: 'count' },
-                };
-                break;
-
-            case 'pie':
-                if (!config.xField) break;
-                newSpec.mark = { type: 'arc', innerRadius: 0 };
-                newSpec.encoding = config.yField
-                    ? {
-                          theta: { field: config.yField, type: getFieldType(config.yField), aggregate: 'sum' },
-                          color: { field: config.xField, type: getFieldType(config.xField) },
-                      }
-                    : {
-                          theta: { aggregate: 'count' },
-                          color: { field: config.xField, type: getFieldType(config.xField) },
-                      };
-                break;
-
-            case 'heatmap':
-                if (!config.xField || !config.yField) break;
-                newSpec.mark = 'rect';
-                newSpec.encoding = {
-                    x: { field: config.xField, type: getFieldType(config.xField) },
-                    y: { field: config.yField, type: getFieldType(config.yField) },
-                    color: { aggregate: 'count', type: 'quantitative' },
-                };
-                break;
-
-            case 'box':
-                if (!config.yField) break;
-                newSpec.mark = { type: 'boxplot', extent: 'min-max' };
-                newSpec.encoding = {
-                    y: { field: config.yField, type: getFieldType(config.yField) },
-                    ...(config.xField && { x: { field: config.xField, type: getFieldType(config.xField) } }),
-                };
-                break;
-
-            default:
-                return chartSpec.spec;
-        }
-
-        return newSpec;
+        return generateChartSpec(chartConfig, columns, chartSpec.spec);
     }, [config, columns, chartSpec.spec]);
 
     // Handle manual apply of configuration changes
