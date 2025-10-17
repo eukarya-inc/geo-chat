@@ -30,6 +30,7 @@ interface AIChatProps {
     onMapStyleDelete?: (tableName: string) => Promise<void>;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
+    emptyMode?: boolean;
 }
 
 export default function AIChat({
@@ -49,6 +50,7 @@ export default function AIChat({
     onMapStyleDelete,
     remoteFileComponent,
     onConversationCompleted,
+    emptyMode = false,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -106,6 +108,13 @@ export default function AIChat({
             onMapStyleDelete,
             onConversationCompleted,
         });
+
+    // Focus textarea on mount
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+        }
+    }, []);
 
     // Check if textarea has multiple lines and calculate height
     useEffect(() => {
@@ -584,6 +593,177 @@ export default function AIChat({
         }
     };
 
+    // Empty mode: only show the input form
+    if (emptyMode) {
+        return (
+            <div className="flex flex-col gap-8 items-center">
+                <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
+                <form
+                    onSubmit={e => {
+                        userHasScrolledRef.current = false;
+                        handleSubmit(e);
+                    }}
+                    className={`flex gap-2 flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'flex-col rounded-3xl' : 'items-center rounded-full'}`}
+                >
+                    {!isMultiline && remoteFileComponent && (
+                        <div className="relative">
+                            <button
+                                ref={buttonRef}
+                                type="button"
+                                onClick={() => setShowPopup(!showPopup)}
+                                className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+                                title="データを読み込む"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
+
+                            {showPopup && (
+                                <div
+                                    ref={popupRef}
+                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                                    style={{ width: '500px', maxHeight: '400px' }}
+                                >
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowPopup(false)}
+                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
+                                        >
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M6 18L18 6M6 6l12 12"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
+                                            {remoteFileComponent(() => setShowPopup(false))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className={isMultiline ? 'w-full' : 'flex-1'}>
+                        <div style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}>
+                            <ChatInput
+                                value={input}
+                                onChange={handleInputChange}
+                                onKeyDown={handleKeyPress}
+                                dbContext={dbContext}
+                                textareaRef={textareaRef}
+                                placeholder="質問してみましょう"
+                                className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                                schemaName={schemaName}
+                                selectedTable={selectedTable}
+                            />
+                        </div>
+                    </div>
+
+                    {isMultiline ? (
+                        <div className="flex justify-between">
+                            {remoteFileComponent && (
+                                <div className="relative">
+                                    <button
+                                        ref={buttonRef}
+                                        type="button"
+                                        onClick={() => setShowPopup(!showPopup)}
+                                        className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+                                        title="データを読み込む"
+                                    >
+                                        <PlusIcon className="w-5 h-5" />
+                                    </button>
+
+                                    {showPopup && (
+                                        <div
+                                            ref={popupRef}
+                                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                                            style={{ width: '500px', maxHeight: '400px' }}
+                                        >
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => setShowPopup(false)}
+                                                    className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
+                                                >
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                                <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
+                                                    {remoteFileComponent(() => setShowPopup(false))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleButtonClick}
+                                disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
+                                className={`p-2 rounded-full transition-colors duration-200 ${
+                                    isLoading
+                                        ? 'text-red-600 hover:bg-red-50'
+                                        : !input.trim() || isAnyLoading
+                                          ? 'text-gray-400 cursor-not-allowed'
+                                          : 'text-blue-600 hover:bg-blue-50'
+                                } focus:outline-none`}
+                                title={
+                                    isLoading
+                                        ? '停止'
+                                        : !isLoading && isAnyLoading
+                                          ? '他のチャットが処理中です'
+                                          : '送信'
+                                }
+                            >
+                                {isLoading ? (
+                                    <StopIcon className="w-5 h-5" />
+                                ) : (
+                                    <PaperAirplaneIcon className="w-5 h-5" />
+                                )}
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleButtonClick}
+                            disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
+                            className={`p-2 rounded-full transition-colors duration-200 ${
+                                isLoading
+                                    ? 'text-red-600 hover:bg-red-50'
+                                    : !input.trim() || isAnyLoading
+                                      ? 'text-gray-400 cursor-not-allowed'
+                                      : 'text-blue-600 hover:bg-blue-50'
+                            } focus:outline-none`}
+                            title={
+                                isLoading ? '停止' : !isLoading && isAnyLoading ? '他のチャットが処理中です' : '送信'
+                            }
+                        >
+                            {isLoading ? <StopIcon className="w-5 h-5" /> : <PaperAirplaneIcon className="w-5 h-5" />}
+                        </button>
+                    )}
+                </form>
+            </div>
+        );
+    }
+
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
             <div
@@ -903,7 +1083,7 @@ export default function AIChat({
                             type="button"
                             onClick={handleButtonClick}
                             disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                            className={`p-2 rounded transition-colors duration-200 ${
+                            className={`p-2 rounded-full transition-colors duration-200 ${
                                 isLoading
                                     ? 'text-red-600 hover:bg-red-50'
                                     : !input.trim() || isAnyLoading
