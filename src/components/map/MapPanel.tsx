@@ -1,7 +1,10 @@
+import { useState, useRef } from 'react';
 import Map from './index';
 import { MapDropdownMenu } from './MapDropdownMenu';
+import { MapStyleModal } from './MapStyleModal';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { MapSpec } from '../../store/remoteAtoms';
+import type { MapStyleManager } from './mapStyleManager';
 
 interface MapPanelProps {
     title?: string;
@@ -10,7 +13,6 @@ interface MapPanelProps {
     dbContext: DBContext;
     schema?: string;
     mapSpec?: MapSpec;
-    showControls?: boolean;
     onRemove?: () => void;
     showRemoveButton?: boolean;
     vizId?: string;
@@ -23,11 +25,22 @@ export function MapPanel({
     dbContext,
     schema,
     mapSpec,
-    showControls = false,
     onRemove,
     showRemoveButton = true,
     vizId,
 }: MapPanelProps) {
+    const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
+    const styleManagerRef = useRef<MapStyleManager | null>(null);
+    const styleChangeHandlerRef = useRef<((style: maplibregl.StyleSpecification) => void) | null>(null);
+
+    const handleMapReady = (styleManager: MapStyleManager) => {
+        styleManagerRef.current = styleManager;
+    };
+
+    const handleStyleChange = (handler: (style: maplibregl.StyleSpecification) => void) => {
+        styleChangeHandlerRef.current = handler;
+    };
+
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {/* Map Title Bar with Menu */}
@@ -38,27 +51,31 @@ export function MapPanel({
                     vizTitle={title || tableName}
                     onRemove={onRemove}
                     showRemoveButton={showRemoveButton}
+                    onOpenStyleEditor={() => setIsStyleModalOpen(true)}
                 />
             </div>
 
             {/* Map Content */}
             <div className="flex-1 overflow-hidden">
-                <div
-                    className="h-full"
-                    onMouseDown={e => showControls || e.stopPropagation()}
-                    onTouchStart={e => showControls || e.stopPropagation()}
-                >
-                    <Map
-                        dbContext={dbContext}
-                        schema={schema}
-                        selectedTable={tableName}
-                        geometryColumnName={geometryColumn}
-                        tableStyles={mapSpec?.tableStyles}
-                        initialStyle={mapSpec?.style}
-                        showControls={showControls}
-                    />
-                </div>
+                <Map
+                    dbContext={dbContext}
+                    schema={schema}
+                    selectedTable={tableName}
+                    geometryColumnName={geometryColumn}
+                    tableStyles={mapSpec?.tableStyles}
+                    initialStyle={mapSpec?.style}
+                    onMapReady={handleMapReady}
+                    onStyleChange={handleStyleChange}
+                />
             </div>
+
+            {/* Style Editor Modal */}
+            <MapStyleModal
+                isOpen={isStyleModalOpen}
+                onClose={() => setIsStyleModalOpen(false)}
+                styleManager={styleManagerRef.current}
+                onStyleChange={styleChangeHandlerRef.current || undefined}
+            />
         </div>
     );
 }

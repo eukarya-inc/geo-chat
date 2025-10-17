@@ -10,7 +10,7 @@ export function useMapVisualization(
     connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
 ) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
-    const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string>('geometry');
+    const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string | undefined>(undefined);
     const currentChatState = useAtomValue(currentChatStateAtom);
     const updateChatStateAtomSet = useSetAtom(updateChatStateAtom);
 
@@ -30,6 +30,7 @@ export function useMapVisualization(
     useEffect(() => {
         const checkGeomColumn = async () => {
             if (!selectedTable || !connection) {
+                setSelectedGeometryColumn(undefined);
                 return;
             }
 
@@ -38,6 +39,8 @@ export function useMapVisualization(
             if (result.geometryColumns.length > 0) {
                 setSelectedGeometryColumn(result.geometryColumns[0]);
                 setMapSelectedColumns(result.nonGeometryColumns);
+            } else {
+                setSelectedGeometryColumn(undefined);
             }
         };
 
