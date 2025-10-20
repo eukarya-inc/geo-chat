@@ -14,7 +14,7 @@ export async function generateSQLExplanation(sql: string, apiKey: string): Promi
             },
         });
 
-        const prompt = `
+        const system = `
 Analyze the following CREATE TABLE SQL and generate an explanation in Japanese. Match the explanation length to the SQL complexity.
 
 Example 1 - Complex SQL with CTE:
@@ -78,15 +78,13 @@ Requirements:
   - "以下の説明をします"
   - Just start immediately with what the SQL does
 
----
-SQL:
-
-${sql}
+**CRITICAL INSTRUCTION**: Your response must start DIRECTLY with the explanation content. Do NOT include ANY introductory phrases or preambles.
 `;
 
         const { text } = await generateText({
-            model: anthropic('claude-3-haiku-20240307'), // Use faster model for explanations
-            prompt,
+            model: anthropic('claude-haiku-4-5-20251001'), // Use faster model for explanations
+            system,
+            prompt: sql,
         });
 
         return text.trim();
