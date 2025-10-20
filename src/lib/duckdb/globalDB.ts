@@ -70,7 +70,7 @@ async function initializeDB(): Promise<duckdb.AsyncDuckDB> {
 
         // Force single-threaded consistent mode
         await conn.query('PRAGMA threads=1;');
-        await conn.query("SET memory_limit='1GB';");
+        await conn.query("SET memory_limit='4GB';"); // max memory limit for wasm 32-bit
 
         console.log('GlobalDB: Database initialized with spatial extension and single-thread mode');
     } finally {
