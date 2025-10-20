@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import AIChat from '../../components/chat';
+import ApiKeyInput from '../../components/chat/ApiKeyInput';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
@@ -417,6 +418,8 @@ function ChatPage() {
                                         />
                                     )}
                                     emptyMode={true}
+                                    onApiKeyChange={setApiKey}
+                                    onApiKeySave={saveApiKey}
                                 />
                             )}
                         </div>
@@ -427,38 +430,7 @@ function ChatPage() {
                         {/* Left Half - AI Chat (Modeling Tools) */}
                         <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
                             {showApiKeyInput && !isLoadingApiKey && (
-                                <div className="p-4 bg-gray-50 border-b border-gray-300 flex-shrink-0">
-                                    <div className="mb-2.5 text-sm font-bold">Anthropic API Key Settings</div>
-                                    <div className="flex gap-2.5 items-center">
-                                        <input
-                                            type="password"
-                                            value={apiKey}
-                                            onChange={e => setApiKey(e.target.value)}
-                                            placeholder="Enter your Anthropic API key..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                const success = await saveApiKey(apiKey);
-                                                if (!success && apiKey.trim()) {
-                                                    alert('APIキーの保存に失敗しました。');
-                                                }
-                                            }}
-                                            disabled={!apiKey.trim()}
-                                            className={`px-4 py-2 text-white border-none rounded text-sm ${
-                                                apiKey.trim()
-                                                    ? 'bg-blue-500 cursor-pointer hover:bg-blue-600'
-                                                    : 'bg-gray-400 cursor-not-allowed'
-                                            }`}
-                                        >
-                                            Save
-                                        </button>
-                                    </div>
-                                    <div className="text-xs text-gray-600 mt-2">
-                                        Your API key is encrypted and stored locally in your browser and never sent to
-                                        our servers.
-                                    </div>
-                                </div>
+                                <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} onSave={saveApiKey} />
                             )}
                             {isLoadingApiKey && (
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
