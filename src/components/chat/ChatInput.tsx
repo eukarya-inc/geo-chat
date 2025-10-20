@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { PlusIcon, PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from '@heroicons/react/24/outline';
 import { extractDataUrl } from '../../utils/tableCreation';
+import SubmitButton from './SubmitButton';
 
 interface ChatInputProps {
     value: string;
@@ -21,6 +22,7 @@ interface ChatInputProps {
     isCreatingTable: boolean;
     isAnyLoading: boolean;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    disabled?: boolean;
 }
 
 interface AutocompleteState {
@@ -49,6 +51,7 @@ export default function ChatInput({
     isCreatingTable,
     isAnyLoading,
     remoteFileComponent,
+    disabled = false,
 }: ChatInputProps) {
     const [tables, setTables] = useState<string[]>([]);
     const [fields, setFields] = useState<Array<{ name: string; type: string }>>([]);
@@ -464,66 +467,24 @@ export default function ChatInput({
                             )}
                         </div>
                     )}
-                    <button
-                        type="button"
+                    <SubmitButton
+                        isLoading={isLoading}
+                        isCreatingTable={isCreatingTable}
+                        value={value}
+                        isAnyLoading={isAnyLoading}
+                        disabled={disabled}
                         onClick={handleButtonClick}
-                        disabled={(!isLoading && !value.trim()) || (!isLoading && isAnyLoading) || isCreatingTable}
-                        className={`p-2 rounded-full transition-colors duration-200 ${
-                            isLoading
-                                ? 'text-red-600 hover:bg-red-50'
-                                : !value.trim() || isAnyLoading || isCreatingTable
-                                  ? 'text-gray-400 cursor-not-allowed'
-                                  : 'text-blue-600 hover:bg-blue-50'
-                        } focus:outline-none`}
-                        title={
-                            isLoading
-                                ? '停止'
-                                : isCreatingTable
-                                  ? 'テーブル作成中...'
-                                  : !isLoading && isAnyLoading
-                                    ? '他のチャットが処理中です'
-                                    : '送信'
-                        }
-                    >
-                        {isLoading ? (
-                            <StopIcon className="w-5 h-5" />
-                        ) : isCreatingTable ? (
-                            <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                        ) : (
-                            <PaperAirplaneIcon className="w-5 h-5" />
-                        )}
-                    </button>
+                    />
                 </div>
             ) : (
-                <button
-                    type="button"
+                <SubmitButton
+                    isLoading={isLoading}
+                    isCreatingTable={isCreatingTable}
+                    value={value}
+                    isAnyLoading={isAnyLoading}
+                    disabled={disabled}
                     onClick={handleButtonClick}
-                    disabled={(!isLoading && !value.trim()) || (!isLoading && isAnyLoading) || isCreatingTable}
-                    className={`p-2 rounded-full transition-colors duration-200 ${
-                        isLoading
-                            ? 'text-red-600 hover:bg-red-50'
-                            : !value.trim() || isAnyLoading || isCreatingTable
-                              ? 'text-gray-400 cursor-not-allowed'
-                              : 'text-blue-600 hover:bg-blue-50'
-                    } focus:outline-none`}
-                    title={
-                        isLoading
-                            ? '停止'
-                            : isCreatingTable
-                              ? 'テーブル作成中...'
-                              : !isLoading && isAnyLoading
-                                ? '他のチャットが処理中です'
-                                : '送信'
-                    }
-                >
-                    {isLoading ? (
-                        <StopIcon className="w-5 h-5" />
-                    ) : isCreatingTable ? (
-                        <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                    ) : (
-                        <PaperAirplaneIcon className="w-5 h-5" />
-                    )}
-                </button>
+                />
             )}
         </div>
     );

@@ -3,6 +3,7 @@ import { useAIChat } from '../../lib/ai/useAIChat';
 import { aiStore } from '../../lib/ai/AIStore';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import ChatInput from './ChatInput';
+import ApiKeyInput from './ApiKeyInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
@@ -32,6 +33,8 @@ interface AIChatProps {
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
     emptyMode?: boolean;
+    onApiKeyChange?: (value: string) => void;
+    onApiKeySave?: (apiKey: string) => Promise<boolean>;
 }
 
 export default function AIChat({
@@ -52,6 +55,8 @@ export default function AIChat({
     remoteFileComponent,
     onConversationCompleted,
     emptyMode = false,
+    onApiKeyChange,
+    onApiKeySave,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -616,8 +621,18 @@ export default function AIChat({
 
     // Empty mode: only show the input form
     if (emptyMode) {
+        const showApiKeyInput = !apiKey && onApiKeyChange && onApiKeySave;
+
         return (
-            <div className="flex flex-col gap-8 items-center">
+            <div className="flex flex-col gap-8 items-center relative">
+                {showApiKeyInput && (
+                    <ApiKeyInput
+                        apiKey={apiKey || ''}
+                        onApiKeyChange={onApiKeyChange}
+                        onSave={onApiKeySave}
+                        floatingMode={true}
+                    />
+                )}
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
                 <div
                     className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
@@ -643,6 +658,7 @@ export default function AIChat({
                         isCreatingTable={isCreatingTable}
                         isAnyLoading={isAnyLoading}
                         remoteFileComponent={remoteFileComponent}
+                        disabled={!apiKey}
                     />
                 </div>
             </div>
@@ -875,6 +891,7 @@ export default function AIChat({
                     isCreatingTable={isCreatingTable}
                     isAnyLoading={isAnyLoading}
                     remoteFileComponent={remoteFileComponent}
+                    disabled={!apiKey}
                 />
             </div>
         </div>
