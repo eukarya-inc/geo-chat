@@ -421,7 +421,7 @@ export default function ChatInput({
             </div>
 
             {isMultiline ? (
-                <div className="flex justify-between">
+                <div className={`flex items-end gap-2 ${remoteFileComponent ? 'justify-between' : 'justify-end'}`}>
                     {remoteFileComponent && (
                         <div className="relative">
                             <button
