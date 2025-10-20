@@ -74,7 +74,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
     const structColumns = `{
         'geometry': ST_AsMVTGeom(
-            ST_Transform(ST_Simplify("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
+            ST_Transform(ST_SimplifyPreserveTopology("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
             ST_Extent(ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})),
             4096,
             256,
@@ -101,6 +101,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
         ) AS mvt
         FROM tile_data
         WHERE feature.geometry IS NOT NULL
+            AND NOT ST_IsEmpty(feature.geometry)
     `;
 }
 
