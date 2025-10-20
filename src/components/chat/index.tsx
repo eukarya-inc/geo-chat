@@ -634,32 +634,37 @@ export default function AIChat({
                     />
                 )}
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
-                <div
-                    className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
-                >
-                    <ChatInput
-                        value={input}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyPress}
-                        onSubmit={e => {
-                            userHasScrolledRef.current = false;
-                            handleSubmit(e);
-                        }}
-                        onStop={handleStop}
-                        dbContext={dbContext}
-                        textareaRef={textareaRef}
-                        placeholder="質問するか、データのURLを貼り付けてみましょう"
-                        className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                        schemaName={schemaName}
-                        selectedTable={selectedTable}
-                        isMultiline={isMultiline}
-                        textareaHeight={textareaHeight}
-                        isLoading={isLoading}
-                        isCreatingTable={isCreatingTable}
-                        isAnyLoading={isAnyLoading}
-                        remoteFileComponent={remoteFileComponent}
-                        disabled={!apiKey}
-                    />
+                <div className="w-full">
+                    <div
+                        className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
+                    >
+                        <ChatInput
+                            value={input}
+                            onChange={handleInputChange}
+                            onKeyDown={handleKeyPress}
+                            onSubmit={e => {
+                                userHasScrolledRef.current = false;
+                                handleSubmit(e);
+                            }}
+                            onStop={handleStop}
+                            dbContext={dbContext}
+                            textareaRef={textareaRef}
+                            placeholder="質問するか、データのURLを貼り付けてみましょう"
+                            className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                            schemaName={schemaName}
+                            selectedTable={selectedTable}
+                            isMultiline={isMultiline}
+                            textareaHeight={textareaHeight}
+                            isLoading={isLoading}
+                            isCreatingTable={isCreatingTable}
+                            isAnyLoading={isAnyLoading}
+                            remoteFileComponent={remoteFileComponent}
+                            disabled={!apiKey}
+                        />
+                    </div>
+                    <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
+                        Enter で改行, Shift+Enter で送信
+                    </div>
                 </div>
             </div>
         );
@@ -868,31 +873,36 @@ export default function AIChat({
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className={`flex-shrink-0 bg-white border border-gray-300 rounded-md p-2`}>
-                <ChatInput
-                    value={input}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyPress}
-                    onSubmit={e => {
-                        // Reset scroll tracking when sending a new message
-                        userHasScrolledRef.current = false;
-                        handleSubmit(e);
-                    }}
-                    onStop={handleStop}
-                    dbContext={dbContext}
-                    textareaRef={textareaRef}
-                    placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
-                    className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                    schemaName={schemaName}
-                    selectedTable={selectedTable}
-                    isMultiline={isMultiline}
-                    textareaHeight={textareaHeight}
-                    isLoading={isLoading}
-                    isCreatingTable={isCreatingTable}
-                    isAnyLoading={isAnyLoading}
-                    remoteFileComponent={remoteFileComponent}
-                    disabled={!apiKey}
-                />
+            <div className="flex-shrink-0">
+                <div className="bg-white border border-gray-300 rounded-md p-2">
+                    <ChatInput
+                        value={input}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyPress}
+                        onSubmit={e => {
+                            // Reset scroll tracking when sending a new message
+                            userHasScrolledRef.current = false;
+                            handleSubmit(e);
+                        }}
+                        onStop={handleStop}
+                        dbContext={dbContext}
+                        textareaRef={textareaRef}
+                        placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
+                        className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                        schemaName={schemaName}
+                        selectedTable={selectedTable}
+                        isMultiline={isMultiline}
+                        textareaHeight={textareaHeight}
+                        isLoading={isLoading}
+                        isCreatingTable={isCreatingTable}
+                        isAnyLoading={isAnyLoading}
+                        remoteFileComponent={remoteFileComponent}
+                        disabled={!apiKey}
+                    />
+                </div>
+                <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
+                    Enter で改行, Shift+Enter で送信
+                </div>
             </div>
         </div>
     );
