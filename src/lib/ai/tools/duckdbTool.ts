@@ -142,7 +142,32 @@ export function createDuckDBTool(
                                 // Take the first new table (there should only be one from a single CREATE TABLE)
                                 createdTableName = newTables[0];
                                 console.log(`[DuckDB Tool] Detected newly created table: ${createdTableName}`);
+                            } else {
+                                // For CREATE OR REPLACE TABLE, table already exists
+                                // Try to extract table name from SQL
+                                // Support both quoted and unquoted table names
+                                // Quoted names (in double quotes) can contain any characters
+                                // Unquoted names can contain ASCII letters, digits, underscores, and Unicode letters (including CJK)
+                                const quotedTablePattern =
+                                    /CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/i;
+                                const unquotedTablePattern =
+                                    /CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+?)(?:\s+AS|\s*\()/i;
 
+                                const quotedMatch = sql.match(quotedTablePattern);
+                                const unquotedMatch = sql.match(unquotedTablePattern);
+                                const match = quotedMatch || unquotedMatch;
+
+                                if (match && match[1]) {
+                                    createdTableName = match[1];
+                                    console.log(
+                                        `[DuckDB Tool] Detected CREATE OR REPLACE or IF NOT EXISTS table: ${createdTableName}`
+                                    );
+                                } else {
+                                    console.warn('[DuckDB Tool] Could not extract table name from CREATE TABLE SQL');
+                                }
+                            }
+
+                            if (createdTableName) {
                                 // Format SQL for both explanation and storage
                                 const formattedSQL = formatSQL(sql);
 
@@ -163,8 +188,6 @@ export function createDuckDBTool(
                                             schema
                                         );
                                 }
-                            } else {
-                                console.warn('[DuckDB Tool] CREATE TABLE executed but no new table detected');
                             }
                         } catch (err) {
                             console.error('[DuckDB Tool] Failed to detect created table:', err);
