@@ -91,7 +91,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
                     ST_Transform("${geomCol}", 'EPSG:4326', 'EPSG:3857', true),
                     ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})
                 )
-            LIMIT 10000  -- Limit features per tile to prevent serialization issues
+            LIMIT 50000  -- Limit features per tile to prevent serialization issues
         )
         SELECT ST_AsMVT(
             feature,
