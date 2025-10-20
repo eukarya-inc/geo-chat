@@ -323,4 +323,60 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         // Just verify the table was created successfully
         expect(res.createdTable).toBe('test_explain');
     });
+
+    it('handles CREATE OR REPLACE TABLE with CJK table names (unquoted)', async () => {
+        const tool = createDuckDBTool(dbContext, null);
+
+        // First create a table with Japanese name
+        await tool.execute({ sql: 'CREATE TABLE 日本語テーブル AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
+
+        // Then replace it
+        const res = await tool.execute(
+            { sql: 'CREATE OR REPLACE TABLE 日本語テーブル AS SELECT 2 as id, ST_Point(139.7, 35.6) as geom' },
+            { messages: [], toolCallId: '' }
+        );
+
+        if ('error' in res) {
+            throw new Error(`Unexpected error: ${res.error}`);
+        }
+        expect(res.createdTable).toBe('日本語テーブル');
+        expect(res.hasGeometry).toBe(true);
+    });
+
+    it('handles CREATE OR REPLACE TABLE with CJK table names (quoted)', async () => {
+        const tool = createDuckDBTool(dbContext, null);
+
+        // First create a table with quoted Chinese name
+        await tool.execute({ sql: 'CREATE TABLE "中文表名" AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
+
+        // Then replace it
+        const res = await tool.execute(
+            { sql: 'CREATE OR REPLACE TABLE "中文表名" AS SELECT 2 as id, ST_Point(139.7, 35.6) as geom' },
+            { messages: [], toolCallId: '' }
+        );
+
+        if ('error' in res) {
+            throw new Error(`Unexpected error: ${res.error}`);
+        }
+        expect(res.createdTable).toBe('中文表名');
+        expect(res.hasGeometry).toBe(true);
+    });
+
+    it('handles CREATE OR REPLACE TABLE with Korean table names', async () => {
+        const tool = createDuckDBTool(dbContext, null);
+
+        // First create
+        await tool.execute({ sql: 'CREATE TABLE 한국어테이블 AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
+
+        // Then replace
+        const res = await tool.execute(
+            { sql: 'CREATE OR REPLACE TABLE 한국어테이블 AS SELECT 2 as id' },
+            { messages: [], toolCallId: '' }
+        );
+
+        if ('error' in res) {
+            throw new Error(`Unexpected error: ${res.error}`);
+        }
+        expect(res.createdTable).toBe('한국어테이블');
+    });
 });

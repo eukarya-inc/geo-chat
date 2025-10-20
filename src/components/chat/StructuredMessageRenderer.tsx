@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import type { VegaChartSpec } from '../../types/chart';
+import type { VegaChartSpec, ChartSpec } from '../../types/chart';
 import type { RegressionAnalysisResponse, ColumnSummary } from '../../types/regression';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
@@ -22,6 +22,8 @@ interface StructuredMessageRendererProps {
     isStreaming?: boolean;
     onPromptClick?: (promptText: string) => void;
     isLoadingMessage?: boolean;
+    chartSpecs?: Record<string, ChartSpec>;
+    tableGeometries?: Record<string, boolean>;
 }
 
 interface CollapsibleSectionProps {
@@ -82,7 +84,9 @@ const renderContentBlock = (
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
     onPromptClick?: (promptText: string) => void,
-    isLoadingMessage?: boolean
+    isLoadingMessage?: boolean,
+    chartSpecs?: Record<string, ChartSpec>,
+    tableGeometries?: Record<string, boolean>
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -92,6 +96,9 @@ const renderContentBlock = (
                 .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
                 .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
                 .trim();
+
+            // Check if this is a final message (final conclusion)
+            const isFinalMessage = block.text.includes('<!--FINAL_MESSAGE-->');
 
             // Check for table created markers in text
             const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
@@ -111,9 +118,11 @@ const renderContentBlock = (
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                     {beforeText}
                                 </ReactMarkdown>
-                                <div className="mt-2 flex">
-                                    <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
-                                </div>
+                                {isFinalMessage && (
+                                    <div className="mt-2 flex">
+                                        <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
+                                    </div>
+                                )}
                             </div>
                         );
                     }
@@ -125,6 +134,8 @@ const renderContentBlock = (
                             tableName={tableName}
                             isSelected={selectedTable === tableName}
                             onClick={() => onTableSelect?.(tableName)}
+                            hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
+                            hasGeometry={tableGeometries?.[tableName] || false}
                         />
                     );
 
@@ -139,9 +150,11 @@ const renderContentBlock = (
                             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                 {remainingText}
                             </ReactMarkdown>
-                            <div className="mt-2 flex">
-                                <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
-                            </div>
+                            {isFinalMessage && (
+                                <div className="mt-2 flex">
+                                    <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
+                                </div>
+                            )}
                         </div>
                     );
                 }
@@ -161,7 +174,7 @@ const renderContentBlock = (
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {cleanedText}
                     </ReactMarkdown>
-                    {!isLoadingMessage && (
+                    {!isLoadingMessage && isFinalMessage && (
                         <div className="mt-2 flex">
                             <CopyButton onCopy={() => navigator.clipboard.writeText(cleanedText)} />
                         </div>
@@ -482,6 +495,8 @@ const renderContentBlock = (
                                 tableName={tableCreated}
                                 isSelected={selectedTable === tableCreated}
                                 onClick={() => onTableSelect?.(tableCreated)}
+                                hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                hasGeometry={tableGeometries?.[tableCreated] || false}
                             />
                         );
                     }
@@ -500,6 +515,8 @@ const renderContentBlock = (
                                 tableName={tableCreated}
                                 isSelected={selectedTable === tableCreated}
                                 onClick={() => onTableSelect?.(tableCreated)}
+                                hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                hasGeometry={tableGeometries?.[tableCreated] || false}
                             />
                         );
                     }
@@ -568,6 +585,8 @@ const renderContentBlock = (
                                     tableName={tableCreated}
                                     isSelected={selectedTable === tableCreated}
                                     onClick={() => onTableSelect?.(tableCreated)}
+                                    hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
+                                    hasGeometry={tableGeometries?.[tableCreated] || false}
                                 />
                             )}
                         </CollapsibleSection>
@@ -785,6 +804,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     isStreaming = false,
     onPromptClick,
     isLoadingMessage = false,
+    chartSpecs,
+    tableGeometries,
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -851,7 +872,16 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             <div className={className}>
                 {/* Render existing structured content blocks */}
                 {filteredContent.map((block, index) =>
-                    renderContentBlock(block, index, selectedTable, onTableSelect, onPromptClick, isLoadingMessage)
+                    renderContentBlock(
+                        block,
+                        index,
+                        selectedTable,
+                        onTableSelect,
+                        onPromptClick,
+                        isLoadingMessage,
+                        chartSpecs,
+                        tableGeometries
+                    )
                 )}
 
                 {/* Render streaming text if present */}
@@ -914,6 +944,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     tableName={tableName}
                     isSelected={selectedTable === tableName}
                     onClick={() => onTableSelect?.(tableName)}
+                    hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
+                    hasGeometry={tableGeometries?.[tableName] || false}
                 />
             );
 

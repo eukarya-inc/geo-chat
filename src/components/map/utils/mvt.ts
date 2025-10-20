@@ -9,7 +9,7 @@ export interface QueryParams {
     };
     selectedTable: string;
     selectedColumns: string[];
-    geometryColumnName: string;
+    geometryColumnName?: string;
     schema?: string | null;
     columnTypes?: Record<string, string>;
 }
@@ -48,8 +48,14 @@ function shouldStringifyColumn(columnType?: string | null): boolean {
  */
 export function generateVectorTileQuery(params: QueryParams): string {
     const { zxy, selectedTable, selectedColumns, geometryColumnName, columnTypes } = params;
+
+    // geometryColumnName is required - throw error if not provided
+    if (!geometryColumnName) {
+        throw new Error('geometryColumnName is required for vector tile generation');
+    }
+
     const simplify = calculateSimplifyTolerance(zxy.z);
-    const geomCol = geometryColumnName || 'geometry';
+    const geomCol = geometryColumnName;
 
     // Don't use schema-qualified table name - connection already has schema context
     const qualifiedTableName = selectedTable;
@@ -68,7 +74,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
     const structColumns = `{
         'geometry': ST_AsMVTGeom(
-            ST_Transform(ST_Simplify("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
+            ST_Transform(ST_SimplifyPreserveTopology("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
             ST_Extent(ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})),
             4096,
             256,
@@ -85,7 +91,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
                     ST_Transform("${geomCol}", 'EPSG:4326', 'EPSG:3857', true),
                     ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})
                 )
-            LIMIT 10000  -- Limit features per tile to prevent serialization issues
+            LIMIT 50000  -- Limit features per tile to prevent serialization issues
         )
         SELECT ST_AsMVT(
             feature,
@@ -95,6 +101,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
         ) AS mvt
         FROM tile_data
         WHERE feature.geometry IS NOT NULL
+            AND NOT ST_IsEmpty(feature.geometry)
     `;
 }
 

@@ -222,9 +222,9 @@ export function createDefaultStyle(): maplibregl.StyleSpecification {
         sources: {
             osm: {
                 type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tiles: ['https://api.plateauview.mlit.go.jp/tiles/dark-map/{z}/{x}/{y}.png'],
                 tileSize: 256,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
             },
         },
         layers: [
@@ -236,3 +236,15 @@ export function createDefaultStyle(): maplibregl.StyleSpecification {
         ],
     };
 }
+
+/*
+Tile URL examples:
+- https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png (OpenStreetMap)
+- https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png (標準地図)
+- https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png (淡色地図)
+- https://cyberjapandata.gsi.go.jp/xyz/dark/{z}/{x}/{y}.png (ダーク地図)
+- https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg (航空写真)
+- https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png (CartoDB Dark Matter)
+- https://api.plateauview.mlit.go.jp/tiles/light-map/{z}/{x}/{y}.png (PLATEAUライトマップ)
+- https://api.plateauview.mlit.go.jp/tiles/dark-map/{z}/{x}/{y}.png (PLATEAUダークマップ)
+*/

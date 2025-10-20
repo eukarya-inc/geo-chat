@@ -84,7 +84,24 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - ALWAYS specify the "type" field explicitly for each encoding channel
         - Common types: "quantitative" (numbers), "nominal" (categories), "temporal" (dates), "ordinal" (ordered categories)
         - The type determines how the data is interpreted and scaled
-        
+
+        AGGREGATE USAGE:
+        - DO NOT add "aggregate" to encoding channels unless you explicitly want to aggregate data
+        - Most visualizations should display individual data points without aggregation
+        - Only use "aggregate" when you need to compute summary statistics (sum, mean, count, etc.) across groups
+        - If no grouping is needed, DO NOT use "aggregate" - it will break the visualization
+        - Example of when NOT to use aggregate: displaying all rows from a table as-is
+        - Example of when to use aggregate: showing average sales per region (grouped by region)
+
+        SORT SPECIFICATION:
+        - For simple sorting, use "ascending" or "descending": {"field": "name", "type": "nominal", "sort": "descending"}
+        - For sorting by another field's values, use object format with "field" and "order":
+          Example: {"field": "date", "type": "temporal", "sort": {"field": "value", "order": "descending"}}
+          Example: {"field": "事業内容", "type": "nominal", "sort": {"field": "事業者数", "order": "descending"}}
+        - DO NOT use invalid patterns like "-x", "-y", "x", or "y" as sort values
+        - Valid sort string values are ONLY "ascending" or "descending"
+        - Valid sort object should have "field" and "order" properties
+
         Example specifications:
         {
           "mark": "bar",
@@ -144,15 +161,46 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
 
 // Function to process and clean the Vega spec from AI
 export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartSpec>): VegaChartSpec {
-    // Helper function to ensure field type is set
+    // Helper function to ensure field type is set and remove unnecessary aggregate
     const ensureFieldType = (field: unknown): unknown => {
         if (!field || typeof field !== 'object') return field;
 
-        const fieldObj = field as Record<string, unknown>;
+        const fieldObj = { ...(field as Record<string, unknown>) };
+
+        // Remove unnecessary aggregate that AI tends to add
+        // Aggregate should only be used when explicitly needed for data aggregation
+        // In most cases, AI adds "aggregate": "mean" unnecessarily, which breaks visualizations
+        // by forcing Vega-Lite to aggregate data when we want to show individual data points
+        if ('aggregate' in fieldObj) {
+            delete fieldObj.aggregate;
+        }
+
+        // Fix incorrect sort patterns that AI tends to generate
+        // AI often generates invalid patterns like "sort": "-x" or "sort": "-y"
+        // Valid patterns: "ascending", "descending", or {"field": "...", "order": "..."}
+        if ('sort' in fieldObj) {
+            if (typeof fieldObj.sort === 'string') {
+                const sortValue = fieldObj.sort;
+                // Fix patterns like "-x", "-y" -> "descending"
+                if (sortValue === '-x' || sortValue === '-y') {
+                    fieldObj.sort = 'descending';
+                }
+                // Fix patterns like "x", "y" -> "ascending"
+                else if (sortValue === 'x' || sortValue === 'y') {
+                    fieldObj.sort = 'ascending';
+                }
+                // Ensure only valid string values are kept
+                else if (!['ascending', 'descending'].includes(sortValue)) {
+                    // If it's an invalid string, remove it
+                    delete fieldObj.sort;
+                }
+            }
+            // No need to modify sort objects - let Vega-Lite handle them as-is
+        }
 
         // If type is already set and valid, keep it
         if (fieldObj.type && ['quantitative', 'nominal', 'ordinal', 'temporal'].includes(fieldObj.type as string)) {
-            return field;
+            return fieldObj;
         }
 
         // Try to infer type from field name
@@ -228,15 +276,22 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         return field;
     };
 
+    // Remove width/height from aiSpec if present
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+    const { width: _width, height: _height, ...restAiSpec } = aiSpec as any;
+
     // Ensure required Vega-Lite schema
     const processedSpec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-        ...aiSpec,
+        ...restAiSpec,
         // Add data with SQL query
         data: {
             sql: `SELECT * FROM ${tableName} LIMIT 1000`,
             values: [],
         },
+        // Set responsive container sizing
+        width: 'container',
+        height: 'container',
     } as VegaChartSpec;
 
     // Ensure title exists - prefer user-provided title over generated one

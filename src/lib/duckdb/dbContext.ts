@@ -51,6 +51,7 @@ class DatabaseContext implements DBContext {
     private refreshDebounceTimeout: NodeJS.Timeout | null = null;
     private sqlHistory: SQLHistoryManager;
     private debugLogging = false; // Set to true to enable debug logs
+    private isInMemory = true; // Track if database is in-memory mode
 
     // Connection pool: Map<schema, PooledConnection[]>
     private connectionPool: Map<string | null, PooledConnection[]> = new Map();
@@ -59,8 +60,9 @@ class DatabaseContext implements DBContext {
     private connectionMutex: Promise<void> = Promise.resolve();
     private cleanupTimer: NodeJS.Timeout | null = null;
 
-    constructor(db: AsyncDuckDB) {
+    constructor(db: AsyncDuckDB, isInMemory = true) {
         this.db = db;
+        this.isInMemory = isInMemory;
         this.sqlHistory = new SQLHistoryManager();
 
         // Start cleanup timer for idle connections
@@ -95,6 +97,25 @@ class DatabaseContext implements DBContext {
             if (connections.length === 0) {
                 this.connectionPool.delete(schema);
             }
+        }
+    }
+
+    // Helper method to execute checkpoint only for persistent databases
+    private async executeCheckpoint(conn: AsyncDuckDBConnection): Promise<void> {
+        if (this.isInMemory) {
+            // Skip checkpoint for in-memory databases
+            return;
+        }
+
+        try {
+            await conn.query('CHECKPOINT;');
+            try {
+                await conn.query('PRAGMA force_checkpoint;');
+            } catch {
+                // force_checkpoint might not be available in all versions
+            }
+        } catch {
+            // Checkpoint failed (non-critical for most operations)
         }
     }
 
@@ -326,17 +347,8 @@ class DatabaseContext implements DBContext {
     async forceConsistency(): Promise<void> {
         const conn = await this.connect(null);
         try {
-            // Force immediate synchronization across all connections
-            await conn.query('CHECKPOINT;');
-
-            // Use force_checkpoint which is available in DuckDB-WASM
-            try {
-                await conn.query('PRAGMA force_checkpoint;');
-            } catch {
-                // If force_checkpoint fails, just use regular CHECKPOINT
-                await conn.query('CHECKPOINT;');
-            }
-
+            // Execute checkpoint only for persistent databases
+            await this.executeCheckpoint(conn);
             // Database consistency enforced
         } catch {
             // DB consistency checkpoint failed (non-critical)
@@ -553,20 +565,27 @@ class DatabaseContext implements DBContext {
         const conn = await this.connect(sanitizedSchema);
         try {
             const result = await conn.query(sql);
+
+            // Extract column type information from Arrow schema
+            const columnTypes = new Map<string, string>();
+            if (result.schema && result.schema.fields) {
+                for (const field of result.schema.fields) {
+                    // Get the field name and type
+                    const fieldName = field.name;
+                    const fieldType = field.type?.toString() || '';
+                    columnTypes.set(fieldName, fieldType);
+                }
+            }
+
             // Convert Arrow format data to JavaScript objects
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = result.toArray().map((row: any) => {
-                return convertArrowToJS(row);
+                return convertArrowToJS(row, columnTypes);
             });
 
             // For DDL operations, force checkpoint to ensure changes are persisted
             if (this.isDDLOperation(sql)) {
-                await conn.query('CHECKPOINT;');
-                try {
-                    await conn.query('PRAGMA force_checkpoint;');
-                } catch {
-                    // force_checkpoint might not be available in all versions
-                }
+                await this.executeCheckpoint(conn);
             }
 
             // Query execution completed
@@ -598,12 +617,7 @@ class DatabaseContext implements DBContext {
             await conn.query(`DROP TABLE IF EXISTS "${tableName}"`);
 
             // Force checkpoint to ensure changes are persisted
-            await conn.query('CHECKPOINT;');
-            try {
-                await conn.query('PRAGMA force_checkpoint;');
-            } catch {
-                // force_checkpoint might not be available in all versions
-            }
+            await this.executeCheckpoint(conn);
 
             // Notify listeners that the table was dropped
             this.notifyTableChange(tableName, schema);
@@ -820,12 +834,7 @@ class DatabaseContext implements DBContext {
             await conn.query(createTableSQL);
 
             // Force checkpoint for DDL operation
-            await conn.query('CHECKPOINT;');
-            try {
-                await conn.query('PRAGMA force_checkpoint;');
-            } catch {
-                // force_checkpoint might not be available in all versions
-            }
+            await this.executeCheckpoint(conn);
         } finally {
             await conn.close();
         }
@@ -856,6 +865,6 @@ class DatabaseContext implements DBContext {
     }
 }
 
-export function createDBContext(db: AsyncDuckDB): DBContext {
-    return new DatabaseContext(db);
+export function createDBContext(db: AsyncDuckDB, isInMemory = true): DBContext {
+    return new DatabaseContext(db, isInMemory);
 }

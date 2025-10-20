@@ -1,5 +1,6 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { Table as ArrowTable, tableFromArrays } from 'apache-arrow';
+import { convertArrowToJS } from './arrowConverter';
 
 export interface TableColumn {
     name: string;
@@ -168,6 +169,7 @@ function buildColumnNamesString(columns: TableColumn[]): string {
 
 /**
  * Convert complex types to displayable format for Arrow
+ * Note: Integer type conversions (HUGEINT, etc.) are now handled by convertArrowToJS
  */
 function convertComplexTypesForArrow(value: unknown, columnType?: string): unknown {
     // Handle null/undefined values first
@@ -184,11 +186,6 @@ function convertComplexTypesForArrow(value: unknown, columnType?: string): unkno
             return '';
         }
         return null;
-    }
-
-    // Convert BigInt to string
-    if (typeof value === 'bigint') {
-        return value.toString();
     }
 
     // Handle binary data (BLOB, GEOMETRY) - convert to string representation
@@ -223,14 +220,24 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
         return new ArrowTable();
     }
 
-    // Convert complex types that Arrow can't handle directly
+    // Create a Map of column types for the shared conversion logic
+    const columnTypes = new Map<string, string>();
+    for (const col of columns) {
+        columnTypes.set(col.name, col.type);
+    }
+
+    // First, apply the shared conversion logic to all rows
+    // This handles integer type conversions (including HUGEINT as string)
+    const convertedData = data.map(row => convertArrowToJS(row, columnTypes) as Record<string, unknown>);
+
+    // Then, convert complex types that Arrow can't handle directly
     const columnData: Record<string, unknown[]> = {};
 
     // Process each column
     for (const col of columns) {
-        columnData[col.name] = data.map(row => {
+        columnData[col.name] = convertedData.map(row => {
             const value = row[col.name];
-            // Pass column type to help with conversion
+            // Convert special types for Arrow display (BLOB, GEOMETRY, etc.)
             return convertComplexTypesForArrow(value, col.type);
         });
     }

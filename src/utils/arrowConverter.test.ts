@@ -167,4 +167,154 @@ describe('convertArrowToJS', () => {
         expect(details.value).toBe(555555555555);
         expect(typeof details.value).toBe('number');
     });
+
+    it('should convert HUGEINT string values to numbers when column type is provided', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('hugeint_col', 'HUGEINT');
+        columnTypes.set('bigint_col', 'BIGINT');
+        columnTypes.set('varchar_col', 'VARCHAR');
+
+        const input = {
+            hugeint_col: '123456789012345',
+            bigint_col: '9876543210',
+            varchar_col: '12345', // Should remain string because it's VARCHAR
+            regular_col: 42,
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        expect(result.hugeint_col).toBe(123456789012345);
+        expect(typeof result.hugeint_col).toBe('number');
+        expect(result.bigint_col).toBe(9876543210);
+        expect(typeof result.bigint_col).toBe('number');
+        expect(result.varchar_col).toBe('12345');
+        expect(typeof result.varchar_col).toBe('string');
+        expect(result.regular_col).toBe(42);
+    });
+
+    it('should handle all integer types', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('tinyint_col', 'TINYINT');
+        columnTypes.set('smallint_col', 'SMALLINT');
+        columnTypes.set('integer_col', 'INTEGER');
+        columnTypes.set('bigint_col', 'BIGINT');
+        columnTypes.set('hugeint_col', 'HUGEINT');
+        columnTypes.set('utinyint_col', 'UTINYINT');
+        columnTypes.set('usmallint_col', 'USMALLINT');
+        columnTypes.set('uinteger_col', 'UINTEGER');
+        columnTypes.set('ubigint_col', 'UBIGINT');
+        columnTypes.set('uhugeint_col', 'UHUGEINT');
+
+        const input = {
+            tinyint_col: '127',
+            smallint_col: '32767',
+            integer_col: '2147483647',
+            bigint_col: '9223372036854775807',
+            hugeint_col: '170141183460469231731687303715884105727',
+            utinyint_col: '255',
+            usmallint_col: '65535',
+            uinteger_col: '4294967295',
+            ubigint_col: '18446744073709551615',
+            uhugeint_col: '340282366920938463463374607431768211455',
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        // All should be converted to numbers
+        expect(typeof result.tinyint_col).toBe('number');
+        expect(typeof result.smallint_col).toBe('number');
+        expect(typeof result.integer_col).toBe('number');
+        expect(typeof result.bigint_col).toBe('number');
+        expect(typeof result.hugeint_col).toBe('number');
+        expect(typeof result.utinyint_col).toBe('number');
+        expect(typeof result.usmallint_col).toBe('number');
+        expect(typeof result.uinteger_col).toBe('number');
+        expect(typeof result.ubigint_col).toBe('number');
+        expect(typeof result.uhugeint_col).toBe('number');
+    });
+
+    it('should keep invalid number strings as strings', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('hugeint_col', 'HUGEINT');
+
+        const input = {
+            hugeint_col: 'not a number',
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        expect(result.hugeint_col).toBe('not a number');
+        expect(typeof result.hugeint_col).toBe('string');
+    });
+
+    it('should handle empty strings for integer columns', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('hugeint_col', 'HUGEINT');
+
+        const input = {
+            hugeint_col: '   ',
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        expect(result.hugeint_col).toBe('   ');
+        expect(typeof result.hugeint_col).toBe('string');
+    });
+
+    it('should handle Arrow Decimal types for HUGEINT (Decimal[38e0])', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('hugeint_col', 'Decimal[38e0]'); // Arrow representation of HUGEINT
+        columnTypes.set('decimal_col', 'Decimal[18e2]'); // Real decimal with scale
+
+        const input = {
+            hugeint_col: '123456789012345',
+            decimal_col: '123.45', // Should remain string as it has scale
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        // Decimal with scale 0 should be converted to number
+        expect(result.hugeint_col).toBe(123456789012345);
+        expect(typeof result.hugeint_col).toBe('number');
+
+        // Decimal with non-zero scale should remain string for now
+        // (we could enhance this later to convert to number too)
+        expect(result.decimal_col).toBe('123.45');
+    });
+
+    it('should handle double-quoted string numbers (JSON encoded)', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('hugeint_col', 'Decimal[38e0]');
+
+        const input = {
+            hugeint_col: '"50308"', // Double-quoted string number
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        expect(result.hugeint_col).toBe(50308);
+        expect(typeof result.hugeint_col).toBe('number');
+    });
+
+    it('should handle various double-quoted integer values', () => {
+        const columnTypes = new Map<string, string>();
+        columnTypes.set('value1', 'BIGINT');
+        columnTypes.set('value2', 'Decimal[38e0]');
+        columnTypes.set('value3', 'INTEGER');
+
+        const input = {
+            value1: '"12345"',
+            value2: '"0"',
+            value3: '"999999"',
+        };
+
+        const result = convertArrowToJS(input, columnTypes) as Record<string, unknown>;
+
+        expect(result.value1).toBe(12345);
+        expect(result.value2).toBe(0);
+        expect(result.value3).toBe(999999);
+        expect(typeof result.value1).toBe('number');
+        expect(typeof result.value2).toBe('number');
+        expect(typeof result.value3).toBe('number');
+    });
 });

@@ -1,26 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import AIChat from '../../components/chat';
+import ApiKeyInput from '../../components/chat/ApiKeyInput';
 import { TableView } from '../../components/table/TableView';
 import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
-import VegaLiteChart from '../../components/chart/VegaLiteChart';
-import { ChartConfigForm } from '../../components/chart';
-import Map from '../../components/map';
+import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
+import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
-import {
-    TableCellsIcon,
-    ArrowUpTrayIcon,
-    CogIcon,
-    EllipsisVerticalIcon,
-    ArrowDownTrayIcon,
-    TrashIcon,
-    ClipboardDocumentIcon,
-    XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
+import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
+import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
@@ -46,8 +39,8 @@ function ChatPage() {
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
     const [showChartConfig, setShowChartConfig] = useState(false);
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
-    const [showChartDropdown, setShowChartDropdown] = useState(false);
-    const chartDropdownRef = useRef<HTMLDivElement>(null);
+    const [showChartSpecModal, setShowChartSpecModal] = useState(false);
+    const chatPageVegaViewRef = useRef<View | null>(null);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -70,6 +63,7 @@ function ChatPage() {
         renameChat,
         selectChat,
         updateChatMessages,
+        updateChatState,
         getCurrentChatState,
     } = useChatManagement(dbContext);
 
@@ -77,7 +71,10 @@ function ChatPage() {
     const schemaName = chatIdToSchemaName(selectedChatId);
 
     // Schema management (uses chats state from above)
-    const { connection } = useSchemaManagement(dbContext, schemaName, chats);
+    const { connection } = useSchemaManagement(dbContext, schemaName, chats, cleanedChartSpecs => {
+        // Update the chat state with cleaned chartSpecs when orphaned specs are removed
+        updateChatState({ chartSpecs: cleanedChartSpecs });
+    });
 
     // Table selection
     const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName, connection);
@@ -97,8 +94,7 @@ function ChatPage() {
         selectedTable,
         dbContext,
         schemaName,
-        connection,
-        activeTab
+        connection
     );
 
     // Message handling
@@ -118,7 +114,8 @@ function ChatPage() {
         getDashboard,
         getAllDashboards,
         updateDashboardLayout,
-        removeVisualizationFromDashboard,
+        hideVisualizationFromDashboard,
+        showVisualizationOnDashboard,
         renameDashboard,
     } = useDashboardManagement();
 
@@ -266,7 +263,7 @@ function ChatPage() {
             title: `${selectedTable} Map`,
             mapSpec: mapSpec,
             tableName: selectedTable,
-            geometryColumn: selectedGeometryColumn || 'geometry',
+            geometryColumn: selectedGeometryColumn,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
         };
@@ -297,164 +294,31 @@ function ChatPage() {
         handleSelectDashboard(dashboardId);
     };
 
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (chartDropdownRef.current && !chartDropdownRef.current.contains(event.target as Node)) {
-                setShowChartDropdown(false);
-            }
-        }
-
-        if (showChartDropdown) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [showChartDropdown]);
-
-    // Chart download handler - automatically detects PNG or SVG
-    const handleDownloadChart = () => {
-        const chartTitle = displayChartSpec?.title || 'chart';
-
-        // Try PNG first (canvas)
-        const canvasElement = document.querySelector('.vega-embed canvas');
-        if (canvasElement) {
-            const canvas = canvasElement as HTMLCanvasElement;
-            const link = document.createElement('a');
-            link.download = `${chartTitle}.png`;
-            link.href = canvas.toDataURL();
-            link.click();
-            setShowChartDropdown(false);
+    // Chart type selection handler
+    const handleChartTypeSelect = async (chartType: ChartTypeOption) => {
+        if (!selectedTable || !dbContext || !updateChartFromAI) {
             return;
         }
 
-        // Try SVG if canvas not found
-        const svgElement = document.querySelector('.vega-embed svg');
-        if (svgElement) {
-            const svg = svgElement as SVGElement;
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svg);
-            const blob = new Blob([svgString], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.download = `${chartTitle}.svg`;
-            link.href = url;
-            link.click();
-            URL.revokeObjectURL(url);
-            setShowChartDropdown(false);
-            return;
-        }
-
-        // If neither found
-        alert('Chart not found. Please ensure the chart is fully rendered and try again.');
-        setShowChartDropdown(false);
-    };
-
-    // Copy chart to clipboard handler
-    const handleCopyChartToClipboard = async () => {
         try {
-            // Check if Clipboard API is available
-            if (!navigator.clipboard || !navigator.clipboard.write) {
-                alert('Clipboard API is not supported in your browser. Please use the download option instead.');
-                setShowChartDropdown(false);
-                return;
+            const result = await generateChartByType(chartType, selectedTable, dbContext, schemaName);
+            if (result) {
+                updateChartFromAI(selectedTable, result.spec);
+                // Automatically open the chart configuration panel
+                setShowChartConfig(true);
+            } else {
+                alert('Failed to generate chart. Please make sure the table has appropriate data for this chart type.');
             }
-
-            // Try canvas (PNG) first
-            const canvasElement = document.querySelector('.vega-embed canvas');
-            if (canvasElement) {
-                const canvas = canvasElement as HTMLCanvasElement;
-
-                // Safari requires ClipboardItem to be created synchronously with a Promise
-                const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob(blob => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Failed to create image from canvas'));
-                        }
-                    }, 'image/png');
-                });
-
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
-                setShowChartDropdown(false);
-                return;
-            }
-
-            // Try SVG - convert to PNG for clipboard
-            const svgElement = document.querySelector('.vega-embed svg');
-            if (svgElement) {
-                const svg = svgElement as SVGElement;
-                const svgData = new XMLSerializer().serializeToString(svg);
-                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-                const url = URL.createObjectURL(svgBlob);
-
-                // Safari requires ClipboardItem to be created synchronously with a Promise
-                const blobPromise = new Promise<Blob>((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        try {
-                            // Create canvas and draw image
-                            const tempCanvas = document.createElement('canvas');
-                            tempCanvas.width = img.width;
-                            tempCanvas.height = img.height;
-                            const ctx = tempCanvas.getContext('2d');
-                            if (!ctx) {
-                                reject(new Error('Failed to get canvas context'));
-                                return;
-                            }
-
-                            ctx.drawImage(img, 0, 0);
-
-                            // Convert to blob
-                            tempCanvas.toBlob(blob => {
-                                URL.revokeObjectURL(url);
-                                if (blob) {
-                                    resolve(blob);
-                                } else {
-                                    reject(new Error('Failed to create PNG from SVG'));
-                                }
-                            }, 'image/png');
-                        } catch (error) {
-                            URL.revokeObjectURL(url);
-                            reject(error);
-                        }
-                    };
-                    img.onerror = () => {
-                        URL.revokeObjectURL(url);
-                        reject(new Error('Failed to load SVG image'));
-                    };
-                    img.src = url;
-                });
-
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-
-                alert('Chart copied to clipboard!');
-                setShowChartDropdown(false);
-                return;
-            }
-
-            alert('Chart not found. Please ensure the chart is fully rendered and try again.');
-        } catch (err) {
-            console.error('Error copying chart:', err);
-            alert('Failed to copy chart to clipboard.');
+        } catch (error) {
+            console.error('Error generating chart:', error);
+            alert('An error occurred while generating the chart.');
         }
-        setShowChartDropdown(false);
     };
 
-    // Remove chart handler
-    const handleRemoveChart = () => {
-        if (selectedTable && deleteChartFromAI) {
-            deleteChartFromAI(selectedTable);
-            setConfiguredChartSpec(null);
-            setShowChartConfig(false);
-        }
-        setShowChartDropdown(false);
-    };
+    // Check if current chat has any messages
+    const currentChatMessages = getCurrentChatState()?.messages || [];
+    const hasMessages = currentChatMessages.length > 0;
+    const isEmptyChat = selectedChatId && !hasMessages;
 
     return (
         <>
@@ -497,12 +361,68 @@ function ChatPage() {
                                             console.error('No dashboard selected for removal');
                                             return;
                                         }
-                                        removeVisualizationFromDashboard(selectedDashboardId, vizId);
+                                        hideVisualizationFromDashboard(selectedDashboardId, vizId);
+                                    }}
+                                    onAddVisualization={vizId => {
+                                        if (!selectedDashboardId) {
+                                            console.error('No dashboard selected for adding visualization');
+                                            return;
+                                        }
+                                        showVisualizationOnDashboard(selectedDashboardId, vizId);
                                     }}
                                     onUpdateDashboard={updateDashboard}
                                 />
                             );
                         })()}
+                    </div>
+                ) : isEmptyChat ? (
+                    /* Empty Chat Mode - Centered Input */
+                    <div className="flex-1 h-full flex items-center justify-center p-4">
+                        <div className="w-full max-w-3xl -mt-32">
+                            {!isLoadingApiKey && dbContext && selectedChatId && (
+                                <AIChat
+                                    dbContext={dbContext}
+                                    apiKey={apiKey}
+                                    chatId={selectedChatId}
+                                    schemaName={schemaName}
+                                    onMessagesChange={handleMessagesChange}
+                                    updateChatMessages={updateChatMessages}
+                                    onSendMessageReady={handleSendMessageReady}
+                                    selectedTable={selectedTable}
+                                    onTableSelect={handleTableSelection}
+                                    onChartUpdate={updateChartFromAI}
+                                    onChartDelete={deleteChartFromAI}
+                                    getCurrentChatState={getCurrentChatState}
+                                    onMapStyleUpdate={async (
+                                        tableName: string,
+                                        style: import('../../components/map').TableStyle
+                                    ) => {
+                                        updateTableStyle(tableName, style);
+                                    }}
+                                    onMapStyleDelete={async (tableName: string) => {
+                                        deleteTableStyle(tableName);
+                                    }}
+                                    onConversationCompleted={syncImmediately}
+                                    remoteFileComponent={onClose => (
+                                        <RemoteFile
+                                            dbContext={dbContext}
+                                            schema={schemaName}
+                                            onTableCreated={(tableName: string) => {
+                                                handleTableSelection(tableName);
+                                                if (dbContext) {
+                                                    dbContext.notifyTableChange(tableName, schemaName);
+                                                }
+                                                onClose();
+                                            }}
+                                            onSendMessage={sendMessageRef.current || undefined}
+                                        />
+                                    )}
+                                    emptyMode={true}
+                                    onApiKeyChange={setApiKey}
+                                    onApiKeySave={saveApiKey}
+                                />
+                            )}
+                        </div>
                     </div>
                 ) : (
                     /* Chat Mode - Split View */
@@ -510,38 +430,7 @@ function ChatPage() {
                         {/* Left Half - AI Chat (Modeling Tools) */}
                         <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
                             {showApiKeyInput && !isLoadingApiKey && (
-                                <div className="p-4 bg-gray-50 border-b border-gray-300 flex-shrink-0">
-                                    <div className="mb-2.5 text-sm font-bold">Anthropic API Key Settings</div>
-                                    <div className="flex gap-2.5 items-center">
-                                        <input
-                                            type="password"
-                                            value={apiKey}
-                                            onChange={e => setApiKey(e.target.value)}
-                                            placeholder="Enter your Anthropic API key..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                const success = await saveApiKey(apiKey);
-                                                if (!success && apiKey.trim()) {
-                                                    alert('APIキーの保存に失敗しました。');
-                                                }
-                                            }}
-                                            disabled={!apiKey.trim()}
-                                            className={`px-4 py-2 text-white border-none rounded text-sm ${
-                                                apiKey.trim()
-                                                    ? 'bg-blue-500 cursor-pointer hover:bg-blue-600'
-                                                    : 'bg-gray-400 cursor-not-allowed'
-                                            }`}
-                                        >
-                                            Save
-                                        </button>
-                                    </div>
-                                    <div className="text-xs text-gray-600 mt-2">
-                                        Your API key is encrypted and stored locally in your browser and never sent to
-                                        our servers.
-                                    </div>
-                                </div>
+                                <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} onSave={saveApiKey} />
                             )}
                             {isLoadingApiKey && (
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
@@ -653,7 +542,12 @@ function ChatPage() {
                                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                     }`}
                                                 >
-                                                    グラフ
+                                                    <span className="flex items-center gap-1.5">
+                                                        グラフ
+                                                        {displayChartSpec && (
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                        )}
+                                                    </span>
                                                 </button>
                                                 <button
                                                     onClick={() => setActiveTab('map')}
@@ -663,7 +557,12 @@ function ChatPage() {
                                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                     }`}
                                                 >
-                                                    地図
+                                                    <span className="flex items-center gap-1.5">
+                                                        地図
+                                                        {selectedGeometryColumn && (
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                        )}
+                                                    </span>
                                                 </button>
                                             </div>
                                         </div>
@@ -697,298 +596,97 @@ function ChatPage() {
                                             {activeTab === 'chart' &&
                                                 selectedTable &&
                                                 (displayChartSpec && connection && selectedChatId ? (
-                                                    <div className="h-full overflow-hidden flex flex-col">
-                                                        {/* Chart Display Area */}
-                                                        <div
-                                                            className={`${showChartConfig ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}
-                                                        >
-                                                            {/* Chart Title Bar with Menu */}
-                                                            <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                                                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                                    {displayChartSpec.title || 'Chart'}
-                                                                </h4>
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="relative" ref={chartDropdownRef}>
-                                                                        <button
-                                                                            onClick={e => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                setShowChartDropdown(
-                                                                                    !showChartDropdown
-                                                                                );
-                                                                            }}
-                                                                            onMouseDown={e => e.stopPropagation()}
-                                                                            className="p-2 text-gray-700 hover:text-gray-900 transition-colors rounded-md hover:bg-gray-100 cursor-pointer"
-                                                                            title="Chart options"
-                                                                            type="button"
-                                                                        >
-                                                                            <EllipsisVerticalIcon className="w-5 h-5" />
-                                                                        </button>
-
-                                                                        {showChartDropdown && (
-                                                                            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[1000]">
-                                                                                <div className="py-1">
-                                                                                    <button
-                                                                                        onClick={e => {
-                                                                                            e.preventDefault();
-                                                                                            e.stopPropagation();
-                                                                                            setShowChartConfig(
-                                                                                                !showChartConfig
-                                                                                            );
-                                                                                            setShowChartDropdown(false);
-                                                                                        }}
-                                                                                        onMouseDown={e =>
-                                                                                            e.stopPropagation()
-                                                                                        }
-                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                                                                        type="button"
-                                                                                    >
-                                                                                        <CogIcon className="w-4 h-4 mr-2" />
-                                                                                        Chart Configuration
-                                                                                    </button>
-
-                                                                                    <hr className="my-1 border-gray-200" />
-
-                                                                                    <button
-                                                                                        onClick={e => {
-                                                                                            e.preventDefault();
-                                                                                            e.stopPropagation();
-                                                                                            handleCopyChartToClipboard();
-                                                                                        }}
-                                                                                        onMouseDown={e =>
-                                                                                            e.stopPropagation()
-                                                                                        }
-                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                                                                        type="button"
-                                                                                    >
-                                                                                        <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                                                                                        Copy to Clipboard
-                                                                                    </button>
-
-                                                                                    <button
-                                                                                        onClick={e => {
-                                                                                            e.preventDefault();
-                                                                                            e.stopPropagation();
-                                                                                            handleDownloadChart();
-                                                                                        }}
-                                                                                        onMouseDown={e =>
-                                                                                            e.stopPropagation()
-                                                                                        }
-                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                                                                        type="button"
-                                                                                    >
-                                                                                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                                                                                        Save as Image
-                                                                                    </button>
-
-                                                                                    <hr className="my-1 border-gray-200" />
-
-                                                                                    <button
-                                                                                        onClick={e => {
-                                                                                            e.preventDefault();
-                                                                                            e.stopPropagation();
-                                                                                            handleRemoveChart();
-                                                                                        }}
-                                                                                        onMouseDown={e =>
-                                                                                            e.stopPropagation()
-                                                                                        }
-                                                                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                                                                        type="button"
-                                                                                    >
-                                                                                        <TrashIcon className="w-4 h-4 mr-2" />
-                                                                                        Remove Chart
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Chart Content */}
-                                                            <div className="flex-1 overflow-auto p-4">
-                                                                <VegaLiteChart
-                                                                    key={`${schemaName}-${displayChartSpec.id}`}
-                                                                    spec={displayChartSpec.spec}
-                                                                    dbContext={dbContext}
-                                                                    schema={schemaName}
-                                                                    showHeader={false}
-                                                                    enableActions={false}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Configuration Panel - Horizontal Split */}
-                                                        {showChartConfig && (
-                                                            <div
-                                                                className="border-t border-gray-200 bg-white"
-                                                                style={{ height: '280px' }}
-                                                            >
-                                                                {/* Configuration Panel Header */}
-                                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
-                                                                    <h5 className="text-sm font-medium text-gray-900">
-                                                                        Chart Configuration
-                                                                    </h5>
-                                                                    <button
-                                                                        onClick={() => setShowChartConfig(false)}
-                                                                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors rounded-md hover:bg-gray-200"
-                                                                        title="Close configuration panel"
-                                                                        type="button"
-                                                                    >
-                                                                        <XMarkIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                </div>
-                                                                <div
-                                                                    className="overflow-auto p-3"
-                                                                    style={{ height: 'calc(100% - 41px)' }}
-                                                                >
-                                                                    {displayChartSpec && (
-                                                                        <ChartConfigForm
-                                                                            chartSpec={displayChartSpec}
-                                                                            dbContext={dbContext}
-                                                                            schema={schemaName || 'main'}
-                                                                            onSpecChange={handleChartSpecChange}
-                                                                            autoApplyChanges={true}
-                                                                            showApplyButton={false}
-                                                                            showSaveButton={true}
-                                                                            onSave={() => {
-                                                                                // Show confirmation dialog before saving
-                                                                                const chartTitle =
-                                                                                    displayChartSpec.title || 'chart';
-                                                                                const chartElement =
-                                                                                    document.querySelector(
-                                                                                        '.vega-embed canvas, .vega-embed svg'
-                                                                                    );
-
-                                                                                if (!chartElement) {
-                                                                                    alert(
-                                                                                        'Chart not found. Please make sure the chart is displayed.'
-                                                                                    );
-                                                                                    return;
-                                                                                }
-
-                                                                                const format =
-                                                                                    chartElement.tagName === 'CANVAS'
-                                                                                        ? 'PNG'
-                                                                                        : 'SVG';
-                                                                                const confirmed = window.confirm(
-                                                                                    `Do you want to save "${chartTitle}" as ${format} image?\n\nThis will download the file to your computer.`
-                                                                                );
-
-                                                                                if (confirmed) {
-                                                                                    // Proceed with save
-                                                                                    if (
-                                                                                        chartElement.tagName ===
-                                                                                        'CANVAS'
-                                                                                    ) {
-                                                                                        // Save as PNG
-                                                                                        const canvas =
-                                                                                            chartElement as HTMLCanvasElement;
-                                                                                        const link =
-                                                                                            document.createElement('a');
-                                                                                        link.download = `${chartTitle}.png`;
-                                                                                        link.href = canvas.toDataURL();
-                                                                                        link.click();
-                                                                                    } else if (
-                                                                                        chartElement.tagName === 'svg'
-                                                                                    ) {
-                                                                                        // Save as SVG
-                                                                                        const svg =
-                                                                                            chartElement as SVGElement;
-                                                                                        const serializer =
-                                                                                            new XMLSerializer();
-                                                                                        const svgString =
-                                                                                            serializer.serializeToString(
-                                                                                                svg
-                                                                                            );
-                                                                                        const blob = new Blob(
-                                                                                            [svgString],
-                                                                                            { type: 'image/svg+xml' }
-                                                                                        );
-                                                                                        const link =
-                                                                                            document.createElement('a');
-                                                                                        link.download = `${chartTitle}.svg`;
-                                                                                        link.href =
-                                                                                            URL.createObjectURL(blob);
-                                                                                        link.click();
-                                                                                        URL.revokeObjectURL(link.href);
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                            isSaveDisabled={false}
-                                                                            saveTooltip="Save chart as PNG or SVG image"
-                                                                            showExportButton={true}
-                                                                            onExport={() => {
-                                                                                if (getAllDashboards().length > 0) {
-                                                                                    setExportType('chart');
-                                                                                    setShowExportModal(true);
-                                                                                }
-                                                                            }}
-                                                                            isExportDisabled={
-                                                                                getAllDashboards().length === 0
-                                                                            }
-                                                                            exportTooltip={
-                                                                                getAllDashboards().length > 0
-                                                                                    ? 'Export this chart to a dashboard'
-                                                                                    : '⚠️ No dashboards available - Create a dashboard first to export charts'
-                                                                            }
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    <ChartPanel
+                                                        chartSpec={displayChartSpec}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName || 'main'}
+                                                        configMode="panel"
+                                                        onViewReady={view => {
+                                                            chatPageVegaViewRef.current = view;
+                                                        }}
+                                                        onConfigOpen={() => setShowChartConfig(!showChartConfig)}
+                                                        onJsonSourceOpen={() => setShowChartSpecModal(true)}
+                                                        onRemove={() => {
+                                                            if (selectedTable && deleteChartFromAI) {
+                                                                deleteChartFromAI(selectedTable);
+                                                                setConfiguredChartSpec(null);
+                                                                setShowChartConfig(false);
+                                                            }
+                                                        }}
+                                                        onSpecChange={handleChartSpecChange}
+                                                        showConfigPanel={showChartConfig}
+                                                        onCloseConfigPanel={() => setShowChartConfig(false)}
+                                                        autoApplyChanges={true}
+                                                        showApplyButton={false}
+                                                        showMenuExportButton={true}
+                                                        onExport={() => {
+                                                            if (getAllDashboards().length > 0) {
+                                                                setExportType('chart');
+                                                                setShowExportModal(true);
+                                                            }
+                                                        }}
+                                                        isExportDisabled={getAllDashboards().length === 0}
+                                                        exportTooltip={
+                                                            getAllDashboards().length > 0
+                                                                ? 'このグラフをダッシュボードにエクスポート'
+                                                                : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
+                                                        }
+                                                    />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <div className="text-center text-gray-500">
-                                                            <p>Generating chart...</p>
-                                                            <p className="text-sm mt-2">
-                                                                Chart will appear automatically
-                                                            </p>
-                                                        </div>
+                                                        <ChartTypeSelector onSelectType={handleChartTypeSelect} />
                                                     </div>
                                                 ))}
 
                                             {/* Map Tab */}
-                                            {activeTab === 'map' && connection && selectedTable && (
-                                                <div className="h-full overflow-hidden flex flex-col">
-                                                    <div className="flex-1 overflow-hidden">
-                                                        <Map
-                                                            dbContext={dbContext}
-                                                            schema={schemaName}
-                                                            selectedTable={selectedTable}
-                                                            selectedColumns={undefined}
-                                                            geometryColumnName={selectedGeometryColumn}
-                                                            tableStyles={tableStyles}
-                                                            initialStyle={mapStyle}
-                                                            onTableStyleChanged={updateTableStyle}
-                                                        />
-                                                    </div>
-                                                    <div className="flex justify-end p-3 border-t border-gray-200 bg-white">
-                                                        <button
-                                                            onClick={() => {
-                                                                if (getAllDashboards().length > 0) {
-                                                                    setExportType('map');
-                                                                    setShowExportModal(true);
-                                                                }
-                                                            }}
-                                                            disabled={getAllDashboards().length === 0}
-                                                            className={`p-2 rounded-full transition-colors shadow-lg ${
-                                                                getAllDashboards().length > 0
-                                                                    ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                            }`}
-                                                            title={
-                                                                getAllDashboards().length > 0
-                                                                    ? 'Export map visualization'
-                                                                    : 'Create a dashboard first to export visualizations'
+                                            {activeTab === 'map' &&
+                                                connection &&
+                                                selectedTable &&
+                                                (selectedGeometryColumn ? (
+                                                    <MapPanel
+                                                        title={selectedTable}
+                                                        tableName={selectedTable}
+                                                        geometryColumn={selectedGeometryColumn}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName || undefined}
+                                                        mapSpec={{ tableStyles, style: mapStyle }}
+                                                        showRemoveButton={false}
+                                                        onExport={() => {
+                                                            if (getAllDashboards().length > 0) {
+                                                                setExportType('map');
+                                                                setShowExportModal(true);
                                                             }
-                                                        >
-                                                            <ArrowUpTrayIcon className="w-5 h-5" />
-                                                        </button>
+                                                        }}
+                                                        showExportButton={true}
+                                                        isExportDisabled={getAllDashboards().length === 0}
+                                                        exportTooltip={
+                                                            getAllDashboards().length > 0
+                                                                ? 'この地図をダッシュボードにエクスポート'
+                                                                : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="h-full flex items-center justify-center bg-gray-50">
+                                                        <div className="text-center text-gray-500 max-w-md">
+                                                            <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                                                            <p className="text-lg mb-4">
+                                                                ジオメトリカラムが存在しません
+                                                            </p>
+                                                            <p className="text-sm mb-2">
+                                                                地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
+                                                            </p>
+                                                            <p className="text-sm mb-4">以下の方法をお試しください：</p>
+                                                            <ul className="text-sm text-left mb-4 space-y-2">
+                                                                <li>• ジオメトリ情報を含むデータを読み込む</li>
+                                                                <li>
+                                                                    •
+                                                                    緯度経度カラムからジオメトリを生成するようAIに依頼する
+                                                                </li>
+                                                                <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
+                                                            </ul>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                ))}
                                         </div>
                                     </>
                                 )}
@@ -1015,6 +713,22 @@ function ChatPage() {
                 type={exportType}
                 lastSelectedDashboard={lastSelectedExportDashboard}
             />
+
+            {/* Chart Spec Modal */}
+            {displayChartSpec && (
+                <ChartSpecModal
+                    isOpen={showChartSpecModal}
+                    onClose={() => setShowChartSpecModal(false)}
+                    chartSpec={displayChartSpec.spec}
+                    vegaView={chatPageVegaViewRef.current}
+                    aiGeneratedSpec={displayChartSpec.aiGeneratedSpec}
+                    onApply={newSpec => {
+                        if (selectedTable && updateChartFromAI) {
+                            updateChartFromAI(selectedTable, newSpec);
+                        }
+                    }}
+                />
+            )}
         </>
     );
 }

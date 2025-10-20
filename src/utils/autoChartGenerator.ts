@@ -66,7 +66,8 @@ export async function generateDefaultCharts(
                             title: valueColumn.name,
                         },
                     },
-                    height: 400,
+                    width: 'container',
+                    height: 'container',
                 },
             };
         }
@@ -97,7 +98,8 @@ export async function generateDefaultCharts(
                             title: valueColumn.name,
                         },
                     },
-                    height: 400,
+                    width: 'container',
+                    height: 'container',
                 },
             };
         }
@@ -136,7 +138,8 @@ export async function generateDefaultCharts(
                             type: 'quantitative',
                         },
                     },
-                    height: 400,
+                    width: 'container',
+                    height: 'container',
                 },
             };
         }
@@ -180,7 +183,8 @@ export async function generateDefaultCharts(
                             title: column.name,
                         },
                     },
-                    height: 400,
+                    width: 'container',
+                    height: 'container',
                 },
             };
         }
@@ -210,7 +214,8 @@ export async function generateDefaultCharts(
                             title: 'Count',
                         },
                     },
-                    height: 400,
+                    width: 'container',
+                    height: 'container',
                 },
             };
         }

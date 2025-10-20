@@ -6,15 +6,18 @@
     "scripts": {
         "dev": "vite --host 0.0.0.0",
         "build": "tsc -b && vite build",
+        "build:nocheck": "vite build",
         "format": "prettier --write --ignore-unknown .",
         "format:check": "prettier --check --ignore-unknown .",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit",
         "preview": "vite preview",
-        "test": "vitest run",
+        "test": "vitest run --project=unit",
         "test:watch": "vitest",
         "test:browser": "vitest run --project=browser",
-        "test:unit": "vitest run --project=unit"
+        "test:unit": "vitest run --project=unit",
+        "test:full": "vitest run",
+        "check": "prettier --write --log-level error . && eslint --quiet . && npm run typecheck && npm run build:nocheck > /dev/null 2>&1 && npm run test:unit > /dev/null 2>&1"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^1.2.12",
@@ -26,6 +29,7 @@
         "@viz-js/viz": "^3.16.0",
         "ai": "^4.3.16",
         "apache-arrow": "^21.0.0",
+        "html2canvas": "^1.4.1",
         "jotai": "^2.13.1",
         "jstat": "^1.9.6",
         "lodash": "^4.17.21",

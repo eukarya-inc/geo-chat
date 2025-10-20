@@ -1,15 +1,17 @@
 import React from 'react';
-import { TableCellsIcon } from '@heroicons/react/24/outline';
+import { TableCellsIcon, ChartBarIcon, MapIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 interface TableCreatedMessageProps {
     tableName: string;
     isSelected: boolean;
     onClick: () => void;
+    hasChartSpec?: boolean;
+    hasGeometry?: boolean;
 }
 
 export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.memo(
-    ({ tableName, isSelected, onClick }) => {
+    ({ tableName, isSelected, onClick, hasChartSpec = false, hasGeometry = false }) => {
         return (
             <div
                 className={`
@@ -29,9 +31,11 @@ export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.mem
                 ) : (
                     <TableCellsIcon className="w-5 h-5 flex-shrink-0" />
                 )}
-                <span className="font-medium">
+                <span className="font-medium flex-1">
                     テーブルを作成しました: <strong>{tableName}</strong>
                 </span>
+                {hasChartSpec && <ChartBarIcon className="w-5 h-5 flex-shrink-0 text-green-600" title="チャートあり" />}
+                {hasGeometry && <MapIcon className="w-5 h-5 flex-shrink-0 text-blue-600" title="地図あり" />}
             </div>
         );
     }

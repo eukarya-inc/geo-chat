@@ -1,16 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { PlusIcon } from '@heroicons/react/24/outline';
+import { extractDataUrl } from '../../utils/tableCreation';
+import SubmitButton from './SubmitButton';
 
 interface ChatInputProps {
     value: string;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+    onSubmit: (e: React.FormEvent) => void;
+    onStop: () => void;
     dbContext: DBContext;
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     placeholder?: string;
     className?: string;
-    rows?: number;
     schemaName?: string | null;
+    selectedTable?: string | null;
+    isMultiline: boolean;
+    textareaHeight: number;
+    isLoading: boolean;
+    isCreatingTable: boolean;
+    isAnyLoading: boolean;
+    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    disabled?: boolean;
 }
 
 interface AutocompleteState {
@@ -18,28 +30,43 @@ interface AutocompleteState {
     triggerIndex: number;
     searchText: string;
     selectedIndex: number;
+    triggerType: '@' | '#';
 }
 
 export default function ChatInput({
     value,
     onChange,
     onKeyDown,
+    onSubmit,
+    onStop,
     dbContext,
     textareaRef,
     placeholder,
     className,
-    rows = 2,
     schemaName,
+    selectedTable,
+    isMultiline,
+    textareaHeight,
+    isLoading,
+    isCreatingTable,
+    isAnyLoading,
+    remoteFileComponent,
+    disabled = false,
 }: ChatInputProps) {
     const [tables, setTables] = useState<string[]>([]);
+    const [fields, setFields] = useState<Array<{ name: string; type: string }>>([]);
     const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
         isOpen: false,
         triggerIndex: -1,
         searchText: '',
         selectedIndex: 0,
+        triggerType: '@',
     });
     const listRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [showPopup, setShowPopup] = useState(false);
+    const popupRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
 
     // Fetch tables from database
     useEffect(() => {
@@ -59,6 +86,26 @@ export default function ChatInput({
         fetchTables();
     }, [dbContext, schemaName, value]); // Re-fetch when value changes to catch new tables
 
+    // Fetch fields from selected table
+    useEffect(() => {
+        const fetchFields = async () => {
+            if (!dbContext || !selectedTable) {
+                setFields([]);
+                return;
+            }
+
+            try {
+                const columns = await dbContext.getTableColumns(selectedTable, schemaName);
+                setFields(columns);
+            } catch (error) {
+                console.error('Failed to fetch fields:', error);
+                setFields([]);
+            }
+        };
+
+        fetchFields();
+    }, [dbContext, selectedTable, schemaName]);
+
     // Track if we're clicking on the dropdown
     const isClickingDropdownRef = useRef(false);
 
@@ -77,21 +124,27 @@ export default function ChatInput({
             const newValue = e.target.value;
             const cursorPos = e.target.selectionStart;
 
-            // Check for @ trigger
+            // Check for @ or # trigger
             if (cursorPos > 0) {
                 const textBeforeCursor = newValue.substring(0, cursorPos);
                 const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+                const lastHashIndex = textBeforeCursor.lastIndexOf('#');
 
-                if (lastAtIndex !== -1) {
-                    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+                // Determine which trigger is most recent
+                const triggerIndex = Math.max(lastAtIndex, lastHashIndex);
+                const triggerChar = triggerIndex === lastAtIndex ? '@' : '#';
 
-                    // Check if @ is not followed by space or newline
-                    if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+                if (triggerIndex !== -1) {
+                    const textAfterTrigger = textBeforeCursor.substring(triggerIndex + 1);
+
+                    // Check if trigger is not followed by space or newline
+                    if (!textAfterTrigger.includes(' ') && !textAfterTrigger.includes('\n')) {
                         setAutocomplete({
                             isOpen: true,
-                            triggerIndex: lastAtIndex,
-                            searchText: textAfterAt.toLowerCase(),
+                            triggerIndex: triggerIndex,
+                            searchText: textAfterTrigger.toLowerCase(),
                             selectedIndex: 0,
+                            triggerType: triggerChar,
                         });
                     } else {
                         setAutocomplete(prev => ({ ...prev, isOpen: false }));
@@ -108,19 +161,31 @@ export default function ChatInput({
         [onChange]
     );
 
-    // Filter tables based on search text
+    // Filter items based on search text and trigger type
     const filteredTables = tables.filter(table => table.toLowerCase().includes(autocomplete.searchText));
+    const filteredFields = fields.filter(field => field.name.toLowerCase().includes(autocomplete.searchText));
 
-    // Handle table selection
-    const selectTable = useCallback(
-        (tableName: string) => {
+    // Get filtered items based on trigger type
+    const getFilteredItems = useCallback(() => {
+        if (autocomplete.triggerType === '@') {
+            return filteredTables.map(name => ({ name, type: undefined }));
+        } else {
+            return filteredFields;
+        }
+    }, [autocomplete.triggerType, filteredTables, filteredFields]);
+
+    const filteredItems = getFilteredItems();
+
+    // Handle item selection
+    const selectItem = useCallback(
+        (itemName: string) => {
             if (!textareaRef.current) return;
 
-            const beforeAt = value.substring(0, autocomplete.triggerIndex);
+            const beforeTrigger = value.substring(0, autocomplete.triggerIndex);
             const afterSearch = value.substring(autocomplete.triggerIndex + 1 + autocomplete.searchText.length);
-            const newValue = beforeAt + '@' + tableName + ' ' + afterSearch;
+            const newValue = beforeTrigger + autocomplete.triggerType + itemName + ' ' + afterSearch;
 
-            const newCursorPos = autocomplete.triggerIndex + tableName.length + 2;
+            const newCursorPos = autocomplete.triggerIndex + itemName.length + 2;
 
             // Create synthetic event
             const event = {
@@ -139,6 +204,7 @@ export default function ChatInput({
                 triggerIndex: -1,
                 searchText: '',
                 selectedIndex: 0,
+                triggerType: '@',
             });
 
             // Set cursor position immediately using requestAnimationFrame for better performance
@@ -156,13 +222,13 @@ export default function ChatInput({
     // Handle keyboard navigation
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (autocomplete.isOpen && filteredTables.length > 0) {
+            if (autocomplete.isOpen && filteredItems.length > 0) {
                 switch (e.key) {
                     case 'ArrowDown':
                         e.preventDefault();
                         setAutocomplete(prev => ({
                             ...prev,
-                            selectedIndex: Math.min(prev.selectedIndex + 1, filteredTables.length - 1),
+                            selectedIndex: Math.min(prev.selectedIndex + 1, filteredItems.length - 1),
                         }));
                         return; // Don't propagate
 
@@ -178,7 +244,7 @@ export default function ChatInput({
                         if (!e.shiftKey) {
                             e.preventDefault();
                             e.stopPropagation(); // Stop propagation to prevent form submission
-                            selectTable(filteredTables[autocomplete.selectedIndex]);
+                            selectItem(filteredItems[autocomplete.selectedIndex].name);
                             return; // Don't call original handler
                         }
                         break;
@@ -190,8 +256,21 @@ export default function ChatInput({
 
                     case 'Tab':
                         e.preventDefault();
-                        selectTable(filteredTables[autocomplete.selectedIndex]);
+                        selectItem(filteredItems[autocomplete.selectedIndex].name);
                         return; // Don't propagate
+                }
+            }
+
+            // Handle Enter key for single-line URL submission
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
+                const trimmedValue = value.trim();
+                const isSingleLine = !trimmedValue.includes('\n');
+                const isUrl = extractDataUrl(trimmedValue) !== null;
+
+                if (isSingleLine && isUrl) {
+                    e.preventDefault();
+                    onSubmit(e);
+                    return;
                 }
             }
 
@@ -200,7 +279,7 @@ export default function ChatInput({
                 onKeyDown(e);
             }
         },
-        [autocomplete, filteredTables, selectTable, onKeyDown]
+        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, onSubmit]
     );
 
     // Scroll selected item into view
@@ -213,49 +292,199 @@ export default function ChatInput({
         }
     }, [autocomplete.selectedIndex, autocomplete.isOpen]);
 
-    return (
-        <div ref={containerRef} className="relative">
-            <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                placeholder={placeholder}
-                className={className}
-                rows={rows}
-            />
+    // Handle click outside popup
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                showPopup &&
+                popupRef.current &&
+                buttonRef.current &&
+                !popupRef.current.contains(event.target as Node) &&
+                !buttonRef.current.contains(event.target as Node)
+            ) {
+                setShowPopup(false);
+            }
+        };
 
-            {autocomplete.isOpen && filteredTables.length > 0 && (
-                <div className="absolute bottom-full mb-1 left-0 z-50" style={{ zIndex: 9999 }}>
-                    <div
-                        ref={listRef}
-                        className="bg-white border border-gray-300 rounded-md shadow-lg overflow-auto py-1"
-                        style={{ maxHeight: '200px', minWidth: '200px' }}
+        if (showPopup) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => {
+                document.removeEventListener('mousedown', handleClickOutside);
+            };
+        }
+    }, [showPopup]);
+
+    const handleButtonClick = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isLoading) {
+            onStop();
+        } else {
+            onSubmit(e);
+        }
+    };
+
+    return (
+        <div className={`flex gap-2 ${isMultiline ? 'flex-col' : 'items-center'} w-full`}>
+            {!isMultiline && remoteFileComponent && (
+                <div className="relative">
+                    <button
+                        ref={buttonRef}
+                        type="button"
+                        onClick={() => setShowPopup(!showPopup)}
+                        className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+                        title="データを読み込む"
                     >
-                        {filteredTables.map((table, index) => (
-                            <button
-                                key={table}
-                                type="button"
-                                data-selected={index === autocomplete.selectedIndex}
-                                className={`w-full text-left px-3 py-1.5 hover:bg-gray-100 cursor-pointer ${
-                                    index === autocomplete.selectedIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-800'
-                                }`}
-                                onMouseDown={e => {
-                                    e.preventDefault();
-                                    isClickingDropdownRef.current = true;
-                                    selectTable(table);
-                                }}
-                                onMouseEnter={() => {
-                                    setAutocomplete(prev => ({ ...prev, selectedIndex: index }));
-                                }}
-                            >
-                                <span className="text-gray-500 mr-1">@</span>
-                                {table}
-                            </button>
-                        ))}
-                    </div>
+                        <PlusIcon className="w-5 h-5" />
+                    </button>
+
+                    {showPopup && (
+                        <div
+                            ref={popupRef}
+                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                            style={{ width: '500px', maxHeight: '400px' }}
+                        >
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowPopup(false)}
+                                    className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                                <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
+                                    {remoteFileComponent(() => setShowPopup(false))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
+            )}
+
+            <div className={isMultiline ? 'w-full' : 'flex-1'}>
+                <div
+                    ref={containerRef}
+                    style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}
+                    className="relative"
+                >
+                    <textarea
+                        ref={textareaRef}
+                        value={value}
+                        onChange={handleChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
+                        placeholder={placeholder}
+                        className={className}
+                        style={{ height: '100%', display: 'block' }}
+                    />
+
+                    {autocomplete.isOpen && filteredItems.length > 0 && (
+                        <div className="absolute bottom-full mb-1 left-0 z-50" style={{ zIndex: 9999 }}>
+                            <div
+                                ref={listRef}
+                                className="bg-white border border-gray-300 rounded-md shadow-lg overflow-auto py-1"
+                                style={{ maxHeight: '200px', minWidth: '200px' }}
+                            >
+                                {filteredItems.map((item, index) => (
+                                    <button
+                                        key={item.name}
+                                        type="button"
+                                        data-selected={index === autocomplete.selectedIndex}
+                                        className={`w-full text-left px-3 py-1.5 hover:bg-gray-100 cursor-pointer ${
+                                            index === autocomplete.selectedIndex
+                                                ? 'bg-blue-50 text-blue-700'
+                                                : 'text-gray-800'
+                                        }`}
+                                        onMouseDown={e => {
+                                            e.preventDefault();
+                                            isClickingDropdownRef.current = true;
+                                            selectItem(item.name);
+                                        }}
+                                        onMouseEnter={() => {
+                                            setAutocomplete(prev => ({ ...prev, selectedIndex: index }));
+                                        }}
+                                    >
+                                        <span className="text-gray-500 mr-1">{autocomplete.triggerType}</span>
+                                        {item.name}
+                                        {item.type && <span className="text-gray-400 ml-2 text-xs">({item.type})</span>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {isMultiline ? (
+                <div className={`flex items-end gap-2 ${remoteFileComponent ? 'justify-between' : 'justify-end'}`}>
+                    {remoteFileComponent && (
+                        <div className="relative">
+                            <button
+                                ref={buttonRef}
+                                type="button"
+                                onClick={() => setShowPopup(!showPopup)}
+                                className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+                                title="データを読み込む"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
+
+                            {showPopup && (
+                                <div
+                                    ref={popupRef}
+                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                                    style={{ width: '500px', maxHeight: '400px' }}
+                                >
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowPopup(false)}
+                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
+                                        >
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M6 18L18 6M6 6l12 12"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
+                                            {remoteFileComponent(() => setShowPopup(false))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <SubmitButton
+                        isLoading={isLoading}
+                        isCreatingTable={isCreatingTable}
+                        value={value}
+                        isAnyLoading={isAnyLoading}
+                        disabled={disabled}
+                        onClick={handleButtonClick}
+                    />
+                </div>
+            ) : (
+                <SubmitButton
+                    isLoading={isLoading}
+                    isCreatingTable={isCreatingTable}
+                    value={value}
+                    isAnyLoading={isAnyLoading}
+                    disabled={disabled}
+                    onClick={handleButtonClick}
+                />
             )}
         </div>
     );

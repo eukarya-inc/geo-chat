@@ -10,10 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
-- `npm test` - Run Vitest tests (single run)
+- `npm test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
-- `npm run test:unit` - Run unit tests
+- `npm run test:unit` - Run unit tests (same as `npm test`)
+- `npm run test:full` - Run all tests including browser tests (used in CI)
 - `npm run preview` - Preview built application
 
 ## Git Workflow and Branch Protection
@@ -42,24 +43,29 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Format Check, Lint, Build and Test After Changes
+## IMPORTANT: Always Run Format, Lint, Build and Test After Changes
 
 After making any code changes, you MUST run:
 
 ```bash
-npm run format:check && npm run lint && npm run build && npm test
+npm run check
 ```
 
 This ensures:
 
-1. Code matches the project's Prettier formatting rules
+1. Code is automatically formatted with Prettier
 2. ESLint passes without errors or warnings
 3. TypeScript compilation succeeds
 4. The build process completes without errors
 5. All tests pass
 6. No regressions are introduced
 
-If lint, build or tests fail, fix the issues before considering the task complete.
+**Important notes:**
+
+- The `check` script runs: format (error-only) → lint (quiet) → build (silent) → unit test (silent)
+- Only unit tests are run for fast feedback; full tests (including browser tests) run in CI
+- Output is suppressed on success; only errors are shown to save context
+- If any step fails, the command chain stops and shows the error
 
 ## Critical Implementation Details
 
@@ -165,7 +171,9 @@ The application includes comprehensive AI tools for data manipulation and visual
 - Tests are organized alongside source files with `.test.ts` or `.test.tsx` extensions
 - **Browser tests** (`.browser.test.ts`): Use for unit-test style tests that depend on browser-only APIs like DuckDB-WASM, MapLibre GL, or other browser-specific features
 - **Regular unit tests** (`.test.ts`): Use for tests that don't depend on browser APIs and can run in Node.js environment
-- Run all tests with `npm test`, watch mode with `npm run test:watch`
+- Run unit tests with `npm test` (fast, for local development)
+- Run all tests with `npm run test:full` (includes browser tests, used in CI)
+- Watch mode with `npm run test:watch`
 - Run browser tests specifically with `npm run test:browser`
 - Run unit tests specifically with `npm run test:unit`
 - Test utilities available in `src/test/` directory
@@ -193,19 +201,21 @@ Use regular unit tests (`.test.ts`) when testing:
 - Avoid dataset-specific code - keep implementations generic and reusable.
 - When handling JSON data, ensure the approach works for any JSON structure, not just specific schemas.
 
-## ⚠️ CRITICAL: Always Run Lint Before Completion
+## ⚠️ CRITICAL: Always Run Check Before Completion
 
 **IMPORTANT**: After making any code changes and before considering your task complete, you MUST run:
 
 ```bash
-npm run lint
+npm run check
 ```
 
 This ensures:
 
+- Code is automatically formatted with Prettier
 - Code follows the project's style guidelines
 - No syntax errors or warnings
-- Consistent formatting across the codebase
-- ESLint rules are satisfied
+- TypeScript compilation succeeds
+- All tests pass
+- No regressions are introduced
 
-If lint errors occur, fix them before marking the task as complete. The linter may automatically fix some issues, which will modify files - this is expected and desired behavior.
+The check command runs all validation steps quietly, only showing errors to save context.

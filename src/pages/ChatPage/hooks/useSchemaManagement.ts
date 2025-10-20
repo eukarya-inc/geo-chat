@@ -2,8 +2,15 @@ import { useState, useEffect } from 'react';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { Chat } from '../../../components/chat/ChatList';
+import type { ChartSpec } from '../../../types/chart';
+import { cleanupOrphanedChartSpecs } from './chartSpecCleanup';
 
-export function useSchemaManagement(dbContext: DBContext | null, schemaName: string | null, chats: Chat[]) {
+export function useSchemaManagement(
+    dbContext: DBContext | null,
+    schemaName: string | null,
+    chats: Chat[],
+    onChartSpecCleanup?: (cleanedChartSpecs: Record<string, ChartSpec>) => void
+) {
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
 
     // Combined schema switching and connection setup
@@ -58,6 +65,27 @@ export function useSchemaManagement(dbContext: DBContext | null, schemaName: str
                         setTimeout(() => {
                             dbContext.notifyTableChange(undefined, schemaName);
                         }, 500);
+                    }
+
+                    // Clean up orphaned chartSpecs for tables that no longer exist
+                    if (onChartSpecCleanup) {
+                        const targetChat = chats.find(
+                            chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName
+                        );
+                        // Type guard: check if targetChat has chartSpecs property
+                        if (targetChat && 'chartSpecs' in targetChat && targetChat.chartSpecs) {
+                            const cleanedChartSpecs = (await cleanupOrphanedChartSpecs(
+                                targetChat.chartSpecs as Record<string, ChartSpec>,
+                                dbContext,
+                                schemaName
+                            )) as Record<string, ChartSpec>;
+                            if (
+                                Object.keys(cleanedChartSpecs).length !==
+                                Object.keys(targetChat.chartSpecs as Record<string, ChartSpec>).length
+                            ) {
+                                onChartSpecCleanup(cleanedChartSpecs);
+                            }
+                        }
                     }
                 }
             } catch (error) {

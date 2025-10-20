@@ -7,21 +7,21 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 
 // Mock the ChartConfigForm component since we test it separately
 vi.mock('./ChartConfigForm', () => ({
-    ChartConfigForm: ({ onSpecChange }: { onSpecChange: (spec: ChartSpec) => void }) => {
-        const mockSpec: ChartSpec = {
-            id: 'test-id',
+    ChartConfigForm: ({
+        onConfigChange,
+    }: {
+        onConfigChange: (config: { title: string; tableName: string; chartType: string }, columns: unknown[]) => void;
+    }) => {
+        const mockConfig = {
             title: 'Test Chart',
-            spec: {
-                mark: 'circle',
-                encoding: {},
-                data: { values: [] },
-            },
-            timestamp: new Date(),
+            tableName: 'test_table',
+            chartType: 'circle',
         };
+        const mockColumns: unknown[] = [];
 
         return (
             <div data-testid="chart-config-form">
-                <button onClick={() => onSpecChange(mockSpec)}>Update Spec</button>
+                <button onClick={() => onConfigChange(mockConfig, mockColumns)}>Update Spec</button>
             </div>
         );
     },
@@ -79,10 +79,11 @@ describe('ChartConfigModal', () => {
         updateButton.click();
 
         // Verify onUpdateChart was called with the correct parameters
+        // Note: The id is preserved from the original chartSpec, not from the config
         expect(defaultProps.onUpdateChart).toHaveBeenCalledWith(
             'test-viz-id',
             expect.objectContaining({
-                id: 'test-id',
+                id: 'test-chart',
                 title: 'Test Chart',
             })
         );

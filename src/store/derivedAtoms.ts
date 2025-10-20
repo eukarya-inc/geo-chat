@@ -161,6 +161,15 @@ export const updateChatStateAtom = atom(null, (get, set, updates: Partial<ChatSt
 
     if (!chatId || !remoteState.chats[chatId]) return;
 
+    // Deep merge for chartSpecs
+    let mergedChartSpecs = remoteState.chats[chatId].chartSpecs;
+    if (updates.chartSpecs) {
+        mergedChartSpecs = {
+            ...remoteState.chats[chatId].chartSpecs,
+            ...updates.chartSpecs,
+        };
+    }
+
     // Deep merge for mapSpecs
     let mergedMapSpecs = remoteState.chats[chatId].mapSpecs;
     if (updates.mapSpecs) {
@@ -186,6 +195,7 @@ export const updateChatStateAtom = atom(null, (get, set, updates: Partial<ChatSt
     const updatedChat = {
         ...remoteState.chats[chatId],
         ...updates,
+        chartSpecs: mergedChartSpecs,
         mapSpecs: mergedMapSpecs,
     };
 

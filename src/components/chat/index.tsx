@@ -3,14 +3,17 @@ import { useAIChat } from '../../lib/ai/useAIChat';
 import { aiStore } from '../../lib/ai/AIStore';
 import StructuredMessageRenderer from './StructuredMessageRenderer';
 import ChatInput from './ChatInput';
+import ApiKeyInput from './ApiKeyInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { StructuredMessage } from '../../types/message';
-import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { generatePromptSuggestions } from '../../lib/ai/promptSuggestionService';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../map';
 import { isTableCreatedOnlyMessage } from './utils';
+import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
+import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 
 interface AIChatProps {
     dbContext: DBContext;
@@ -29,6 +32,9 @@ interface AIChatProps {
     onMapStyleDelete?: (tableName: string) => Promise<void>;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
+    emptyMode?: boolean;
+    onApiKeyChange?: (value: string) => void;
+    onApiKeySave?: (apiKey: string) => Promise<boolean>;
 }
 
 export default function AIChat({
@@ -48,19 +54,24 @@ export default function AIChat({
     onMapStyleDelete,
     remoteFileComponent,
     onConversationCompleted,
+    emptyMode = false,
+    onApiKeyChange,
+    onApiKeySave,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastScrollTimeRef = useRef<number>(0);
     const userHasScrolledRef = useRef<boolean>(false);
     const isProgrammaticScrollRef = useRef<boolean>(false);
-    const [showPopup, setShowPopup] = useState(false);
-    const popupRef = useRef<HTMLDivElement>(null);
-    const buttonRef = useRef<HTMLButtonElement>(null);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
     const [manuallyToggledGroups, setManuallyToggledGroups] = useState<Set<number>>(new Set());
     const promptSuggestionAbortRef = useRef<AbortController | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [tableGeometries, setTableGeometries] = useState<Record<string, boolean>>({});
+    const checkedTablesRef = useRef<Set<string>>(new Set());
+    const [isMultiline, setIsMultiline] = useState(false);
+    const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
+    const [isCreatingTable, setIsCreatingTable] = useState(false);
 
     const effectiveChatId = chatId || 'default';
 
@@ -86,21 +97,138 @@ export default function AIChat({
         }, 500);
     }, []);
 
-    const { messages, isLoading, isAnyLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } =
-        useAIChat({
-            chatId: effectiveChatId,
-            schema: schemaName,
-            dbContext,
-            apiKey,
-            selectedTable,
-            onMessagesChange: handleMessagesChange,
-            onChartUpdate,
-            onChartDelete,
-            getCurrentChatState,
-            onMapStyleUpdate,
-            onMapStyleDelete,
-            onConversationCompleted,
-        });
+    const {
+        messages,
+        isLoading,
+        isAnyLoading,
+        input,
+        handleInputChange,
+        handleSubmit: originalHandleSubmit,
+        handleStop,
+        sendMessage,
+    } = useAIChat({
+        chatId: effectiveChatId,
+        schema: schemaName,
+        dbContext,
+        apiKey,
+        selectedTable,
+        onMessagesChange: handleMessagesChange,
+        onChartUpdate,
+        onChartDelete,
+        getCurrentChatState,
+        onMapStyleUpdate,
+        onMapStyleDelete,
+        onConversationCompleted,
+    });
+
+    // Wrap handleSubmit to detect and handle URLs
+    const handleSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+
+            const trimmedInput = input.trim();
+            if (!trimmedInput) return;
+
+            // Check if input is a URL
+            const dataUrl = extractDataUrl(trimmedInput);
+
+            if (dataUrl) {
+                if (!dbContext) {
+                    console.error('DBContext is not available');
+                    return;
+                }
+
+                setIsCreatingTable(true);
+                try {
+                    // Create table from URL
+                    const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
+
+                    // Clear input
+                    const changeEvent = {
+                        target: { value: '' },
+                    } as React.ChangeEvent<HTMLTextAreaElement>;
+                    handleInputChange(changeEvent);
+
+                    // Send the table message
+                    sendMessage(message);
+                } catch (error) {
+                    console.error('Failed to create table from URL:', error);
+                    // Show error to user - you might want to add error state handling here
+                } finally {
+                    setIsCreatingTable(false);
+                }
+            } else {
+                // Regular message, use original handler
+                await originalHandleSubmit(e);
+            }
+        },
+        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit]
+    );
+
+    // Focus textarea on mount
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+        }
+    }, []);
+
+    // Check if textarea has multiple lines and calculate height
+    useEffect(() => {
+        const MIN_HEIGHT = 44; // Minimum height for single line
+        const MAX_LINES = 10;
+
+        // Empty input is always single line
+        if (!input || input.trim() === '') {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        if (!textareaRef.current) {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        // Get actual computed styles
+        const textarea = textareaRef.current;
+        const computedStyle = window.getComputedStyle(textarea);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const totalPadding = paddingTop + paddingBottom;
+
+        // Count the number of lines
+        const lines = input.split('\n').length;
+        const hasNewline = lines > 1;
+
+        if (hasNewline) {
+            setIsMultiline(true);
+            // Calculate height based on line count, capped at MAX_LINES
+            const effectiveLines = Math.min(lines, MAX_LINES);
+            const calculatedHeight = effectiveLines * lineHeight + totalPadding;
+            setTextareaHeight(calculatedHeight);
+        } else {
+            // Check if content overflows (for single line with long text)
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    const hasOverflow = textareaRef.current.scrollHeight > textareaRef.current.clientHeight + 5;
+                    if (hasOverflow) {
+                        setIsMultiline(true);
+                        // Calculate how many lines are needed based on scrollHeight
+                        const neededLines = Math.min(
+                            Math.ceil((textareaRef.current.scrollHeight - totalPadding) / lineHeight),
+                            MAX_LINES
+                        );
+                        setTextareaHeight(neededLines * lineHeight + totalPadding);
+                    } else {
+                        setIsMultiline(false);
+                        setTextareaHeight(MIN_HEIGHT);
+                    }
+                }
+            });
+        }
+    }, [input]);
 
     const messageGroups = useMemo(() => {
         const groups: { userMessage: StructuredMessage; assistantMessage?: StructuredMessage; startIndex: number }[] =
@@ -129,6 +257,44 @@ export default function AIChat({
 
         return groups;
     }, [messages]);
+
+    const chartSpecs = useMemo(() => {
+        return getCurrentChatState?.()?.chartSpecs || {};
+    }, [getCurrentChatState]);
+
+    // Analyze geometry columns for all tables
+    useEffect(() => {
+        const checkTableGeometry = async () => {
+            const chatState = getCurrentChatState?.();
+            if (!chatState?.tables || !dbContext) return;
+
+            const tables = Object.values(chatState.tables);
+            for (const table of tables) {
+                // Skip if we already checked this table
+                if (checkedTablesRef.current.has(table.tableName)) continue;
+
+                // Mark as checked to prevent duplicate checks
+                checkedTablesRef.current.add(table.tableName);
+
+                try {
+                    const result = await analyzeTableGeometry(dbContext, table.tableName, table.schema || null);
+                    setTableGeometries(prev => ({
+                        ...prev,
+                        [table.tableName]: result.hasGeometry,
+                    }));
+                } catch (error) {
+                    console.error(`Failed to analyze geometry for table ${table.tableName}:`, error);
+                    // Set to false on error
+                    setTableGeometries(prev => ({
+                        ...prev,
+                        [table.tableName]: false,
+                    }));
+                }
+            }
+        };
+
+        checkTableGeometry();
+    }, [getCurrentChatState, dbContext]);
 
     const toggleGroupCollapse = (groupIndex: number) => {
         setManuallyToggledGroups(prev => {
@@ -439,45 +605,70 @@ export default function AIChat({
                 target: { value: promptText },
             } as React.ChangeEvent<HTMLTextAreaElement>;
             handleInputChange(changeEvent);
+            // Focus on textarea after setting the prompt
+            setTimeout(() => {
+                textareaRef.current?.focus();
+            }, 0);
         }
     };
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (
-                showPopup &&
-                popupRef.current &&
-                buttonRef.current &&
-                !popupRef.current.contains(event.target as Node) &&
-                !buttonRef.current.contains(event.target as Node)
-            ) {
-                setShowPopup(false);
-            }
-        };
-
-        if (showPopup) {
-            document.addEventListener('mousedown', handleClickOutside);
-            return () => {
-                document.removeEventListener('mousedown', handleClickOutside);
-            };
-        }
-    }, [showPopup]);
-
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
+        if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
             handleSubmit(e);
         }
     };
 
-    const handleButtonClick = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (isLoading) {
-            handleStop();
-        } else {
-            handleSubmit(e);
-        }
-    };
+    // Empty mode: only show the input form
+    if (emptyMode) {
+        const showApiKeyInput = !apiKey && onApiKeyChange && onApiKeySave;
+
+        return (
+            <div className="flex flex-col gap-8 items-center relative">
+                {showApiKeyInput && (
+                    <ApiKeyInput
+                        apiKey={apiKey || ''}
+                        onApiKeyChange={onApiKeyChange}
+                        onSave={onApiKeySave}
+                        floatingMode={true}
+                    />
+                )}
+                <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
+                <div className="w-full">
+                    <div
+                        className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
+                    >
+                        <ChatInput
+                            value={input}
+                            onChange={handleInputChange}
+                            onKeyDown={handleKeyPress}
+                            onSubmit={e => {
+                                userHasScrolledRef.current = false;
+                                handleSubmit(e);
+                            }}
+                            onStop={handleStop}
+                            dbContext={dbContext}
+                            textareaRef={textareaRef}
+                            placeholder="質問するか、データのURLを貼り付けてみましょう"
+                            className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                            schemaName={schemaName}
+                            selectedTable={selectedTable}
+                            isMultiline={isMultiline}
+                            textareaHeight={textareaHeight}
+                            isLoading={isLoading}
+                            isCreatingTable={isCreatingTable}
+                            isAnyLoading={isAnyLoading}
+                            remoteFileComponent={remoteFileComponent}
+                            disabled={!apiKey}
+                        />
+                    </div>
+                    <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
+                        Enterで改行、Shift+Enterで送信
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
@@ -486,11 +677,6 @@ export default function AIChat({
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto bg-white border border-gray-300 rounded-md p-2.5 mb-2.5"
             >
-                {messages.length === 0 && (
-                    <p className="text-gray-500">
-                        チャットを開始しましょう。データの可視化やモデリングについて質問してみてください。
-                    </p>
-                )}
                 {messageGroups.map((group, groupIndex) => {
                     const isLastGroup = groupIndex === messageGroups.length - 1;
                     const isCollapsed = collapsedGroups.has(groupIndex);
@@ -511,6 +697,8 @@ export default function AIChat({
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                         onPromptClick={handlePromptSelection}
+                                        chartSpecs={chartSpecs}
+                                        tableGeometries={tableGeometries}
                                     />
                                 </div>
                             ) : (
@@ -530,6 +718,8 @@ export default function AIChat({
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                                 onPromptClick={handlePromptSelection}
+                                                chartSpecs={chartSpecs}
+                                                tableGeometries={tableGeometries}
                                             />
                                         </div>
                                     </div>
@@ -616,6 +806,8 @@ export default function AIChat({
                                                             hideToolCalls={false}
                                                             isLoadingMessage={isLoadingMessage}
                                                             onPromptClick={handlePromptSelection}
+                                                            chartSpecs={chartSpecs}
+                                                            tableGeometries={tableGeometries}
                                                         />
                                                     </div>
                                                 );
@@ -634,6 +826,8 @@ export default function AIChat({
                                                                 hideToolCalls={false}
                                                                 isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
+                                                                chartSpecs={chartSpecs}
+                                                                tableGeometries={tableGeometries}
                                                             />
                                                             {isCurrentlyLoading &&
                                                                 group.assistantMessage.streaming !== undefined && (
@@ -656,6 +850,8 @@ export default function AIChat({
                                                                 isStreaming={isCurrentlyLoading ? true : false}
                                                                 isLoadingMessage={isLoadingMessage}
                                                                 onPromptClick={handlePromptSelection}
+                                                                chartSpecs={chartSpecs}
+                                                                tableGeometries={tableGeometries}
                                                             />
                                                         </div>
                                                     )}
@@ -677,88 +873,37 @@ export default function AIChat({
                 <div ref={messagesEndRef} />
             </div>
 
-            <form
-                onSubmit={e => {
-                    // Reset scroll tracking when sending a new message
-                    userHasScrolledRef.current = false;
-                    handleSubmit(e);
-                }}
-                className="flex flex-col gap-2 flex-shrink-0"
-            >
-                <ChatInput
-                    value={input}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyPress}
-                    dbContext={dbContext}
-                    textareaRef={textareaRef}
-                    placeholder="質問してみましょう（@でテーブル名を補完）"
-                    className="w-full p-2.5 border border-gray-300 rounded resize-none h-15 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    rows={2}
-                    schemaName={schemaName}
-                />
-                <div className="flex justify-between">
-                    {remoteFileComponent && (
-                        <div className="relative">
-                            <button
-                                ref={buttonRef}
-                                type="button"
-                                onClick={() => setShowPopup(!showPopup)}
-                                className="p-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                title="データを読み込む"
-                            >
-                                <PlusIcon className="w-5 h-5" />
-                            </button>
-
-                            {showPopup && (
-                                <div
-                                    ref={popupRef}
-                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                    style={{ width: '500px', maxHeight: '400px' }}
-                                >
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowPopup(false)}
-                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M6 18L18 6M6 6l12 12"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                            {remoteFileComponent(() => setShowPopup(false))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <button
-                        type="button"
-                        onClick={handleButtonClick}
-                        disabled={(!isLoading && !input.trim()) || (!isLoading && isAnyLoading)}
-                        className={`px-5 py-2 text-white font-medium rounded transition-colors duration-200 ${
-                            isLoading
-                                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
-                                : !input.trim() || isAnyLoading
-                                  ? 'bg-gray-400 cursor-not-allowed'
-                                  : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2`}
-                        title={!isLoading && isAnyLoading ? '他のチャットが処理中です' : ''}
-                    >
-                        {isLoading ? '停止' : '送信'}
-                    </button>
+            <div className="flex-shrink-0">
+                <div className="bg-white border border-gray-300 rounded-md p-2">
+                    <ChatInput
+                        value={input}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyPress}
+                        onSubmit={e => {
+                            // Reset scroll tracking when sending a new message
+                            userHasScrolledRef.current = false;
+                            handleSubmit(e);
+                        }}
+                        onStop={handleStop}
+                        dbContext={dbContext}
+                        textareaRef={textareaRef}
+                        placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
+                        className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
+                        schemaName={schemaName}
+                        selectedTable={selectedTable}
+                        isMultiline={isMultiline}
+                        textareaHeight={textareaHeight}
+                        isLoading={isLoading}
+                        isCreatingTable={isCreatingTable}
+                        isAnyLoading={isAnyLoading}
+                        remoteFileComponent={remoteFileComponent}
+                        disabled={!apiKey}
+                    />
                 </div>
-            </form>
+                <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
+                    Enterで改行、Shift+Enterで送信
+                </div>
+            </div>
         </div>
     );
 }
