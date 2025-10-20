@@ -663,7 +663,7 @@ export default function AIChat({
                         />
                     </div>
                     <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
-                        Enter で改行, Shift+Enter で送信
+                        Enterで改行、Shift+Enterで送信
                     </div>
                 </div>
             </div>
@@ -901,7 +901,7 @@ export default function AIChat({
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
-                    Enter で改行, Shift+Enter で送信
+                    Enterで改行、Shift+Enterで送信
                 </div>
             </div>
         </div>
