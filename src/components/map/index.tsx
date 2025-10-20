@@ -43,6 +43,8 @@ const MapComponent: React.FC<MapProps> = ({
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
     const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+    // AbortController to cancel in-flight tile requests when table changes
+    const tileAbortControllerRef = useRef<AbortController | null>(null);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -115,6 +117,19 @@ const MapComponent: React.FC<MapProps> = ({
         if (!selectedTable || !mapRef.current || !isInitialized) {
             return;
         }
+
+        // Close popup when table changes
+        if (popupRef.current) {
+            popupRef.current.remove();
+            popupRef.current = null;
+        }
+
+        // Abort any in-flight tile requests from the previous table/columns
+        if (tileAbortControllerRef.current) {
+            tileAbortControllerRef.current.abort();
+        }
+        // Create new AbortController for the new table/columns
+        tileAbortControllerRef.current = new AbortController();
 
         // Clear tile cache to force refresh with new columns
         tileCache.current.clear();
@@ -247,6 +262,11 @@ const MapComponent: React.FC<MapProps> = ({
         const updateSchemaInfo = async () => {
             if (!connectionRef.current || !selectedTable) {
                 columnTypesRef.current = {};
+                // Abort any in-flight tile requests when table is cleared
+                if (tileAbortControllerRef.current) {
+                    tileAbortControllerRef.current.abort();
+                    tileAbortControllerRef.current = null;
+                }
                 return;
             }
 
@@ -391,7 +411,7 @@ const MapComponent: React.FC<MapProps> = ({
         // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
         // If it already exists, it will be overwritten which is fine for our use case
         try {
-            maplibregl.addProtocol('duckdb', async params => {
+            maplibregl.addProtocol('duckdb', async (params, abortController) => {
                 // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
                 const url = params.url.replace(/\.pbf$/, '.mvt'); // Convert extension for parsing
                 const parseResult = parseDuckDBTileUrl(url);
@@ -402,6 +422,15 @@ const MapComponent: React.FC<MapProps> = ({
                 const { tableSpec, tableName, zxy } = parseResult;
 
                 const cacheKey = `${tableSpec}/${zxy.z}/${zxy.x}/${zxy.y}`;
+
+                // Capture the current abort controller at the start of this request
+                // This ensures we check the correct controller even if tileAbortControllerRef.current changes
+                const currentAbortController = tileAbortControllerRef.current;
+
+                // Check if request should be aborted
+                if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                    return { data: new Uint8Array() };
+                }
 
                 // Check cache
                 if (tileCache.current.has(cacheKey)) {
@@ -424,6 +453,11 @@ const MapComponent: React.FC<MapProps> = ({
 
                     // Return empty tile if no geometry column is specified
                     if (!geometryColumnName) {
+                        return { data: new Uint8Array() };
+                    }
+
+                    // Check abort signal again before expensive operations
+                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
                         return { data: new Uint8Array() };
                     }
 
@@ -480,11 +514,52 @@ const MapComponent: React.FC<MapProps> = ({
                         columnTypes: columnTypeMap,
                     });
 
-                    let result;
+                    // Final abort check before executing the query
+                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                        return { data: new Uint8Array() };
+                    }
+
+                    let result: Awaited<ReturnType<AsyncDuckDBConnection['query']>>;
+
                     try {
-                        // No need to prepare since we're not using parameters anymore
-                        result = await connectionRef.current.query(query);
+                        // Save connection reference for use in abort handler
+                        const connection = connectionRef.current;
+
+                        // Execute query and set up cancellation
+                        const queryPromise = connection.query(query);
+
+                        // Set up abort listener to cancel the query if abort is triggered
+                        const abortHandler = async () => {
+                            try {
+                                // Try to cancel the running query
+                                await connection.cancelSent();
+                            } catch {
+                                // Ignore cancellation errors - query may have already completed
+                            }
+                        };
+
+                        // Add abort listeners
+                        if (currentAbortController?.signal) {
+                            currentAbortController.signal.addEventListener('abort', abortHandler, {
+                                once: true,
+                            });
+                        }
+                        if (abortController?.signal) {
+                            abortController.signal.addEventListener('abort', abortHandler, { once: true });
+                        }
+
+                        // Wait for query to complete
+                        result = await queryPromise;
+
+                        // Check if aborted after query completes
+                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                            return { data: new Uint8Array() };
+                        }
                     } catch (error) {
+                        // Silently ignore errors if we've been aborted
+                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                            return { data: new Uint8Array() };
+                        }
                         console.error('Vector tile query error:', error);
                         console.error('Query:', query);
                         console.error('Tile coordinates:', { z: zxy.z, x: zxy.x, y: zxy.y });
@@ -794,6 +869,11 @@ const MapComponent: React.FC<MapProps> = ({
 
                 // Cleanup function
                 return () => {
+                    // Abort any in-flight tile requests
+                    if (tileAbortControllerRef.current) {
+                        tileAbortControllerRef.current.abort();
+                        tileAbortControllerRef.current = null;
+                    }
                     if (mapInstance) {
                         mapInstance.remove();
                     }
