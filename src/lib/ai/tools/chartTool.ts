@@ -49,6 +49,46 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
     });
 }
 
+const baseSpecSchema = z
+    .object({
+        mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
+        encoding: z.record(z.unknown()).describe('The encoding channels'),
+        title: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Chart title'),
+        config: z.record(z.unknown()).optional().describe('Chart configuration'),
+    })
+    .describe('Single-view Vega-Lite spec (excluding data, width, height)');
+
+const layeredLayerSchema = baseSpecSchema
+    .extend({
+        data: z.unknown().optional().describe('Optional layer-specific data'),
+        transform: z.array(z.unknown()).optional().describe('Optional layer transforms'),
+        mark: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Layer mark (inherits when omitted)'),
+        encoding: z.record(z.unknown()).optional().describe('Layer encoding (inherits when omitted)'),
+    })
+    .describe('Layer definition');
+
+const layeredSpecSchema = z
+    .object({
+        mark: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Default mark for layers'),
+        encoding: z.record(z.unknown()).optional().describe('Default encoding shared by layers'),
+        layer: z.array(layeredLayerSchema).min(2).describe('Layer definitions'),
+        title: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Chart title'),
+        config: z.record(z.unknown()).optional().describe('Chart configuration'),
+    })
+    .describe('Layered Vega-Lite spec (excluding data, width, height)');
+
 // Create the chart update tool for AI
 export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>) {
     if (!onChartUpdate) return null;
@@ -102,6 +142,20 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - Valid sort string values are ONLY "ascending" or "descending"
         - Valid sort object should have "field" and "order" properties
 
+        REGRESSION LAYERED CHART OUTPUT:
+        - When the regression tool creates a table that already includes observed values (scatter) and predicted/fitted values (regression line), build a SINGLE Vega-Lite spec that reads from that table only.
+        - Detect columns by their names:
+          * X axis candidates contain "feature", "explanatory", "predictor", end with "_x", or match the user-specified explanatory column.
+          * Observed/actual values include tokens like "actual", "observed", "target", "response", or end with "_y".
+          * Predicted/fitted values include "predicted", "fitted", "regression", "y_hat", or "estimate".
+        - Use layer with at least two entries:
+          1. Scatter layer: mark {"type": "point", "filled": true} showing the observed values.
+          2. Regression layer: mark {"type": "line", "strokeWidth": 2-3} showing the predicted values.
+        - Share the same encoding.x across layers. In the regression layer set order to the x field (or add a transform that sorts by the x field) so the line renders smoothly. Retain a consistent color/legend naming (e.g., "Actual" vs "Regression line").
+        - Tooltips must include the x field, observed value, and predicted value so the user can compare them easily.
+        - If confidence interval columns such as "lower_bound" and "upper_bound" exist, add a third layer with mark {"type": "area", "opacity": 0.1} spanning the interval.
+        - When the user wants to copy/paste into the Vega-Lite Playground, return a complete JSON object including $schema, description, data: {"values": [...] } (limit to at most 200 rows), layer, width, height, and config. Otherwise default to the normal in-app format using data.sql.
+
         Example specifications:
         {
           "mark": "bar",
@@ -117,29 +171,47 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
             "x": {"field": "date", "type": "temporal", "title": "Date"},
             "y": {"field": "sales", "type": "quantitative", "title": "Sales"}
           }
+        }
+        
+        {
+          "layer": [
+            {
+              "mark": {"type": "point", "opacity": 0.6, "size": 40},
+              "encoding": {
+                "x": {"field": "feature", "type": "quantitative", "title": "Feature"},
+                "y": {"field": "actual_value", "type": "quantitative", "title": "Actual"},
+                "color": {"value": "#1f77b4"}
+              }
+            },
+            {
+              "mark": {"type": "line", "strokeWidth": 3, "color": "#d62728"},
+              "encoding": {
+                "x": {"field": "feature", "type": "quantitative"},
+                "y": {"field": "predicted_value", "type": "quantitative", "title": "Predicted"},
+                "order": {"field": "feature"}
+              }
+            }
+          ]
         }`,
         parameters: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z
-                .object({
-                    mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
-                    encoding: z.record(z.unknown()).describe('The encoding channels'),
-                    title: z
-                        .union([z.string(), z.record(z.unknown())])
-                        .optional()
-                        .describe('Chart title'),
-                    config: z.record(z.unknown()).optional().describe('Chart configuration'),
-                })
-                .describe('Vega-Lite specification (excluding data, width, height)'),
+                .union([baseSpecSchema, layeredSpecSchema])
+                .describe('Single-view or layered Vega-Lite specification (excluding data, width, height)'),
         }),
         execute: async ({ table_name, vega_spec }) => {
             try {
                 const processedSpec = processAIChartSpec(table_name, vega_spec as Partial<VegaChartSpec>);
+                const specRecord = processedSpec as unknown as Record<string, unknown>;
+                const hasTopLevelView = Boolean(specRecord.mark) && Boolean(specRecord.encoding);
+                const layers = Array.isArray(specRecord.layer) ? (specRecord.layer as unknown[]) : [];
+                const hasLayerView = layers.length > 0;
 
-                if (!('mark' in processedSpec) || !processedSpec.mark || !processedSpec.encoding) {
+                if (!hasTopLevelView && !hasLayerView) {
                     return {
                         success: false,
-                        message: 'Chart specification must include both mark and encoding properties',
+                        message:
+                            'Chart specification must include either a top-level mark + encoding or at least one layer definition.',
                     };
                 }
 

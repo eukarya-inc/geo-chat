@@ -16,20 +16,17 @@ export function createRegressionTool(dbContext: DBContext, schema: string | null
 Returns regression coefficients, inference metrics (p-values, t-statistics, F statistic, adjusted R²),
 variance inflation factors (VIF), and regression line data for each predictor.
 
-IMPORTANT: After using this tool successfully, you MUST create regression line visualizations:
-1. For each predictor variable, create a line chart showing the regression line
-2. Use the plotSeries data from the regression result (contains regressionLine array with 2 points)
-3. Each regressionLine has {x: minX, y: predictedY} and {x: maxX, y: predictedY} - these define the line
-4. Create a DuckDB table with these 2 points, then use create_chart with mark type "line"
-5. This helps users visually understand the linear relationship found by the regression
+IMPORTANT: After using this tool successfully, you MUST create regression visualizations:
+1. For each predictor variable, prepare a scatter plot dataset that contains **all rows** used in the regression
+2. Add a new column to that dataset with the predicted target values calculated from the regression equation (intercept + Σ βᵢ·xᵢ)
+3. Use this enriched dataset for both the scatter plot (actual values) and the regression line (predicted values) in create_chart
+4. Avoid creating tables that only store the min/max regression line endpoints—always keep the full data so the line covers the entire predictor range
+5. 目的変数と説明変数をまとめた散布図用テーブルに、回帰直線の式から得られる予測値の列を追加して可視化に利用してください
 
 Example workflow after regression:
-1. perform_regression_analysis returns results with plotSeries array
-2. For each predictor in regression.plotSeries:
-   - Extract regressionLine array (contains 2 points defining the line)
-   - Create a table: CREATE TABLE regression_[predictor]_line AS SELECT * FROM (VALUES (x1, y1), (x2, y2)) AS t(predictor_name, predicted_target_name)
-   - Use create_chart with mark type "line", encoding x and y
-   - This creates a regression line chart showing the linear relationship`,
+1. perform_regression_analysis returns the regression coefficients (intercept + betas) and plotSeries metadata
+2. For each predictor in regression.plotSeries, build or update a scatter dataset that includes the original target column, the predictor column, and a predicted target column computed from the regression equation. Add an ordering column with \`ROW_NUMBER()\` only if必要になった場合に限ります。
+3. Use create_chart with layered marks (points for actual values, line for predicted values) referencing this dataset`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z
@@ -261,40 +258,41 @@ Example workflow after regression:
 
                 // Generate suggestions for creating regression line charts
                 const suggestions: string[] = [];
-                const validPlots = regression.plotSeries?.filter(
-                    series => series.regressionLine && series.regressionLine.length === 2
-                );
+                const { intercept, betas, names } = regression.coefficients;
+                const coefficientsAreFinite =
+                    Number.isFinite(intercept) &&
+                    betas.every(beta => Number.isFinite(beta)) &&
+                    names.length === betas.length;
 
-                if (validPlots && validPlots.length > 0) {
+                if (coefficientsAreFinite) {
                     suggestions.push(
-                        `次のステップ: 各説明変数について回帰直線のグラフを作成して、線形関係を視覚的に確認しましょう。regression.plotSeriesから各predictorのregressionLineデータ（2点）を取得し、適切な英数字のテーブル名を使ってCREATE TABLEし、create_chartで可視化してください。`
+                        `次のステップ: 回帰分析で使用した全行を含む散布図用テーブルを作成し、回帰式（切片 + Σβ×説明変数）で計算した予測値の列を追加して、実測値と予測値を同じテーブルで可視化しましょう。create_chartでは実測値を散布図、予測値を線グラフとして重ねると線形関係が明確になります。`
                     );
+
+                    const formattedIntercept = Number(intercept).toString();
+                    const coefficientTerms = betas.map((beta, idx) => {
+                        const column = names[idx];
+                        return `CAST(${Number(beta).toString()} AS DOUBLE) * ${quoteIdentifier(column)}`;
+                    });
+                    const targetIdentifier = quoteIdentifier(targetColumn);
+                    const targetAlias = toAsciiIdentifier(targetColumn, 'target');
+                    const predictedAlias = toAsciiIdentifier(`predicted_${targetColumn}`, 'predicted');
+                    const predictedExpression = [`CAST(${formattedIntercept} AS DOUBLE)`, ...coefficientTerms].join(
+                        ' + '
+                    );
+
                     for (const predictor of predictorColumns) {
-                        const plotData = validPlots.find(series => series.predictor === predictor);
-                        if (plotData && plotData.regressionLine.length === 2) {
-                            const [point1, point2] = plotData.regressionLine;
-                            // Validate that all coordinates are finite
-                            if (
-                                Number.isFinite(point1.x) &&
-                                Number.isFinite(point1.y) &&
-                                Number.isFinite(point2.x) &&
-                                Number.isFinite(point2.y)
-                            ) {
-                                // Format numbers to ensure they're treated as numeric in SQL
-                                const x1 = Number(point1.x).toString();
-                                const y1 = Number(point1.y).toString();
-                                const x2 = Number(point2.x).toString();
-                                const y2 = Number(point2.y).toString();
-                                suggestions.push(
-                                    `説明変数「${predictor}」の回帰直線: CREATE TABLE <table_name> AS SELECT * FROM (VALUES (CAST(${x1} AS DOUBLE), CAST(${y1} AS DOUBLE)), (CAST(${x2} AS DOUBLE), CAST(${y2} AS DOUBLE))) AS t(<x_column_name>, <y_column_name>); その後create_chartでmark type "line"を使用。テーブル名とカラム名は適切な英数字名を指定してください。`
-                                );
-                            } else {
-                                warnings.push(
-                                    `説明変数「${predictor}」の回帰直線は計算できませんでした（係数またはインターセプトが無限大です）。`
-                                );
-                            }
-                        }
+                        const predictorIdentifier = quoteIdentifier(predictor);
+                        const predictorAlias = toAsciiIdentifier(predictor, 'predictor');
+                        const previewSql = `SELECT ${targetIdentifier} AS ${targetAlias}, ${predictorIdentifier} AS ${predictorAlias}, ${predictedExpression} AS ${predictedAlias} FROM ${qualifiedTable} LIMIT 5;`;
+                        const createSql = `CREATE OR REPLACE TABLE <scatter_table_name> AS SELECT ${targetIdentifier} AS ${targetAlias}, ${predictorIdentifier} AS ${predictorAlias}, ${predictedExpression} AS ${predictedAlias} FROM ${qualifiedTable};`;
+
+                        suggestions.push(
+                            `説明変数「${predictor}」の散布図データ整備:\n  - 事前確認: ${previewSql}\n  - 作成: ${createSql} 英数字エイリアス（${targetAlias}, ${predictorAlias}, ${predictedAlias}）を維持し、並び替えが必要な場合はROW_NUMBER() OVER (ORDER BY ${predictorIdentifier}) AS row_index を追加してください。その後create_chartでmark "point"を実測列（${targetAlias}）に、mark "line"を予測列（${predictedAlias}）に割り当て、同じテーブルで散布図と回帰直線を表示できます。テーブル名は適切な名称に置き換えてください。`
+                        );
                     }
+                } else {
+                    warnings.push('回帰係数が有限値ではないため、予測値カラムの自動生成手順を提案できません。');
                 }
 
                 const response: RegressionAnalysisResponse = {
@@ -599,4 +597,38 @@ function toNumber(value: unknown): number | null {
         return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
+}
+
+function toAsciiIdentifier(name: string, fallbackPrefix: string): string {
+    const normalized = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    let candidate = normalized
+        .replace(/[^A-Za-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase();
+
+    if (!candidate) {
+        const hex = Array.from(name)
+            .map(char => {
+                const codePoint = char.codePointAt(0);
+                return codePoint !== undefined ? codePoint.toString(16) : '';
+            })
+            .join('');
+        candidate = `${fallbackPrefix}_${hex}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    }
+
+    candidate = candidate.replace(/__+/g, '_');
+
+    if (!/^[a-z]/.test(candidate)) {
+        candidate = `${fallbackPrefix}_${candidate}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    }
+
+    if (candidate.length > 64) {
+        candidate = candidate.slice(0, 64).replace(/_+$/g, '');
+    }
+
+    if (!candidate) {
+        candidate = fallbackPrefix.toLowerCase();
+    }
+
+    return candidate;
 }

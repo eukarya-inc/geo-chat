@@ -260,40 +260,40 @@ CREATE TABLE table_name_1 AS SELECT ...;
 ### CRITICAL: Automatic Regression Line Chart Creation After Regression
 **After successfully running perform_regression_analysis, you MUST automatically create regression line charts:**
 
-1. **For each predictor variable**, create a line chart showing the regression line using the \`create_chart\` tool
-2. **Prepare the regression line data** from plotSeries:
-   - Get plotSeries for the predictor from regression.plotSeries array
-   - Extract regressionLine array which contains two points: {x: minX, y: predictedY_min} and {x: maxX, y: predictedY_max}
-   - These two points define the regression line across the range of the predictor variable
-3. **Create a DuckDB table** with the regression line data:
-   \\\`\\\`\\\`sql
-   -- Example: Create table with regression line (2 points)
-   CREATE TABLE regression_[predictor]_line AS
-   SELECT * FROM (VALUES
-     ([minX], [predictedY_at_minX]),
-     ([maxX], [predictedY_at_maxX])
-   ) AS t([predictor_name], [predicted_target_name]);
-   \\\`\\\`\\\`
-4. **Create the line chart** using create_chart:
-   \\\`\\\`\\\`json
-   {
-     "title": "Regression Line: [target_name] vs [predictor_name]",
-     "mark": {"type": "line", "color": "red", "strokeWidth": 3},
-     "encoding": {
-       "x": {"field": "[predictor_name]", "type": "quantitative", "title": "[predictor_name]"},
-       "y": {"field": "[predicted_target_name]", "type": "quantitative", "title": "Predicted [target_name]"}
-     }
-   }
-   \\\`\\\`\\\`
-5. **Do this for ALL predictors** in the regression result - each predictor gets its own regression line chart
+1. **For each predictor variable**, build a scatter plot dataset that reuses all rows from the regression input
+2. **Compute predicted values using the regression equation**:
+   - Use the intercept and all β coefficients returned by perform_regression_analysis
+   - Avoid relying solely on regression.plotSeries.regressionLine (it only contains two endpoints)
+   - Apply the equation to every row: \`predicted = intercept + Σ βᵢ × 説明変数ᵢ\`
+3. **Create or update (e.g., CREATE OR REPLACE) a DuckDB table / dataset** for the scatter plot that contains **all rows** from the regression input. This dataset must include:
+   - The predictor column
+   - The actual target column
+   - A new column with the predicted target values computed from the regression equation (切片 + Σβ×説明変数)
+4. **Create the chart** using create_chart:
+   - Plot actual values with \`mark: "point"\` (scatter)
+   - Plot predicted values with \`mark: "line"\` using the same dataset (sorted by the predictor)
+   - Keep both series in the same table so the regression line spans the full predictor range
+5. **Do this for ALL predictors** in the regression result - each predictor gets a dedicated scatter/line visualization sharing the predicted-value column
+6. Consolidate the target and predictor columns into a single scatter dataset and add a predicted-value column derived from the regression equation so the scatter plot and regression line share the same table.
+7. If every predicted value is identical, verify whether any predictor column is constant (e.g., all values are 1) and adjust filters or grouping as needed because constant predictors yield horizontal regression lines.
+8. Before creating the scatter table, run a SELECT query with the regression formula and LIMIT 5 to confirm that the predicted magnitude and sign look reasonable.
+9. Assign ASCII-only aliases (letters, numbers, underscores) to every column in the scatter table (target, predictor, predicted). For example: "事業用自動車数" AS car_count.
 
 Example workflow:
 - Run perform_regression_analysis → Get results with plotSeries
 - For each predictor in results.regression.plotSeries:
-  1. Extract regressionLine array (2 points: min and max)
-  2. Create a table: CREATE TABLE regression_[predictor]_line AS SELECT * FROM (VALUES (x1, y1), (x2, y2))
-  3. Use create_chart with mark type "line" to visualize the regression line
-  4. Name clearly (e.g., "regression_[predictor]_line")
+  1. Create a scatter dataset that copies all rows:
+     \\\`\\\`\\\`sql
+     CREATE OR REPLACE TABLE regression_[predictor]_scatter AS
+     SELECT
+       "<target_name>"   AS "<target_name>",
+       "<predictor_name>" AS "<predictor_name>",
+       (<intercept> + <beta1>*"<col1>" + <beta2>*"<col2>" + ...) AS "predicted_<target_name>"
+     FROM source_table;
+     \\\`\\\`\\\`
+  2. Use create_chart with layered marks (points for actual, line for predicted) referencing this table
+  3. Name clearly (e.g., "regression_[predictor]_scatter")
+ 4. Keeping the predicted column in the same table lets the scatter plot and regression line render together seamlessly.
 
 ## Examples: Questions vs Visualization Requests
 
