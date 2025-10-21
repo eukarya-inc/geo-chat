@@ -72,6 +72,7 @@ export default function AIChat({
     const [isMultiline, setIsMultiline] = useState(false);
     const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
     const [isCreatingTable, setIsCreatingTable] = useState(false);
+    const [tableCreationError, setTableCreationError] = useState<string | null>(null);
 
     const effectiveChatId = chatId || 'default';
 
@@ -129,6 +130,12 @@ export default function AIChat({
             const trimmedInput = input.trim();
             if (!trimmedInput) return;
 
+            // Abort any ongoing prompt suggestion loading when user submits a new message
+            if (promptSuggestionAbortRef.current) {
+                promptSuggestionAbortRef.current.abort();
+                promptSuggestionAbortRef.current = null;
+            }
+
             // Check if input is a URL
             const dataUrl = extractDataUrl(trimmedInput);
 
@@ -139,6 +146,7 @@ export default function AIChat({
                 }
 
                 setIsCreatingTable(true);
+                setTableCreationError(null); // Clear previous errors
                 try {
                     // Create table from URL
                     const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
@@ -153,7 +161,8 @@ export default function AIChat({
                     sendMessage(message);
                 } catch (error) {
                     console.error('Failed to create table from URL:', error);
-                    // Show error to user - you might want to add error state handling here
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setTableCreationError(`テーブルの作成に失敗しました: ${errorMessage}`);
                 } finally {
                     setIsCreatingTable(false);
                 }
@@ -419,9 +428,18 @@ export default function AIChat({
 
             const content = tableCreatedMessage.content as string;
 
-            // Check if we already have prompt suggestions for this table
-            // Table creation suggestions are in tool_result, completion suggestions are in tool_use (for memory efficiency)
-            const hasPromptSuggestions = messages.some(
+            // Extract table name from the marker
+            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
+            const tableName = match?.[1] || selectedTable || null;
+
+            if (!tableName || !dbContext || !apiKey) return;
+
+            // Find the index of this TABLE_CREATED message
+            const tableCreatedIndex = messages.indexOf(tableCreatedMessage);
+
+            // Check if we already have prompt suggestions AFTER this specific TABLE_CREATED message
+            // Only check messages that come after the table creation message
+            const hasPromptSuggestionsAfterTable = messages.slice(tableCreatedIndex + 1).some(
                 msg =>
                     msg.role === 'assistant' &&
                     Array.isArray(msg.content) &&
@@ -432,7 +450,10 @@ export default function AIChat({
                                 block.name === 'completion' &&
                                 block.result &&
                                 typeof block.result === 'object' &&
-                                'suggestedPrompts' in block.result) ||
+                                'suggestedPrompts' in block.result &&
+                                'completionMessage' in block.result &&
+                                typeof block.result.completionMessage === 'string' &&
+                                block.result.completionMessage.includes(tableName)) ||
                             // Check for completion suggestions (tool_use)
                             (block.type === 'tool_use' &&
                                 block.name === 'completion' &&
@@ -442,15 +463,14 @@ export default function AIChat({
                     )
             );
 
-            if (hasPromptSuggestions) {
+            if (hasPromptSuggestionsAfterTable) {
                 return;
             }
 
-            // Extract table name from the marker
-            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
-            const tableName = match?.[1] || selectedTable || null;
-
-            if (!tableName || !dbContext || !apiKey) return;
+            // Check if aborted before adding loading message
+            if (abortSignal.aborted) {
+                return;
+            }
 
             // Check if we already have the loading message
             const hasLoadingMessage = messages.some(
@@ -637,6 +657,35 @@ export default function AIChat({
                 )}
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
                 <div className="w-full">
+                    {tableCreationError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-300 rounded-lg">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <strong className="text-red-800 text-sm">エラー</strong>
+                                    <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                                </div>
+                                <button
+                                    onClick={() => setTableCreationError(null)}
+                                    className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                    title="閉じる"
+                                >
+                                    <svg
+                                        className="w-4 h-4 text-red-800"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div
                         className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
                     >
@@ -876,6 +925,35 @@ export default function AIChat({
             </div>
 
             <div className="flex-shrink-0">
+                {tableCreationError && (
+                    <div className="mb-2 p-3 bg-red-50 border border-red-300 rounded-md">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                                <strong className="text-red-800 text-sm">エラー</strong>
+                                <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                            </div>
+                            <button
+                                onClick={() => setTableCreationError(null)}
+                                className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                title="閉じる"
+                            >
+                                <svg
+                                    className="w-4 h-4 text-red-800"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <div className="bg-white border border-gray-300 rounded-md p-2">
                     <ChatInput
                         value={input}
