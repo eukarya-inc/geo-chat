@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AIChat from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
-import { TableView } from '../../components/table/TableView';
+import { TablePanel } from '../../components/table/TablePanel';
 import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
@@ -684,14 +684,13 @@ function ChatPage() {
 
                                             {/* Table Tab */}
                                             {activeTab === 'table' && (
-                                                <div className="h-full overflow-hidden">
-                                                    <TableView
-                                                        key={`${selectedChatId}-${selectedTable}`}
-                                                        connection={connection}
-                                                        tableName={selectedTable}
-                                                        dbContext={dbContext}
-                                                    />
-                                                </div>
+                                                <TablePanel
+                                                    key={`${selectedChatId}-${selectedTable}`}
+                                                    connection={connection}
+                                                    tableName={selectedTable}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || null}
+                                                />
                                             )}
 
                                             {/* Chart Tab */}
