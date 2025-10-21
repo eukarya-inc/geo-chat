@@ -130,6 +130,12 @@ export default function AIChat({
             const trimmedInput = input.trim();
             if (!trimmedInput) return;
 
+            // Abort any ongoing prompt suggestion loading when user submits a new message
+            if (promptSuggestionAbortRef.current) {
+                promptSuggestionAbortRef.current.abort();
+                promptSuggestionAbortRef.current = null;
+            }
+
             // Check if input is a URL
             const dataUrl = extractDataUrl(trimmedInput);
 
@@ -422,9 +428,18 @@ export default function AIChat({
 
             const content = tableCreatedMessage.content as string;
 
-            // Check if we already have prompt suggestions for this table
-            // Table creation suggestions are in tool_result, completion suggestions are in tool_use (for memory efficiency)
-            const hasPromptSuggestions = messages.some(
+            // Extract table name from the marker
+            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
+            const tableName = match?.[1] || selectedTable || null;
+
+            if (!tableName || !dbContext || !apiKey) return;
+
+            // Find the index of this TABLE_CREATED message
+            const tableCreatedIndex = messages.indexOf(tableCreatedMessage);
+
+            // Check if we already have prompt suggestions AFTER this specific TABLE_CREATED message
+            // Only check messages that come after the table creation message
+            const hasPromptSuggestionsAfterTable = messages.slice(tableCreatedIndex + 1).some(
                 msg =>
                     msg.role === 'assistant' &&
                     Array.isArray(msg.content) &&
@@ -435,7 +450,10 @@ export default function AIChat({
                                 block.name === 'completion' &&
                                 block.result &&
                                 typeof block.result === 'object' &&
-                                'suggestedPrompts' in block.result) ||
+                                'suggestedPrompts' in block.result &&
+                                'completionMessage' in block.result &&
+                                typeof block.result.completionMessage === 'string' &&
+                                block.result.completionMessage.includes(tableName)) ||
                             // Check for completion suggestions (tool_use)
                             (block.type === 'tool_use' &&
                                 block.name === 'completion' &&
@@ -445,15 +463,14 @@ export default function AIChat({
                     )
             );
 
-            if (hasPromptSuggestions) {
+            if (hasPromptSuggestionsAfterTable) {
                 return;
             }
 
-            // Extract table name from the marker
-            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
-            const tableName = match?.[1] || selectedTable || null;
-
-            if (!tableName || !dbContext || !apiKey) return;
+            // Check if aborted before adding loading message
+            if (abortSignal.aborted) {
+                return;
+            }
 
             // Check if we already have the loading message
             const hasLoadingMessage = messages.some(
