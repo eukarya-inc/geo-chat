@@ -5,6 +5,7 @@ import { getGlobalDB } from './globalDB';
 export function useDuckDB() {
     const [dbContext, setDbContext] = useState<DBContext | null>(null);
     const [error, setError] = useState<Error | null>(null);
+    const [isInitializing, setIsInitializing] = useState(true);
     const isInitialized = useRef(false);
 
     useEffect(() => {
@@ -19,6 +20,8 @@ export function useDuckDB() {
                 console.log('useDuckDB: Database context set successfully');
             } catch (err) {
                 setError(err instanceof Error ? err : new Error('Failed to initialize DuckDB'));
+            } finally {
+                setIsInitializing(false);
             }
         }
 
@@ -28,5 +31,5 @@ export function useDuckDB() {
         }
     }, []);
 
-    return { dbContext, error };
+    return { dbContext, error, isInitializing };
 }
