@@ -1,6 +1,50 @@
 import { describe, it, expect } from 'vitest';
+import { convertComplexTypesForArrow } from './duckdb';
 
 describe('duckdbTable', () => {
+    describe('convertComplexTypesForArrow', () => {
+        it('should keep Uint8Array as-is', () => {
+            const input = new Uint8Array([1, 2, 3, 4, 5]);
+            const result = convertComplexTypesForArrow(input, 'GEOMETRY');
+            expect(result).toBeInstanceOf(Uint8Array);
+            expect(result).toEqual(input);
+        });
+
+        it('should convert object with numeric keys and byteLength to Uint8Array', () => {
+            const input = {
+                0: 5,
+                1: 4,
+                2: 0,
+                3: 0,
+                byteLength: 4,
+            };
+            const result = convertComplexTypesForArrow(input, 'GEOMETRY');
+            expect(result).toBeInstanceOf(Uint8Array);
+            expect((result as Uint8Array)[0]).toBe(5);
+            expect((result as Uint8Array)[1]).toBe(4);
+            expect((result as Uint8Array)[2]).toBe(0);
+            expect((result as Uint8Array)[3]).toBe(0);
+        });
+
+        it('should convert ArrayBuffer as-is', () => {
+            const buffer = new ArrayBuffer(10);
+            const result = convertComplexTypesForArrow(buffer, 'BLOB');
+            expect(result).toBe(buffer);
+        });
+
+        it('should convert regular objects to JSON string', () => {
+            const input = { foo: 'bar', nested: { value: 123 } };
+            const result = convertComplexTypesForArrow(input);
+            expect(result).toBe(JSON.stringify(input));
+        });
+
+        it('should keep Date objects as-is', () => {
+            const input = new Date('2024-01-01');
+            const result = convertComplexTypesForArrow(input);
+            expect(result).toBe(input);
+        });
+    });
+
     describe('convertSpecialValues', () => {
         // We can't directly test the private function, but we can test the behavior
         // through the public functions that use it
