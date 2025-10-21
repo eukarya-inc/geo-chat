@@ -16,6 +16,7 @@ describe('olsRegression', () => {
         expect(result.adjustedR2).toBeCloseTo(1, 6);
         expect(result.metricsPerPredictor).toHaveLength(1);
         expect(result.metricsPerPredictor[0].pValue).toBeLessThan(0.0001);
+        expect(result.metricsPerPredictor[0].vif).toBe(1);
         expect(result.plotSeries).toHaveLength(1);
         expect(result.plotSeries[0].regressionLine[0].y).toBeCloseTo(2, 6);
         expect(result.plotSeries[0].regressionLine[1].y).toBeCloseTo(10, 6);
@@ -43,6 +44,61 @@ describe('olsRegression', () => {
         expect(result.fStatistic).toBeGreaterThan(10);
         const maxResidual = Math.max(...result.residuals.map(value => Math.abs(value)));
         expect(maxResidual).toBeLessThan(2);
+    });
+
+    it('handles constant target values by returning zero slope and NaN inferential stats', () => {
+        const X = [[1], [2], [3], [4]];
+        const y = [3, 3, 3, 3];
+
+        const result = olsRegression(X, y, { featureNames: ['x1'] });
+
+        expect(result.coefficients.intercept).toBeCloseTo(3, 6);
+        expect(result.coefficients.betas[0]).toBeCloseTo(0, 6);
+        expect(result.r2).toBe(1);
+        expect(result.adjustedR2).toBe(1);
+        expect(result.residualStandardError).toBeCloseTo(0, 10);
+
+        const predictorMetrics = result.metricsPerPredictor[0];
+        expect(predictorMetrics.standardError).toBeCloseTo(0, 10);
+        expect(Number.isFinite(predictorMetrics.tStatistic)).toBe(true);
+        expect(predictorMetrics.pValue).toBeGreaterThanOrEqual(0);
+        expect(predictorMetrics.pValue).toBeLessThanOrEqual(1);
+    });
+
+    it('returns NaN statistics when degrees of freedom are exhausted', () => {
+        const X = [[1], [2]];
+        const y = [3, 4];
+
+        const result = olsRegression(X, y, { featureNames: ['x1'] });
+
+        expect(result.dfResidual).toBe(0);
+        expect(Number.isNaN(result.adjustedR2)).toBe(true);
+        expect(Number.isNaN(result.residualStandardError)).toBe(true);
+        const predictorMetrics = result.metricsPerPredictor[0];
+        expect(Number.isNaN(predictorMetrics.standardError)).toBe(true);
+        expect(Number.isNaN(predictorMetrics.tStatistic)).toBe(true);
+        expect(Number.isNaN(predictorMetrics.pValue)).toBe(true);
+    });
+
+    it('limits plot sampling to 2000 points for large datasets', () => {
+        const X = Array.from({ length: 2500 }, (_, i) => [i]);
+        const y = Array.from({ length: 2500 }, (_, i) => i * 2 + 1);
+
+        const result = olsRegression(X, y, { featureNames: ['x1'] });
+
+        expect(result.plotSeries).toHaveLength(1);
+        expect(result.plotSeries[0].points).toHaveLength(2000);
+        expect(result.plotSeries[0].regressionLine).toHaveLength(2);
+        expect(Number.isFinite(result.plotSeries[0].regressionLine[0].y)).toBe(true);
+    });
+
+    it('skips plot generation when disabled', () => {
+        const X = [[1], [2], [3], [4], [5]];
+        const y = [2, 4, 6, 8, 10];
+
+        const result = olsRegression(X, y, { featureNames: ['x1'], generatePlots: false });
+
+        expect(result.plotSeries).toHaveLength(0);
     });
 
     it('throws when inputs are invalid', () => {
