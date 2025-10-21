@@ -23,6 +23,7 @@ export function useChartVisualization(
     const currentChatState = useAtomValue(currentChatStateAtom);
     const showGraph = useAtomValue(currentTableShowGraphAtom);
     const lastUpdatedTableRef = useRef<string | null>(null);
+    const deletingTableRef = useRef<string | null>(null);
 
     // Clear chart spec immediately when schema changes or table is cleared
     useEffect(() => {
@@ -66,6 +67,14 @@ export function useChartVisualization(
             return;
         }
 
+        // Check if this table was deleted by user
+        const wasDeleted = currentChatState?.chartUserDeleted?.includes(selectedTable);
+        if (wasDeleted || deletingTableRef.current === selectedTable) {
+            // User deleted this chart, don't load it
+            setChartSpec(null);
+            return;
+        }
+
         // Check if we already have a chart spec for this table
         const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
         if (existingSpec) {
@@ -80,7 +89,7 @@ export function useChartVisualization(
             // Don't generate chart automatically, wait for user to click chart tab
             setChartSpec(null);
         }
-    }, [selectedTable, currentChatState?.chartSpecs]);
+    }, [selectedTable, currentChatState?.chartSpecs, currentChatState?.chartUserDeleted]);
 
     // Generate chart when graph is turned on for the first time
     useEffect(() => {
@@ -94,6 +103,17 @@ export function useChartVisualization(
             const existingSpec = currentChatState?.chartSpecs?.[selectedTable];
             if (existingSpec) {
                 return; // Already have a chart
+            }
+
+            // Check if we're currently deleting this table
+            if (deletingTableRef.current === selectedTable) {
+                return;
+            }
+
+            // Check if user explicitly deleted the chart for this table
+            const wasDeleted = currentChatState?.chartUserDeleted?.includes(selectedTable);
+            if (wasDeleted) {
+                return; // User deleted this chart, don't auto-regenerate
             }
 
             // Add a small delay to ensure schema is fully switched
@@ -187,6 +207,9 @@ export function useChartVisualization(
                 setChartSpec(newChartSpec);
             }
 
+            // Remove from chartUserDeleted list since chart is being recreated by AI
+            const updatedChartUserDeleted = (currentChatState?.chartUserDeleted || []).filter(t => t !== tableName);
+
             // Update remote state
             updateChatState({
                 chartSpecs: {
@@ -199,6 +222,7 @@ export function useChartVisualization(
                         aiGeneratedSpec: newChartSpec.aiGeneratedSpec,
                     },
                 },
+                chartUserDeleted: updatedChartUserDeleted,
             });
 
             // Graph display is automatically turned on when chartSpec exists
@@ -213,6 +237,9 @@ export function useChartVisualization(
                 throw new Error('Database context or schema not available');
             }
 
+            // Mark as deleting to prevent auto-regeneration during state update
+            deletingTableRef.current = tableName;
+
             // Clear local state if this is the currently selected table
             if (tableName === selectedTable) {
                 setChartSpec(null);
@@ -222,12 +249,25 @@ export function useChartVisualization(
             const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
             delete updatedChartSpecs[tableName];
 
+            // Add to chartUserDeleted list to prevent auto-regeneration
+            const updatedChartUserDeleted = [...(currentChatState?.chartUserDeleted || [])];
+            if (!updatedChartUserDeleted.includes(tableName)) {
+                updatedChartUserDeleted.push(tableName);
+            }
+
             updateChatState({
                 chartSpecs: updatedChartSpecs,
+                chartUserDeleted: updatedChartUserDeleted,
             });
 
+            // Clear deleting flag after state update has propagated
+            setTimeout(() => {
+                if (deletingTableRef.current === tableName) {
+                    deletingTableRef.current = null;
+                }
+            }, 500);
+
             // Graph display is automatically turned off when chartSpec is deleted
-            // Note: Chart will auto-regenerate when chart tab is clicked again
         },
         [dbContext, schemaName, selectedTable, currentChatState, updateChatState]
     );
