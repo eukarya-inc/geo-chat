@@ -177,57 +177,59 @@ export default function AIChat({
         const MIN_HEIGHT = 44; // Minimum height for single line
         const MAX_LINES = 10;
 
-        // Empty input is always single line
-        if (!input || input.trim() === '') {
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
             setIsMultiline(false);
             setTextareaHeight(MIN_HEIGHT);
             return;
         }
 
-        if (!textareaRef.current) {
+        const trimmed = input.trim();
+
+        // Empty input is always single line
+        if (!trimmed) {
             setIsMultiline(false);
             setTextareaHeight(MIN_HEIGHT);
             return;
         }
 
         // Get actual computed styles
-        const textarea = textareaRef.current;
         const computedStyle = window.getComputedStyle(textarea);
         const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
         const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
         const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
         const totalPadding = paddingTop + paddingBottom;
+        const singleLineHeight = lineHeight + totalPadding;
 
-        // Count the number of lines
+        // Count the number of newline-separated lines
         const lines = input.split('\n').length;
-        const hasNewline = lines > 1;
-
-        if (hasNewline) {
+        if (lines > 1) {
             setIsMultiline(true);
-            // Calculate height based on line count, capped at MAX_LINES
             const effectiveLines = Math.min(lines, MAX_LINES);
-            const calculatedHeight = effectiveLines * lineHeight + totalPadding;
-            setTextareaHeight(calculatedHeight);
-        } else {
-            // Check if content overflows (for single line with long text)
-            requestAnimationFrame(() => {
-                if (textareaRef.current) {
-                    const hasOverflow = textareaRef.current.scrollHeight > textareaRef.current.clientHeight + 5;
-                    if (hasOverflow) {
-                        setIsMultiline(true);
-                        // Calculate how many lines are needed based on scrollHeight
-                        const neededLines = Math.min(
-                            Math.ceil((textareaRef.current.scrollHeight - totalPadding) / lineHeight),
-                            MAX_LINES
-                        );
-                        setTextareaHeight(neededLines * lineHeight + totalPadding);
-                    } else {
-                        setIsMultiline(false);
-                        setTextareaHeight(MIN_HEIGHT);
-                    }
-                }
-            });
+            setTextareaHeight(effectiveLines * lineHeight + totalPadding);
+            return;
         }
+
+        const updateForWrappedContent = () => {
+            const currentTextarea = textareaRef.current;
+            if (!currentTextarea) {
+                return;
+            }
+
+            const contentHeight = currentTextarea.scrollHeight;
+            if (contentHeight > singleLineHeight + 1) {
+                const neededLines = Math.min(Math.ceil((contentHeight - totalPadding) / lineHeight), MAX_LINES);
+                const newHeight = neededLines * lineHeight + totalPadding;
+                setIsMultiline(true);
+                setTextareaHeight(newHeight);
+            } else {
+                setIsMultiline(false);
+                setTextareaHeight(MIN_HEIGHT);
+            }
+        };
+
+        requestAnimationFrame(updateForWrappedContent);
     }, [input]);
 
     const messageGroups = useMemo(() => {
