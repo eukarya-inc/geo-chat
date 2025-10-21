@@ -6,6 +6,7 @@ import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
 import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
@@ -33,7 +34,7 @@ import {
 } from './hooks';
 
 function ChatPage() {
-    const { dbContext } = useDuckDB();
+    const { dbContext, isInitializing } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportType, setExportType] = useState<'chart' | 'map'>('chart');
@@ -42,6 +43,40 @@ function ChatPage() {
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
     const [showChartSpecModal, setShowChartSpecModal] = useState(false);
     const chatPageVegaViewRef = useRef<View | null>(null);
+    const dbContextRef = useRef<DBContext | null>(dbContext);
+    const isInitializingRef = useRef<boolean>(isInitializing);
+
+    // Update refs when values change
+    useEffect(() => {
+        dbContextRef.current = dbContext;
+    }, [dbContext]);
+
+    useEffect(() => {
+        isInitializingRef.current = isInitializing;
+    }, [isInitializing]);
+
+    // Wait for DuckDB context to be ready
+    const waitForDbContext = useCallback(async (): Promise<DBContext> => {
+        if (dbContextRef.current) return dbContextRef.current;
+        if (!isInitializingRef.current) throw new Error('DuckDB initialization failed');
+
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(() => {
+                if (dbContextRef.current) {
+                    clearInterval(checkInterval);
+                    resolve(dbContextRef.current);
+                } else if (!isInitializingRef.current) {
+                    clearInterval(checkInterval);
+                    reject(new Error('DuckDB initialization failed'));
+                }
+            }, 100);
+
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('DuckDB initialization timeout'));
+            }, 30000);
+        });
+    }, []);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
@@ -396,7 +431,7 @@ function ChatPage() {
                         onCreateChat={createNewChat}
                         onDeleteChat={deleteChat}
                         onRenameChat={renameChat}
-                        isInitialized={!!dbContext}
+                        isInitialized={!isInitializing}
                         dashboards={getAllDashboards()}
                         onCreateDashboard={handleCreateDashboard}
                         onSelectDashboard={handleSelectDashboard}
@@ -443,7 +478,7 @@ function ChatPage() {
                     /* Empty Chat Mode - Centered Input */
                     <div className="flex-1 h-full flex items-center justify-center p-4">
                         <div className="w-full max-w-3xl -mt-32">
-                            {!isLoadingApiKey && dbContext && selectedChatId && (
+                            {!isLoadingApiKey && selectedChatId && (
                                 <AIChat
                                     dbContext={dbContext}
                                     apiKey={apiKey}
@@ -479,11 +514,13 @@ function ChatPage() {
                                                 onClose();
                                             }}
                                             onSendMessage={sendMessageRef.current || undefined}
+                                            waitForDbContext={waitForDbContext}
                                         />
                                     )}
                                     emptyMode={true}
                                     onApiKeyChange={setApiKey}
                                     onApiKeySave={saveApiKey}
+                                    waitForDbContext={waitForDbContext}
                                 />
                             )}
                         </div>
@@ -536,8 +573,10 @@ function ChatPage() {
                                                     onClose();
                                                 }}
                                                 onSendMessage={sendMessageRef.current || undefined}
+                                                waitForDbContext={waitForDbContext}
                                             />
                                         )}
+                                        waitForDbContext={waitForDbContext}
                                     />
                                 </div>
                             ) : !isLoadingApiKey && dbContext ? (
