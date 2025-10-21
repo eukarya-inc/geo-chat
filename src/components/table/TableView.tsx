@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from '@glideapps/glide-data-grid';
 import { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { getTableData, getTableDataByWindow, getValueFromArrowTable } from '../../utils/duckdb';
+import { getTableData, getTableDataByWindow, getValueFromArrowTable, getValueFromRawData } from '../../utils/duckdb';
 import { Table as ArrowTable } from 'apache-arrow';
 import { throttle } from '../../utils/throttle';
 import '@glideapps/glide-data-grid/dist/index.css';
@@ -35,6 +35,95 @@ interface TableViewProps {
     dbContext?: DBContext;
 }
 
+// Helper function to format cell values for display
+const formatCellValue = (value: unknown, columnType?: string): string => {
+    if (value === null || value === undefined) {
+        return 'NULL';
+    }
+
+    // Binary data (Uint8Array) is now handled directly from rawData cache
+    // No need for base64 encoding/decoding
+
+    // Handle BLOB/geometry data
+    if (
+        value instanceof Uint8Array ||
+        value instanceof ArrayBuffer ||
+        (value && typeof value === 'object' && 'byteLength' in value)
+    ) {
+        // Check if this is a geometry column
+        if (
+            columnType &&
+            (columnType.toUpperCase().includes('GEOMETRY') ||
+                columnType.toUpperCase().includes('POINT') ||
+                columnType.toUpperCase().includes('LINESTRING') ||
+                columnType.toUpperCase().includes('POLYGON') ||
+                columnType.toUpperCase().includes('MULTIPOINT') ||
+                columnType.toUpperCase().includes('MULTILINESTRING') ||
+                columnType.toUpperCase().includes('MULTIPOLYGON') ||
+                columnType.toUpperCase().includes('GEOMETRYCOLLECTION'))
+        ) {
+            // Try to extract geometry type from WKB
+            if (value instanceof Uint8Array && value.length > 5) {
+                try {
+                    const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+                    const byteOrder = value[0];
+                    const typeCode = byteOrder === 1 ? view.getUint32(1, true) : view.getUint32(1, false);
+
+                    const geomTypes: Record<number, string> = {
+                        1: 'Point',
+                        2: 'LineString',
+                        3: 'Polygon',
+                        4: 'MultiPoint',
+                        5: 'MultiLineString',
+                        6: 'MultiPolygon',
+                        7: 'GeometryCollection',
+                    };
+
+                    const baseType = typeCode & 0xff;
+                    const typeName = geomTypes[baseType] || 'Geometry';
+                    return `[${typeName}]`;
+                } catch {
+                    // If parsing fails, use column type
+                }
+            }
+
+            // Fallback: use column type
+            const typeUpper = columnType.toUpperCase();
+            if (typeUpper.includes('MULTIPOLYGON')) return '[MultiPolygon]';
+            if (typeUpper.includes('MULTILINESTRING')) return '[MultiLineString]';
+            if (typeUpper.includes('MULTIPOINT')) return '[MultiPoint]';
+            if (typeUpper.includes('POLYGON')) return '[Polygon]';
+            if (typeUpper.includes('LINESTRING')) return '[LineString]';
+            if (typeUpper.includes('POINT')) return '[Point]';
+            return '[Geometry]';
+        }
+
+        // For non-geometry BLOB, show size
+        let byteLength = 0;
+        if (value instanceof Uint8Array) {
+            byteLength = value.byteLength;
+        } else if (value instanceof ArrayBuffer) {
+            byteLength = value.byteLength;
+        } else if (value && typeof value === 'object' && 'byteLength' in value) {
+            byteLength = (value as { byteLength: number }).byteLength;
+        }
+
+        if (byteLength > 0) {
+            if (byteLength < 1024) {
+                return `[Blob: ${byteLength}B]`;
+            } else if (byteLength < 1024 * 1024) {
+                return `[Blob: ${(byteLength / 1024).toFixed(1)}KB]`;
+            } else {
+                return `[Blob: ${(byteLength / (1024 * 1024)).toFixed(1)}MB]`;
+            }
+        }
+
+        return '[Blob]';
+    }
+
+    return String(value);
+};
+
 export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbContext }) => {
     // Inject scrollbar styles
     useEffect(() => {
@@ -50,6 +139,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
     const [totalRows, setTotalRows] = useState(0);
     const [arrowCache] = useState(new Map<string, ArrowTable>());
+    const [rawDataCache] = useState(new Map<string, Map<string, unknown>[]>());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const loadingWindowsRef = useRef(new Set<string>());
@@ -63,8 +153,9 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
     // Reset cache when sort changes
     useEffect(() => {
         arrowCache.clear();
+        rawDataCache.clear();
         loadingWindowsRef.current.clear();
-    }, [sortColumn, sortDirection, arrowCache]);
+    }, [sortColumn, sortDirection, arrowCache, rawDataCache]);
 
     useEffect(() => {
         const loadInitialData = async (retryCount = 0) => {
@@ -72,6 +163,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             setError(null);
             // Clear cache and reset loading windows when connection or table changes
             arrowCache.clear();
+            rawDataCache.clear();
             loadingWindowsRef.current.clear();
 
             // Use dbContext connection if available to ensure proper schema context
@@ -152,8 +244,11 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                 setColumnTypes(types);
                 setTotalRows(initialData.totalRows);
 
-                // Store initial Arrow table in cache
+                // Store initial Arrow table and raw data in cache
                 arrowCache.set('window-0-100', initialData.arrowTable);
+                if (initialData.rawData) {
+                    rawDataCache.set('window-0-100', initialData.rawData);
+                }
 
                 // Success - set loading to false
                 setLoading(false);
@@ -224,7 +319,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             const conn = connection;
 
             try {
-                const arrowTable = await getTableDataByWindow(
+                const windowResult = await getTableDataByWindow(
                     conn,
                     tableName,
                     windowStart,
@@ -232,7 +327,8 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                     sortColumn || undefined,
                     sortDirection
                 );
-                arrowCache.set(cacheKey, arrowTable);
+                arrowCache.set(cacheKey, windowResult.arrowTable);
+                rawDataCache.set(cacheKey, windowResult.rawData);
             } catch (error) {
                 console.error('Error loading data window:', error, {
                     tableName,
@@ -246,7 +342,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                 loadingWindowsRef.current.delete(cacheKey);
             }
         },
-        [connection, tableName, arrowCache, sortColumn, sortDirection]
+        [connection, tableName, arrowCache, rawDataCache, sortColumn, sortDirection]
     );
 
     // Create a throttled version of loadDataWindow
@@ -274,8 +370,8 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             const windowEnd = windowStart + windowSize;
             const cacheKey = `window-${windowStart}-${windowEnd}`;
 
-            const arrowTable = arrowCache.get(cacheKey);
-            if (!arrowTable) {
+            const rawData = rawDataCache.get(cacheKey);
+            if (!rawData) {
                 // Try to load data but don't block - show empty cell instead
                 throttledLoadDataWindow(row);
                 return {
@@ -286,15 +382,13 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                 };
             }
 
-            // Convert only the specific cell value from Arrow
-            // Adjust column index since first column is row number
-            const dataColIndex = col - 1;
+            // Get value directly from raw data (more efficient for binary data)
             const rowInWindow = row - windowStart;
             const columnName = columns[col]?.id;
             const columnType = columnName ? columnTypes[columnName] : undefined;
-            const value = getValueFromArrowTable(arrowTable, rowInWindow, dataColIndex, columnType);
-            // Value is already converted to string in getValueFromArrowTable for BigInt and BLOB
-            const displayValue = value === null ? 'NULL' : String(value);
+            const value = getValueFromRawData(rawData, rowInWindow, columnName || '', columnType);
+            // Format the value for display using our formatting function
+            const displayValue = formatCellValue(value, columnType);
 
             return {
                 kind: GridCellKind.Text,
@@ -303,7 +397,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                 allowOverlay: true,
             };
         },
-        [arrowCache, throttledLoadDataWindow, columns, columnTypes]
+        [rawDataCache, throttledLoadDataWindow, columns, columnTypes]
     );
 
     const onVisibleRegionChanged = useCallback(
