@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AIChat from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
 import { TableView } from '../../components/table/TableView';
@@ -14,6 +14,7 @@ import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
+import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
@@ -44,6 +45,32 @@ function ChatPage() {
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
+
+    // Extract title from completion tool result in messages
+    const extractCompletionTitle = useCallback((messages: StructuredMessage[]): string | null => {
+        // Search messages in reverse order to find the most recent completion tool
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
+
+            for (const block of message.content) {
+                // Check tool_use for completion (this is where the title is in the input)
+                if (block.type === 'tool_use' && block.name === 'completion') {
+                    const input = block.input;
+                    if (
+                        input &&
+                        typeof input === 'object' &&
+                        'title' in input &&
+                        typeof input.title === 'string' &&
+                        input.title.trim()
+                    ) {
+                        return input.title.trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }, []);
 
     // Dashboard state management with atoms
     const currentDashboard = useAtomValue(currentDashboardAtom);
@@ -97,10 +124,47 @@ function ChatPage() {
         connection
     );
 
+    // Handler for conversation completion - updates chat title if needed
+    const handleConversationCompleted = useCallback(() => {
+        // Just trigger immediate sync
+        syncImmediately();
+    }, [syncImmediately]);
+
+    // Check and update chat title when messages change
+    const checkAndUpdateChatTitle = useCallback(
+        (messages: StructuredMessage[]) => {
+            if (!selectedChatId) return;
+
+            const currentChat = chats.find(chat => chat.id === selectedChatId);
+            if (!currentChat) return;
+
+            // Only update if title is still default (isTitleDefault is true or undefined for backward compatibility)
+            if (!currentChat.isTitleDefault) return;
+
+            // Extract title from completion tool result
+            const completionTitle = extractCompletionTitle(messages);
+            if (completionTitle) {
+                // Update the chat title (isDefault=false since AI explicitly provided a custom title)
+                renameChat(selectedChatId, completionTitle, false);
+            }
+        },
+        [selectedChatId, chats, extractCompletionTitle, renameChat]
+    );
+
     // Message handling
-    const { sendMessageRef, handleSendMessageReady, handleMessagesChange } = useMessageHandling(
-        selectedChatId,
-        updateChatMessages
+    const {
+        sendMessageRef,
+        handleSendMessageReady,
+        handleMessagesChange: originalHandleMessagesChange,
+    } = useMessageHandling(selectedChatId, updateChatMessages);
+
+    // Wrap handleMessagesChange to check for title updates
+    const handleMessagesChange = useCallback(
+        (messages: StructuredMessage[]) => {
+            originalHandleMessagesChange(messages);
+            checkAndUpdateChatTitle(messages);
+        },
+        [originalHandleMessagesChange, checkAndUpdateChatTitle]
     );
 
     // Sync table creation history to remote state
@@ -402,7 +466,7 @@ function ChatPage() {
                                     onMapStyleDelete={async (tableName: string) => {
                                         deleteTableStyle(tableName);
                                     }}
-                                    onConversationCompleted={syncImmediately}
+                                    onConversationCompleted={handleConversationCompleted}
                                     remoteFileComponent={onClose => (
                                         <RemoteFile
                                             dbContext={dbContext}
@@ -459,7 +523,7 @@ function ChatPage() {
                                         onMapStyleDelete={async (tableName: string) => {
                                             deleteTableStyle(tableName);
                                         }}
-                                        onConversationCompleted={syncImmediately}
+                                        onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={onClose => (
                                             <RemoteFile
                                                 dbContext={dbContext}

@@ -22,14 +22,19 @@ export const completionTool = tool({
             .max(5)
             .describe('Array of up to 5 suggested follow-up prompts'),
         completionMessage: z.string().optional().describe('Optional message to display when work is completed'),
+        title: z
+            .string()
+            .max(20)
+            .optional()
+            .describe(
+                'Short conversation title/summary (max 20 characters). If provided and the current chat has a default title, it will be replaced with this title for better list display.'
+            ),
     }),
-    execute: async ({ completionMessage }) => {
-        // Return minimal result since the tool_use already contains the suggestions
+    execute: async () => {
+        // Return minimal result since the tool_use already contains the suggestions and title
         // This saves memory by not duplicating the data
         return {
-            success: true,
-            message: completionMessage || 'すべての作業が完了しました。',
-            timestamp: new Date().toISOString(),
+            ok: true,
         };
     },
 });

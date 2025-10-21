@@ -54,6 +54,7 @@ export interface Chat {
     title: string;
     createdAt: Date;
     selectedTable: string | null;
+    isTitleDefault?: boolean; // True if title is still the default "Chat N" pattern (not customized by user or AI)
 
     // State fields (previously in ChatState)
     messages: StructuredMessage[];

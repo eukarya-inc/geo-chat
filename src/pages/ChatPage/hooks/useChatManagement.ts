@@ -45,6 +45,7 @@ export function useChatManagement(dbContext: DBContext | null) {
                 messages: chat.messages,
                 selectedTable: chat.selectedTable,
                 mapSpecs: chat.mapSpecs,
+                isTitleDefault: chat.isTitleDefault,
             }));
     }, [chatsRecord]);
 
@@ -56,6 +57,7 @@ export function useChatManagement(dbContext: DBContext | null) {
             messages: currentChatState.messages,
             selectedTable: currentChat.selectedTable,
             mapSpecs: currentChatState.mapSpecs,
+            isTitleDefault: currentChat.isTitleDefault,
         };
     }, [currentChat, currentChatState]);
 
@@ -158,8 +160,8 @@ export function useChatManagement(dbContext: DBContext | null) {
     };
 
     // Handle chat rename
-    const renameChatHandler = (chatId: string, newTitle: string) => {
-        renameChat({ chatId, newTitle });
+    const renameChatHandler = (chatId: string, newTitle: string, isDefault?: boolean) => {
+        renameChat({ chatId, newTitle, isDefault });
     };
 
     // Update chat state (for compatibility with existing code)
@@ -182,6 +184,7 @@ export function useChatManagement(dbContext: DBContext | null) {
                     title: chat.title,
                     createdAt: chat.createdAt,
                     selectedTable: chat.selectedTable || null,
+                    isTitleDefault: chat.isTitleDefault,
                     messages: chat.messages,
                     tables: {}, // Initialize empty tables record
                     chartSpecs: undefined,
