@@ -32,6 +32,7 @@ const MapComponent: React.FC<MapProps> = ({
     onExtraStyleChange,
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
+    const [mvtError, setMvtError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
@@ -45,6 +46,8 @@ const MapComponent: React.FC<MapProps> = ({
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
     // AbortController to cancel in-flight tile requests when table changes
     const tileAbortControllerRef = useRef<AbortController | null>(null);
+    // Track MVT errors with a ref to allow protocol handler to report errors
+    const mvtErrorRef = useRef<string | null>(null);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -123,6 +126,10 @@ const MapComponent: React.FC<MapProps> = ({
             popupRef.current.remove();
             popupRef.current = null;
         }
+
+        // Clear MVT errors when table/columns change
+        setMvtError(null);
+        mvtErrorRef.current = null;
 
         // Abort any in-flight tile requests from the previous table/columns
         if (tileAbortControllerRef.current) {
@@ -240,6 +247,23 @@ const MapComponent: React.FC<MapProps> = ({
             };
 
             if (bounds && bounds.min_lng !== null && bounds.min_lng !== undefined) {
+                // Validate coordinate ranges before fitting bounds
+                const isValidLat = (lat: number) => lat >= -90 && lat <= 90;
+                const isValidLng = (lng: number) => lng >= -180 && lng <= 180;
+
+                if (
+                    !isValidLng(bounds.min_lng) ||
+                    !isValidLng(bounds.max_lng) ||
+                    !isValidLat(bounds.min_lat) ||
+                    !isValidLat(bounds.max_lat)
+                ) {
+                    const errorMsg = `無効な座標範囲が検出されました。緯度は-90～90、経度は-180～180の範囲である必要があります。検出された座標: 経度 [${bounds.min_lng.toFixed(2)}, ${bounds.max_lng.toFixed(2)}]、緯度 [${bounds.min_lat.toFixed(2)}, ${bounds.max_lat.toFixed(2)}]。このデータは投影座標系（例: Web Mercator）のようです。データ提供元に正しい座標系のデータを依頼するか、AIチャットで「このテーブルの座標を地理座標系（EPSG:4326）に変換してください」と依頼してみてください。`;
+                    console.error('Error fitting map to data bounds:', errorMsg);
+                    setMvtError(errorMsg);
+                    mvtErrorRef.current = errorMsg;
+                    return;
+                }
+
                 mapRef.current.fitBounds(
                     [
                         [bounds.min_lng, bounds.min_lat],
@@ -253,7 +277,10 @@ const MapComponent: React.FC<MapProps> = ({
                 );
             }
         } catch (error) {
-            console.error('Error fitting map to data bounds:', error);
+            const errorMsg = `地図の表示範囲の調整中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`;
+            console.error(errorMsg);
+            setMvtError(errorMsg);
+            mvtErrorRef.current = errorMsg;
         }
     }, []);
 
@@ -563,6 +590,17 @@ const MapComponent: React.FC<MapProps> = ({
                         console.error('Vector tile query error:', error);
                         console.error('Query:', query);
                         console.error('Tile coordinates:', { z: zxy.z, x: zxy.x, y: zxy.y });
+
+                        // Report error to state for UI display
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        mvtErrorRef.current = `MVTレンダリングエラー (タイル ${zxy.z}/${zxy.x}/${zxy.y}): ${errorMessage}`;
+                        // Trigger state update on next tick
+                        setTimeout(() => {
+                            if (mvtErrorRef.current) {
+                                setMvtError(mvtErrorRef.current);
+                            }
+                        }, 0);
+
                         return { data: new Uint8Array() };
                     }
 
@@ -946,6 +984,50 @@ const MapComponent: React.FC<MapProps> = ({
                     }}
                 >
                     Error: {mapError}
+                </div>
+            )}
+            {mvtError && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: 'rgba(255, 165, 0, 0.9)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        maxWidth: '400px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                    }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <strong style={{ fontSize: '15px' }}>地図レンダリングエラー</strong>
+                        <button
+                            onClick={() => {
+                                setMvtError(null);
+                                mvtErrorRef.current = null;
+                            }}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '20px',
+                                lineHeight: '1',
+                                padding: '0',
+                                marginLeft: '8px',
+                            }}
+                            title="Close"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div style={{ fontSize: '13px', opacity: 0.95 }}>{mvtError}</div>
                 </div>
             )}
         </div>
