@@ -15,9 +15,11 @@ import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import { useStoreSync } from '../../store/sync';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
-import { localStateAtom } from '../../store/localAtoms';
+import { localStateAtom, viewModeAtom } from '../../store/localAtoms';
+import { ChatHistoryGrid, DashboardHistoryGrid, DataSourceHistoryGrid } from '../../components/history';
+import type { DataSourceWithChat } from '../../components/history';
 import {
     chatIdToSchemaName,
     useApiKeyManagement,
@@ -50,6 +52,9 @@ function ChatPage() {
     const localState = useAtomValue(localStateAtom);
     const selectedDashboardId = localState.selectedDashboardId;
     const setSelectedDashboard = useSetAtom(selectDashboardAtom);
+
+    // View mode management (for history grids)
+    const [viewMode, setViewMode] = useAtom(viewModeAtom);
 
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -119,36 +124,62 @@ function ChatPage() {
         renameDashboard,
     } = useDashboardManagement();
 
-    // Dashboard handlers
-    const handleCreateDashboard = () => {
-        const newDashboard = createDashboard();
-        setSelectedDashboard(newDashboard.id);
-        // Clear chat selection when dashboard is selected
-        if (selectedChatId) {
-            selectChat('');
-        }
-    };
-
-    const handleSelectDashboard = (dashboardId: string) => {
-        setSelectedDashboard(dashboardId);
-        // Clear chat selection when dashboard is selected
-        if (selectedChatId) {
-            selectChat('');
-        }
-    };
-
-    const handleSelectChat = (chatId: string) => {
-        selectChat(chatId);
-        // Clear dashboard selection when chat is selected
+    // Navigation handler for sidebar buttons
+    const handleNavigate = (view: 'datasource-list' | 'chat-list' | 'dashboard-list') => {
+        setViewMode(view);
+        selectChat('');
         setSelectedDashboard(null);
     };
 
+    // Chat handlers
+    const handleSelectChat = (chatId: string) => {
+        selectChat(chatId);
+        setViewMode('chat');
+        setSelectedDashboard(null);
+    };
+
+    const handleCreateChat = () => {
+        createNewChat();
+        setViewMode('chat');
+        setSelectedDashboard(null);
+    };
+
+    // Dashboard handlers
+    const handleSelectDashboard = (dashboardId: string) => {
+        setSelectedDashboard(dashboardId);
+        setViewMode('dashboard');
+        selectChat('');
+    };
+
+    const handleCreateDashboard = () => {
+        const newDashboard = createDashboard();
+        setSelectedDashboard(newDashboard.id);
+        setViewMode('dashboard');
+        selectChat('');
+    };
+
     const handleDeleteDashboard = (dashboardId: string) => {
-        // Clear selection if deleting the currently selected dashboard
         if (selectedDashboardId === dashboardId) {
             setSelectedDashboard(null);
         }
         deleteDashboard(dashboardId);
+    };
+
+    // Data source handlers
+    // Collect all tables from all chats
+    const allDataSources: DataSourceWithChat[] = Object.values(chats).flatMap(chat =>
+        Object.values(chat.tables).map(table => ({
+            ...table,
+            chatId: chat.id,
+            chatTitle: chat.title,
+        }))
+    );
+
+    const handleSelectDataSource = (chatId: string) => {
+        selectChat(chatId);
+        setViewMode('chat');
+        setSelectedDashboard(null);
+        // Note: Table selection will be handled by the user in the chat component
     };
 
     // Chart export to dashboard functionality
@@ -320,30 +351,58 @@ function ChatPage() {
     const hasMessages = currentChatMessages.length > 0;
     const isEmptyChat = selectedChatId && !hasMessages;
 
+    // Sidebar selection: highlight button only when showing list view
+    const isListView = viewMode.endsWith('-list');
+    const sidebarSelection = isListView ? (viewMode as 'datasource-list' | 'chat-list' | 'dashboard-list') : undefined;
+
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
                 {/* Sidebar with Chat List */}
                 <div className="w-64 h-full border-r border-gray-300 bg-gray-50 flex-shrink-0">
                     <ChatList
-                        chats={chats}
-                        selectedChatId={selectedChatId}
-                        onSelectChat={handleSelectChat}
-                        onCreateChat={createNewChat}
-                        onDeleteChat={deleteChat}
-                        onRenameChat={renameChat}
-                        isInitialized={!!dbContext}
-                        dashboards={getAllDashboards()}
+                        onCreateChat={handleCreateChat}
                         onCreateDashboard={handleCreateDashboard}
-                        onSelectDashboard={handleSelectDashboard}
-                        onDeleteDashboard={handleDeleteDashboard}
-                        onRenameDashboard={renameDashboard}
-                        selectedDashboardId={selectedDashboardId}
+                        isInitialized={!!dbContext}
+                        selectedView={sidebarSelection}
+                        onNavigate={handleNavigate}
                     />
                 </div>
 
                 {/* Main Content Area */}
-                {selectedDashboardId ? (
+                {viewMode === 'datasource-list' ? (
+                    /* Data Source History Grid */
+                    <div className="flex-1 h-full overflow-hidden">
+                        <DataSourceHistoryGrid
+                            dataSources={allDataSources}
+                            onSelectDataSource={handleSelectDataSource}
+                        />
+                    </div>
+                ) : viewMode === 'chat-list' ? (
+                    /* Chat History Grid */
+                    <div className="flex-1 h-full overflow-hidden">
+                        <ChatHistoryGrid
+                            chats={Object.values(chats).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())}
+                            onSelectChat={handleSelectChat}
+                            onDeleteChat={deleteChat}
+                            onRenameChat={renameChat}
+                            onCreateChat={handleCreateChat}
+                        />
+                    </div>
+                ) : viewMode === 'dashboard-list' ? (
+                    /* Dashboard History Grid */
+                    <div className="flex-1 h-full overflow-hidden">
+                        <DashboardHistoryGrid
+                            dashboards={getAllDashboards().sort(
+                                (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+                            )}
+                            onSelectDashboard={handleSelectDashboard}
+                            onDeleteDashboard={handleDeleteDashboard}
+                            onRenameDashboard={renameDashboard}
+                            onCreateDashboard={handleCreateDashboard}
+                        />
+                    </div>
+                ) : selectedDashboardId ? (
                     /* Dashboard Mode - Full Width */
                     <div className="flex-1 h-full flex flex-col overflow-hidden">
                         {(() => {

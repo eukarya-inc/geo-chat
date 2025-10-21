@@ -17,7 +17,6 @@ import {
 } from '../../../store/atoms';
 import type { StructuredMessage } from '../../../types/message';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { Chat as ChatListChat } from '../../../components/chat/ChatList';
 
 export function useChatManagement(dbContext: DBContext | null) {
     const chatsRecord = useAtomValue(chatsAtom); // Now a Record<string, Chat>
@@ -35,21 +34,14 @@ export function useChatManagement(dbContext: DBContext | null) {
     const selectedChatId = localState.selectedChatId;
 
     // Convert Record to array and sort by createdAt for ChatList format
-    const chatsWithMessages = useMemo((): ChatListChat[] => {
-        return Object.values(chatsRecord)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .map(chat => ({
-                id: chat.id,
-                title: chat.title,
-                createdAt: chat.createdAt,
-                messages: chat.messages,
-                selectedTable: chat.selectedTable,
-                mapSpecs: chat.mapSpecs,
-            }));
+    const chatsWithMessages = useMemo((): Chat[] => {
+        return Object.values(chatsRecord).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
     }, [chatsRecord]);
 
     // Current chat with full state
-    const currentChatWithState = useMemo((): ChatListChat | undefined => {
+    const currentChatWithState = useMemo((): Chat | undefined => {
         if (!currentChat || !currentChatState) return undefined;
         return {
             ...currentChat,
@@ -172,7 +164,7 @@ export function useChatManagement(dbContext: DBContext | null) {
 
     return {
         chats: chatsWithMessages,
-        setChats: (newChats: ChatListChat[]) => {
+        setChats: (newChats: Chat[]) => {
             // For compatibility - update remote state directly
             const newChatsRecord: Record<string, Chat> = {};
 

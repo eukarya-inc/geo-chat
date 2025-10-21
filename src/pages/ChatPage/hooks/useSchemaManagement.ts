@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { Chat } from '../../../components/chat/ChatList';
+import type { Chat } from '../../../store/remoteAtoms';
 import type { ChartSpec } from '../../../types/chart';
 import { cleanupOrphanedChartSpecs } from './chartSpecCleanup';
 
