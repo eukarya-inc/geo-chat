@@ -65,17 +65,9 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
             // Try to extract geometry type from WKB
             if (value instanceof Uint8Array && value.length > 5) {
                 try {
-                    console.log('WKB Parse - value length:', value.length);
-                    console.log('WKB Parse - first 20 bytes:', Array.from(value.slice(0, 20)));
-
                     const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
                     const byteOrder = value[0];
                     const typeCode = byteOrder === 1 ? view.getUint32(1, true) : view.getUint32(1, false);
-
-                    console.log('WKB Parse - byteOrder:', byteOrder);
-                    console.log('WKB Parse - typeCode:', typeCode);
-                    console.log('WKB Parse - typeCode hex:', typeCode.toString(16));
-                    console.log('WKB Parse - baseType:', typeCode & 0xff);
 
                     const geomTypes: Record<number, string> = {
                         1: 'Point',
@@ -89,17 +81,10 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
 
                     const baseType = typeCode & 0xff;
                     const typeName = geomTypes[baseType] || 'Geometry';
-                    console.log('WKB Parse - typeName:', typeName);
                     return `[${typeName}]`;
-                } catch (error) {
-                    console.error('WKB Parse - error:', error);
+                } catch {
                     // If parsing fails, use column type
                 }
-            } else {
-                console.log('WKB Parse - skipped, value is not Uint8Array or length <= 5', {
-                    isUint8Array: value instanceof Uint8Array,
-                    length: value instanceof Uint8Array ? value.length : 'N/A',
-                });
             }
 
             // Fallback: use column type
