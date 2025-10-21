@@ -72,6 +72,7 @@ export default function AIChat({
     const [isMultiline, setIsMultiline] = useState(false);
     const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
     const [isCreatingTable, setIsCreatingTable] = useState(false);
+    const [tableCreationError, setTableCreationError] = useState<string | null>(null);
 
     const effectiveChatId = chatId || 'default';
 
@@ -139,6 +140,7 @@ export default function AIChat({
                 }
 
                 setIsCreatingTable(true);
+                setTableCreationError(null); // Clear previous errors
                 try {
                     // Create table from URL
                     const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
@@ -153,7 +155,8 @@ export default function AIChat({
                     sendMessage(message);
                 } catch (error) {
                     console.error('Failed to create table from URL:', error);
-                    // Show error to user - you might want to add error state handling here
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setTableCreationError(`テーブルの作成に失敗しました: ${errorMessage}`);
                 } finally {
                     setIsCreatingTable(false);
                 }
@@ -637,6 +640,35 @@ export default function AIChat({
                 )}
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
                 <div className="w-full">
+                    {tableCreationError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-300 rounded-lg">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <strong className="text-red-800 text-sm">エラー</strong>
+                                    <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                                </div>
+                                <button
+                                    onClick={() => setTableCreationError(null)}
+                                    className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                    title="閉じる"
+                                >
+                                    <svg
+                                        className="w-4 h-4 text-red-800"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div
                         className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
                     >
@@ -876,6 +908,35 @@ export default function AIChat({
             </div>
 
             <div className="flex-shrink-0">
+                {tableCreationError && (
+                    <div className="mb-2 p-3 bg-red-50 border border-red-300 rounded-md">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                                <strong className="text-red-800 text-sm">エラー</strong>
+                                <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                            </div>
+                            <button
+                                onClick={() => setTableCreationError(null)}
+                                className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                title="閉じる"
+                            >
+                                <svg
+                                    className="w-4 h-4 text-red-800"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <div className="bg-white border border-gray-300 rounded-md p-2">
                     <ChatInput
                         value={input}
