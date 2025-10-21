@@ -155,8 +155,7 @@ function ChatPage() {
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(
         selectedTable,
         dbContext,
-        schemaName,
-        connection
+        schemaName
     );
 
     // Handler for conversation completion - updates chat title if needed
