@@ -13,6 +13,7 @@ export interface Chat {
     schemaName?: string;
     selectedTable?: string | null;
     mapSpecs?: Record<string, MapSpec>;
+    isTitleDefault?: boolean;
 }
 
 interface ChatListProps {

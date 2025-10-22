@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
     chatsAtom,
@@ -31,6 +31,7 @@ export function useChatManagement(dbContext: DBContext | null) {
     const updateMessages = useSetAtom(updateMessagesAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
     const setRemoteState = useSetAtom(remoteStateAtom);
+    const hasInitialized = useRef(false);
 
     const selectedChatId = localState.selectedChatId;
 
@@ -45,6 +46,7 @@ export function useChatManagement(dbContext: DBContext | null) {
                 messages: chat.messages,
                 selectedTable: chat.selectedTable,
                 mapSpecs: chat.mapSpecs,
+                isTitleDefault: chat.isTitleDefault,
             }));
     }, [chatsRecord]);
 
@@ -56,34 +58,61 @@ export function useChatManagement(dbContext: DBContext | null) {
             messages: currentChatState.messages,
             selectedTable: currentChat.selectedTable,
             mapSpecs: currentChatState.mapSpecs,
+            isTitleDefault: currentChat.isTitleDefault,
         };
     }, [currentChat, currentChatState]);
 
-    // Initialize first chat if no chats exist
+    // Initialize first chat if no chats exist (independent of dbContext)
     useEffect(() => {
-        if (dbContext && Object.keys(chatsRecord).length === 0) {
-            const initializeFirstChat = async () => {
-                try {
-                    const firstChat = await createChat();
+        // Only run once
+        if (hasInitialized.current) {
+            return;
+        }
 
-                    const schemaName = chatIdToSchemaName(firstChat.id);
-                    if (schemaName) {
-                        await dbContext.createSchema(schemaName);
-                    }
+        const hasNoChats = Object.keys(chatsRecord).length === 0;
+        if (!hasNoChats) {
+            return;
+        }
 
+        hasInitialized.current = true;
+
+        const initializeFirstChat = async () => {
+            try {
+                const firstChat = await createChat();
+                // Select the first chat immediately
+                selectChat(firstChat.id);
+            } catch (error) {
+                console.error('Error creating initial chat:', error);
+                hasInitialized.current = false; // Reset on error
+            }
+        };
+
+        initializeFirstChat();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chatsRecord]); // Watch chatsRecord to check if empty
+
+    // Create schema for the selected chat when dbContext becomes available
+    useEffect(() => {
+        if (!dbContext || !selectedChatId) {
+            return;
+        }
+
+        const createSchemaForChat = async () => {
+            try {
+                const schemaName = chatIdToSchemaName(selectedChatId);
+                if (schemaName) {
+                    await dbContext.createSchema(schemaName);
                     setTimeout(() => {
-                        const schemaName = chatIdToSchemaName(firstChat.id);
                         dbContext.notifyTableChange(undefined, schemaName);
                     }, 0);
-                } catch (error) {
-                    console.error('Error creating initial chat:', error);
                 }
-            };
+            } catch (error) {
+                console.error('Error creating schema for chat:', error);
+            }
+        };
 
-            initializeFirstChat();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dbContext]); // Only depend on dbContext to avoid re-creating chats
+        createSchemaForChat();
+    }, [dbContext, selectedChatId]); // Create schema when dbContext or selectedChatId changes
 
     // Update messages for a specific chat
     const updateChatMessages = useCallback(
@@ -158,8 +187,8 @@ export function useChatManagement(dbContext: DBContext | null) {
     };
 
     // Handle chat rename
-    const renameChatHandler = (chatId: string, newTitle: string) => {
-        renameChat({ chatId, newTitle });
+    const renameChatHandler = (chatId: string, newTitle: string, isDefault?: boolean) => {
+        renameChat({ chatId, newTitle, isDefault });
     };
 
     // Update chat state (for compatibility with existing code)
@@ -182,6 +211,7 @@ export function useChatManagement(dbContext: DBContext | null) {
                     title: chat.title,
                     createdAt: chat.createdAt,
                     selectedTable: chat.selectedTable || null,
+                    isTitleDefault: chat.isTitleDefault,
                     messages: chat.messages,
                     tables: {}, // Initialize empty tables record
                     chartSpecs: undefined,

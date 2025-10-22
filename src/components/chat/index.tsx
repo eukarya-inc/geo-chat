@@ -16,7 +16,7 @@ import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 
 interface AIChatProps {
-    dbContext: DBContext;
+    dbContext: DBContext | null;
     apiKey?: string;
     chatId?: string | null;
     schemaName?: string | null;
@@ -35,6 +35,7 @@ interface AIChatProps {
     emptyMode?: boolean;
     onApiKeyChange?: (value: string) => void;
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
+    waitForDbContext?: () => Promise<DBContext>;
 }
 
 export default function AIChat({
@@ -57,6 +58,7 @@ export default function AIChat({
     emptyMode = false,
     onApiKeyChange,
     onApiKeySave,
+    waitForDbContext,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -73,6 +75,7 @@ export default function AIChat({
     const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [tableCreationError, setTableCreationError] = useState<string | null>(null);
+    const [isWaitingForDb, setIsWaitingForDb] = useState(false);
 
     const effectiveChatId = chatId || 'default';
 
@@ -140,16 +143,25 @@ export default function AIChat({
             const dataUrl = extractDataUrl(trimmedInput);
 
             if (dataUrl) {
-                if (!dbContext) {
-                    console.error('DBContext is not available');
-                    return;
-                }
-
                 setIsCreatingTable(true);
                 setTableCreationError(null); // Clear previous errors
                 try {
+                    // Wait for DuckDB to be ready
+                    let db = dbContext;
+                    if (!db) {
+                        if (!waitForDbContext) {
+                            throw new Error('DuckDB is not initialized');
+                        }
+                        setIsWaitingForDb(true);
+                        try {
+                            db = await waitForDbContext();
+                        } finally {
+                            setIsWaitingForDb(false);
+                        }
+                    }
+
                     // Create table from URL
-                    const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
+                    const { message } = await createTableFromUrl(dataUrl, db, schemaName || null);
 
                     // Clear input
                     const changeEvent = {
@@ -167,11 +179,28 @@ export default function AIChat({
                     setIsCreatingTable(false);
                 }
             } else {
-                // Regular message, use original handler
-                await originalHandleSubmit(e);
+                // Regular message - wait for DuckDB if needed
+                try {
+                    if (!dbContext) {
+                        if (!waitForDbContext) {
+                            throw new Error('DuckDB is not initialized');
+                        }
+                        setIsWaitingForDb(true);
+                        try {
+                            await waitForDbContext();
+                        } finally {
+                            setIsWaitingForDb(false);
+                        }
+                    }
+                    await originalHandleSubmit(e);
+                } catch (error) {
+                    console.error('Failed to submit message:', error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setTableCreationError(`メッセージの送信に失敗しました: ${errorMessage}`);
+                }
             }
         },
-        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit]
+        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit, waitForDbContext]
     );
 
     // Focus textarea on mount
@@ -711,6 +740,7 @@ export default function AIChat({
                             isAnyLoading={isAnyLoading}
                             remoteFileComponent={remoteFileComponent}
                             disabled={!apiKey}
+                            isWaitingForDb={isWaitingForDb}
                         />
                     </div>
                     <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
@@ -744,7 +774,7 @@ export default function AIChat({
                                     <StructuredMessageRenderer
                                         message={group.userMessage}
                                         className="prose prose-xs max-w-none"
-                                        dbContext={dbContext}
+                                        dbContext={dbContext || undefined}
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                         onPromptClick={handlePromptSelection}
@@ -765,7 +795,7 @@ export default function AIChat({
                                             <StructuredMessageRenderer
                                                 message={group.userMessage}
                                                 className="prose max-w-none"
-                                                dbContext={dbContext}
+                                                dbContext={dbContext || undefined}
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                                 onPromptClick={handlePromptSelection}
@@ -851,7 +881,7 @@ export default function AIChat({
                                                         <StructuredMessageRenderer
                                                             message={group.assistantMessage}
                                                             className="prose max-w-none"
-                                                            dbContext={dbContext}
+                                                            dbContext={dbContext || undefined}
                                                             selectedTable={selectedTable}
                                                             onTableSelect={onTableSelect}
                                                             hideToolCalls={false}
@@ -871,7 +901,7 @@ export default function AIChat({
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"
-                                                                dbContext={dbContext}
+                                                                dbContext={dbContext || undefined}
                                                                 selectedTable={selectedTable}
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={false}
@@ -894,7 +924,7 @@ export default function AIChat({
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"
-                                                                dbContext={dbContext}
+                                                                dbContext={dbContext || undefined}
                                                                 selectedTable={selectedTable}
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={true}
@@ -978,6 +1008,7 @@ export default function AIChat({
                         isAnyLoading={isAnyLoading}
                         remoteFileComponent={remoteFileComponent}
                         disabled={!apiKey}
+                        isWaitingForDb={isWaitingForDb}
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
