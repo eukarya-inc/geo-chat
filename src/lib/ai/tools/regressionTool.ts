@@ -14,20 +14,20 @@ export function createRegressionTool(dbContext: DBContext, schema: string | null
     return tool({
         description: `Perform multiple linear regression analysis on DuckDB tables.
 Returns regression coefficients, inference metrics (p-values, t-statistics, F statistic, adjusted R²),
-variance inflation factors (VIF), and regression line data for each predictor.
+variance inflation factors (VIF), and regression line metadata for each predictor.
 
-IMPORTANT: After using this tool successfully, you MUST create regression visualizations **without** augmenting DuckDB tables with predicted columns:
-1. 保持: 散布図には元データのままのテーブル（実測値のみ）を使用し、予測値をテーブルにJOINしないでください
-2. 算出: regression.columnSummariesなどから各説明変数のmin/max（および他変数の平均）を取得し、回帰式（切片 + Σ βᵢ·xᵢ）でmin/maxに対応する予測値を計算します
-3. 設定: 計算した2点（minとmax）のみをVega-Lite仕様のdatasetsセクションに格納し、回帰直線レイヤーではそのdataset名を参照してください
-4. 可視化: create_chartでは
-   - 散布図レイヤーをdata.sql等で元テーブルを参照するpointマーク
-   - 回帰直線レイヤーをdata.name（datasets内の2点）で参照するlineマーク＋predictorフィールドでorderを付与
-   とし、ツールチップに実測値と予測値を表示して比較できるようにします
+IMPORTANT: After using this tool successfully, ALWAYS create regression visualizations **without** augmenting DuckDB tables with predicted columns:
+1. Keep the scatter layer bound to the original data table (observed values only); never join or persist predicted values into that table.
+2. Compute the regression endpoints by taking each predictor's min and max from regression.columnSummaries (and holding other predictors at their means) and evaluating the equation predicted = intercept + Σ βᵢ·xᵢ at those values.
+3. Store exactly those two points per predictor inside the Vega-Lite spec's datasets section and reference the dataset name from the regression line layer.
+4. In create_chart, use layered marks:
+   - Scatter layer: data.sql (or equivalent) pointing at the source table with mark {"type": "point"}
+   - Regression layer: data.name referencing the datasets entry with mark {"type": "line"} and an order on the predictor field
+   Include tooltips so observed and predicted values can be compared directly.
 
 Example workflow after regression:
-1. perform_regression_analysis returns the regression coefficients (intercept + betas) and columnSummaries including min/max/mean for each numeric column
-2. For each predictor, evaluate the regression equation at (predictor_min, other_means) and (predictor_max, other_means), place those two points in the Vega-Lite datasets (e.g., "reg_line_<alias>"), then call create_chart with a layered spec referencing the original table for points and the datasets entry for the regression line`,
+1. perform_regression_analysis returns the regression coefficients (intercept + betas) and columnSummaries with min, max, and mean values for each numeric column.
+2. For each predictor, evaluate the regression equation at (predictor_min, other_means) and (predictor_max, other_means), put those two points into the Vega-Lite datasets (e.g., "reg_line_<alias>"), then call create_chart with a layered spec that references the original table for points and the datasets entry for the regression line.`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z
