@@ -35,6 +35,7 @@ interface AIChatProps {
     emptyMode?: boolean;
     onApiKeyChange?: (value: string) => void;
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
+    showApiKeyInput?: boolean;
     waitForDbContext?: () => Promise<DBContext>;
 }
 
@@ -58,6 +59,7 @@ export default function AIChat({
     emptyMode = false,
     onApiKeyChange,
     onApiKeySave,
+    showApiKeyInput,
     waitForDbContext,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -672,11 +674,9 @@ export default function AIChat({
 
     // Empty mode: only show the input form
     if (emptyMode) {
-        const showApiKeyInput = !apiKey && onApiKeyChange && onApiKeySave;
-
         return (
             <div className="flex flex-col gap-8 items-center relative">
-                {showApiKeyInput && (
+                {showApiKeyInput && onApiKeyChange && onApiKeySave && (
                     <ApiKeyInput
                         apiKey={apiKey || ''}
                         onApiKeyChange={onApiKeyChange}
