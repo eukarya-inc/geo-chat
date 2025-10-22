@@ -519,6 +519,7 @@ function ChatPage() {
                                     emptyMode={true}
                                     onApiKeyChange={setApiKey}
                                     onApiKeySave={saveApiKey}
+                                    showApiKeyInput={showApiKeyInput}
                                     waitForDbContext={waitForDbContext}
                                 />
                             )}
@@ -575,6 +576,7 @@ function ChatPage() {
                                                 waitForDbContext={waitForDbContext}
                                             />
                                         )}
+                                        showApiKeyInput={showApiKeyInput}
                                         waitForDbContext={waitForDbContext}
                                     />
                                 </div>
