@@ -17,9 +17,7 @@ describe('olsRegression', () => {
         expect(result.metricsPerPredictor).toHaveLength(1);
         expect(result.metricsPerPredictor[0].pValue).toBeLessThan(0.0001);
         expect(result.metricsPerPredictor[0].vif).toBe(1);
-        expect(result.plotSeries).toHaveLength(1);
-        expect(result.plotSeries[0].regressionLine[0].y).toBeCloseTo(2, 6);
-        expect(result.plotSeries[0].regressionLine[1].y).toBeCloseTo(10, 6);
+        expect(result.equation).toContain('x1');
     });
 
     it('supports multiple predictors and returns VIF', () => {
@@ -42,8 +40,7 @@ describe('olsRegression', () => {
         expect(metric1.vif).toBeGreaterThan(10);
         expect(metric2.vif).toBeGreaterThan(10);
         expect(result.fStatistic).toBeGreaterThan(10);
-        const maxResidual = Math.max(...result.residuals.map(value => Math.abs(value)));
-        expect(maxResidual).toBeLessThan(2);
+        expect(result.residualStandardError).toBeLessThan(2);
     });
 
     it('handles constant target values by returning zero slope and NaN inferential stats', () => {
@@ -78,27 +75,6 @@ describe('olsRegression', () => {
         expect(Number.isNaN(predictorMetrics.standardError)).toBe(true);
         expect(Number.isNaN(predictorMetrics.tStatistic)).toBe(true);
         expect(Number.isNaN(predictorMetrics.pValue)).toBe(true);
-    });
-
-    it('limits plot sampling to 2000 points for large datasets', () => {
-        const X = Array.from({ length: 2500 }, (_, i) => [i]);
-        const y = Array.from({ length: 2500 }, (_, i) => i * 2 + 1);
-
-        const result = olsRegression(X, y, { featureNames: ['x1'] });
-
-        expect(result.plotSeries).toHaveLength(1);
-        expect(result.plotSeries[0].points).toHaveLength(2000);
-        expect(result.plotSeries[0].regressionLine).toHaveLength(2);
-        expect(Number.isFinite(result.plotSeries[0].regressionLine[0].y)).toBe(true);
-    });
-
-    it('skips plot generation when disabled', () => {
-        const X = [[1], [2], [3], [4], [5]];
-        const y = [2, 4, 6, 8, 10];
-
-        const result = olsRegression(X, y, { featureNames: ['x1'], generatePlots: false });
-
-        expect(result.plotSeries).toHaveLength(0);
     });
 
     it('throws when inputs are invalid', () => {

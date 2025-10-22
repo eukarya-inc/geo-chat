@@ -11,19 +11,6 @@ export interface RegressionMetricsPerPredictor {
     correlation: number;
 }
 
-export interface RegressionPlotSeries {
-    predictor: string;
-    points: Array<{ x: number; y: number }>;
-    regressionLine: Array<{ x: number; y: number }>;
-    summary: {
-        minX: number;
-        maxX: number;
-        slope: number;
-        intercept: number;
-        correlation: number;
-    };
-}
-
 export interface RegressionResult {
     n: number;
     p: number;
@@ -43,14 +30,10 @@ export interface RegressionResult {
     fStatistic: number;
     residualStandardError: number;
     metricsPerPredictor: RegressionMetricsPerPredictor[];
-    predictions: number[];
-    residuals: number[];
-    plotSeries: RegressionPlotSeries[];
 }
 
 export interface RegressionOptions {
     featureNames?: string[];
-    generatePlots?: boolean;
 }
 
 export class RegressionError extends Error {
@@ -60,11 +43,9 @@ export class RegressionError extends Error {
     }
 }
 
-const DEFAULT_PLOT_SAMPLE_LIMIT = 2000;
-
 /**
  * Ordinary Least Squares regression supporting single and multiple predictors.
- * Returns rich statistics including inference metrics and optional plot data.
+ * Returns rich statistics including inference metrics.
  */
 export function olsRegression(X: number[][], y: number[], options: RegressionOptions = {}): RegressionResult {
     if (!Array.isArray(X) || !Array.isArray(y)) {
@@ -113,9 +94,6 @@ export function olsRegression(X: number[][], y: number[], options: RegressionOpt
 
     const predictionsMatrix = design.mmul(betaVector); // [n, 1]
     const residualsMatrix = yVector.sub(predictionsMatrix); // [n, 1]
-
-    const predictions = Array.from({ length: n }, (_, i) => predictionsMatrix.get(i, 0));
-    const residuals = Array.from({ length: n }, (_, i) => residualsMatrix.get(i, 0));
 
     const sse = residualsMatrix.transpose().mmul(residualsMatrix).get(0, 0);
     const yMean = y.reduce((acc, value) => acc + value, 0) / n;
@@ -189,7 +167,6 @@ export function olsRegression(X: number[][], y: number[], options: RegressionOpt
         try {
             const result = olsRegression(reducedX, targetFeature, {
                 featureNames: featureNames.filter((_, idx) => idx !== featureIdx),
-                generatePlots: false,
             });
             if (!Number.isFinite(result.r2)) {
                 return Number.NaN;
@@ -209,53 +186,6 @@ export function olsRegression(X: number[][], y: number[], options: RegressionOpt
         vif: vifs[idx],
         correlation: correlations[idx],
     }));
-
-    // Optional plot series generation
-    const plotSeries: RegressionPlotSeries[] = [];
-    if (options.generatePlots !== false) {
-        const sampleLimit = Math.min(n, DEFAULT_PLOT_SAMPLE_LIMIT);
-        const sampleIndices =
-            n <= sampleLimit
-                ? Array.from({ length: n }, (_, i) => i)
-                : // simple uniform sampling if dataset is large
-                  Array.from({ length: sampleLimit }, (_, i) => Math.floor((i * n) / sampleLimit));
-
-        featureNames.forEach((name, idx) => {
-            const predictorValues = sampleIndices.map(rowIdx => X[rowIdx][idx]);
-            const targetValues = sampleIndices.map(rowIdx => y[rowIdx]);
-
-            const minX = Math.min(...predictorValues);
-            const maxX = Math.max(...predictorValues);
-
-            const slope = betas[idx];
-
-            // Calculate y values for regression line, handling non-finite values
-            const yAtMin = intercept + slope * minX;
-            const yAtMax = intercept + slope * maxX;
-
-            // Only include regression line if both points are finite
-            const line: Array<{ x: number; y: number }> = [];
-            if (Number.isFinite(yAtMin) && Number.isFinite(yAtMax) && Number.isFinite(minX) && Number.isFinite(maxX)) {
-                line.push({ x: minX, y: yAtMin }, { x: maxX, y: yAtMax });
-            }
-
-            plotSeries.push({
-                predictor: name,
-                points: predictorValues.map((xValue, arrIdx) => ({
-                    x: xValue,
-                    y: targetValues[arrIdx],
-                })),
-                regressionLine: line,
-                summary: {
-                    minX,
-                    maxX,
-                    slope,
-                    intercept,
-                    correlation: correlations[idx],
-                },
-            });
-        });
-    }
 
     const equation = createEquationString(intercept, betas, featureNames);
 
@@ -278,9 +208,6 @@ export function olsRegression(X: number[][], y: number[], options: RegressionOpt
         fStatistic,
         residualStandardError,
         metricsPerPredictor,
-        predictions,
-        residuals,
-        plotSeries,
     };
 }
 
