@@ -14,19 +14,20 @@ export function createRegressionTool(dbContext: DBContext, schema: string | null
     return tool({
         description: `Perform multiple linear regression analysis on DuckDB tables.
 Returns regression coefficients, inference metrics (p-values, t-statistics, F statistic, adjusted R²),
-variance inflation factors (VIF), and regression line data for each predictor.
+variance inflation factors (VIF), and regression line metadata for each predictor.
 
-IMPORTANT: After using this tool successfully, you MUST create regression visualizations:
-1. For each predictor variable, prepare a scatter plot dataset that contains **all rows** used in the regression
-2. Add a new column to that dataset with the predicted target values calculated from the regression equation (intercept + Σ βᵢ·xᵢ)
-3. Use this enriched dataset for both the scatter plot (actual values) and the regression line (predicted values) in create_chart
-4. Avoid creating tables that only store the min/max regression line endpoints—always keep the full data so the line covers the entire predictor range
-5. 目的変数と説明変数をまとめた散布図用テーブルに、回帰直線の式から得られる予測値の列を追加して可視化に利用してください
+IMPORTANT: After using this tool successfully, ALWAYS create regression visualizations **without** augmenting DuckDB tables with predicted columns:
+1. Keep the scatter layer bound to the original data table (observed values only); never join or persist predicted values into that table.
+2. Compute the regression endpoints by taking each predictor's min and max from regression.columnSummaries (and holding other predictors at their means) and evaluating the equation predicted = intercept + Σ βᵢ·xᵢ at those values.
+3. Store exactly those two points per predictor inside the Vega-Lite spec's datasets section and reference the dataset name from the regression line layer.
+4. In create_chart, use layered marks:
+   - Scatter layer: data.sql (or equivalent) pointing at the source table with mark {"type": "point"}
+   - Regression layer: data.name referencing the datasets entry with mark {"type": "line"} and an order on the predictor field
+   Include tooltips so observed and predicted values can be compared directly.
 
 Example workflow after regression:
-1. perform_regression_analysis returns the regression coefficients (intercept + betas) and plotSeries metadata
-2. For each predictor in regression.plotSeries, build or update a scatter dataset that includes the original target column, the predictor column, and a predicted target column computed from the regression equation. Add an ordering column with \`ROW_NUMBER()\` only if必要になった場合に限ります。
-3. Use create_chart with layered marks (points for actual values, line for predicted values) referencing this dataset`,
+1. perform_regression_analysis returns the regression coefficients (intercept + betas) and columnSummaries with min, max, and mean values for each numeric column.
+2. For each predictor, evaluate the regression equation at (predictor_min, other_means) and (predictor_max, other_means), put those two points into the Vega-Lite datasets (e.g., "reg_line_<alias>"), then call create_chart with a layered spec that references the original table for points and the datasets entry for the regression line.`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z
@@ -230,7 +231,6 @@ Example workflow after regression:
                 try {
                     regression = olsRegression(matrixX, vectorY, {
                         featureNames: predictorColumns,
-                        generatePlots: true,
                     });
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
@@ -265,34 +265,62 @@ Example workflow after regression:
                     names.length === betas.length;
 
                 if (coefficientsAreFinite) {
-                    suggestions.push(
-                        `次のステップ: 回帰分析で使用した全行を含む散布図用テーブルを作成し、回帰式（切片 + Σβ×説明変数）で計算した予測値の列を追加して、実測値と予測値を同じテーブルで可視化しましょう。create_chartでは実測値を散布図、予測値を線グラフとして重ねると線形関係が明確になります。`
-                    );
-
-                    const formattedIntercept = Number(intercept).toString();
-                    const coefficientTerms = betas.map((beta, idx) => {
-                        const column = names[idx];
-                        return `CAST(${Number(beta).toString()} AS DOUBLE) * ${quoteIdentifier(column)}`;
-                    });
-                    const targetIdentifier = quoteIdentifier(targetColumn);
                     const targetAlias = toAsciiIdentifier(targetColumn, 'target');
                     const predictedAlias = toAsciiIdentifier(`predicted_${targetColumn}`, 'predicted');
-                    const predictedExpression = [`CAST(${formattedIntercept} AS DOUBLE)`, ...coefficientTerms].join(
-                        ' + '
+
+                    suggestions.push(
+                        `次のステップ: 散布図は元テーブルの実測値（例: ${targetColumn}→${targetAlias}）をpointマークで描画し、回帰直線はdatasetsに登録した2点のみ（xに説明変数エイリアス、yに${predictedAlias}）をlineマークで表示してください。テーブルへ予測列を追加する必要はありません。`
                     );
 
+                    const computePredicted = (featureIndex: number, predictorValue: number): number => {
+                        let predictedValue = intercept;
+                        for (let idx = 0; idx < betas.length; idx += 1) {
+                            const featureName = names[idx];
+                            const contributionValue =
+                                idx === featureIndex ? predictorValue : (columnSummaries[featureName]?.mean ?? 0);
+                            predictedValue += betas[idx] * contributionValue;
+                        }
+                        return predictedValue;
+                    };
+
                     for (const predictor of predictorColumns) {
-                        const predictorIdentifier = quoteIdentifier(predictor);
+                        const predictorIndex = names.indexOf(predictor);
+                        if (predictorIndex === -1) continue;
+
+                        const predictorSummary = columnSummaries[predictor];
+                        if (!predictorSummary) continue;
+
+                        const { min: minX, max: maxX } = predictorSummary;
+                        if (!Number.isFinite(minX) || !Number.isFinite(maxX)) continue;
+
+                        const minPredicted = computePredicted(predictorIndex, minX);
+                        const maxPredicted = computePredicted(predictorIndex, maxX);
+                        if (!Number.isFinite(minPredicted) || !Number.isFinite(maxPredicted)) continue;
+
                         const predictorAlias = toAsciiIdentifier(predictor, 'predictor');
-                        const previewSql = `SELECT ${targetIdentifier} AS ${targetAlias}, ${predictorIdentifier} AS ${predictorAlias}, ${predictedExpression} AS ${predictedAlias} FROM ${qualifiedTable} LIMIT 5;`;
-                        const createSql = `CREATE OR REPLACE TABLE <scatter_table_name> AS SELECT ${targetIdentifier} AS ${targetAlias}, ${predictorIdentifier} AS ${predictorAlias}, ${predictedExpression} AS ${predictedAlias} FROM ${qualifiedTable};`;
+                        const datasetName = `reg_line_${predictorAlias}`;
+
+                        const otherMeans = names
+                            .filter((_, idx) => idx !== predictorIndex)
+                            .map(name => {
+                                const alias = toAsciiIdentifier(name, 'feature');
+                                const mean = columnSummaries[name]?.mean ?? 0;
+                                return `${alias}=${formatNumeric(mean)}`;
+                            })
+                            .join(', ');
+
+                        const datasetSnippet = `  "${datasetName}": [\n    { "${predictorAlias}": ${formatNumeric(minX)}, "${predictedAlias}": ${formatNumeric(minPredicted)} },\n    { "${predictorAlias}": ${formatNumeric(maxX)}, "${predictedAlias}": ${formatNumeric(maxPredicted)} }\n  ]`;
 
                         suggestions.push(
-                            `説明変数「${predictor}」の散布図データ整備:\n  - 事前確認: ${previewSql}\n  - 作成: ${createSql} 英数字エイリアス（${targetAlias}, ${predictorAlias}, ${predictedAlias}）を維持し、並び替えが必要な場合はROW_NUMBER() OVER (ORDER BY ${predictorIdentifier}) AS row_index を追加してください。その後create_chartでmark "point"を実測列（${targetAlias}）に、mark "line"を予測列（${predictedAlias}）に割り当て、同じテーブルで散布図と回帰直線を表示できます。テーブル名は適切な名称に置き換えてください。`
+                            `説明変数「${predictor}」の回帰線データセット例:\n{\n${datasetSnippet}\n}\nlineレイヤーでは data.name "${datasetName}"、encoding.x "${predictorAlias}"、encoding.y "${predictedAlias}" を指定してください。${
+                                otherMeans
+                                    ? ` 他の説明変数は平均値（${otherMeans}）を固定して予測値を計算しています。`
+                                    : ''
+                            }`
                         );
                     }
                 } else {
-                    warnings.push('回帰係数が有限値ではないため、予測値カラムの自動生成手順を提案できません。');
+                    warnings.push('回帰係数が有限値ではないため、回帰直線用のmin/maxポイントを提案できません。');
                 }
 
                 const response: RegressionAnalysisResponse = {
@@ -419,6 +447,17 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
     }
 
     return summaries;
+}
+
+function formatNumeric(value: number): string {
+    if (!Number.isFinite(value)) {
+        return 'null';
+    }
+    const precise = Number.parseFloat(value.toPrecision(6));
+    if (!Number.isFinite(precise)) {
+        return value.toString();
+    }
+    return Object.is(precise, -0) ? '0' : precise.toString();
 }
 
 function pickTargetColumn(
