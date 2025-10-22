@@ -107,15 +107,12 @@ function buildColumnNamesString(columns: TableColumn[]): string {
 export function convertComplexTypesForArrow(value: unknown, columnType?: string): unknown {
     // Handle null/undefined values first
     if (value === null || value === undefined) {
-        // For complex types that cause Arrow type inference issues, return empty string
-        if (
-            columnType &&
-            (columnType.includes('GEOMETRY') ||
-                columnType.includes('BLOB') ||
-                columnType.includes('JSON') ||
-                columnType.includes('STRUCT') ||
-                columnType.includes('[]')) // Array types
-        ) {
+        // For GEOMETRY and BLOB types, return empty Uint8Array for type consistency
+        if (columnType && (columnType.includes('GEOMETRY') || columnType.includes('BLOB'))) {
+            return new Uint8Array(0);
+        }
+        // For other complex types (JSON, STRUCT, arrays), return empty string
+        if (columnType && (columnType.includes('JSON') || columnType.includes('STRUCT') || columnType.includes('[]'))) {
             return '';
         }
         return null;
@@ -179,8 +176,10 @@ export function convertComplexTypesForArrow(value: unknown, columnType?: string)
 
 /**
  * Convert query result data to Arrow table format
+ *
+ * @internal Exported for testing purposes only
  */
-function convertToArrowTable(data: Record<string, unknown>[], columns: TableColumn[]): ArrowTable {
+export function convertToArrowTable(data: Record<string, unknown>[], columns: TableColumn[]): ArrowTable {
     if (data.length === 0) {
         return new ArrowTable();
     }
