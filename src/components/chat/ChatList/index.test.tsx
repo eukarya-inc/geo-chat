@@ -13,7 +13,6 @@ describe('ChatList', () => {
     it('should render navigation buttons', () => {
         render(<ChatList {...defaultProps} />);
 
-        expect(screen.getByText('Data Source')).toBeInTheDocument();
         expect(screen.getByText('Chat')).toBeInTheDocument();
         expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
@@ -61,10 +60,6 @@ describe('ChatList', () => {
         rerender(<ChatList {...defaultProps} selectedView="dashboard-list" />);
         const dashboardButton = screen.getByText('Dashboard');
         expect(dashboardButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');
-
-        rerender(<ChatList {...defaultProps} selectedView="datasource-list" />);
-        const dataSourceButton = screen.getByText('Data Source');
-        expect(dataSourceButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');
     });
 
     it('should not highlight any view when selectedView is undefined', () => {
@@ -72,20 +67,14 @@ describe('ChatList', () => {
 
         const chatButton = screen.getByText('Chat');
         const dashboardButton = screen.getByText('Dashboard');
-        const dataSourceButton = screen.getByText('Data Source');
 
         expect(chatButton).not.toHaveClass('bg-blue-50');
         expect(dashboardButton).not.toHaveClass('bg-blue-50');
-        expect(dataSourceButton).not.toHaveClass('bg-blue-50');
     });
 
     it('should call onNavigate with correct view when navigation button is clicked', () => {
         const mockOnNavigate = vi.fn();
         render(<ChatList {...defaultProps} onNavigate={mockOnNavigate} />);
-
-        const dataSourceButton = screen.getByText('Data Source');
-        fireEvent.click(dataSourceButton);
-        expect(mockOnNavigate).toHaveBeenCalledWith('datasource-list');
 
         const chatButton = screen.getByText('Chat');
         fireEvent.click(chatButton);

@@ -18,8 +18,7 @@ import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
 import { localStateAtom, viewModeAtom } from '../../store/localAtoms';
-import { ChatHistoryGrid, DashboardHistoryGrid, DataSourceHistoryGrid } from '../../components/history';
-import type { DataSourceWithChat } from '../../components/history';
+import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
 import {
     chatIdToSchemaName,
     useApiKeyManagement,
@@ -125,7 +124,7 @@ function ChatPage() {
     } = useDashboardManagement();
 
     // Navigation handler for sidebar buttons
-    const handleNavigate = (view: 'datasource-list' | 'chat-list' | 'dashboard-list') => {
+    const handleNavigate = (view: 'chat-list' | 'dashboard-list') => {
         setViewMode(view);
         selectChat('');
         setSelectedDashboard(null);
@@ -163,23 +162,6 @@ function ChatPage() {
             setSelectedDashboard(null);
         }
         deleteDashboard(dashboardId);
-    };
-
-    // Data source handlers
-    // Collect all tables from all chats
-    const allDataSources: DataSourceWithChat[] = Object.values(chats).flatMap(chat =>
-        Object.values(chat.tables).map(table => ({
-            ...table,
-            chatId: chat.id,
-            chatTitle: chat.title,
-        }))
-    );
-
-    const handleSelectDataSource = (chatId: string) => {
-        selectChat(chatId);
-        setViewMode('chat');
-        setSelectedDashboard(null);
-        // Note: Table selection will be handled by the user in the chat component
     };
 
     // Chart export to dashboard functionality
@@ -353,7 +335,7 @@ function ChatPage() {
 
     // Sidebar selection: highlight button only when showing list view
     const isListView = viewMode.endsWith('-list');
-    const sidebarSelection = isListView ? (viewMode as 'datasource-list' | 'chat-list' | 'dashboard-list') : undefined;
+    const sidebarSelection = isListView ? (viewMode as 'chat-list' | 'dashboard-list') : undefined;
 
     return (
         <>
@@ -370,15 +352,7 @@ function ChatPage() {
                 </div>
 
                 {/* Main Content Area */}
-                {viewMode === 'datasource-list' ? (
-                    /* Data Source History Grid */
-                    <div className="flex-1 h-full overflow-hidden">
-                        <DataSourceHistoryGrid
-                            dataSources={allDataSources}
-                            onSelectDataSource={handleSelectDataSource}
-                        />
-                    </div>
-                ) : viewMode === 'chat-list' ? (
+                {viewMode === 'chat-list' ? (
                     /* Chat History Grid */
                     <div className="flex-1 h-full overflow-hidden">
                         <ChatHistoryGrid

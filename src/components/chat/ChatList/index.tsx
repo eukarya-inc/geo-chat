@@ -4,8 +4,8 @@ interface ChatListProps {
     onCreateChat: () => void | Promise<void>;
     onCreateDashboard?: () => void;
     isInitialized?: boolean;
-    selectedView?: 'datasource-list' | 'chat-list' | 'dashboard-list';
-    onNavigate?: (view: 'datasource-list' | 'chat-list' | 'dashboard-list') => void;
+    selectedView?: 'chat-list' | 'dashboard-list';
+    onNavigate?: (view: 'chat-list' | 'dashboard-list') => void;
 }
 
 export function ChatList({
@@ -52,17 +52,6 @@ export function ChatList({
             <div className="flex-1 overflow-y-auto p-2">
                 {/* Navigation Buttons */}
                 <div className="space-y-1">
-                    <button
-                        onClick={() => onNavigate?.('datasource-list')}
-                        className={`w-full px-4 py-3 text-left text-sm font-medium rounded transition-colors ${
-                            selectedView === 'datasource-list'
-                                ? 'bg-blue-50 border border-blue-200'
-                                : 'hover:bg-gray-100'
-                        }`}
-                    >
-                        Data Source
-                    </button>
-
                     <button
                         onClick={() => onNavigate?.('chat-list')}
                         className={`w-full px-4 py-3 text-left text-sm font-medium rounded transition-colors ${
