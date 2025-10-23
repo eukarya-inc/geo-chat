@@ -49,6 +49,80 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
     });
 }
 
+const datasetsSchema = z
+    .record(z.unknown())
+    .refine(value => Object.keys(value).length > 0, {
+        message: 'datasets must include at least one named dataset',
+    })
+    .describe('Named datasets available to the spec');
+
+const baseSpecSchema = z
+    .object({
+        mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
+        encoding: z.record(z.unknown()).describe('The encoding channels'),
+        title: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Chart title'),
+        config: z.record(z.unknown()).optional().describe('Chart configuration'),
+    })
+    .describe('Single-view Vega-Lite spec (excluding data, width, height)');
+
+const layeredLayerSchema = baseSpecSchema
+    .extend({
+        data: z.unknown().optional().describe('Optional layer-specific data'),
+        transform: z.array(z.unknown()).optional().describe('Optional layer transforms'),
+        mark: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Layer mark (inherits when omitted)'),
+        encoding: z.record(z.unknown()).optional().describe('Layer encoding (inherits when omitted)'),
+    })
+    .describe('Layer definition');
+
+const layeredSpecSchema = z
+    .object({
+        datasets: datasetsSchema,
+        mark: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Default mark for layers'),
+        encoding: z.record(z.unknown()).optional().describe('Default encoding shared by layers'),
+        layer: z.array(layeredLayerSchema).min(2).describe('Layer definitions'),
+        title: z
+            .union([z.string(), z.record(z.unknown())])
+            .optional()
+            .describe('Chart title'),
+        config: z.record(z.unknown()).optional().describe('Chart configuration'),
+    })
+    .superRefine((spec, ctx) => {
+        const datasetNames = new Set(Object.keys(spec.datasets ?? {}));
+        if (datasetNames.size === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message:
+                    'Layered specs must define at least one dataset for regression lines and named data references.',
+                path: ['datasets'],
+            });
+            return;
+        }
+
+        spec.layer.forEach((layer, index) => {
+            const layerData = (layer as Record<string, unknown>).data;
+            if (layerData && typeof layerData === 'object' && 'name' in (layerData as Record<string, unknown>)) {
+                const name = (layerData as Record<string, unknown>).name;
+                if (typeof name === 'string' && !datasetNames.has(name)) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: `Layer ${index} references dataset "${name}" which is not defined in datasets`,
+                        path: ['layer', index, 'data', 'name'],
+                    });
+                }
+            }
+        });
+    })
+    .describe('Layered Vega-Lite spec (excluding data, width, height)');
+
 // Create the chart update tool for AI
 export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>) {
     if (!onChartUpdate) return null;
@@ -102,6 +176,16 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - Valid sort string values are ONLY "ascending" or "descending"
         - Valid sort object should have "field" and "order" properties
 
+        REGRESSION LAYERED CHART OUTPUT:
+        - After using perform_regression_analysis, reuse the observed data table for the scatter layer; do NOT add predicted columns to the table.
+        - Compute exactly two regression points per predictor (min and max) with the regression equation using the intercept and β coefficients. For multi-predictor models, hold the other predictors at their mean values from regression.columnSummaries.
+        - Place those two points inside the Vega-Lite spec under the datasets property (e.g., "datasets": {"reg_line_feature": [...]}) and reference that dataset name in the regression line layer.
+        - Use layered marks:
+          1. Scatter layer: mark {"type": "point"} using the raw observations (data.sql or data.name as appropriate).
+          2. Regression layer: mark {"type": "line"} with data {"name": "<dataset_name>"} and order on the predictor field so the line renders correctly.
+        - Tooltips should allow comparing observed vs predicted values (include x/y on both layers). Add an area layer only if you explicitly compute confidence bounds.
+        - When providing a full JSON spec for copy/paste, include $schema, description, datasets with the regression points, primary data, layer definitions, and optional config just like the example below.
+
         Example specifications:
         {
           "mark": "bar",
@@ -117,29 +201,96 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
             "x": {"field": "date", "type": "temporal", "title": "Date"},
             "y": {"field": "sales", "type": "quantitative", "title": "Sales"}
           }
+        }
+        
+        {
+          "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+          "description": "Scatter + line from two externally-provided points (no regression transform).",
+          "datasets": {
+            "regPoints": [
+              { "x": 1, "y": 1.0 },
+              { "x": 10, "y": 8.0 }
+            ]
+          },
+          "data": {
+            "values": [
+              {"x": 1, "y": 1.2}, {"x": 2, "y": 1.9}, {"x": 3, "y": 3.1},
+              {"x": 4, "y": 3.7}, {"x": 5, "y": 4.6}, {"x": 6, "y": 5.1},
+              {"x": 7, "y": 5.9}, {"x": 8, "y": 6.2}, {"x": 9, "y": 7.1},
+              {"x": 10, "y": 7.8}
+            ]
+          },
+          "layer": [
+            {
+              "mark": {"type": "point"},
+              "encoding": {
+                "x": {"field": "x", "type": "quantitative", "title": "x"},
+                "y": {"field": "y", "type": "quantitative", "title": "y"},
+                "tooltip": [{"field": "x"}, {"field": "y"}]
+              }
+            },
+            {
+              "data": {"name": "regPoints"},
+              "mark": {"type": "line"},
+              "encoding": {
+                "x": {"field": "x", "type": "quantitative"},
+                "y": {"field": "y", "type": "quantitative"},
+                "order": {"field": "x"},
+                "color": {"value": "firebrick"},
+                "tooltip": [{"field": "x"}, {"field": "y"}]
+              }
+            }
+          ],
+          "config": {"view": {"stroke": null}}
+        }
+        
+        {
+          "datasets": {
+            "reg_line_feature": [
+              { "feature": 1.0, "predicted": 2.5 },
+              { "feature": 10.0, "predicted": 8.1 }
+            ]
+          },
+          "layer": [
+            {
+              "data": {"sql": "SELECT feature, actual AS target FROM regression_source"},
+              "mark": {"type": "point", "opacity": 0.6, "size": 40},
+              "encoding": {
+                "x": {"field": "feature", "type": "quantitative", "title": "Feature"},
+                "y": {"field": "target", "type": "quantitative", "title": "Actual"},
+                "color": {"value": "#1f77b4"}
+              }
+            },
+            {
+              "data": {"name": "reg_line_feature"},
+              "mark": {"type": "line", "strokeWidth": 3, "color": "#d62728"},
+              "encoding": {
+                "x": {"field": "feature", "type": "quantitative"},
+                "y": {"field": "predicted", "type": "quantitative", "title": "Predicted"},
+                "order": {"field": "feature"}
+              }
+            }
+          ]
         }`,
         parameters: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z
-                .object({
-                    mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
-                    encoding: z.record(z.unknown()).describe('The encoding channels'),
-                    title: z
-                        .union([z.string(), z.record(z.unknown())])
-                        .optional()
-                        .describe('Chart title'),
-                    config: z.record(z.unknown()).optional().describe('Chart configuration'),
-                })
-                .describe('Vega-Lite specification (excluding data, width, height)'),
+                .union([baseSpecSchema, layeredSpecSchema])
+                .describe('Single-view or layered Vega-Lite specification (excluding data, width, height)'),
         }),
         execute: async ({ table_name, vega_spec }) => {
             try {
                 const processedSpec = processAIChartSpec(table_name, vega_spec as Partial<VegaChartSpec>);
+                const specRecord = processedSpec as unknown as Record<string, unknown>;
+                const hasTopLevelView = Boolean(specRecord.mark) && Boolean(specRecord.encoding);
+                const layers = Array.isArray(specRecord.layer) ? (specRecord.layer as unknown[]) : [];
+                const hasLayerView = layers.length > 0;
 
-                if (!('mark' in processedSpec) || !processedSpec.mark || !processedSpec.encoding) {
+                if (!hasTopLevelView && !hasLayerView) {
                     return {
                         success: false,
-                        message: 'Chart specification must include both mark and encoding properties',
+                        message:
+                            'Chart specification must include either a top-level mark + encoding or at least one layer definition.',
                     };
                 }
 

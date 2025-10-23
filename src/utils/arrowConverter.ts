@@ -39,6 +39,11 @@ export function convertArrowToJS(val: unknown, columnTypes?: Map<string, string>
         return convertArrowToJS(struct.toJSON(), columnTypes);
     }
 
+    // Handle Uint8Array and ArrayBuffer - keep as-is, don't convert to plain object
+    if (val instanceof Uint8Array || val instanceof ArrayBuffer) {
+        return val;
+    }
+
     // Handle plain objects - recursively convert all properties
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(val)) {

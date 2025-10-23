@@ -10,7 +10,7 @@ interface ChatInputProps {
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
     onSubmit: (e: React.FormEvent) => void;
     onStop: () => void;
-    dbContext: DBContext;
+    dbContext: DBContext | null;
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     placeholder?: string;
     className?: string;
@@ -23,6 +23,7 @@ interface ChatInputProps {
     isAnyLoading: boolean;
     remoteFileComponent?: (onClose: () => void) => React.ReactNode;
     disabled?: boolean;
+    isWaitingForDb?: boolean;
 }
 
 interface AutocompleteState {
@@ -52,6 +53,7 @@ export default function ChatInput({
     isAnyLoading,
     remoteFileComponent,
     disabled = false,
+    isWaitingForDb = false,
 }: ChatInputProps) {
     const [tables, setTables] = useState<string[]>([]);
     const [fields, setFields] = useState<Array<{ name: string; type: string }>>([]);
@@ -474,6 +476,7 @@ export default function ChatInput({
                         isAnyLoading={isAnyLoading}
                         disabled={disabled}
                         onClick={handleButtonClick}
+                        isWaitingForDb={isWaitingForDb}
                     />
                 </div>
             ) : (
@@ -484,6 +487,7 @@ export default function ChatInput({
                     isAnyLoading={isAnyLoading}
                     disabled={disabled}
                     onClick={handleButtonClick}
+                    isWaitingForDb={isWaitingForDb}
                 />
             )}
         </div>

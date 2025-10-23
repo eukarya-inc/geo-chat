@@ -16,7 +16,7 @@ import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 
 interface AIChatProps {
-    dbContext: DBContext;
+    dbContext: DBContext | null;
     apiKey?: string;
     chatId?: string | null;
     schemaName?: string | null;
@@ -35,6 +35,8 @@ interface AIChatProps {
     emptyMode?: boolean;
     onApiKeyChange?: (value: string) => void;
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
+    showApiKeyInput?: boolean;
+    waitForDbContext?: () => Promise<DBContext>;
 }
 
 export default function AIChat({
@@ -57,6 +59,8 @@ export default function AIChat({
     emptyMode = false,
     onApiKeyChange,
     onApiKeySave,
+    showApiKeyInput,
+    waitForDbContext,
 }: AIChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +76,8 @@ export default function AIChat({
     const [isMultiline, setIsMultiline] = useState(false);
     const [textareaHeight, setTextareaHeight] = useState(44); // Default single line height
     const [isCreatingTable, setIsCreatingTable] = useState(false);
+    const [tableCreationError, setTableCreationError] = useState<string | null>(null);
+    const [isWaitingForDb, setIsWaitingForDb] = useState(false);
 
     const effectiveChatId = chatId || 'default';
 
@@ -129,19 +135,35 @@ export default function AIChat({
             const trimmedInput = input.trim();
             if (!trimmedInput) return;
 
+            // Abort any ongoing prompt suggestion loading when user submits a new message
+            if (promptSuggestionAbortRef.current) {
+                promptSuggestionAbortRef.current.abort();
+                promptSuggestionAbortRef.current = null;
+            }
+
             // Check if input is a URL
             const dataUrl = extractDataUrl(trimmedInput);
 
             if (dataUrl) {
-                if (!dbContext) {
-                    console.error('DBContext is not available');
-                    return;
-                }
-
                 setIsCreatingTable(true);
+                setTableCreationError(null); // Clear previous errors
                 try {
+                    // Wait for DuckDB to be ready
+                    let db = dbContext;
+                    if (!db) {
+                        if (!waitForDbContext) {
+                            throw new Error('DuckDB is not initialized');
+                        }
+                        setIsWaitingForDb(true);
+                        try {
+                            db = await waitForDbContext();
+                        } finally {
+                            setIsWaitingForDb(false);
+                        }
+                    }
+
                     // Create table from URL
-                    const { message } = await createTableFromUrl(dataUrl, dbContext, schemaName || null);
+                    const { message } = await createTableFromUrl(dataUrl, db, schemaName || null);
 
                     // Clear input
                     const changeEvent = {
@@ -153,16 +175,34 @@ export default function AIChat({
                     sendMessage(message);
                 } catch (error) {
                     console.error('Failed to create table from URL:', error);
-                    // Show error to user - you might want to add error state handling here
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setTableCreationError(`テーブルの作成に失敗しました: ${errorMessage}`);
                 } finally {
                     setIsCreatingTable(false);
                 }
             } else {
-                // Regular message, use original handler
-                await originalHandleSubmit(e);
+                // Regular message - wait for DuckDB if needed
+                try {
+                    if (!dbContext) {
+                        if (!waitForDbContext) {
+                            throw new Error('DuckDB is not initialized');
+                        }
+                        setIsWaitingForDb(true);
+                        try {
+                            await waitForDbContext();
+                        } finally {
+                            setIsWaitingForDb(false);
+                        }
+                    }
+                    await originalHandleSubmit(e);
+                } catch (error) {
+                    console.error('Failed to submit message:', error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setTableCreationError(`メッセージの送信に失敗しました: ${errorMessage}`);
+                }
             }
         },
-        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit]
+        [input, dbContext, schemaName, handleInputChange, sendMessage, originalHandleSubmit, waitForDbContext]
     );
 
     // Focus textarea on mount
@@ -177,57 +217,59 @@ export default function AIChat({
         const MIN_HEIGHT = 44; // Minimum height for single line
         const MAX_LINES = 10;
 
-        // Empty input is always single line
-        if (!input || input.trim() === '') {
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
             setIsMultiline(false);
             setTextareaHeight(MIN_HEIGHT);
             return;
         }
 
-        if (!textareaRef.current) {
+        const trimmed = input.trim();
+
+        // Empty input is always single line
+        if (!trimmed) {
             setIsMultiline(false);
             setTextareaHeight(MIN_HEIGHT);
             return;
         }
 
         // Get actual computed styles
-        const textarea = textareaRef.current;
         const computedStyle = window.getComputedStyle(textarea);
         const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
         const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
         const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
         const totalPadding = paddingTop + paddingBottom;
+        const singleLineHeight = lineHeight + totalPadding;
 
-        // Count the number of lines
+        // Count the number of newline-separated lines
         const lines = input.split('\n').length;
-        const hasNewline = lines > 1;
-
-        if (hasNewline) {
+        if (lines > 1) {
             setIsMultiline(true);
-            // Calculate height based on line count, capped at MAX_LINES
             const effectiveLines = Math.min(lines, MAX_LINES);
-            const calculatedHeight = effectiveLines * lineHeight + totalPadding;
-            setTextareaHeight(calculatedHeight);
-        } else {
-            // Check if content overflows (for single line with long text)
-            requestAnimationFrame(() => {
-                if (textareaRef.current) {
-                    const hasOverflow = textareaRef.current.scrollHeight > textareaRef.current.clientHeight + 5;
-                    if (hasOverflow) {
-                        setIsMultiline(true);
-                        // Calculate how many lines are needed based on scrollHeight
-                        const neededLines = Math.min(
-                            Math.ceil((textareaRef.current.scrollHeight - totalPadding) / lineHeight),
-                            MAX_LINES
-                        );
-                        setTextareaHeight(neededLines * lineHeight + totalPadding);
-                    } else {
-                        setIsMultiline(false);
-                        setTextareaHeight(MIN_HEIGHT);
-                    }
-                }
-            });
+            setTextareaHeight(effectiveLines * lineHeight + totalPadding);
+            return;
         }
+
+        const updateForWrappedContent = () => {
+            const currentTextarea = textareaRef.current;
+            if (!currentTextarea) {
+                return;
+            }
+
+            const contentHeight = currentTextarea.scrollHeight;
+            if (contentHeight > singleLineHeight + 1) {
+                const neededLines = Math.min(Math.ceil((contentHeight - totalPadding) / lineHeight), MAX_LINES);
+                const newHeight = neededLines * lineHeight + totalPadding;
+                setIsMultiline(true);
+                setTextareaHeight(newHeight);
+            } else {
+                setIsMultiline(false);
+                setTextareaHeight(MIN_HEIGHT);
+            }
+        };
+
+        requestAnimationFrame(updateForWrappedContent);
     }, [input]);
 
     const messageGroups = useMemo(() => {
@@ -417,9 +459,18 @@ export default function AIChat({
 
             const content = tableCreatedMessage.content as string;
 
-            // Check if we already have prompt suggestions for this table
-            // Table creation suggestions are in tool_result, completion suggestions are in tool_use (for memory efficiency)
-            const hasPromptSuggestions = messages.some(
+            // Extract table name from the marker
+            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
+            const tableName = match?.[1] || selectedTable || null;
+
+            if (!tableName || !dbContext || !apiKey) return;
+
+            // Find the index of this TABLE_CREATED message
+            const tableCreatedIndex = messages.indexOf(tableCreatedMessage);
+
+            // Check if we already have prompt suggestions AFTER this specific TABLE_CREATED message
+            // Only check messages that come after the table creation message
+            const hasPromptSuggestionsAfterTable = messages.slice(tableCreatedIndex + 1).some(
                 msg =>
                     msg.role === 'assistant' &&
                     Array.isArray(msg.content) &&
@@ -430,7 +481,10 @@ export default function AIChat({
                                 block.name === 'completion' &&
                                 block.result &&
                                 typeof block.result === 'object' &&
-                                'suggestedPrompts' in block.result) ||
+                                'suggestedPrompts' in block.result &&
+                                'completionMessage' in block.result &&
+                                typeof block.result.completionMessage === 'string' &&
+                                block.result.completionMessage.includes(tableName)) ||
                             // Check for completion suggestions (tool_use)
                             (block.type === 'tool_use' &&
                                 block.name === 'completion' &&
@@ -440,15 +494,14 @@ export default function AIChat({
                     )
             );
 
-            if (hasPromptSuggestions) {
+            if (hasPromptSuggestionsAfterTable) {
                 return;
             }
 
-            // Extract table name from the marker
-            const match = content.match(/<!--TABLE_CREATED:(.+?)-->/);
-            const tableName = match?.[1] || selectedTable || null;
-
-            if (!tableName || !dbContext || !apiKey) return;
+            // Check if aborted before adding loading message
+            if (abortSignal.aborted) {
+                return;
+            }
 
             // Check if we already have the loading message
             const hasLoadingMessage = messages.some(
@@ -621,11 +674,9 @@ export default function AIChat({
 
     // Empty mode: only show the input form
     if (emptyMode) {
-        const showApiKeyInput = !apiKey && onApiKeyChange && onApiKeySave;
-
         return (
             <div className="flex flex-col gap-8 items-center relative">
-                {showApiKeyInput && (
+                {showApiKeyInput && onApiKeyChange && onApiKeySave && (
                     <ApiKeyInput
                         apiKey={apiKey || ''}
                         onApiKeyChange={onApiKeyChange}
@@ -635,6 +686,35 @@ export default function AIChat({
                 )}
                 <h1 className="text-2xl font-bold text-gray-800">今日はどんな分析をしますか？</h1>
                 <div className="w-full">
+                    {tableCreationError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-300 rounded-lg">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <strong className="text-red-800 text-sm">エラー</strong>
+                                    <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                                </div>
+                                <button
+                                    onClick={() => setTableCreationError(null)}
+                                    className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                    title="閉じる"
+                                >
+                                    <svg
+                                        className="w-4 h-4 text-red-800"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div
                         className={`flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full ${isMultiline ? 'rounded-3xl' : 'rounded-full'}`}
                     >
@@ -660,6 +740,7 @@ export default function AIChat({
                             isAnyLoading={isAnyLoading}
                             remoteFileComponent={remoteFileComponent}
                             disabled={!apiKey}
+                            isWaitingForDb={isWaitingForDb}
                         />
                     </div>
                     <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
@@ -693,7 +774,7 @@ export default function AIChat({
                                     <StructuredMessageRenderer
                                         message={group.userMessage}
                                         className="prose prose-xs max-w-none"
-                                        dbContext={dbContext}
+                                        dbContext={dbContext || undefined}
                                         selectedTable={selectedTable}
                                         onTableSelect={onTableSelect}
                                         onPromptClick={handlePromptSelection}
@@ -714,7 +795,7 @@ export default function AIChat({
                                             <StructuredMessageRenderer
                                                 message={group.userMessage}
                                                 className="prose max-w-none"
-                                                dbContext={dbContext}
+                                                dbContext={dbContext || undefined}
                                                 selectedTable={selectedTable}
                                                 onTableSelect={onTableSelect}
                                                 onPromptClick={handlePromptSelection}
@@ -800,7 +881,7 @@ export default function AIChat({
                                                         <StructuredMessageRenderer
                                                             message={group.assistantMessage}
                                                             className="prose max-w-none"
-                                                            dbContext={dbContext}
+                                                            dbContext={dbContext || undefined}
                                                             selectedTable={selectedTable}
                                                             onTableSelect={onTableSelect}
                                                             hideToolCalls={false}
@@ -820,7 +901,7 @@ export default function AIChat({
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"
-                                                                dbContext={dbContext}
+                                                                dbContext={dbContext || undefined}
                                                                 selectedTable={selectedTable}
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={false}
@@ -843,7 +924,7 @@ export default function AIChat({
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"
-                                                                dbContext={dbContext}
+                                                                dbContext={dbContext || undefined}
                                                                 selectedTable={selectedTable}
                                                                 onTableSelect={onTableSelect}
                                                                 hideToolCalls={true}
@@ -874,6 +955,35 @@ export default function AIChat({
             </div>
 
             <div className="flex-shrink-0">
+                {tableCreationError && (
+                    <div className="mb-2 p-3 bg-red-50 border border-red-300 rounded-md">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                                <strong className="text-red-800 text-sm">エラー</strong>
+                                <p className="text-red-700 text-sm mt-1">{tableCreationError}</p>
+                            </div>
+                            <button
+                                onClick={() => setTableCreationError(null)}
+                                className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                title="閉じる"
+                            >
+                                <svg
+                                    className="w-4 h-4 text-red-800"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <div className="bg-white border border-gray-300 rounded-md p-2">
                     <ChatInput
                         value={input}
@@ -898,6 +1008,7 @@ export default function AIChat({
                         isAnyLoading={isAnyLoading}
                         remoteFileComponent={remoteFileComponent}
                         disabled={!apiKey}
+                        isWaitingForDb={isWaitingForDb}
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">

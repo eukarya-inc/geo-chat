@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AIChat from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
-import { TableView } from '../../components/table/TableView';
+import { TablePanel } from '../../components/table/TablePanel';
 import RemoteFile from '../../components/remote-file';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
+import type { DBContext } from '../../lib/duckdb/dbContext';
 import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
 import { MapPanel } from '../../components/map';
 import { ChatList } from '../../components/chat/ChatList';
@@ -14,6 +15,7 @@ import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
 import type { View } from 'vega';
+import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
@@ -33,7 +35,7 @@ import {
 } from './hooks';
 
 function ChatPage() {
-    const { dbContext } = useDuckDB();
+    const { dbContext, isInitializing } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportType, setExportType] = useState<'chart' | 'map'>('chart');
@@ -42,9 +44,69 @@ function ChatPage() {
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
     const [showChartSpecModal, setShowChartSpecModal] = useState(false);
     const chatPageVegaViewRef = useRef<View | null>(null);
+    const dbContextRef = useRef<DBContext | null>(dbContext);
+    const isInitializingRef = useRef<boolean>(isInitializing);
+
+    // Update refs when values change
+    useEffect(() => {
+        dbContextRef.current = dbContext;
+    }, [dbContext]);
+
+    useEffect(() => {
+        isInitializingRef.current = isInitializing;
+    }, [isInitializing]);
+
+    // Wait for DuckDB context to be ready
+    const waitForDbContext = useCallback(async (): Promise<DBContext> => {
+        if (dbContextRef.current) return dbContextRef.current;
+        if (!isInitializingRef.current) throw new Error('DuckDB initialization failed');
+
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(() => {
+                if (dbContextRef.current) {
+                    clearInterval(checkInterval);
+                    resolve(dbContextRef.current);
+                } else if (!isInitializingRef.current) {
+                    clearInterval(checkInterval);
+                    reject(new Error('DuckDB initialization failed'));
+                }
+            }, 100);
+
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('DuckDB initialization timeout'));
+            }, 30000);
+        });
+    }, []);
 
     // Enable state synchronization
     const { syncImmediately } = useStoreSync();
+
+    // Extract title from completion tool result in messages
+    const extractCompletionTitle = useCallback((messages: StructuredMessage[]): string | null => {
+        // Search messages in reverse order to find the most recent completion tool
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
+
+            for (const block of message.content) {
+                // Check tool_use for completion (this is where the title is in the input)
+                if (block.type === 'tool_use' && block.name === 'completion') {
+                    const input = block.input;
+                    if (
+                        input &&
+                        typeof input === 'object' &&
+                        'title' in input &&
+                        typeof input.title === 'string' &&
+                        input.title.trim()
+                    ) {
+                        return input.title.trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }, []);
 
     // Dashboard state management with atoms
     const currentDashboard = useAtomValue(currentDashboardAtom);
@@ -97,14 +159,50 @@ function ChatPage() {
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(
         selectedTable,
         dbContext,
-        schemaName,
-        connection
+        schemaName
+    );
+
+    // Handler for conversation completion - updates chat title if needed
+    const handleConversationCompleted = useCallback(() => {
+        // Just trigger immediate sync
+        syncImmediately();
+    }, [syncImmediately]);
+
+    // Check and update chat title when messages change
+    const checkAndUpdateChatTitle = useCallback(
+        (messages: StructuredMessage[]) => {
+            if (!selectedChatId) return;
+
+            const currentChat = chats.find(chat => chat.id === selectedChatId);
+            if (!currentChat) return;
+
+            // Only update if title is still default (isTitleDefault is true or undefined for backward compatibility)
+            if (!currentChat.isTitleDefault) return;
+
+            // Extract title from completion tool result
+            const completionTitle = extractCompletionTitle(messages);
+            if (completionTitle) {
+                // Update the chat title (isDefault=false since AI explicitly provided a custom title)
+                renameChat(selectedChatId, completionTitle, false);
+            }
+        },
+        [selectedChatId, chats, extractCompletionTitle, renameChat]
     );
 
     // Message handling
-    const { sendMessageRef, handleSendMessageReady, handleMessagesChange } = useMessageHandling(
-        selectedChatId,
-        updateChatMessages
+    const {
+        sendMessageRef,
+        handleSendMessageReady,
+        handleMessagesChange: originalHandleMessagesChange,
+    } = useMessageHandling(selectedChatId, updateChatMessages);
+
+    // Wrap handleMessagesChange to check for title updates
+    const handleMessagesChange = useCallback(
+        (messages: StructuredMessage[]) => {
+            originalHandleMessagesChange(messages);
+            checkAndUpdateChatTitle(messages);
+        },
+        [originalHandleMessagesChange, checkAndUpdateChatTitle]
     );
 
     // Sync table creation history to remote state
@@ -412,7 +510,7 @@ function ChatPage() {
                     /* Empty Chat Mode - Centered Input */
                     <div className="flex-1 h-full flex items-center justify-center p-4">
                         <div className="w-full max-w-3xl -mt-32">
-                            {!isLoadingApiKey && dbContext && selectedChatId && (
+                            {!isLoadingApiKey && selectedChatId && (
                                 <AIChat
                                     dbContext={dbContext}
                                     apiKey={apiKey}
@@ -435,7 +533,7 @@ function ChatPage() {
                                     onMapStyleDelete={async (tableName: string) => {
                                         deleteTableStyle(tableName);
                                     }}
-                                    onConversationCompleted={syncImmediately}
+                                    onConversationCompleted={handleConversationCompleted}
                                     remoteFileComponent={onClose => (
                                         <RemoteFile
                                             dbContext={dbContext}
@@ -448,11 +546,14 @@ function ChatPage() {
                                                 onClose();
                                             }}
                                             onSendMessage={sendMessageRef.current || undefined}
+                                            waitForDbContext={waitForDbContext}
                                         />
                                     )}
                                     emptyMode={true}
                                     onApiKeyChange={setApiKey}
                                     onApiKeySave={saveApiKey}
+                                    showApiKeyInput={showApiKeyInput}
+                                    waitForDbContext={waitForDbContext}
                                 />
                             )}
                         </div>
@@ -492,7 +593,7 @@ function ChatPage() {
                                         onMapStyleDelete={async (tableName: string) => {
                                             deleteTableStyle(tableName);
                                         }}
-                                        onConversationCompleted={syncImmediately}
+                                        onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={onClose => (
                                             <RemoteFile
                                                 dbContext={dbContext}
@@ -505,8 +606,11 @@ function ChatPage() {
                                                     onClose();
                                                 }}
                                                 onSendMessage={sendMessageRef.current || undefined}
+                                                waitForDbContext={waitForDbContext}
                                             />
                                         )}
+                                        showApiKeyInput={showApiKeyInput}
+                                        waitForDbContext={waitForDbContext}
                                     />
                                 </div>
                             ) : !isLoadingApiKey && dbContext ? (
@@ -615,14 +719,13 @@ function ChatPage() {
 
                                             {/* Table Tab */}
                                             {activeTab === 'table' && (
-                                                <div className="h-full overflow-hidden">
-                                                    <TableView
-                                                        key={`${selectedChatId}-${selectedTable}`}
-                                                        connection={connection}
-                                                        tableName={selectedTable}
-                                                        dbContext={dbContext}
-                                                    />
-                                                </div>
+                                                <TablePanel
+                                                    key={`${selectedChatId}-${selectedTable}`}
+                                                    connection={connection}
+                                                    tableName={selectedTable}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || null}
+                                                />
                                             )}
 
                                             {/* Chart Tab */}

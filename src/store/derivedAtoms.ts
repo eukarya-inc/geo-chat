@@ -19,7 +19,7 @@ export const currentDashboardAtom = atom(get => {
 });
 
 // Current chat state (kept for compatibility - extracts state portion from chat itself)
-export const currentChatStateAtom = atom(get => {
+export const currentChatStateAtom = atom<ChatState | null>(get => {
     const chat = get(currentChatAtom);
     if (!chat) return null;
 
@@ -28,7 +28,7 @@ export const currentChatStateAtom = atom(get => {
         tables: chat.tables,
         chartSpecs: chat.chartSpecs,
         mapSpecs: chat.mapSpecs,
-    } as ChatState;
+    };
 });
 
 // Current table graph display state
@@ -58,6 +58,7 @@ export const createChatAtom = atom(null, async (get, set) => {
         title: `Chat ${chatCount + 1}`,
         createdAt: new Date(),
         selectedTable: null,
+        isTitleDefault: true,
         messages: [],
         tables: {},
     };
@@ -115,23 +116,27 @@ export const deleteChatAtom = atom(null, (get, set, chatId: string) => {
 });
 
 // Rename chat (updates remote state)
-export const renameChatAtom = atom(null, (get, set, { chatId, newTitle }: { chatId: string; newTitle: string }) => {
-    const remoteState = get(remoteStateAtom);
-    const chat = remoteState.chats[chatId];
+export const renameChatAtom = atom(
+    null,
+    (get, set, { chatId, newTitle, isDefault = false }: { chatId: string; newTitle: string; isDefault?: boolean }) => {
+        const remoteState = get(remoteStateAtom);
+        const chat = remoteState.chats[chatId];
 
-    if (!chat) return;
+        if (!chat) return;
 
-    set(remoteStateAtom, {
-        ...remoteState,
-        chats: {
-            ...remoteState.chats,
-            [chatId]: {
-                ...chat,
-                title: newTitle,
+        set(remoteStateAtom, {
+            ...remoteState,
+            chats: {
+                ...remoteState.chats,
+                [chatId]: {
+                    ...chat,
+                    title: newTitle,
+                    isTitleDefault: isDefault,
+                },
             },
-        },
-    });
-});
+        });
+    }
+);
 
 // Select table (updates current chat)
 export const selectTableAtom = atom(null, (get, set, tableName: string | null) => {
@@ -161,14 +166,10 @@ export const updateChatStateAtom = atom(null, (get, set, updates: Partial<ChatSt
 
     if (!chatId || !remoteState.chats[chatId]) return;
 
-    // Deep merge for chartSpecs
-    let mergedChartSpecs = remoteState.chats[chatId].chartSpecs;
-    if (updates.chartSpecs) {
-        mergedChartSpecs = {
-            ...remoteState.chats[chatId].chartSpecs,
-            ...updates.chartSpecs,
-        };
-    }
+    // Use chartSpecs from updates if provided, otherwise keep existing
+    // This allows both updating specific tables and removing tables
+    const mergedChartSpecs =
+        updates.chartSpecs !== undefined ? updates.chartSpecs : remoteState.chats[chatId].chartSpecs;
 
     // Deep merge for mapSpecs
     let mergedMapSpecs = remoteState.chats[chatId].mapSpecs;

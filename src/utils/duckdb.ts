@@ -11,6 +11,12 @@ export interface TableDataResult {
     columns: TableColumn[];
     arrowTable: ArrowTable;
     totalRows: number;
+    rawData?: Map<string, unknown>[]; // Keep raw data for efficient binary access
+}
+
+export interface TableWindowResult {
+    arrowTable: ArrowTable;
+    rawData: Map<string, unknown>[]; // Keep raw data for efficient binary access
 }
 
 /**
@@ -70,129 +76,85 @@ function convertSpecialValues(value: unknown, columnType?: string): unknown {
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
 
-    // Handle BLOB data (Uint8Array, ArrayBuffer, or objects with byteLength)
-    if (
-        value instanceof Uint8Array ||
-        value instanceof ArrayBuffer ||
-        (value && typeof value === 'object' && 'byteLength' in value)
-    ) {
-        // Check if this is a geometry column based on column type
-        if (
-            columnType &&
-            (columnType.toUpperCase().includes('GEOMETRY') ||
-                columnType.toUpperCase().includes('POINT') ||
-                columnType.toUpperCase().includes('LINESTRING') ||
-                columnType.toUpperCase().includes('POLYGON') ||
-                columnType.toUpperCase().includes('MULTIPOINT') ||
-                columnType.toUpperCase().includes('MULTILINESTRING') ||
-                columnType.toUpperCase().includes('MULTIPOLYGON') ||
-                columnType.toUpperCase().includes('GEOMETRYCOLLECTION'))
-        ) {
-            // Try to extract geometry type from WKB if possible
-            if (value instanceof Uint8Array && value.length > 5) {
-                try {
-                    // WKB format: byte order (1 byte) + type (4 bytes)
-                    const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
-                    const byteOrder = value[0]; // 0 = big endian, 1 = little endian
-                    const typeCode =
-                        byteOrder === 1
-                            ? view.getUint32(1, true) // little endian
-                            : view.getUint32(1, false); // big endian
-
-                    // Geometry type codes
-                    const geomTypes: Record<number, string> = {
-                        1: 'POINT',
-                        2: 'LINESTRING',
-                        3: 'POLYGON',
-                        4: 'MULTIPOINT',
-                        5: 'MULTILINESTRING',
-                        6: 'MULTIPOLYGON',
-                        7: 'GEOMETRYCOLLECTION',
-                    };
-
-                    const baseType = typeCode & 0xff; // Get base type without dimension flags
-                    const typeName = geomTypes[baseType] || 'GEOMETRY';
-
-                    // For POINT geometry, try to extract coordinates
-                    if (baseType === 1 && value.length >= 21) {
-                        const x = byteOrder === 1 ? view.getFloat64(5, true) : view.getFloat64(5, false);
-                        const y = byteOrder === 1 ? view.getFloat64(13, true) : view.getFloat64(13, false);
-
-                        // Format coordinates with reasonable precision
-                        return `POINT(${x.toFixed(6)} ${y.toFixed(6)})`;
-                    }
-
-                    return `[${typeName}]`;
-                } catch {
-                    // If parsing fails, fall back to column type
-                }
-            }
-
-            // For geometry types, show a more descriptive label based on column type
-            const geomType = columnType.toUpperCase().replace('MULTI', 'MULTI ');
-            return `[${geomType}]`;
-        }
-
-        // For other BLOB data, try to show size information
-        let byteLength = 0;
-        if (value instanceof Uint8Array) {
-            byteLength = value.byteLength;
-        } else if (value instanceof ArrayBuffer) {
-            byteLength = value.byteLength;
-        } else if (value && typeof value === 'object' && 'byteLength' in value) {
-            byteLength = (value as { byteLength: number }).byteLength;
-        }
-
-        if (byteLength > 0) {
-            // Format byte size in a human-readable way
-            if (byteLength < 1024) {
-                return `[BLOB: ${byteLength} bytes]`;
-            } else if (byteLength < 1024 * 1024) {
-                return `[BLOB: ${(byteLength / 1024).toFixed(1)} KB]`;
-            } else {
-                return `[BLOB: ${(byteLength / (1024 * 1024)).toFixed(1)} MB]`;
-            }
-        }
-
-        return '[BLOB]';
-    }
+    // Return BLOB data as-is for further processing in the view layer
+    // The view layer will decide how to format it for display
 
     return value;
 }
 
 /**
  * Build column names string for SQL queries
+ * Converts GEOMETRY columns to WKB format for proper parsing
  */
 function buildColumnNamesString(columns: TableColumn[]): string {
-    return columns.map(col => `"${col.name}"`).join(', ');
+    return columns
+        .map(col => {
+            // Convert GEOMETRY columns to standard WKB format
+            if (isGeometryColumn(col.type)) {
+                return `ST_AsWKB("${col.name}") as "${col.name}"`;
+            }
+            return `"${col.name}"`;
+        })
+        .join(', ');
 }
 
 /**
  * Convert complex types to displayable format for Arrow
  * Note: Integer type conversions (HUGEINT, etc.) are now handled by convertArrowToJS
+ *
+ * @internal Exported for testing purposes only
  */
-function convertComplexTypesForArrow(value: unknown, columnType?: string): unknown {
+export function convertComplexTypesForArrow(value: unknown, columnType?: string): unknown {
     // Handle null/undefined values first
     if (value === null || value === undefined) {
-        // For complex types that cause Arrow type inference issues, return empty string
-        if (
-            columnType &&
-            (columnType.includes('GEOMETRY') ||
-                columnType.includes('BLOB') ||
-                columnType.includes('JSON') ||
-                columnType.includes('STRUCT') ||
-                columnType.includes('[]')) // Array types
-        ) {
+        // For GEOMETRY and BLOB types, return empty Uint8Array for type consistency
+        if (columnType && (columnType.includes('GEOMETRY') || columnType.includes('BLOB'))) {
+            return new Uint8Array(0);
+        }
+        // For other complex types (JSON, STRUCT, arrays), return empty string
+        if (columnType && (columnType.includes('JSON') || columnType.includes('STRUCT') || columnType.includes('[]'))) {
             return '';
         }
         return null;
     }
 
-    // Handle binary data (BLOB, GEOMETRY) - convert to string representation
+    // Handle binary data (BLOB, GEOMETRY) - keep as-is since we now use rawData cache
+    // The Arrow table conversion will still happen, but we don't use it for binary data
     if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
-        // Convert to string to avoid Arrow type inference issues with mixed null/binary
-        const byteLength = value instanceof ArrayBuffer ? value.byteLength : (value as Uint8Array).byteLength;
-        return `[BLOB: ${byteLength} bytes]`;
+        // Return the binary data as-is for rawData cache
+        return value;
+    }
+
+    // Handle objects that look like typed arrays with numeric keys
+    // These come from DuckDB's Arrow result when BLOB/GEOMETRY data is deserialized
+    // Note: Sometimes byteLength property is missing, so we check for numeric keys
+    if (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date)) {
+        const keys = Object.keys(value);
+        // Check if most keys are numeric
+        const numericKeys = keys.filter(k => /^\d+$/.test(k));
+        const hasNumericKeys = numericKeys.length > 0 && numericKeys.length >= Math.max(1, keys.length - 1);
+
+        if (hasNumericKeys) {
+            // Convert to Uint8Array
+            // If byteLength exists, use it; otherwise, find the max numeric key + 1
+            let byteLength: number;
+            if ('byteLength' in value && typeof (value as { byteLength: unknown }).byteLength === 'number') {
+                byteLength = (value as { byteLength: number }).byteLength;
+            } else {
+                // Find max numeric key and add 1
+                const maxKey = Math.max(...numericKeys.map(k => parseInt(k, 10)));
+                byteLength = maxKey + 1;
+            }
+
+            const arr = new Uint8Array(byteLength);
+            for (let i = 0; i < byteLength; i++) {
+                const val = (value as Record<string, number>)[String(i)];
+                if (val !== undefined) {
+                    arr[i] = val;
+                }
+            }
+            return arr;
+        }
     }
 
     // Handle objects and arrays - convert to JSON string
@@ -214,8 +176,10 @@ function convertComplexTypesForArrow(value: unknown, columnType?: string): unkno
 
 /**
  * Convert query result data to Arrow table format
+ *
+ * @internal Exported for testing purposes only
  */
-function convertToArrowTable(data: Record<string, unknown>[], columns: TableColumn[]): ArrowTable {
+export function convertToArrowTable(data: Record<string, unknown>[], columns: TableColumn[]): ArrowTable {
     if (data.length === 0) {
         return new ArrowTable();
     }
@@ -228,6 +192,7 @@ function convertToArrowTable(data: Record<string, unknown>[], columns: TableColu
 
     // First, apply the shared conversion logic to all rows
     // This handles integer type conversions (including HUGEINT as string)
+    // Keep as Record for Arrow table creation (Arrow needs plain objects)
     const convertedData = data.map(row => convertArrowToJS(row, columnTypes) as Record<string, unknown>);
 
     // Then, convert complex types that Arrow can't handle directly
@@ -352,12 +317,25 @@ export async function getTableData(
 
     const data = result.toArray();
 
+    // Create a Map of column types
+    const columnTypes = new Map<string, string>();
+    for (const col of columns) {
+        columnTypes.set(col.name, col.type);
+    }
+
+    // Apply convertArrowToJS and convert to Map for efficient access
+    const convertedData = data.map(row => {
+        const converted = convertArrowToJS(row, columnTypes) as Record<string, unknown>;
+        return new Map(Object.entries(converted));
+    });
+
     const arrowTable = convertToArrowTable(data, columns);
 
     return {
         columns,
         arrowTable,
         totalRows,
+        rawData: convertedData, // Store raw data for efficient access
     };
 }
 
@@ -368,12 +346,15 @@ export async function getTableDataByWindow(
     endRow: number,
     sortColumn?: string,
     sortDirection: 'ASC' | 'DESC' = 'ASC'
-): Promise<ArrowTable> {
+): Promise<TableWindowResult> {
     const columns = await getTableSchema(connection, tableName);
 
-    // If no columns found, return empty table
+    // If no columns found, return empty result
     if (columns.length === 0) {
-        return new ArrowTable();
+        return {
+            arrowTable: new ArrowTable(),
+            rawData: [],
+        };
     }
 
     const limit = endRow - startRow;
@@ -388,7 +369,23 @@ export async function getTableDataByWindow(
     );
 
     const data = result.toArray();
-    return convertToArrowTable(data, columns);
+
+    // Create a Map of column types
+    const columnTypes = new Map<string, string>();
+    for (const col of columns) {
+        columnTypes.set(col.name, col.type);
+    }
+
+    // Apply convertArrowToJS and convert to Map for efficient access
+    const convertedData = data.map(row => {
+        const converted = convertArrowToJS(row, columnTypes) as Record<string, unknown>;
+        return new Map(Object.entries(converted));
+    });
+
+    return {
+        arrowTable: convertToArrowTable(data, columns),
+        rawData: convertedData,
+    };
 }
 
 export function getValueFromArrowTable(
@@ -407,6 +404,28 @@ export function getValueFromArrowTable(
     }
 
     const value = column.get(rowIndex);
+    return convertSpecialValues(value, columnType);
+}
+
+/**
+ * Get value from raw data array (more efficient for binary data)
+ */
+export function getValueFromRawData(
+    rawData: Map<string, unknown>[],
+    rowIndex: number,
+    columnName: string,
+    columnType?: string
+): unknown {
+    if (rowIndex >= rawData.length) {
+        return null;
+    }
+
+    const row = rawData[rowIndex];
+    if (!row) {
+        return null;
+    }
+
+    const value = row.get(columnName);
     return convertSpecialValues(value, columnType);
 }
 

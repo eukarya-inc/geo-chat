@@ -32,6 +32,7 @@ const MapComponent: React.FC<MapProps> = ({
     onExtraStyleChange,
 }) => {
     const [mapError, setMapError] = useState<string | null>(null);
+    const [mvtError, setMvtError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
@@ -43,6 +44,10 @@ const MapComponent: React.FC<MapProps> = ({
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
     const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+    // AbortController to cancel in-flight tile requests when table changes
+    const tileAbortControllerRef = useRef<AbortController | null>(null);
+    // Track MVT errors with a ref to allow protocol handler to report errors
+    const mvtErrorRef = useRef<string | null>(null);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -115,6 +120,23 @@ const MapComponent: React.FC<MapProps> = ({
         if (!selectedTable || !mapRef.current || !isInitialized) {
             return;
         }
+
+        // Close popup when table changes
+        if (popupRef.current) {
+            popupRef.current.remove();
+            popupRef.current = null;
+        }
+
+        // Clear MVT errors when table/columns change
+        setMvtError(null);
+        mvtErrorRef.current = null;
+
+        // Abort any in-flight tile requests from the previous table/columns
+        if (tileAbortControllerRef.current) {
+            tileAbortControllerRef.current.abort();
+        }
+        // Create new AbortController for the new table/columns
+        tileAbortControllerRef.current = new AbortController();
 
         // Clear tile cache to force refresh with new columns
         tileCache.current.clear();
@@ -225,6 +247,23 @@ const MapComponent: React.FC<MapProps> = ({
             };
 
             if (bounds && bounds.min_lng !== null && bounds.min_lng !== undefined) {
+                // Validate coordinate ranges before fitting bounds
+                const isValidLat = (lat: number) => lat >= -90 && lat <= 90;
+                const isValidLng = (lng: number) => lng >= -180 && lng <= 180;
+
+                if (
+                    !isValidLng(bounds.min_lng) ||
+                    !isValidLng(bounds.max_lng) ||
+                    !isValidLat(bounds.min_lat) ||
+                    !isValidLat(bounds.max_lat)
+                ) {
+                    const errorMsg = `無効な座標範囲が検出されました。緯度は-90～90、経度は-180～180の範囲である必要があります。検出された座標: 経度 [${bounds.min_lng.toFixed(2)}, ${bounds.max_lng.toFixed(2)}]、緯度 [${bounds.min_lat.toFixed(2)}, ${bounds.max_lat.toFixed(2)}]。このデータは投影座標系（例: Web Mercator）のようです。データ提供元に正しい座標系のデータを依頼するか、AIチャットで「このテーブルの座標を地理座標系（EPSG:4326）に変換してください」と依頼してみてください。`;
+                    console.error('Error fitting map to data bounds:', errorMsg);
+                    setMvtError(errorMsg);
+                    mvtErrorRef.current = errorMsg;
+                    return;
+                }
+
                 mapRef.current.fitBounds(
                     [
                         [bounds.min_lng, bounds.min_lat],
@@ -238,7 +277,10 @@ const MapComponent: React.FC<MapProps> = ({
                 );
             }
         } catch (error) {
-            console.error('Error fitting map to data bounds:', error);
+            const errorMsg = `地図の表示範囲の調整中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`;
+            console.error(errorMsg);
+            setMvtError(errorMsg);
+            mvtErrorRef.current = errorMsg;
         }
     }, []);
 
@@ -247,6 +289,11 @@ const MapComponent: React.FC<MapProps> = ({
         const updateSchemaInfo = async () => {
             if (!connectionRef.current || !selectedTable) {
                 columnTypesRef.current = {};
+                // Abort any in-flight tile requests when table is cleared
+                if (tileAbortControllerRef.current) {
+                    tileAbortControllerRef.current.abort();
+                    tileAbortControllerRef.current = null;
+                }
                 return;
             }
 
@@ -391,7 +438,7 @@ const MapComponent: React.FC<MapProps> = ({
         // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
         // If it already exists, it will be overwritten which is fine for our use case
         try {
-            maplibregl.addProtocol('duckdb', async params => {
+            maplibregl.addProtocol('duckdb', async (params, abortController) => {
                 // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
                 const url = params.url.replace(/\.pbf$/, '.mvt'); // Convert extension for parsing
                 const parseResult = parseDuckDBTileUrl(url);
@@ -402,6 +449,15 @@ const MapComponent: React.FC<MapProps> = ({
                 const { tableSpec, tableName, zxy } = parseResult;
 
                 const cacheKey = `${tableSpec}/${zxy.z}/${zxy.x}/${zxy.y}`;
+
+                // Capture the current abort controller at the start of this request
+                // This ensures we check the correct controller even if tileAbortControllerRef.current changes
+                const currentAbortController = tileAbortControllerRef.current;
+
+                // Check if request should be aborted
+                if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                    return { data: new Uint8Array() };
+                }
 
                 // Check cache
                 if (tileCache.current.has(cacheKey)) {
@@ -424,6 +480,11 @@ const MapComponent: React.FC<MapProps> = ({
 
                     // Return empty tile if no geometry column is specified
                     if (!geometryColumnName) {
+                        return { data: new Uint8Array() };
+                    }
+
+                    // Check abort signal again before expensive operations
+                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
                         return { data: new Uint8Array() };
                     }
 
@@ -480,14 +541,66 @@ const MapComponent: React.FC<MapProps> = ({
                         columnTypes: columnTypeMap,
                     });
 
-                    let result;
+                    // Final abort check before executing the query
+                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                        return { data: new Uint8Array() };
+                    }
+
+                    let result: Awaited<ReturnType<AsyncDuckDBConnection['query']>>;
+
                     try {
-                        // No need to prepare since we're not using parameters anymore
-                        result = await connectionRef.current.query(query);
+                        // Save connection reference for use in abort handler
+                        const connection = connectionRef.current;
+
+                        // Execute query and set up cancellation
+                        const queryPromise = connection.query(query);
+
+                        // Set up abort listener to cancel the query if abort is triggered
+                        const abortHandler = async () => {
+                            try {
+                                // Try to cancel the running query
+                                await connection.cancelSent();
+                            } catch {
+                                // Ignore cancellation errors - query may have already completed
+                            }
+                        };
+
+                        // Add abort listeners
+                        if (currentAbortController?.signal) {
+                            currentAbortController.signal.addEventListener('abort', abortHandler, {
+                                once: true,
+                            });
+                        }
+                        if (abortController?.signal) {
+                            abortController.signal.addEventListener('abort', abortHandler, { once: true });
+                        }
+
+                        // Wait for query to complete
+                        result = await queryPromise;
+
+                        // Check if aborted after query completes
+                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                            return { data: new Uint8Array() };
+                        }
                     } catch (error) {
+                        // Silently ignore errors if we've been aborted
+                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
+                            return { data: new Uint8Array() };
+                        }
                         console.error('Vector tile query error:', error);
                         console.error('Query:', query);
                         console.error('Tile coordinates:', { z: zxy.z, x: zxy.x, y: zxy.y });
+
+                        // Report error to state for UI display
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        mvtErrorRef.current = `MVTレンダリングエラー (タイル ${zxy.z}/${zxy.x}/${zxy.y}): ${errorMessage}`;
+                        // Trigger state update on next tick
+                        setTimeout(() => {
+                            if (mvtErrorRef.current) {
+                                setMvtError(mvtErrorRef.current);
+                            }
+                        }, 0);
+
                         return { data: new Uint8Array() };
                     }
 
@@ -794,6 +907,11 @@ const MapComponent: React.FC<MapProps> = ({
 
                 // Cleanup function
                 return () => {
+                    // Abort any in-flight tile requests
+                    if (tileAbortControllerRef.current) {
+                        tileAbortControllerRef.current.abort();
+                        tileAbortControllerRef.current = null;
+                    }
                     if (mapInstance) {
                         mapInstance.remove();
                     }
@@ -866,6 +984,50 @@ const MapComponent: React.FC<MapProps> = ({
                     }}
                 >
                     Error: {mapError}
+                </div>
+            )}
+            {mvtError && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: 'rgba(255, 165, 0, 0.9)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        maxWidth: '400px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                    }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <strong style={{ fontSize: '15px' }}>地図レンダリングエラー</strong>
+                        <button
+                            onClick={() => {
+                                setMvtError(null);
+                                mvtErrorRef.current = null;
+                            }}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '20px',
+                                lineHeight: '1',
+                                padding: '0',
+                                marginLeft: '8px',
+                            }}
+                            title="Close"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div style={{ fontSize: '13px', opacity: 0.95 }}>{mvtError}</div>
                 </div>
             )}
         </div>

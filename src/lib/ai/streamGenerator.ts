@@ -10,6 +10,7 @@ import { createMapStyleGetTool } from './tools/mapStyleGetTool';
 import { createGeocodingTools } from './tools/geocodingTool';
 import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
+import { createRegressionTool } from './tools/regressionTool';
 
 export interface StreamGeneratorOptions {
     messages: CoreMessage[];
@@ -61,6 +62,7 @@ export async function* createAIStreamGenerator({
             tools: {
                 ...(dbContext && {
                     duckdb_query: createDuckDBTool(dbContext, schema, apiKey, onChartDelete, onMapStyleDelete),
+                    perform_regression_analysis: createRegressionTool(dbContext, schema),
                     ...createGeocodingTools(dbContext),
                 }),
                 ...(onChartUpdate && createChartUpdateTool(onChartUpdate)

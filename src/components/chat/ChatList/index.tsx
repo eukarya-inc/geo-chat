@@ -1,4 +1,19 @@
 import { PlusIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
+import type { StructuredMessage } from '../../../types/message';
+import type { MapSpec } from '../../../store/remoteAtoms';
+
+export type ChatType = 'graph';
+
+export interface Chat {
+    id: string;
+    title: string;
+    createdAt: Date;
+    messages: StructuredMessage[];
+    schemaName?: string;
+    selectedTable?: string | null;
+    mapSpecs?: Record<string, MapSpec>;
+    isTitleDefault?: boolean;
+}
 
 interface ChatListProps {
     onCreateChat: () => void | Promise<void>;
