@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
     chatsAtom,
     localStateAtom,
@@ -10,7 +10,6 @@ import {
     selectChatAtom,
     updateMessagesAtom,
     updateChatStateAtom,
-    remoteStateAtom,
     currentChatStateAtom,
     type Chat,
     type ChatState,
@@ -20,7 +19,7 @@ import type { DBContext } from '../../../lib/duckdb/dbContext';
 
 export function useChatManagement(dbContext: DBContext | null) {
     const chatsRecord = useAtomValue(chatsAtom); // Now a Record<string, Chat>
-    const [localState, setLocalState] = useAtom(localStateAtom);
+    const localState = useAtomValue(localStateAtom);
     const currentChat = useAtomValue(currentChatAtom);
     const currentChatState = useAtomValue(currentChatStateAtom);
     const createChat = useSetAtom(createChatAtom);
@@ -29,7 +28,6 @@ export function useChatManagement(dbContext: DBContext | null) {
     const selectChat = useSetAtom(selectChatAtom);
     const updateMessages = useSetAtom(updateMessagesAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
-    const setRemoteState = useSetAtom(remoteStateAtom);
     const hasInitialized = useRef(false);
 
     const selectedChatId = localState.selectedChatId;
@@ -192,36 +190,7 @@ export function useChatManagement(dbContext: DBContext | null) {
 
     return {
         chats: chatsWithMessages,
-        setChats: (newChats: Chat[]) => {
-            // For compatibility - update remote state directly
-            const newChatsRecord: Record<string, Chat> = {};
-
-            newChats.forEach(chat => {
-                newChatsRecord[chat.id] = {
-                    id: chat.id,
-                    title: chat.title,
-                    createdAt: chat.createdAt,
-                    selectedTable: chat.selectedTable || null,
-                    isTitleDefault: chat.isTitleDefault,
-                    messages: chat.messages,
-                    tables: {}, // Initialize empty tables record
-                    chartSpecs: undefined,
-                    mapSpecs: chat.mapSpecs,
-                };
-            });
-
-            setRemoteState(prev => ({
-                ...prev,
-                chats: newChatsRecord,
-            }));
-        },
         selectedChatId,
-        setSelectedChatId: (chatId: string | null) => {
-            setLocalState(prev => ({
-                ...prev,
-                selectedChatId: chatId,
-            }));
-        },
         currentChat: currentChatWithState,
         createNewChat,
         deleteChat: deleteChatHandler,
