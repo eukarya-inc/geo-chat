@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { Chat } from '../../../components/chat/ChatList';
-import type { ChartSpec } from '../../../types/chart';
+import type { ChartSpecs } from '../../../store/remoteAtoms';
 import { cleanupOrphanedChartSpecs } from './chartSpecCleanup';
 
 export function useSchemaManagement(
     dbContext: DBContext | null,
     schemaName: string | null,
     chats: Chat[],
-    onChartSpecCleanup?: (cleanedChartSpecs: Record<string, ChartSpec>) => void
+    onChartSpecCleanup?: (cleanedChartSpecs: ChartSpecs) => void
 ) {
     const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
 
@@ -74,15 +74,12 @@ export function useSchemaManagement(
                         );
                         // Type guard: check if targetChat has chartSpecs property
                         if (targetChat && 'chartSpecs' in targetChat && targetChat.chartSpecs) {
-                            const cleanedChartSpecs = (await cleanupOrphanedChartSpecs(
-                                targetChat.chartSpecs as Record<string, ChartSpec>,
+                            const cleanedChartSpecs = await cleanupOrphanedChartSpecs(
+                                targetChat.chartSpecs as ChartSpecs,
                                 dbContext,
                                 schemaName
-                            )) as Record<string, ChartSpec>;
-                            if (
-                                Object.keys(cleanedChartSpecs).length !==
-                                Object.keys(targetChat.chartSpecs as Record<string, ChartSpec>).length
-                            ) {
+                            );
+                            if (Object.keys(cleanedChartSpecs).length !== Object.keys(targetChat.chartSpecs).length) {
                                 onChartSpecCleanup(cleanedChartSpecs);
                             }
                         }
