@@ -214,6 +214,7 @@ function ChatPage() {
         updateDashboardLayout,
         hideVisualizationFromDashboard,
         showVisualizationOnDashboard,
+        removeVisualizationFromDashboard,
         renameDashboard,
     } = useDashboardManagement();
 
@@ -467,6 +468,14 @@ function ChatPage() {
                                             return;
                                         }
                                         showVisualizationOnDashboard(selectedDashboardId, vizId);
+                                    }}
+                                    onDeleteVisualization={vizId => {
+                                        if (!selectedDashboardId) {
+                                            console.error('No dashboard selected for deletion');
+                                            return;
+                                        }
+                                        // Permanently remove visualization from dashboard
+                                        removeVisualizationFromDashboard(selectedDashboardId, vizId);
                                     }}
                                     onUpdateDashboard={updateDashboard}
                                 />
