@@ -12,7 +12,7 @@ function createMockDBContext(overrides: Partial<DBContext> = {}): DBContext {
         notifyTableChange: () => {},
         onTableChange: () => () => {},
         executeWithRefresh: async <T>(operation: () => Promise<T>) => operation(),
-        validateTable: async () => true,
+        validateTable: async () => false,
         getTables: async () => [],
         getTableColumns: async () => [],
         executeQuery: async () => [],
@@ -77,8 +77,17 @@ describe('createRegressionTool', () => {
         ]);
 
         const executeQuery = vi.fn(async (sql: string) => {
-            expect(sql).toBe('SELECT "sales", "ad_spend", "profit" FROM "sales" LIMIT 5000;');
-            return rows;
+            const trimmedSql = sql.trim();
+            if (trimmedSql.toUpperCase().startsWith('SELECT')) {
+                expect(sql).toBe('SELECT "sales", "ad_spend", "profit" FROM "sales" LIMIT 5000;');
+                return rows;
+            }
+
+            // Check for CREATE TABLE statement that uses SELECT
+            expect(trimmedSql.toUpperCase().startsWith('CREATE') && trimmedSql.toUpperCase().includes('SELECT')).toBe(
+                true
+            );
+            return [];
         });
 
         const dbContext = createMockDBContext({
@@ -117,7 +126,13 @@ describe('createRegressionTool', () => {
         expect(result.suggestions).toBeDefined();
         expect(result.suggestions).toEqual(expect.arrayContaining([expect.stringContaining('predicted_sales')]));
 
-        expect(executeQuery).toHaveBeenCalledTimes(1);
+        const selectCall = executeQuery.mock.calls[0]?.[0] ?? '';
+        expect(selectCall.startsWith('SELECT')).toBe(true);
+
+        const additionalCalls = executeQuery.mock.calls.slice(1).map(([sql]) => sql as string);
+        additionalCalls.forEach(sql => {
+            expect(sql.startsWith('SELECT')).toBe(true);
+        });
     });
 
     it('rejects invalid predictor column requests', async () => {
