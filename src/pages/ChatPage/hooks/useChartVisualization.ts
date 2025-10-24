@@ -65,7 +65,6 @@ export function useChartVisualization(
             // Update remote state
             updateChatState({
                 chartSpecs: {
-                    ...(currentChatState?.chartSpecs || {}),
                     [tableName]: newChartSpec,
                 },
             });
@@ -80,16 +79,15 @@ export function useChartVisualization(
                 throw new Error('Database context or schema not available');
             }
 
-            // Remove from chartSpecs
-            const updatedChartSpecs = { ...(currentChatState?.chartSpecs || {}) };
-            delete updatedChartSpecs[tableName];
-
-            // Update remote state
+            // Update remote state with null to indicate deletion
+            // The atom merger will handle removing the entry
             updateChatState({
-                chartSpecs: updatedChartSpecs,
+                chartSpecs: {
+                    [tableName]: null,
+                },
             });
         },
-        [dbContext, schemaName, currentChatState, updateChatState]
+        [dbContext, schemaName, updateChatState]
     );
 
     // Deprecated function kept for backward compatibility

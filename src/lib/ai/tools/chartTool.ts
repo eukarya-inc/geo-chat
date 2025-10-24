@@ -24,7 +24,8 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
                     };
                 }
 
-                const chartSpec = chatState.chartSpecs?.[table_name];
+                const chartList = chatState.chartSpecs?.[table_name];
+                const chartSpec = Array.isArray(chartList) ? chartList[chartList.length - 1] : undefined;
                 if (!chartSpec) {
                     return {
                         success: true,
@@ -123,6 +124,8 @@ const layeredSpecSchema = z
     })
     .describe('Layered Vega-Lite spec (excluding data, width, height)');
 
+const chartSpecSchema = z.union([baseSpecSchema, layeredSpecSchema]);
+
 // Create the chart update tool for AI
 export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>) {
     if (!onChartUpdate) return null;
@@ -181,7 +184,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - Compute exactly two regression points per predictor (min and max) with the regression equation using the intercept and β coefficients. For multi-predictor models, hold the other predictors at their mean values from regression.columnSummaries.
         - Place those two points inside the Vega-Lite spec under the datasets property (e.g., "datasets": {"reg_line_feature": [...]}) and reference that dataset name in the regression line layer.
         - Use layered marks:
-          1. Scatter layer: mark {"type": "point"} using the raw observations (data.sql or data.name as appropriate).
+          1. Scatter layer: mark {"type": "point"} using the raw observations. Prefer data.sql (or data.values) directly referencing the scatter table; if you reference data.name, make sure that dataset is also declared in datasets, otherwise validation will fail.
           2. Regression layer: mark {"type": "line"} with data {"name": "<dataset_name>"} and order on the predictor field so the line renders correctly.
         - Tooltips should allow comparing observed vs predicted values (include x/y on both layers). Add an area layer only if you explicitly compute confidence bounds.
         - When providing a full JSON spec for copy/paste, include $schema, description, datasets with the regression points, primary data, layer definitions, and optional config just like the example below.
@@ -275,12 +278,45 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         parameters: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z
-                .union([baseSpecSchema, layeredSpecSchema])
-                .describe('Single-view or layered Vega-Lite specification (excluding data, width, height)'),
+                .union([chartSpecSchema, z.string().describe('JSON string representing a Vega-Lite spec')])
+                .describe(
+                    'Single-view or layered Vega-Lite specification (object or JSON string, excluding data, width, height)'
+                ),
         }),
         execute: async ({ table_name, vega_spec }) => {
             try {
-                const processedSpec = processAIChartSpec(table_name, vega_spec as Partial<VegaChartSpec>);
+                let specInput: Partial<VegaChartSpec>;
+
+                if (typeof vega_spec === 'string') {
+                    let parsedSpec: unknown;
+                    try {
+                        parsedSpec = JSON.parse(vega_spec);
+                    } catch (parseError) {
+                        return {
+                            success: false,
+                            message: `Failed to parse Vega-Lite JSON specification: ${
+                                parseError instanceof Error ? parseError.message : 'Unknown error'
+                            }`,
+                        };
+                    }
+
+                    const parsedResult = chartSpecSchema.safeParse(parsedSpec);
+                    if (!parsedResult.success) {
+                        const issue = parsedResult.error.issues[0];
+                        const issueMessage = issue?.message ?? 'Unknown validation error';
+                        const issuePath = issue?.path?.length ? ` (${issue.path.join('.')})` : '';
+                        return {
+                            success: false,
+                            message: `Invalid Vega-Lite specification${issuePath}: ${issueMessage}`,
+                        };
+                    }
+
+                    specInput = parsedResult.data as Partial<VegaChartSpec>;
+                } else {
+                    specInput = vega_spec as Partial<VegaChartSpec>;
+                }
+
+                const processedSpec = processAIChartSpec(table_name, specInput);
                 const specRecord = processedSpec as unknown as Record<string, unknown>;
                 const hasTopLevelView = Boolean(specRecord.mark) && Boolean(specRecord.encoding);
                 const layers = Array.isArray(specRecord.layer) ? (specRecord.layer as unknown[]) : [];

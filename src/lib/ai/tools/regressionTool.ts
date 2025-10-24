@@ -17,14 +17,15 @@ Returns regression coefficients, inference metrics (p-values, t-statistics, F st
 variance inflation factors (VIF), and regression line metadata for each predictor.
 
 IMPORTANT: After using this tool successfully, ALWAYS create regression visualizations **without** augmenting DuckDB tables with predicted columns:
-1. Keep the scatter layer bound to the original data table (observed values only); never join or persist predicted values into that table.
-2. Compute the regression endpoints by taking each predictor's min and max from regression.columnSummaries (and holding other predictors at their means) and evaluating the equation predicted = intercept + Σ βᵢ·xᵢ at those values.
+Before creating any auxiliary tables, pick a short, descriptive English table name (e.g., "sales_vs_driver_ratio_scatter"). Use that name for the scatter table while keeping the original column names intact so analysts can still recognize them.
+1. For each predictor, create a dedicated scatter table with that English name, selecting only the original target column and the predictor column (filtering NULLs if needed) while preserving the original column names.
+2. Immediately compute the regression endpoints by taking each predictor's min and max from regression.columnSummaries (and holding other predictors at their means) and evaluating the equation predicted = intercept + Σ βᵢ·xᵢ at those values. Use those two points to build the chart for the scatter table you just created.
 3. Store exactly those two points per predictor inside the Vega-Lite spec's datasets section and reference the dataset name from the regression line layer.
-4. In create_chart, use layered marks:
-   - Scatter layer: data.sql (or equivalent) pointing at the source table with mark {"type": "point"}
-   - Regression layer: data.name referencing the datasets entry with mark {"type": "line"} and an order on the predictor field
-   Include tooltips so observed and predicted values can be compared directly.
-
+4. Call create_chart with layered marks for each scatter table, in this order:
+   - Scatter layer: data.sql (or equivalent) pointing at the scatter table with mark {"type": "point"} and tooltips for the actual values only. **Do not use data.name here unless you also declare that dataset inside datasets; the validation will fail otherwise.**
+   - Regression layer: data.name referencing the datasets entry with mark {"type": "line"} and an order on the predictor field so the line renders correctly. Add a confidence interval layer only if you explicitly derive bounds.
+   Ensure you walk through predictors sequentially: create the table → compute endpoints → update/create the chart, then repeat for the next predictor.
+ 
 Example workflow after regression:
 1. perform_regression_analysis returns the regression coefficients (intercept + betas) and columnSummaries with min, max, and mean values for each numeric column.
 2. For each predictor, evaluate the regression equation at (predictor_min, other_means) and (predictor_max, other_means), put those two points into the Vega-Lite datasets (e.g., "reg_line_<alias>"), then call create_chart with a layered spec that references the original table for points and the datasets entry for the regression line.`,
@@ -61,6 +62,7 @@ Example workflow after regression:
 
                 const sanitizedTable = quoteIdentifier(tableName);
                 const qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+                const usedDatasetNames = new Set<string>();
 
                 const columns = await dbContext.getTableColumns(tableName, schema);
                 if (!columns || columns.length === 0) {
@@ -265,11 +267,10 @@ Example workflow after regression:
                     names.length === betas.length;
 
                 if (coefficientsAreFinite) {
-                    const targetAlias = toAsciiIdentifier(targetColumn, 'target');
-                    const predictedAlias = toAsciiIdentifier(`predicted_${targetColumn}`, 'predicted');
+                    const predictedField = `predicted_${targetColumn}`;
 
                     suggestions.push(
-                        `次のステップ: 散布図は元テーブルの実測値（例: ${targetColumn}→${targetAlias}）をpointマークで描画し、回帰直線はdatasetsに登録した2点のみ（xに説明変数エイリアス、yに${predictedAlias}）をlineマークで表示してください。テーブルへ予測列を追加する必要はありません。`
+                        `次のステップ: 散布図は元テーブルの実測値（${targetColumn}列）をpointマークで描画し、各説明変数ごとに計算した2点のみ（xに説明変数、yに${predictedField}）をdatasetsへ登録してlineマークで表示してください。テーブルへ予測列を追加する必要はありません。`
                     );
 
                     const computePredicted = (featureIndex: number, predictorValue: number): number => {
@@ -297,22 +298,20 @@ Example workflow after regression:
                         const maxPredicted = computePredicted(predictorIndex, maxX);
                         if (!Number.isFinite(minPredicted) || !Number.isFinite(maxPredicted)) continue;
 
-                        const predictorAlias = toAsciiIdentifier(predictor, 'predictor');
-                        const datasetName = `reg_line_${predictorAlias}`;
+                        const datasetName = ensureUniqueName(`reg_line_${predictorIndex + 1}`, usedDatasetNames);
 
                         const otherMeans = names
                             .filter((_, idx) => idx !== predictorIndex)
                             .map(name => {
-                                const alias = toAsciiIdentifier(name, 'feature');
                                 const mean = columnSummaries[name]?.mean ?? 0;
-                                return `${alias}=${formatNumeric(mean)}`;
+                                return `${name}=${formatNumeric(mean)}`;
                             })
                             .join(', ');
 
-                        const datasetSnippet = `  "${datasetName}": [\n    { "${predictorAlias}": ${formatNumeric(minX)}, "${predictedAlias}": ${formatNumeric(minPredicted)} },\n    { "${predictorAlias}": ${formatNumeric(maxX)}, "${predictedAlias}": ${formatNumeric(maxPredicted)} }\n  ]`;
+                        const datasetSnippet = `  "${datasetName}": [\n    { "${predictor}": ${formatNumeric(minX)}, "${predictedField}": ${formatNumeric(minPredicted)} },\n    { "${predictor}": ${formatNumeric(maxX)}, "${predictedField}": ${formatNumeric(maxPredicted)} }\n  ]`;
 
                         suggestions.push(
-                            `説明変数「${predictor}」の回帰線データセット例:\n{\n${datasetSnippet}\n}\nlineレイヤーでは data.name "${datasetName}"、encoding.x "${predictorAlias}"、encoding.y "${predictedAlias}" を指定してください。${
+                            `説明変数「${predictor}」の回帰線データセット例:\n{\n${datasetSnippet}\n}\nlineレイヤーでは data.name "${datasetName}"、encoding.x "${predictor}"、encoding.y "${predictedField}" を指定してください。${
                                 otherMeans
                                     ? ` 他の説明変数は平均値（${otherMeans}）を固定して予測値を計算しています。`
                                     : ''
@@ -447,6 +446,19 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
     }
 
     return summaries;
+}
+
+function ensureUniqueName(base: string, seen: Set<string>): string {
+    let candidate = base;
+    let suffix = 2;
+
+    while (seen.has(candidate)) {
+        candidate = `${base}_${suffix}`;
+        suffix += 1;
+    }
+
+    seen.add(candidate);
+    return candidate;
 }
 
 function formatNumeric(value: number): string {
@@ -636,38 +648,4 @@ function toNumber(value: unknown): number | null {
         return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
-}
-
-function toAsciiIdentifier(name: string, fallbackPrefix: string): string {
-    const normalized = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-    let candidate = normalized
-        .replace(/[^A-Za-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .toLowerCase();
-
-    if (!candidate) {
-        const hex = Array.from(name)
-            .map(char => {
-                const codePoint = char.codePointAt(0);
-                return codePoint !== undefined ? codePoint.toString(16) : '';
-            })
-            .join('');
-        candidate = `${fallbackPrefix}_${hex}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    }
-
-    candidate = candidate.replace(/__+/g, '_');
-
-    if (!/^[a-z]/.test(candidate)) {
-        candidate = `${fallbackPrefix}_${candidate}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    }
-
-    if (candidate.length > 64) {
-        candidate = candidate.slice(0, 64).replace(/_+$/g, '');
-    }
-
-    if (!candidate) {
-        candidate = fallbackPrefix.toLowerCase();
-    }
-
-    return candidate;
 }
