@@ -5,6 +5,17 @@ import type { ChartSpec } from '../types/chart';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { Layout } from 'react-grid-layout';
 
+// ===== Type aliases for clarity =====
+// Key for chart/map specs: table name (e.g., "scatter_driver_ratio", "regression_analysis")
+export type TableName = string;
+
+// Chart specifications per table
+// Future: May be extended to ChartSpec[] for history support
+export type ChartSpecs = Record<TableName, ChartSpec>;
+
+// Map specifications per table
+export type MapSpecs = Record<TableName, MapSpec>;
+
 // ===== Remote state type definitions (server sync target) =====
 export interface Table {
     tableName: string;
@@ -59,13 +70,19 @@ export interface Chat {
     // State fields (previously in ChatState)
     messages: StructuredMessage[];
     tables: Record<string, Table>; // Changed from tableHistory array to tables Record
-    chartSpecs?: Record<string, ChartSpec>;
-    mapSpecs?: Record<string, MapSpec>;
+    chartSpecs?: ChartSpecs; // Chart specs per table (e.g., scatter plots for each explanatory variable)
+    mapSpecs?: MapSpecs; // Map styles per table
     chartUserDeleted?: string[]; // List of table keys (schema-table) where user deleted charts
 }
 
 // ChatState is now just an alias for backward compatibility during migration
 export type ChatState = Omit<Chat, 'id' | 'title' | 'createdAt' | 'selectedTable'>;
+
+// ChatStateUpdate allows null values for deletion (used in updateChatStateAtom)
+export type ChatStateUpdate = Partial<Omit<ChatState, 'chartSpecs' | 'mapSpecs'>> & {
+    chartSpecs?: Record<TableName, ChartSpec | null>; // ChartSpec | null for deletion support
+    mapSpecs?: MapSpecs;
+};
 
 export interface RemoteState {
     chats: Record<string, Chat>; // Changed from Chat[] to Record<string, Chat>

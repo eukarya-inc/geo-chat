@@ -4,8 +4,9 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import type { VegaChartSpec, ChartSpec } from '../../types/chart';
+import type { VegaChartSpec } from '../../types/chart';
 import type { RegressionAnalysisResponse, ColumnSummary } from '../../types/regression';
+import type { ChartSpecs } from '../../store/remoteAtoms';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
@@ -22,7 +23,7 @@ interface StructuredMessageRendererProps {
     isStreaming?: boolean;
     onPromptClick?: (promptText: string) => void;
     isLoadingMessage?: boolean;
-    chartSpecs?: Record<string, ChartSpec>;
+    chartSpecs?: ChartSpecs;
     tableGeometries?: Record<string, boolean>;
 }
 
@@ -85,7 +86,7 @@ const renderContentBlock = (
     onTableSelect?: (tableName: string) => void,
     onPromptClick?: (promptText: string) => void,
     isLoadingMessage?: boolean,
-    chartSpecs?: Record<string, ChartSpec>,
+    chartSpecs?: ChartSpecs,
     tableGeometries?: Record<string, boolean>
 ): React.ReactNode => {
     switch (block.type) {

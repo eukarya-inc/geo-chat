@@ -49,7 +49,7 @@ export function useChartVisualization(
             const existingSpec = currentChatState?.chartSpecs?.[tableName];
 
             // Create new chart spec
-            const newChartSpec = {
+            const newChartSpec: ChartSpec = {
                 id: `ai-chart-${tableName}-${Date.now()}`,
                 spec: spec,
                 timestamp: new Date(),
