@@ -418,7 +418,7 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         ...restAiSpec,
         // Add data with SQL query
         data: {
-            sql: `SELECT * FROM ${tableName} LIMIT 1000`,
+            sql: `SELECT * FROM ${tableName} LIMIT 100`,
             values: [],
         },
         // Set responsive container sizing
