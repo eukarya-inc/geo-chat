@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
+- `npm run check:light` - Run format, lint, and typecheck (fast feedback for development)
 - `npm test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
@@ -43,19 +44,20 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Type Check After Code Changes
+## IMPORTANT: Always Run Light Check After Code Changes
 
 After making any code changes, you MUST run:
 
 ```bash
-npm run typecheck
+npm run check:light
 ```
 
 This ensures:
 
-1. TypeScript type checking succeeds
-2. No syntax or type errors are introduced
-3. Fast feedback during development
+1. Code is automatically formatted with Prettier
+2. ESLint passes without errors or warnings
+3. TypeScript type checking succeeds
+4. Fast feedback during development without heavy build/test processes
 
 **Before committing**, you MUST run the full check:
 
@@ -73,8 +75,9 @@ This runs:
 
 **Important notes:**
 
-- Use `typecheck` for fast feedback during development
-- Use `check` before commits to ensure everything works
+- Use `check:light` for fast feedback during development (format + lint + typecheck)
+- Use `check` before commits to ensure everything works (includes build + test)
+- The `check:light` script runs: format → lint → typecheck
 - The `check` script runs: format → lint → typecheck → build → unit test
 - Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
