@@ -25,7 +25,7 @@ jobs:
               run: npm ci --legacy-peer-deps
 
             - name: Install Playwright browsers
-              run: npx playwright install webkit --with-deps
+              run: npx playwright install webkit
 
             - name: Run formatter
               run: npm run format:check
