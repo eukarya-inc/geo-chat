@@ -43,27 +43,39 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Format, Lint, Build and Test After Changes
+## IMPORTANT: Always Run Type Check After Code Changes
 
 After making any code changes, you MUST run:
+
+```bash
+npm run typecheck
+```
+
+This ensures:
+
+1. TypeScript type checking succeeds
+2. No syntax or type errors are introduced
+3. Fast feedback during development
+
+**Before committing**, you MUST run the full check:
 
 ```bash
 npm run check
 ```
 
-This ensures:
+This runs:
 
-1. Code is automatically formatted with Prettier
-2. ESLint passes without errors or warnings
-3. TypeScript compilation succeeds
-4. The build process completes without errors
-5. All tests pass
-6. No regressions are introduced
+1. Code formatting with Prettier
+2. ESLint validation
+3. TypeScript type checking
+4. Full build process
+5. Unit tests
 
 **Important notes:**
 
-- The `check` script runs: format (error-only) → lint (quiet) → build (silent) → unit test (silent)
-- Only unit tests are run for fast feedback; full tests (including browser tests) run in CI
+- Use `typecheck` for fast feedback during development
+- Use `check` before commits to ensure everything works
+- The `check` script runs: format → lint → typecheck → build → unit test
 - Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
 
@@ -201,9 +213,9 @@ Use regular unit tests (`.test.ts`) when testing:
 - Avoid dataset-specific code - keep implementations generic and reusable.
 - When handling JSON data, ensure the approach works for any JSON structure, not just specific schemas.
 
-## ⚠️ CRITICAL: Always Run Check Before Completion
+## ⚠️ CRITICAL: Always Run Check Before Task Completion
 
-**IMPORTANT**: After making any code changes and before considering your task complete, you MUST run:
+**IMPORTANT**: Before considering your task complete, you MUST run:
 
 ```bash
 npm run check
@@ -214,7 +226,8 @@ This ensures:
 - Code is automatically formatted with Prettier
 - Code follows the project's style guidelines
 - No syntax errors or warnings
-- TypeScript compilation succeeds
+- TypeScript type checking succeeds
+- Build process completes successfully
 - All tests pass
 - No regressions are introduced
 
