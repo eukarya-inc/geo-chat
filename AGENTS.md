@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
-- `npm run check:light` - Run format, lint, and typecheck (fast feedback for development)
+- `npm run check:light` - Run format, lint, typecheck, and unit tests (fast feedback for development)
 - `npm test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
@@ -57,7 +57,8 @@ This ensures:
 1. Code is automatically formatted with Prettier
 2. ESLint passes without errors or warnings
 3. TypeScript type checking succeeds
-4. Fast feedback during development without heavy build/test processes
+4. Unit tests pass
+5. Fast feedback during development without heavy build processes
 
 **Before committing**, you MUST run the full check:
 
@@ -75,9 +76,9 @@ This runs:
 
 **Important notes:**
 
-- Use `check:light` for fast feedback during development (format + lint + typecheck)
+- Use `check:light` for fast feedback during development (format + lint + typecheck + unit tests)
 - Use `check` before commits to ensure everything works (includes build + test)
-- The `check:light` script runs: format → lint → typecheck
+- The `check:light` script runs: format → lint → typecheck → unit test
 - The `check` script runs: format → lint → typecheck → build → unit test
 - Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
