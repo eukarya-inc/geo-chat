@@ -164,8 +164,12 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - Use layered marks with direct data.values in each layer:
           1. Scatter layer: mark {"type": "point"} with data.values containing the raw observations from your table
           2. Regression layer: mark {"type": "line"} with data.values containing exactly two points (min and max) and order on the predictor field so the line renders correctly.
+        - CRITICAL SCALE ALIGNMENT: Do NOT specify "scale" properties (like "domain", "zero", etc.) in individual layer encodings. Vega-Lite automatically unifies scale domains across all layers by default. The system will automatically remove any layer-specific scale properties to ensure proper alignment.
         - Tooltips should allow comparing observed vs predicted values (include x/y on both layers). Add an area layer only if you explicitly compute confidence bounds.
         - When providing a full JSON spec for copy/paste, include $schema, description, layer definitions with direct data values, and optional config just like the example below.
+
+        DUAL-AXIS CHARTS (for future reference):
+        - When you need different Y-axis scales (e.g., line + bar with different value ranges), explicitly add "resolve": {"scale": {"y": "independent"}}
 
         Example specifications:
         {
@@ -451,6 +455,31 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
                 encoding.tooltip = ensureFieldType(encoding.tooltip);
             }
         }
+    }
+
+    // Process layered specs to ensure consistent scales across layers
+    if ('layer' in processedSpec && Array.isArray(processedSpec.layer) && processedSpec.layer.length > 0) {
+        // Remove scale properties from individual layer encodings to prevent conflicts
+        // Vega-Lite by default shares scales across layers (default behavior),
+        // but if individual layers specify scale properties (like domain, zero, etc.),
+        // those can override the unified scale and cause misalignment between layers.
+        // This is particularly important for regression charts where scatter plots
+        // and regression lines must share the same scale ranges.
+        processedSpec.layer = processedSpec.layer.map(layer => {
+            if (typeof layer === 'object' && layer !== null && 'encoding' in layer) {
+                const layerEncoding = layer.encoding as Record<string, unknown>;
+                ['x', 'y', 'color', 'size', 'shape', 'opacity'].forEach(channel => {
+                    if (layerEncoding[channel] && typeof layerEncoding[channel] === 'object') {
+                        const channelDef = layerEncoding[channel] as Record<string, unknown>;
+                        // Remove scale property from layer encoding to allow default scale sharing
+                        if ('scale' in channelDef) {
+                            delete channelDef.scale;
+                        }
+                    }
+                });
+            }
+            return layer;
+        });
     }
 
     return processedSpec;

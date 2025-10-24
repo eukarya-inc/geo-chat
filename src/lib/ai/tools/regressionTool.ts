@@ -20,16 +20,7 @@ IMPORTANT: After using this tool successfully, ALWAYS create regression visualiz
 Before creating any auxiliary tables, pick a short, descriptive English table name (e.g., "sales_vs_driver_ratio_scatter"). Use that name for the scatter table while keeping the original column names intact so analysts can still recognize them.
 1. For each predictor, create a dedicated scatter table with that English name, selecting only the original target column and the predictor column (filtering NULLs if needed) while preserving the original column names.
 2. Immediately compute the regression endpoints by taking each predictor's min and max from regression.columnSummaries (and holding other predictors at their means) and evaluating the equation predicted = intercept + Σ βᵢ·xᵢ at those values. Use those two points to build the regression line layer.
-3. Call create_chart with layered marks for each scatter table, in this order:
-   - Scatter layer: data.values with the scatter plot data, mark {"type": "point"} and tooltips for the actual values only.
-   - Regression layer: data.values with the two regression line endpoints, mark {"type": "line"} and an order on the predictor field so the line renders correctly. Add a confidence interval layer only if you explicitly derive bounds.
-   Ensure you walk through predictors sequentially: create the table → compute endpoints → update/create the chart, then repeat for the next predictor.
- 
-Example workflow after regression:
-1. perform_regression_analysis returns the regression coefficients (intercept + betas) and columnSummaries with min, max, and mean values for each numeric column.
-2. For each predictor, evaluate the regression equation at (predictor_min, other_means) and (predictor_max, other_means) to get two points for the regression line, then create a layered spec with:
-   - First layer: scatter plot using data.values with the original data points
-   - Second layer: regression line using data.values with just those two computed points.`,
+3. Use layered chart spec with scatter points (layer 1) and regression line (layer 2)`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z
@@ -269,7 +260,7 @@ Example workflow after regression:
                     const predictedField = `predicted_${targetColumn}`;
 
                     suggestions.push(
-                        `次のステップ: 各説明変数について、layered spec を作成してください。第1レイヤーは元テーブルの実測値をpointマークで描画（data指定なし、トップレベルのdataを継承）、第2レイヤーは回帰線用に計算した2点のデータをdata.valuesで直接指定してlineマークで描画してください（xに説明変数、yに${predictedField}）。テーブルへ予測列を追加する必要はありません。`
+                        `次のステップ: 各説明変数について散布図テーブルを作成し、create_chartツールでlayered specを使用してください。回帰線の端点は回帰式 ${predictedField} = ${formatNumeric(intercept)} + Σ(βᵢ × xᵢ) を使って計算してください。`
                     );
 
                     const computePredicted = (featureIndex: number, predictorValue: number): number => {
@@ -306,25 +297,11 @@ Example workflow after regression:
                             .join(', ');
 
                         suggestions.push(
-                            `説明変数「${predictor}」の回帰線レイヤー例:
-                            {
-                                "data": {
-                                    "values": [
-                                        { "${predictor}": ${formatNumeric(minX)}, "${predictedField}": ${formatNumeric(minPredicted)} },
-                                        { "${predictor}": ${formatNumeric(maxX)}, "${predictedField}": ${formatNumeric(maxPredicted)} }
-                                    ]
-                                },
-                                "mark": {"type": "line", "color": "red", "strokeWidth": 3},
-                                "encoding": {
-                                    "x": {"field": "${predictor}", "type": "quantitative"},
-                                    "y": {"field": "${predictedField}", "type": "quantitative"},
-                                    "order": {"field": "${predictor}"}
-                                }
-                            }${otherMeans ? `\n他の説明変数は平均値（${otherMeans}）を固定して予測値を計算しています。` : ''}`
+                            `説明変数「${predictor}」: 回帰線の端点は (${formatNumeric(minX)}, ${formatNumeric(minPredicted)}) と (${formatNumeric(maxX)}, ${formatNumeric(maxPredicted)})${otherMeans ? ` (他の変数は平均値: ${otherMeans})` : ''}`
                         );
                     }
                 } else {
-                    warnings.push('回帰係数が有限値ではないため、回帰直線用のmin/maxポイントを提案できません。');
+                    warnings.push('回帰係数が有限値ではないため、回帰直線の端点を計算できません。');
                 }
 
                 const response: RegressionAnalysisResponse = {
