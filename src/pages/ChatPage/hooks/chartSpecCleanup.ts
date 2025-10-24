@@ -1,5 +1,5 @@
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { ChatState } from '../../../store/remoteAtoms';
+import type { ChatState, ChartSpecs } from '../../../store/remoteAtoms';
 
 /**
  * Cleans up orphaned chartSpecs for tables that no longer exist in the database
@@ -9,12 +9,12 @@ import type { ChatState } from '../../../store/remoteAtoms';
  * @returns Cleaned chartSpecs object with only valid table references
  */
 export async function cleanupOrphanedChartSpecs(
-    chartSpecs: Record<string, unknown> | undefined,
+    chartSpecs: ChartSpecs | undefined,
     dbContext: DBContext | null,
     schemaName: string | null
-): Promise<Record<string, unknown>> {
+): Promise<ChartSpecs> {
     if (!chartSpecs || !dbContext || !schemaName) {
-        return chartSpecs || {};
+        return (chartSpecs || {}) as ChartSpecs;
     }
 
     try {
@@ -23,11 +23,11 @@ export async function cleanupOrphanedChartSpecs(
         const existingTableSet = new Set(existingTables);
 
         // Filter chartSpecs to only include tables that exist
-        const cleanedChartSpecs: Record<string, unknown> = {};
+        const cleanedChartSpecs: ChartSpecs = {};
         let removedCount = 0;
 
         for (const [tableName, spec] of Object.entries(chartSpecs)) {
-            if (existingTableSet.has(tableName)) {
+            if (existingTableSet.has(tableName) && spec) {
                 cleanedChartSpecs[tableName] = spec;
             } else {
                 removedCount++;
@@ -45,7 +45,7 @@ export async function cleanupOrphanedChartSpecs(
     } catch (error) {
         console.error('[ChartSpec Cleanup] Error cleaning up chartSpecs:', error);
         // Return original chartSpecs if cleanup fails
-        return chartSpecs;
+        return chartSpecs || {};
     }
 }
 
