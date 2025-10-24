@@ -1,5 +1,10 @@
 import type { RegressionResult } from '../utils/regression/ols';
 
+export interface SimpleLinearRegression {
+    slope: number;
+    intercept: number;
+}
+
 export interface ColumnSummary {
     column: string;
     count: number;
@@ -7,6 +12,7 @@ export interface ColumnSummary {
     min: number;
     max: number;
     stdDev: number;
+    simpleRegression?: SimpleLinearRegression;
 }
 
 export interface RegressionDataInfo {

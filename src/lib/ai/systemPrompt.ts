@@ -250,12 +250,38 @@ CREATE TABLE table_name_1 AS SELECT ...;
 
 ## Regression Analysis Tool
 
+### When to Use
 - When asked for regression analysis, correlation, p-value, t-value, VIF, or scatter plots, ALWAYS use the \`perform_regression_analysis\` tool
-- \`table_name\` is required. Specify \`target_column\` and \`explanatory_columns\` (1-6 columns) if provided by user, otherwise let the tool auto-select
-- \`max_rows\` controls sampling limit (default is 5000 rows)
+
+### Required and Optional Parameters
+- \`table_name\` (required): The table to analyze
+- \`target_column\` (optional): If not specified, the tool auto-selects the numeric column with highest variance
+- \`explanatory_columns\` (optional, 1-6 columns): If not specified, the tool automatically selects top 3 predictors using correlation-based feature selection
+- \`max_rows\` (optional): Sampling limit (default 5000 rows)
+
+### Auto-Selection Process (When Variables Not Specified)
+When users don't specify explanatory variables, the tool performs intelligent auto-selection:
+
+1. **Univariate Pre-Filtering (SelectKBest approach)**:
+   - All numeric columns are evaluated as candidates
+   - For each candidate x_i, compute correlation |corr(y, x_i)| with target using jStat
+   - Select top K columns with highest absolute correlation (default K=3)
+   - Missing values are handled via row-wise deletion
+
+2. **Pooled Multiple Regression (OLS)**:
+   - Creates design matrix X with selected K predictors
+   - Solves normal equation: β̂ = (X'X)^(-1)X'y using pseudoInverse for numerical stability
+   - Computes full regression statistics: coefficients, R², adjusted R², F-statistic, p-values, VIF
+
+3. **Simple Regression Lines for Visualization**:
+   - For each selected predictor x_i, computes univariate regression: y = slope × x_i + intercept
+   - These simple regression lines are used for scatter plot visualization
+   - Available in \`columnSummaries[predictor].simpleRegression\` with \`slope\` and \`intercept\`
+
+### Interpreting Results
 - Read R², adjusted R², F-statistic, p-value, VIF from tool results
-- **CRITICAL for regression analysis**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly in simple language
-- If variables were auto-selected, clearly state which variables were chosen
+- **CRITICAL**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly in simple language
+- If variables were auto-selected, clearly state which variables were chosen and why (based on correlation)
 - **IMPORTANT OBJECTIVITY REQUIREMENT**: Describe relationships found in the regression results with careful interpretation
   - Report coefficients, R², p-values, and other statistics as they appear in the data
   - Cautious interpretations allowed: Use phrases like "〜の可能性があります" when discussing implications
@@ -264,39 +290,41 @@ CREATE TABLE table_name_1 AS SELECT ...;
   - If asked about causes or mechanisms, acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
 
 ### CRITICAL: Regression Visualization Workflow After perform_regression_analysis
-**After successfully running perform_regression_analysis, create scatter + regression-line charts WITHOUT augmenting DuckDB tables with predicted columns:**
+**After successfully running perform_regression_analysis, create scatter plots with SIMPLE regression lines (univariate y vs x_i):**
 
-1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_driver_ratio_scatter"):
+1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_employees_scatter"):
    - Select only the original target column and the predictor column from the regression input table
    - Filter out NULL values if needed
    - **Preserve the original column names** so analysts can still recognize them
    - Use purpose='chart' when creating this table
 
-2. **Compute exactly two regression line points per predictor**:
-   - Take the predictor's min and max from regression.columnSummaries
-   - For multi-predictor models, hold other predictors at their mean values (from columnSummaries)
-   - Evaluate the regression equation: predicted = intercept + Σ βᵢ·xᵢ at (predictor_min, other_means) and (predictor_max, other_means)
-   - This gives you two points for the regression line
+2. **Use the simple regression line from columnSummaries**:
+   - Each predictor has a \`simpleRegression\` object in \`columnSummaries[predictor_name]\`
+   - Contains \`slope\` and \`intercept\` for the univariate regression: y = slope × x + intercept
+   - Compute two endpoints using predictor's min and max from columnSummaries:
+     - Point 1: (min_x, slope × min_x + intercept)
+     - Point 2: (max_x, slope × max_x + intercept)
 
 3. **Call create_chart with layered marks**, in this order:
    - **Scatter layer**:
      - No "data" field (inherits from top-level data)
      - mark: {"type": "point"}
      - Include tooltips for the actual values
-   - **Regression layer**:
-     - data: {"values": [...]} with the two regression line endpoints computed above
+   - **Simple Regression Line layer**:
+     - data: {"values": [...]} with the two endpoints from simple regression
      - mark: {"type": "line", "color": "red", "strokeWidth": 3}
      - Include order: {"field": "predictor_field"} so the line renders correctly
-     - Include tooltips for the predicted values
+     - Include tooltips showing the simple regression equation
 
 4. **Process predictors sequentially**:
-   - For each predictor: create the scatter table → compute the two endpoints → create/update the chart
+   - For each predictor: create the scatter table → get simple regression from columnSummaries → compute endpoints → create/update the chart
    - Repeat for the next predictor
 
-5. **DO NOT**:
-   - Add predicted columns to DuckDB tables
-   - Use SELECT queries with regression formulas to generate full datasets
-   - Rely solely on regression.plotSeries.regressionLine (it only contains sample points)
+5. **Important Note**:
+   - Simple regression lines show the univariate relationship (y vs x_i alone)
+   - This is different from partial effects in multiple regression
+   - The tool provides both: multiple regression coefficients AND simple regression lines for visualization
+   - Do NOT add predicted columns to DuckDB tables
 
 Example outputs for regression analysis:
 [... tool executions happen silently ...]

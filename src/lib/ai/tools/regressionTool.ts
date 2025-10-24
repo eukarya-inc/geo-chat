@@ -1,14 +1,16 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { jStat } from 'jstat';
 import type { DBContext } from '../../duckdb/dbContext';
 import { olsRegression, type RegressionResult } from '../../../utils/regression/ols';
-import type { ColumnSummary, RegressionAnalysisResponse } from '../../../types/regression';
+import type { ColumnSummary, RegressionAnalysisResponse, SimpleLinearRegression } from '../../../types/regression';
 
 const DEFAULT_MAX_ROWS = 5000;
 const MAX_ALLOWED_ROWS = 20000;
 const MIN_REQUIRED_ROWS = 10;
 const MAX_AUTO_COLUMNS = 20;
 const MAX_PREDICTORS = 6;
+const DEFAULT_TOP_K = 3;
 
 export function createRegressionTool(dbContext: DBContext, schema: string | null) {
     return tool({
@@ -145,7 +147,8 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                 let autoPredictors = false;
 
                 if (predictorColumns.length === 0) {
-                    predictorColumns = pickPredictorColumns(numericData, columnsToFetch, targetColumn, MAX_PREDICTORS);
+                    // Use DEFAULT_TOP_K (3) for auto-selection as per requirements
+                    predictorColumns = pickPredictorColumns(numericData, columnsToFetch, targetColumn, DEFAULT_TOP_K);
                     autoPredictors = true;
                 }
 
@@ -229,7 +232,7 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     return errorResponse(`回帰分析の計算中にエラーが発生しました: ${message}`);
                 }
 
-                const columnSummaries = buildColumnSummaries(columnTrackers);
+                const columnSummaries = buildColumnSummaries(columnTrackers, targetColumn);
                 const warnings: string[] = [];
 
                 if (truncated) {
@@ -248,60 +251,29 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     );
                 }
 
-                // Generate suggestions for creating regression line charts
+                // Generate suggestions for creating scatter plots with simple regression lines
                 const suggestions: string[] = [];
-                const { intercept, betas, names } = regression.coefficients;
-                const coefficientsAreFinite =
-                    Number.isFinite(intercept) &&
-                    betas.every(beta => Number.isFinite(beta)) &&
-                    names.length === betas.length;
 
-                if (coefficientsAreFinite) {
-                    const predictedField = `predicted_${targetColumn}`;
+                suggestions.push(
+                    '次のステップ: 各説明変数について散布図を作成し、単回帰直線を重ねてください。columnSummariesに各説明変数の単回帰直線パラメータ(slope, intercept)が含まれています。'
+                );
+
+                for (const predictor of predictorColumns) {
+                    const predictorSummary = columnSummaries[predictor];
+                    if (!predictorSummary || !predictorSummary.simpleRegression) continue;
+
+                    const { slope, intercept: simpleIntercept } = predictorSummary.simpleRegression;
+                    if (!Number.isFinite(slope) || !Number.isFinite(simpleIntercept)) continue;
+
+                    const { min: minX, max: maxX } = predictorSummary;
+                    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) continue;
+
+                    const minY = slope * minX + simpleIntercept;
+                    const maxY = slope * maxX + simpleIntercept;
 
                     suggestions.push(
-                        `次のステップ: 各説明変数について散布図テーブルを作成し、create_chartツールでlayered specを使用してください。回帰線の端点は回帰式 ${predictedField} = ${formatNumeric(intercept)} + Σ(βᵢ × xᵢ) を使って計算してください。`
+                        `説明変数「${predictor}」: 単回帰直線 y = ${formatNumeric(slope)} * x + ${formatNumeric(simpleIntercept)}、端点 (${formatNumeric(minX)}, ${formatNumeric(minY)}) と (${formatNumeric(maxX)}, ${formatNumeric(maxY)})`
                     );
-
-                    const computePredicted = (featureIndex: number, predictorValue: number): number => {
-                        let predictedValue = intercept;
-                        for (let idx = 0; idx < betas.length; idx += 1) {
-                            const featureName = names[idx];
-                            const contributionValue =
-                                idx === featureIndex ? predictorValue : (columnSummaries[featureName]?.mean ?? 0);
-                            predictedValue += betas[idx] * contributionValue;
-                        }
-                        return predictedValue;
-                    };
-
-                    for (const predictor of predictorColumns) {
-                        const predictorIndex = names.indexOf(predictor);
-                        if (predictorIndex === -1) continue;
-
-                        const predictorSummary = columnSummaries[predictor];
-                        if (!predictorSummary) continue;
-
-                        const { min: minX, max: maxX } = predictorSummary;
-                        if (!Number.isFinite(minX) || !Number.isFinite(maxX)) continue;
-
-                        const minPredicted = computePredicted(predictorIndex, minX);
-                        const maxPredicted = computePredicted(predictorIndex, maxX);
-                        if (!Number.isFinite(minPredicted) || !Number.isFinite(maxPredicted)) continue;
-
-                        const otherMeans = names
-                            .filter((_, idx) => idx !== predictorIndex)
-                            .map(name => {
-                                const mean = columnSummaries[name]?.mean ?? 0;
-                                return `${name}=${formatNumeric(mean)}`;
-                            })
-                            .join(', ');
-
-                        suggestions.push(
-                            `説明変数「${predictor}」: 回帰線の端点は (${formatNumeric(minX)}, ${formatNumeric(minPredicted)}) と (${formatNumeric(maxX)}, ${formatNumeric(maxPredicted)})${otherMeans ? ` (他の変数は平均値: ${otherMeans})` : ''}`
-                        );
-                    }
-                } else {
-                    warnings.push('回帰係数が有限値ではないため、回帰直線の端点を計算できません。');
                 }
 
                 const response: RegressionAnalysisResponse = {
@@ -385,8 +357,12 @@ function errorResponse(message: string, warnings?: string[]): RegressionAnalysis
     };
 }
 
-function buildColumnSummaries(columnValues: Record<string, number[]>): Record<string, ColumnSummary> {
+function buildColumnSummaries(
+    columnValues: Record<string, number[]>,
+    targetColumn?: string
+): Record<string, ColumnSummary> {
     const summaries: Record<string, ColumnSummary> = {};
+    const targetValues = targetColumn ? columnValues[targetColumn] : undefined;
 
     for (const [column, values] of Object.entries(columnValues)) {
         const numericValues = values.filter(value => Number.isFinite(value));
@@ -417,6 +393,26 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
         }
 
         const variance = count > 1 ? squaredDiffSum / (count - 1) : 0;
+
+        // Calculate simple linear regression for predictors (not target)
+        let simpleRegression: SimpleLinearRegression | undefined;
+        if (targetValues && column !== targetColumn && values.length === targetValues.length) {
+            // Get valid pairs for this predictor vs target
+            const validXValues: number[] = [];
+            const validYValues: number[] = [];
+            for (let i = 0; i < values.length; i += 1) {
+                const x = values[i];
+                const y = targetValues[i];
+                if (Number.isFinite(x) && Number.isFinite(y)) {
+                    validXValues.push(x);
+                    validYValues.push(y);
+                }
+            }
+            if (validXValues.length >= 2) {
+                simpleRegression = computeSimpleLinearRegression(validXValues, validYValues);
+            }
+        }
+
         summaries[column] = {
             column,
             count,
@@ -424,6 +420,7 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
             min: minValue,
             max: maxValue,
             stdDev: Math.sqrt(Math.max(variance, 0)),
+            simpleRegression,
         };
     }
 
@@ -487,6 +484,18 @@ function pickPredictorColumns(
     const targetSeries = numericData[targetColumn];
     if (!targetSeries) return [];
 
+    // Filter target series to get valid (finite) values with their indices
+    const validTargetIndices: number[] = [];
+    const validTargetValues: number[] = [];
+    for (let i = 0; i < targetSeries.length; i += 1) {
+        if (Number.isFinite(targetSeries[i])) {
+            validTargetIndices.push(i);
+            validTargetValues.push(targetSeries[i]);
+        }
+    }
+
+    if (validTargetValues.length < minValues) return [];
+
     const stats = columnCandidates
         .filter(column => column !== targetColumn)
         .map(column => {
@@ -494,15 +503,38 @@ function pickPredictorColumns(
             if (!otherSeries) {
                 return { column, correlation: Number.NaN, pairCount: 0 };
             }
-            const { correlation, pairCount } = computeCorrelation(targetSeries, otherSeries);
-            return {
-                column,
-                correlation,
-                pairCount,
-            };
+
+            // Get valid pairs (both target and predictor must be finite)
+            const validPairs: Array<{ x: number; y: number }> = [];
+            for (const idx of validTargetIndices) {
+                const predictorValue = otherSeries[idx];
+                if (Number.isFinite(predictorValue)) {
+                    validPairs.push({ x: predictorValue, y: validTargetValues[validTargetIndices.indexOf(idx)] });
+                }
+            }
+
+            if (validPairs.length < minValues) {
+                return { column, correlation: Number.NaN, pairCount: validPairs.length };
+            }
+
+            // Use jStat to compute correlation
+            const xValues = validPairs.map(p => p.x);
+            const yValues = validPairs.map(p => p.y);
+
+            try {
+                const correlation = jStat.corrcoeff(xValues, yValues);
+                return {
+                    column,
+                    correlation: Number.isFinite(correlation) ? correlation : Number.NaN,
+                    pairCount: validPairs.length,
+                };
+            } catch {
+                return { column, correlation: Number.NaN, pairCount: validPairs.length };
+            }
         })
         .filter(item => item.pairCount >= minValues && Number.isFinite(item.correlation));
 
+    // Sort by absolute correlation (descending)
     stats.sort((a, b) => {
         const diff = Math.abs(b.correlation) - Math.abs(a.correlation);
         if (diff !== 0) return diff;
@@ -523,47 +555,47 @@ function computeVariance(values: number[]): number {
     return sumSq / (values.length - 1);
 }
 
-function computeCorrelation(seriesA: number[], seriesB: number[]): { correlation: number; pairCount: number } {
-    const length = Math.min(seriesA.length, seriesB.length);
-    if (length === 0) return { correlation: Number.NaN, pairCount: 0 };
+/**
+ * Compute simple linear regression: y = slope * x + intercept
+ * Using least squares method
+ */
+function computeSimpleLinearRegression(xValues: number[], yValues: number[]): SimpleLinearRegression {
+    if (xValues.length !== yValues.length || xValues.length < 2) {
+        return { slope: Number.NaN, intercept: Number.NaN };
+    }
 
-    let pairCount = 0;
+    const n = xValues.length;
     let sumX = 0;
     let sumY = 0;
-    let sumXX = 0;
-    let sumYY = 0;
     let sumXY = 0;
+    let sumXX = 0;
 
-    for (let i = 0; i < length; i += 1) {
-        const x = seriesA[i];
-        const y = seriesB[i];
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-
-        pairCount += 1;
+    for (let i = 0; i < n; i += 1) {
+        const x = xValues[i];
+        const y = yValues[i];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return { slope: Number.NaN, intercept: Number.NaN };
+        }
         sumX += x;
         sumY += y;
-        sumXX += x * x;
-        sumYY += y * y;
         sumXY += x * y;
+        sumXX += x * x;
     }
 
-    if (pairCount < 2) return { correlation: Number.NaN, pairCount };
+    const meanX = sumX / n;
+    const meanY = sumY / n;
 
-    const meanX = sumX / pairCount;
-    const meanY = sumY / pairCount;
-    const cov = sumXY - pairCount * meanX * meanY;
-    const varX = sumXX - pairCount * meanX * meanX;
-    const varY = sumYY - pairCount * meanY * meanY;
+    const numerator = sumXY - n * meanX * meanY;
+    const denominator = sumXX - n * meanX * meanX;
 
-    if (varX <= 0 || varY <= 0) {
-        return { correlation: 0, pairCount };
+    if (Math.abs(denominator) < 1e-10) {
+        return { slope: Number.NaN, intercept: meanY };
     }
 
-    const denominator = Math.sqrt(varX * varY);
-    return {
-        correlation: cov / denominator,
-        pairCount,
-    };
+    const slope = numerator / denominator;
+    const intercept = meanY - slope * meanX;
+
+    return { slope, intercept };
 }
 
 function deduplicateStrings(values: string[]): string[] {
