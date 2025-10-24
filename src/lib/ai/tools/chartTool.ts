@@ -50,13 +50,6 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
     });
 }
 
-const datasetsSchema = z
-    .record(z.unknown())
-    .refine(value => Object.keys(value).length > 0, {
-        message: 'datasets must include at least one named dataset',
-    })
-    .describe('Named datasets available to the spec');
-
 const baseSpecSchema = z
     .object({
         mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
@@ -83,7 +76,6 @@ const layeredLayerSchema = baseSpecSchema
 
 const layeredSpecSchema = z
     .object({
-        datasets: datasetsSchema,
         mark: z
             .union([z.string(), z.record(z.unknown())])
             .optional()
@@ -97,28 +89,15 @@ const layeredSpecSchema = z
         config: z.record(z.unknown()).optional().describe('Chart configuration'),
     })
     .superRefine((spec, ctx) => {
-        const datasetNames = new Set(Object.keys(spec.datasets ?? {}));
-        if (datasetNames.size === 0) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message:
-                    'Layered specs must define at least one dataset for regression lines and named data references.',
-                path: ['datasets'],
-            });
-            return;
-        }
-
         spec.layer.forEach((layer, index) => {
             const layerData = (layer as Record<string, unknown>).data;
-            if (layerData && typeof layerData === 'object' && 'name' in (layerData as Record<string, unknown>)) {
-                const name = (layerData as Record<string, unknown>).name;
-                if (typeof name === 'string' && !datasetNames.has(name)) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        message: `Layer ${index} references dataset "${name}" which is not defined in datasets`,
-                        path: ['layer', index, 'data', 'name'],
-                    });
-                }
+            // Only validate if data is present
+            if (layerData && typeof layerData === 'object' && layerData !== null && !('values' in layerData)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Layer ${index} must use data.values directly, not data.sql or data.name`,
+                    path: ['layer', index, 'data'],
+                });
             }
         });
     })
@@ -182,12 +161,11 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         REGRESSION LAYERED CHART OUTPUT:
         - After using perform_regression_analysis, reuse the observed data table for the scatter layer; do NOT add predicted columns to the table.
         - Compute exactly two regression points per predictor (min and max) with the regression equation using the intercept and β coefficients. For multi-predictor models, hold the other predictors at their mean values from regression.columnSummaries.
-        - Place those two points inside the Vega-Lite spec under the datasets property (e.g., "datasets": {"reg_line_feature": [...]}) and reference that dataset name in the regression line layer.
-        - Use layered marks:
-          1. Scatter layer: mark {"type": "point"} using the raw observations. Prefer data.sql (or data.values) directly referencing the scatter table; if you reference data.name, make sure that dataset is also declared in datasets, otherwise validation will fail.
-          2. Regression layer: mark {"type": "line"} with data {"name": "<dataset_name>"} and order on the predictor field so the line renders correctly.
+        - Use layered marks with direct data.values in each layer:
+          1. Scatter layer: mark {"type": "point"} with data.values containing the raw observations from your table
+          2. Regression layer: mark {"type": "line"} with data.values containing exactly two points (min and max) and order on the predictor field so the line renders correctly.
         - Tooltips should allow comparing observed vs predicted values (include x/y on both layers). Add an area layer only if you explicitly compute confidence bounds.
-        - When providing a full JSON spec for copy/paste, include $schema, description, datasets with the regression points, primary data, layer definitions, and optional config just like the example below.
+        - When providing a full JSON spec for copy/paste, include $schema, description, layer definitions with direct data values, and optional config just like the example below.
 
         Example specifications:
         {
@@ -207,24 +185,16 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         }
         
         {
-          "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-          "description": "Scatter + line from two externally-provided points (no regression transform).",
-          "datasets": {
-            "regPoints": [
-              { "x": 1, "y": 1.0 },
-              { "x": 10, "y": 8.0 }
-            ]
-          },
-          "data": {
-            "values": [
-              {"x": 1, "y": 1.2}, {"x": 2, "y": 1.9}, {"x": 3, "y": 3.1},
-              {"x": 4, "y": 3.7}, {"x": 5, "y": 4.6}, {"x": 6, "y": 5.1},
-              {"x": 7, "y": 5.9}, {"x": 8, "y": 6.2}, {"x": 9, "y": 7.1},
-              {"x": 10, "y": 7.8}
-            ]
-          },
           "layer": [
             {
+              "data": {
+                "values": [
+                  {"x": 1, "y": 1.2}, {"x": 2, "y": 1.9}, {"x": 3, "y": 3.1},
+                  {"x": 4, "y": 3.7}, {"x": 5, "y": 4.6}, {"x": 6, "y": 5.1},
+                  {"x": 7, "y": 5.9}, {"x": 8, "y": 6.2}, {"x": 9, "y": 7.1},
+                  {"x": 10, "y": 7.8}
+                ]
+              },
               "mark": {"type": "point"},
               "encoding": {
                 "x": {"field": "x", "type": "quantitative", "title": "x"},
@@ -233,47 +203,22 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
               }
             },
             {
-              "data": {"name": "regPoints"},
-              "mark": {"type": "line"},
+              "data": {
+                "values": [
+                  { "x": 1, "y": 1.0 },
+                  { "x": 10, "y": 8.0 }
+                ]
+              },
+              "mark": {"type": "line", "color": "red", "strokeWidth": 3},
               "encoding": {
                 "x": {"field": "x", "type": "quantitative"},
                 "y": {"field": "y", "type": "quantitative"},
                 "order": {"field": "x"},
-                "color": {"value": "firebrick"},
                 "tooltip": [{"field": "x"}, {"field": "y"}]
               }
             }
           ],
           "config": {"view": {"stroke": null}}
-        }
-        
-        {
-          "datasets": {
-            "reg_line_feature": [
-              { "feature": 1.0, "predicted": 2.5 },
-              { "feature": 10.0, "predicted": 8.1 }
-            ]
-          },
-          "layer": [
-            {
-              "data": {"sql": "SELECT feature, actual AS target FROM regression_source"},
-              "mark": {"type": "point", "opacity": 0.6, "size": 40},
-              "encoding": {
-                "x": {"field": "feature", "type": "quantitative", "title": "Feature"},
-                "y": {"field": "target", "type": "quantitative", "title": "Actual"},
-                "color": {"value": "#1f77b4"}
-              }
-            },
-            {
-              "data": {"name": "reg_line_feature"},
-              "mark": {"type": "line", "strokeWidth": 3, "color": "#d62728"},
-              "encoding": {
-                "x": {"field": "feature", "type": "quantitative"},
-                "y": {"field": "predicted", "type": "quantitative", "title": "Predicted"},
-                "order": {"field": "feature"}
-              }
-            }
-          ]
         }`,
         parameters: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
