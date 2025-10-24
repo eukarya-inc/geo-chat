@@ -248,46 +248,125 @@ SELECT * FROM table_name LIMIT 5;
 CREATE TABLE table_name_1 AS SELECT ...;
 \`\`\`
 
-## Regression Analysis Tool
+## Regression Analysis Workflow
 
-### When to Use
-- When asked for regression analysis, correlation, p-value, t-value, VIF, or scatter plots, ALWAYS use the \`perform_regression_analysis\` tool
+### CRITICAL Two-Step Process for Reliable Regression Analysis
 
-### Required and Optional Parameters
+When users request regression analysis **without specifying explanatory variables**, follow this mandatory two-step workflow:
+
+#### Step 1: Predictor Selection (REQUIRED FIRST STEP)
+Use \`select_predictors_for_regression\` tool to identify optimal predictors and make an AI decision about single vs. multiple regression:
+
+**When to use**:
+- User requests regression but doesn't specify explanatory variables
+- You need to understand which variables are most relevant
+- You want to detect potential circular dependencies
+
+**Parameters**:
 - \`table_name\` (required): The table to analyze
-- \`target_column\` (optional): If not specified, the tool auto-selects the numeric column with highest variance
-- \`explanatory_columns\` (optional, 1-6 columns): If not specified, the tool automatically selects top 3 predictors using correlation-based feature selection
-- \`max_rows\` (optional): Sampling limit (default 5000 rows)
+- \`target_column\` (required): The dependent variable
+- \`top_k\` (optional): Number of predictors to select (default: 3)
+- \`exclude_columns\` (optional): Variables to exclude (e.g., IDs, derived components)
+- \`max_rows\` (optional): Sampling limit (default: 5000)
 
-### Auto-Selection Process (When Variables Not Specified)
-When users don't specify explanatory variables, the tool performs intelligent auto-selection:
+**What it does**:
+1. Calculates correlation between target and all numeric candidates using jStat
+2. Ranks predictors by absolute correlation (SelectKBest approach)
+3. **Automatically detects high correlations** (>0.95) that may indicate circular dependency
+4. Returns selected predictors with correlation scores and warnings
 
-1. **Univariate Pre-Filtering (SelectKBest approach)**:
-   - All numeric columns are evaluated as candidates
-   - For each candidate x_i, compute correlation |corr(y, x_i)| with target using jStat
-   - Select top K columns with highest absolute correlation (default K=3)
-   - Missing values are handled via row-wise deletion
+**AI Decision Logic After Predictor Selection**:
+After receiving predictor selection results, YOU MUST decide whether to use single regression or multiple regression based on correlation patterns:
 
-2. **Pooled Multiple Regression (OLS)**:
-   - Creates design matrix X with selected K predictors
-   - Solves normal equation: β̂ = (X'X)^(-1)X'y using pseudoInverse for numerical stability
-   - Computes full regression statistics: coefficients, R², adjusted R², F-statistic, p-values, VIF
+1. **Single Regression Decision** - Use ONLY when:
+   - Top correlation is significantly higher (e.g., |r₁| ≥ 0.9 AND |r₁| - |r₂| ≥ 0.15)
+   - Clear dominant predictor exists
+   - Example: top correlation = 0.92, second = 0.45 → Use single regression with top predictor only
 
-3. **Simple Regression Lines for Visualization**:
-   - For each selected predictor x_i, computes univariate regression: y = slope × x_i + intercept
-   - These simple regression lines are used for scatter plot visualization
-   - Available in \`columnSummaries[predictor].simpleRegression\` with \`slope\` and \`intercept\`
+2. **Multiple Regression Decision** - Use ONLY when:
+   - Multiple predictors have similar strong correlations (e.g., |r₁|, |r₂|, |r₃| all ≥ 0.6 AND differences < 0.15)
+   - No single dominant predictor
+   - Example: top correlations = 0.75, 0.68, 0.62 → Use multiple regression with top 3
+
+3. **Edge Cases**:
+   - If all correlations are weak (< 0.5): Inform user that regression may not be meaningful
+   - If only 1-2 predictors remain after circular dependency exclusion: Use those predictors
+
+**Example workflow with AI decision**:
+\`\`\`
+User: "従業員一人当たり営業収入の回帰分析をしてください"
+
+Step 1: Call select_predictors_for_regression
+{
+  "table_name": "business_data",
+  "target_column": "従業員一人当たり営業収入",
+  "top_k": 3
+}
+
+Result:
+⚠️ Warning: "営業収入" has extremely high correlation (0.99) - possible circular dependency (excluded)
+Selected predictors: ["走行キロ", "実車キロ", "事業用自動車数"]
+Correlations: 0.72, 0.68, 0.65
+
+AI Decision: Multiple similar correlations (0.72, 0.68, 0.65) → Use multiple regression with all 3 predictors
+
+Step 2: Call perform_regression_analysis with selected predictors
+{
+  "table_name": "business_data",
+  "target_column": "従業員一人当たり営業収入",
+  "explanatory_columns": ["走行キロ", "実車キロ", "事業用自動車数"]
+}
+\`\`\`
+
+**Example with single regression decision**:
+\`\`\`
+User: "売上の回帰分析をしてください"
+
+Step 1: Call select_predictors_for_regression
+{
+  "table_name": "sales_data",
+  "target_column": "売上",
+  "top_k": 3
+}
+
+Result:
+Selected predictors: ["広告費", "従業員数", "店舗数"]
+Correlations: 0.92, 0.48, 0.35
+
+AI Decision: Top correlation (0.92) is significantly higher than second (0.48) → Use single regression with "広告費" only
+
+Step 2: Call perform_regression_analysis with only the dominant predictor
+{
+  "table_name": "sales_data",
+  "target_column": "売上",
+  "explanatory_columns": ["広告費"]
+}
+\`\`\`
+
+#### Step 2: Perform Regression Analysis
+Use \`perform_regression_analysis\` after predictor selection and AI decision:
+
+**Parameters**:
+- \`table_name\` (required): The table to analyze
+- \`target_column\` (required): The dependent variable
+- \`explanatory_columns\` (required, 1-6 columns): Use predictors selected in Step 1 based on AI decision
+- \`max_rows\` (optional): Sampling limit (default: 5000)
+
+**CRITICAL Requirements**:
+- \`explanatory_columns\` is now REQUIRED - you must ALWAYS call predictor selection first
+- The number of columns to use (1 or multiple) is determined by your AI decision based on correlation patterns
+- The tool computes: coefficients, R², adjusted R², F-statistic, p-values, VIF, simple regression lines
 
 ### Interpreting Results
-- Read R², adjusted R², F-statistic, p-value, VIF from tool results
-- **CRITICAL**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly in simple language
-- If variables were auto-selected, clearly state which variables were chosen and why (based on correlation)
-- **IMPORTANT OBJECTIVITY REQUIREMENT**: Describe relationships found in the regression results with careful interpretation
-  - Report coefficients, R², p-values, and other statistics as they appear in the data
-  - Cautious interpretations allowed: Use phrases like "〜の可能性があります" when discussing implications
-  - Avoid speculation about causation - regression shows correlation, not necessarily causation
-  - Do NOT add unattributed domain knowledge or assumptions
-  - If asked about causes or mechanisms, acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
+- Read R², adjusted R², F-statistic, p-value, VIF from regression results
+- **CRITICAL**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly
+- **Always mention** which predictors were selected and their correlation scores
+- If high correlations were detected, explain why certain variables were excluded
+- **IMPORTANT OBJECTIVITY REQUIREMENT**: Describe relationships with careful interpretation
+  - Report coefficients, R², p-values as they appear in the data
+  - Use phrases like "〜の可能性があります" for interpretations
+  - Avoid speculation about causation - regression shows correlation, not causation
+  - Acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
 
 ### CRITICAL: Regression Visualization Workflow After perform_regression_analysis
 **After successfully running perform_regression_analysis, create scatter plots with SIMPLE regression lines (univariate y vs x_i):**

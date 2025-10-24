@@ -1,6 +1,5 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { jStat } from 'jstat';
 import type { DBContext } from '../../duckdb/dbContext';
 import { olsRegression, type RegressionResult } from '../../../utils/regression/ols';
 import type { ColumnSummary, RegressionAnalysisResponse, SimpleLinearRegression } from '../../../types/regression';
@@ -8,9 +7,7 @@ import type { ColumnSummary, RegressionAnalysisResponse, SimpleLinearRegression 
 const DEFAULT_MAX_ROWS = 5000;
 const MAX_ALLOWED_ROWS = 20000;
 const MIN_REQUIRED_ROWS = 10;
-const MAX_AUTO_COLUMNS = 20;
 const MAX_PREDICTORS = 6;
-const DEFAULT_TOP_K = 3;
 
 export function createRegressionTool(dbContext: DBContext, schema: string | null) {
     return tool({
@@ -25,19 +22,13 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
 3. Use layered chart spec with scatter points (layer 1) and regression line (layer 2)`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
-            target_column: z
-                .string()
-                .optional()
-                .describe(
-                    'Dependent variable column. When omitted the tool will pick a numeric column with the highest variance.'
-                ),
+            target_column: z.string().describe('Dependent variable column (required).'),
             explanatory_columns: z
                 .array(z.string())
                 .min(1)
                 .max(MAX_PREDICTORS)
-                .optional()
                 .describe(
-                    'Predictor columns (1-6). When omitted the tool automatically selects numeric columns highly correlated with the target.'
+                    'Predictor columns (1-6, required). Use select_features_for_regression tool first to identify optimal predictors.'
                 ),
             max_rows: z
                 .number()
@@ -72,13 +63,13 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     );
                 }
 
-                const providedPredictors = deduplicateStrings(explanatory_columns ?? []);
-
-                if (target_column && !numericColumns.includes(target_column)) {
+                if (!numericColumns.includes(target_column)) {
                     return errorResponse(
                         `目的変数カラム「${target_column}」は存在しないか数値型ではありません。数値カラムを指定してください。`
                     );
                 }
+
+                const providedPredictors = deduplicateStrings(explanatory_columns);
 
                 for (const predictor of providedPredictors) {
                     if (!numericColumns.includes(predictor)) {
@@ -92,20 +83,7 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     return errorResponse(`説明変数は最大${MAX_PREDICTORS}個まで指定可能です。`);
                 }
 
-                const needsAutoSelection =
-                    !target_column || providedPredictors.length === 0 || providedPredictors.includes(target_column);
-
-                const { columnsToFetch, truncated } = determineWorkingColumns({
-                    numericColumns,
-                    targetColumn: target_column ?? null,
-                    predictorColumns: providedPredictors,
-                    needsAutoSelection,
-                    maxColumns: MAX_AUTO_COLUMNS,
-                });
-
-                if (columnsToFetch.length === 0) {
-                    return errorResponse('分析対象となる数値カラムを特定できませんでした。');
-                }
+                const columnsToFetch = [target_column, ...providedPredictors];
 
                 const limit = clamp(max_rows ?? DEFAULT_MAX_ROWS, MIN_REQUIRED_ROWS, MAX_ALLOWED_ROWS);
                 const query = `SELECT ${columnsToFetch
@@ -130,41 +108,17 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     }
                 }
 
-                // Auto-select target when omitted
-                let targetColumn = target_column ?? '';
-                let autoTarget = false;
-                if (!targetColumn) {
-                    const detectedTarget = pickTargetColumn(numericData, columnsToFetch);
-                    autoTarget = true;
-                    if (!detectedTarget) {
-                        return errorResponse('適切な目的変数候補が見つかりませんでした。');
-                    }
-                    targetColumn = detectedTarget;
-                }
+                const targetColumn = target_column;
+                const predictorColumns = providedPredictors;
 
-                // Validate provided predictors and auto-select when needed
-                let predictorColumns = providedPredictors.filter(column => column !== targetColumn);
-                let autoPredictors = false;
-
-                if (predictorColumns.length === 0) {
-                    // Use DEFAULT_TOP_K (3) for auto-selection as per requirements
-                    predictorColumns = pickPredictorColumns(numericData, columnsToFetch, targetColumn, DEFAULT_TOP_K);
-                    autoPredictors = true;
-                }
-
-                if (predictorColumns.length === 0) {
-                    return errorResponse(
-                        '目的変数と十分な関連を持つ説明変数が見つかりませんでした。数値カラムを指定して再度お試しください。'
-                    );
+                if (!numericData[targetColumn]) {
+                    return errorResponse(`目的変数「${targetColumn}」のデータが取得できませんでした。`);
                 }
 
                 const missingColumns = predictorColumns.filter(column => !(column in numericData));
-                if (!numericData[targetColumn] || missingColumns.length > 0) {
+                if (missingColumns.length > 0) {
                     return errorResponse(
-                        `回帰分析に必要なカラムがデータに含まれていません（不足: ${[
-                            targetColumn,
-                            ...missingColumns,
-                        ].join(', ')}）。`
+                        `説明変数のデータが取得できませんでした（不足: ${missingColumns.join(', ')}）。`
                     );
                 }
 
@@ -235,12 +189,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                 const columnSummaries = buildColumnSummaries(columnTrackers, targetColumn);
                 const warnings: string[] = [];
 
-                if (truncated) {
-                    warnings.push(
-                        `数値カラムが多いため、最初の${MAX_AUTO_COLUMNS}件を自動選択対象としました。他のカラムを分析する場合は明示的に指定してください。`
-                    );
-                }
-
                 if (skippedRows > 0) {
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
                 }
@@ -288,10 +236,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                         skippedRows,
                         samplingLimit: limit,
                     },
-                    autoSelection: {
-                        target: autoTarget,
-                        predictors: autoPredictors,
-                    },
                     regression,
                     columnSummaries,
                     warnings: warnings.length > 0 ? warnings : undefined,
@@ -305,48 +249,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
             }
         },
     });
-}
-
-function determineWorkingColumns({
-    numericColumns,
-    targetColumn,
-    predictorColumns,
-    needsAutoSelection,
-    maxColumns,
-}: {
-    numericColumns: string[];
-    targetColumn: string | null;
-    predictorColumns: string[];
-    needsAutoSelection: boolean;
-    maxColumns: number;
-}): { columnsToFetch: string[]; truncated: boolean } {
-    const required = deduplicateStrings([targetColumn ?? '', ...predictorColumns].filter(Boolean));
-
-    if (!needsAutoSelection) {
-        return {
-            columnsToFetch: required,
-            truncated: false,
-        };
-    }
-
-    const columns: string[] = [...required];
-    const seen = new Set(columns);
-
-    for (const column of numericColumns) {
-        if (columns.length >= maxColumns) {
-            break;
-        }
-        if (!seen.has(column)) {
-            columns.push(column);
-            seen.add(column);
-        }
-    }
-
-    const truncated = numericColumns.length > columns.length;
-    return {
-        columnsToFetch: columns,
-        truncated,
-    };
 }
 
 function errorResponse(message: string, warnings?: string[]): RegressionAnalysisResponse {
@@ -436,123 +338,6 @@ function formatNumeric(value: number): string {
         return value.toString();
     }
     return Object.is(precise, -0) ? '0' : precise.toString();
-}
-
-function pickTargetColumn(
-    numericData: Record<string, number[]>,
-    columnCandidates: string[],
-    minValues = MIN_REQUIRED_ROWS
-): string | null {
-    let bestColumn: string | null = null;
-    let bestVariance = -Infinity;
-
-    for (const column of columnCandidates) {
-        const series = numericData[column];
-        if (!series || series.length === 0) continue;
-        const values = series.filter(value => Number.isFinite(value));
-        if (values.length < minValues) continue;
-
-        const variance = computeVariance(values);
-        if (Number.isFinite(variance) && variance > bestVariance) {
-            bestVariance = variance;
-            bestColumn = column;
-        }
-    }
-
-    if (!bestColumn) {
-        for (const column of columnCandidates) {
-            const series = numericData[column];
-            if (!series) continue;
-            const validCount = series.reduce((acc, value) => acc + (Number.isFinite(value) ? 1 : 0), 0);
-            if (validCount >= minValues) {
-                bestColumn = column;
-                break;
-            }
-        }
-    }
-
-    return bestColumn;
-}
-
-function pickPredictorColumns(
-    numericData: Record<string, number[]>,
-    columnCandidates: string[],
-    targetColumn: string,
-    maxPredictors: number,
-    minValues = MIN_REQUIRED_ROWS
-): string[] {
-    const targetSeries = numericData[targetColumn];
-    if (!targetSeries) return [];
-
-    // Filter target series to get valid (finite) values with their indices
-    const validTargetIndices: number[] = [];
-    const validTargetValues: number[] = [];
-    for (let i = 0; i < targetSeries.length; i += 1) {
-        if (Number.isFinite(targetSeries[i])) {
-            validTargetIndices.push(i);
-            validTargetValues.push(targetSeries[i]);
-        }
-    }
-
-    if (validTargetValues.length < minValues) return [];
-
-    const stats = columnCandidates
-        .filter(column => column !== targetColumn)
-        .map(column => {
-            const otherSeries = numericData[column];
-            if (!otherSeries) {
-                return { column, correlation: Number.NaN, pairCount: 0 };
-            }
-
-            // Get valid pairs (both target and predictor must be finite)
-            const validPairs: Array<{ x: number; y: number }> = [];
-            for (const idx of validTargetIndices) {
-                const predictorValue = otherSeries[idx];
-                if (Number.isFinite(predictorValue)) {
-                    validPairs.push({ x: predictorValue, y: validTargetValues[validTargetIndices.indexOf(idx)] });
-                }
-            }
-
-            if (validPairs.length < minValues) {
-                return { column, correlation: Number.NaN, pairCount: validPairs.length };
-            }
-
-            // Use jStat to compute correlation
-            const xValues = validPairs.map(p => p.x);
-            const yValues = validPairs.map(p => p.y);
-
-            try {
-                const correlation = jStat.corrcoeff(xValues, yValues);
-                return {
-                    column,
-                    correlation: Number.isFinite(correlation) ? correlation : Number.NaN,
-                    pairCount: validPairs.length,
-                };
-            } catch {
-                return { column, correlation: Number.NaN, pairCount: validPairs.length };
-            }
-        })
-        .filter(item => item.pairCount >= minValues && Number.isFinite(item.correlation));
-
-    // Sort by absolute correlation (descending)
-    stats.sort((a, b) => {
-        const diff = Math.abs(b.correlation) - Math.abs(a.correlation);
-        if (diff !== 0) return diff;
-        return b.pairCount - a.pairCount;
-    });
-
-    return stats.slice(0, maxPredictors).map(item => item.column);
-}
-
-function computeVariance(values: number[]): number {
-    if (values.length === 0) return Number.NaN;
-    if (values.length === 1) return 0;
-    const mean = values.reduce((acc, value) => acc + value, 0) / values.length;
-    const sumSq = values.reduce((acc, value) => {
-        const diff = value - mean;
-        return acc + diff * diff;
-    }, 0);
-    return sumSq / (values.length - 1);
 }
 
 /**

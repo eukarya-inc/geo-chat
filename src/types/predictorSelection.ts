@@ -1,35 +1,35 @@
-export interface FeatureCorrelation {
-    feature: string;
+export interface PredictorCorrelation {
+    predictor: string;
     correlation: number;
     absoluteCorrelation: number;
     pairCount: number;
 }
 
-export interface ExcludedFeature {
-    feature: string;
+export interface ExcludedPredictor {
+    predictor: string;
     correlation: number;
     reason: 'user_excluded' | 'high_correlation' | 'insufficient_data';
     details?: string;
 }
 
-export interface FeatureSelectionSuccess {
+export interface PredictorSelectionSuccess {
     success: true;
     message: string;
     tableName: string;
     targetColumn: string;
-    selectedFeatures: string[];
-    featureCorrelations: FeatureCorrelation[];
-    excludedFeatures: ExcludedFeature[];
+    selectedPredictors: string[];
+    predictorCorrelations: PredictorCorrelation[];
+    excludedPredictors: ExcludedPredictor[];
     candidateCount: number;
     selectionMethod: 'correlation_based';
     topK: number;
     warnings?: string[];
 }
 
-export interface FeatureSelectionError {
+export interface PredictorSelectionError {
     success: false;
     message: string;
     warnings?: string[];
 }
 
-export type FeatureSelectionResponse = FeatureSelectionSuccess | FeatureSelectionError;
+export type PredictorSelectionResponse = PredictorSelectionSuccess | PredictorSelectionError;

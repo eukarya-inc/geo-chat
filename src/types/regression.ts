@@ -22,11 +22,6 @@ export interface RegressionDataInfo {
     samplingLimit: number;
 }
 
-export interface AutoSelectionInfo {
-    target: boolean;
-    predictors: boolean;
-}
-
 export interface RegressionAnalysisSuccess {
     success: true;
     message: string;
@@ -34,7 +29,6 @@ export interface RegressionAnalysisSuccess {
     targetColumn: string;
     predictorColumns: string[];
     dataInfo: RegressionDataInfo;
-    autoSelection: AutoSelectionInfo;
     regression: RegressionResult;
     columnSummaries: Record<string, ColumnSummary>;
     warnings?: string[];
