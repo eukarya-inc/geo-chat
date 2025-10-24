@@ -269,10 +269,6 @@ CREATE TABLE table_name_1 AS SELECT ...;
 1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_driver_ratio_scatter"):
    - Select only the original target column and the predictor column from the regression input table
    - Filter out NULL values if needed
-   - **IMPORTANT: Use SAMPLE or random sampling to reduce data points by ~90%** to prevent rendering issues:
-     - Use "USING SAMPLE 10 PERCENT" to randomly select 10% of rows
-     - Or use "ORDER BY random() LIMIT n" where n is approximately 10% of total rows
-     - Example: CREATE TABLE scatter_x_vs_y AS SELECT x, y FROM original_table WHERE x IS NOT NULL AND y IS NOT NULL USING SAMPLE 10 PERCENT;
    - **Preserve the original column names** so analysts can still recognize them
    - Use purpose='chart' when creating this table
 
@@ -419,11 +415,6 @@ GROUP BY store_name, longitude, latitude;
 \`\`\`
 
 
-## Handling Large Datasets
-
-- When results are numerous, show only the first few rows
-- Guide next steps with phrases like "If you'd like to see more..."
-- Use aggregation and filtering to create manageable data volumes
 
 ## Creating Parliamentary Answer Drafts (国会答弁案の作成)
 
