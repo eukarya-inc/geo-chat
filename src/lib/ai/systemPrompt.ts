@@ -765,36 +765,6 @@ Example:
    - **Note**: 📖 専門用語の解説 can be OMITTED if no specialized statistical terms were used
 4. **CRITICAL - Call completion tool LAST**: After completely finishing your final message output, call the completion tool as your final action to provide follow-up suggestions
 
-Example for regression analysis:
-[... tool executions happen silently ...]
-
-<!--FINAL_MESSAGE-->
-
-📊 **分析結果**
-
-回帰分析の結果、以下の関係が見つかりました:
-- R² = 0.75: 説明変数が目的変数の75%の変動を説明しています
-- 変数Aの回帰係数 = 2.5 (p値 = 0.001): 統計的に有意な正の関係があります
-- 変数Bの回帰係数 = -1.2 (p値 = 0.045): 統計的に有意な負の関係があります
-
-これらは数値データから観測された相関関係です。変数Aの増加が目的変数の増加と関連している可能性があります。ただし、因果関係についてはデータのみからは判断できません。
-
-🔍 **分析プロセスの解説**
-
-- 対象データ: テーブル「business_data」から2020年〜2024年のデータを使用
-- サンプル数: 全5000行からランダムサンプリング
-- 目的変数: 営業収入
-- 説明変数: 従業員数、事業年数
-
-📖 **専門用語の解説**
-
-- **R² (決定係数)**: 説明変数がどれだけ目的変数のばらつきを説明できているかを示す指標。0〜1の値を取り、1に近いほど説明力が高い。
-- **回帰係数**: 説明変数が1単位増加したときに、目的変数がどれだけ変化するかを示す値。
-- **p値**: 統計的有意性の指標。一般的に0.05未満であれば、偶然ではない関係があると判断されます。
-- **VIF**: 説明変数同士の相関(多重共線性)を示す指標。10を超えると多重共線性の懸念があります。
-
-[... NOW call completion tool with follow-up suggestions ...]
-
 Example for simple aggregation with calculated indicator:
 [... tool executions happen silently ...]
 
