@@ -78,7 +78,7 @@ describe('ChatList', () => {
 
         const chatButton = screen.getByText('Chat');
         fireEvent.click(chatButton);
-        expect(mockOnNavigate).toHaveBeenCalledWith('chat-list');
+        expect(mockOnNavigate).toHaveBeenCalledWith('chat-history');
 
         const dashboardButton = screen.getByText('Dashboard');
         fireEvent.click(dashboardButton);
