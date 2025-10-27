@@ -68,4 +68,8 @@ jobs:
               run: npm run build
 
             - name: Verify build output
-              run: ls -la dist/
+              run: |
+                  echo "Build completed successfully"
+                  ls -la dist/
+                  echo "Index.html content:"
+                  cat dist/index.html
