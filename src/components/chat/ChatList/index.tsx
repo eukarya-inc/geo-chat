@@ -19,8 +19,8 @@ interface ChatListProps {
     onCreateChat: () => void | Promise<void>;
     onCreateDashboard?: () => void;
     isInitialized?: boolean;
-    selectedView?: 'chat-list' | 'dashboard-list';
-    onNavigate?: (view: 'chat-list' | 'dashboard-list') => void;
+    selectedView?: 'chat-history' | 'dashboard-list';
+    onNavigate?: (view: 'chat-history' | 'dashboard-list') => void;
 }
 
 export function ChatList({
@@ -68,9 +68,9 @@ export function ChatList({
                 {/* Navigation Buttons */}
                 <div className="space-y-1">
                     <button
-                        onClick={() => onNavigate?.('chat-list')}
+                        onClick={() => onNavigate?.('chat-history')}
                         className={`w-full px-4 py-3 text-left text-sm font-medium rounded transition-colors ${
-                            selectedView === 'chat-list' ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                            selectedView === 'chat-history' ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
                         }`}
                     >
                         Chat

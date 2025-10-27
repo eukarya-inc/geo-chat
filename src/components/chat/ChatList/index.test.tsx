@@ -52,7 +52,7 @@ describe('ChatList', () => {
     });
 
     it('should highlight selected view', () => {
-        const { rerender } = render(<ChatList {...defaultProps} selectedView="chat-list" />);
+        const { rerender } = render(<ChatList {...defaultProps} selectedView="chat-history" />);
 
         const chatButton = screen.getByText('Chat');
         expect(chatButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');

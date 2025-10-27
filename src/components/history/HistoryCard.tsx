@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { getRelativeTime } from '../../utils/timeUtils';
 
 interface HistoryCardProps {
     title: string;
@@ -150,7 +151,7 @@ export function HistoryCard({
             </div>
             {!isEditing && (
                 <>
-                    <p className="text-sm text-gray-500">{date.toLocaleString('ja-JP')}</p>
+                    <p className="text-sm text-gray-500">last message {getRelativeTime(date)}</p>
                     {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
                 </>
             )}

@@ -33,36 +33,13 @@ describe('ChatHistoryGrid', () => {
         onSelectChat: vi.fn(),
         onDeleteChat: vi.fn(),
         onRenameChat: vi.fn(),
-        onCreateChat: vi.fn(),
     };
-
-    it('should render header with title', () => {
-        render(<ChatHistoryGrid {...defaultProps} />);
-
-        expect(screen.getByText('Chat List')).toBeInTheDocument();
-    });
-
-    it('should render create chat button', () => {
-        render(<ChatHistoryGrid {...defaultProps} />);
-
-        expect(screen.getByText('+ New chat')).toBeInTheDocument();
-    });
 
     it('should render all chats', () => {
         render(<ChatHistoryGrid {...defaultProps} />);
 
         expect(screen.getByText('Test Chat 1')).toBeInTheDocument();
         expect(screen.getByText('Test Chat 2')).toBeInTheDocument();
-    });
-
-    it('should call onCreateChat when create button is clicked', () => {
-        const mockOnCreateChat = vi.fn();
-        render(<ChatHistoryGrid {...defaultProps} onCreateChat={mockOnCreateChat} />);
-
-        const createButton = screen.getByText('+ New chat');
-        fireEvent.click(createButton);
-
-        expect(mockOnCreateChat).toHaveBeenCalledTimes(1);
     });
 
     it('should call onSelectChat when chat card is clicked', () => {
