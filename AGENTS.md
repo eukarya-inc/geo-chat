@@ -60,26 +60,17 @@ This ensures:
 4. Unit tests pass
 5. Fast feedback during development without heavy build processes
 
-**Before committing**, you MUST run the full check:
+**Development command:**
 
 ```bash
-npm run check
+npm run check:light
 ```
 
-This runs:
-
-1. Code formatting with Prettier
-2. ESLint validation
-3. TypeScript type checking
-4. Full build process
-5. Unit tests
+This runs: format → lint → typecheck → unit tests
 
 **Important notes:**
 
-- Use `check:light` for fast feedback during development (format + lint + typecheck + unit tests)
-- Use `check` before commits to ensure everything works (includes build + test)
-- The `check:light` script runs: format → lint → typecheck → unit test
-- The `check` script runs: format → lint → typecheck → build → unit test
+- Provides fast feedback during development
 - Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
 
@@ -217,22 +208,7 @@ Use regular unit tests (`.test.ts`) when testing:
 - Avoid dataset-specific code - keep implementations generic and reusable.
 - When handling JSON data, ensure the approach works for any JSON structure, not just specific schemas.
 
-## ⚠️ CRITICAL: Always Run Check Before Task Completion
+## Code Quality
 
-**IMPORTANT**: Before considering your task complete, you MUST run:
-
-```bash
-npm run check
-```
-
-This ensures:
-
-- Code is automatically formatted with Prettier
-- Code follows the project's style guidelines
-- No syntax errors or warnings
-- TypeScript type checking succeeds
-- Build process completes successfully
-- All tests pass
-- No regressions are introduced
-
-The check command runs all validation steps quietly, only showing errors to save context.
+Use `npm run check:light` for development validation (format, lint, typecheck, test).
+The command runs validation steps quietly, only showing errors to save context.

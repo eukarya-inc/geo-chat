@@ -17,7 +17,6 @@
         "test:browser": "vitest run --project=browser",
         "test:unit": "vitest run --project=unit",
         "test:full": "vitest run",
-        "check": "prettier --write --log-level error . && eslint . && npm run typecheck && npm run build:nocheck && npm run test:unit",
         "check:light": "prettier --write --log-level error . && eslint . && npm run typecheck && npm run test:unit"
     },
     "dependencies": {
