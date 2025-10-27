@@ -142,3 +142,7 @@ export const updateSessionAtom = atom(
         });
     }
 );
+
+// ===== View Mode Atom =====
+// Manages the current view mode for the main content area
+export const viewModeAtom = atom<'chat-list' | 'chat' | 'dashboard-list' | 'dashboard'>('chat');
