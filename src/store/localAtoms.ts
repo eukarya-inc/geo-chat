@@ -1,45 +1,104 @@
 import { atom } from 'jotai';
-// import { atomWithStorage } from 'jotai/utils';
 import { retrieveEncryptedApiKey, storeEncryptedApiKey } from '../utils/encryption';
+import type { Layout } from 'react-grid-layout';
 
 // ===== Local state type definitions (client-side only) =====
+export interface SessionState {
+    // This interface defines the state of a chat session
+    isLoading: boolean;
+    error: Error | null;
+    input: string;
+    streamingText: string;
+}
+
 export interface LocalState {
     selectedChatId: string | null;
     selectedDashboardId: string | null;
+    sessions: Record<string, SessionState>;
+    dashboardLayouts: Record<string, Layout[]>;
+    isSidebarOpen: boolean;
 
     // API key (saved locally for security)
     apiKey: string;
     showApiKeyInput: boolean;
-
-    // AI sessions (temporary execution state)
-    sessions: Record<
-        string,
-        {
-            isLoading: boolean;
-            error: Error | null;
-            input: string;
-            streamingText: string;
-        }
-    >;
 }
 
-// ===== Local State Atoms =====
-// Local persistence (localStorage) temporarily disabled
-// export const localStateAtom = atomWithStorage<LocalState>('links-bi-local-state', {
+// ===== Local state atoms =====
+// IMPORTANT: localStorage persistence is disabled to prevent data accumulation issues
+// Reasons for disabling localStorage:
+// 1. Data accumulation: Chat sessions, dashboard layouts, and other state continuously grow over time
+// 2. No cleanup mechanism: Old/deleted chats remain in localStorage indefinitely
+// 3. Storage management complexity: Users have no clear way to manage or delete accumulated data
+// 4. Potential storage quota issues: localStorage has size limits (typically 5-10MB)
+// 5. Privacy concerns: Sensitive data (chat history, SQL queries) persisting locally
+//
+// Future consideration: If persistence is needed, implement:
+// - Server-side state management with proper cleanup
+// - Explicit user-controlled persistence (e.g., "Save session" button)
+// - Automatic cleanup of old/unused data
+// - Clear UI for storage management
+//
+// Note: API key persistence is handled separately via encrypted storage (see apiKeyAtom)
 export const localStateAtom = atom<LocalState>({
     selectedChatId: null,
-    selectedDashboardId: null,
-    apiKey: '',
-    showApiKeyInput: true,
     sessions: {},
+    selectedDashboardId: null,
+    dashboardLayouts: {},
+    isSidebarOpen: true,
+    apiKey: '',
+    showApiKeyInput: false,
 });
+
+// ===== Derived atoms from local state =====
+export const selectedChatIdAtom = atom(
+    get => get(localStateAtom).selectedChatId,
+    (get, set, update: string | null) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, selectedChatId: update });
+    }
+);
+
+export const sessionStateAtom = atom(
+    get => get(localStateAtom).sessions,
+    (get, set, update: Record<string, SessionState>) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, sessions: update });
+    }
+);
+
+export const selectedDashboardIdAtom = atom(
+    get => get(localStateAtom).selectedDashboardId,
+    (get, set, update: string | null) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, selectedDashboardId: update });
+    }
+);
+
+export const dashboardLayoutsAtom = atom(
+    get => get(localStateAtom).dashboardLayouts,
+    (get, set, update: Record<string, Layout[]>) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, dashboardLayouts: update });
+    }
+);
+
+export const isSidebarOpenAtom = atom(
+    get => get(localStateAtom).isSidebarOpen,
+    (get, set, update: boolean) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, isSidebarOpen: update });
+    }
+);
+
+// For backward compatibility
+export const localSessionsAtom = sessionStateAtom;
 
 // API key dedicated atom (encrypted and managed separately)
 // Note: Jotai v2 doesn't support async storage, so wrapped synchronously
 export const apiKeyAtom = atom<string>('');
 
 // Effect atom for API key initialization
-export const initApiKeyAtom = atom(null, async (get, set) => {
+export const initApiKeyAtom = atom(null, async (_get, set) => {
     try {
         const decryptedKey = await retrieveEncryptedApiKey();
         set(apiKeyAtom, decryptedKey || '');
@@ -54,7 +113,7 @@ export const initApiKeyAtom = atom(null, async (get, set) => {
 });
 
 // Atom for saving API key
-export const saveApiKeyAtom = atom(null, async (get, set, value: string) => {
+export const saveApiKeyAtom = atom(null, async (_get, set, value: string) => {
     await storeEncryptedApiKey(value); // Empty string will remove from localStorage
     set(apiKeyAtom, value);
     set(localStateAtom, prev => ({

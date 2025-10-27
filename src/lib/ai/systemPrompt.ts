@@ -264,28 +264,69 @@ CREATE TABLE table_name_1 AS SELECT ...;
   - If asked about causes or mechanisms, acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
 
 ### CRITICAL: Regression Visualization Workflow After perform_regression_analysis
-**After successfully running perform_regression_analysis, build scatter + regression-line charts WITHOUT storing predicted values in DuckDB tables:**
+**After successfully running perform_regression_analysis, create scatter + regression-line charts WITHOUT augmenting DuckDB tables with predicted columns:**
 
-1. **Reuse the observed data** for the scatter layer. Do NOT create or join predicted columns in the source table.
-2. **Compute regression line endpoints for each predictor**:
-   - Retrieve the predictor's min and max from \`regression.columnSummaries\` (or run a quick SELECT).
-   - Evaluate the regression equation \`predicted = intercept + Σ βᵢ × 値ᵢ\` at those min/max values.
-   - When multiple predictors exist, keep the non-focused predictors at their mean values (also available in \`columnSummaries\`) while varying the current predictor.
-   - Produce exactly two records per predictor: one at the min value and one at the max value.
-3. **Insert the two regression points into the Vega-Lite spec** via the \`datasets\` property and reference them by name in the line layer.
-   \\\`\\\`\\\`json
-   "datasets": {
-     "reg_line_feature": [
-       { "feature": 1, "predicted": 1.0 },
-       { "feature": 10, "predicted": 8.0 }
-     ]
-   }
-   \\\`\\\`\\\`
-4. **Use create_chart with layered marks**:
-   - Scatter layer: \`data: { sql: "SELECT ..." }\` using the observed table, mark {"type": "point"} with tooltips for actual values.
-   - Regression layer: \`data: { name: "reg_line_feature" }\` with mark {"type": "line"}, ordering by the predictor field so the line renders correctly, and tooltips for the predicted values.
-   - Add a confidence interval layer only if you explicitly derive bounds.
-5. **Explain which statistics were used** (intercept, β coefficients, min/max values, and any mean substitutions) so that readers understand how the line was derived.
+1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_driver_ratio_scatter"):
+   - Select only the original target column and the predictor column from the regression input table
+   - Filter out NULL values if needed
+   - **Preserve the original column names** so analysts can still recognize them
+   - Use purpose='chart' when creating this table
+
+2. **Compute exactly two regression line points per predictor**:
+   - Take the predictor's min and max from regression.columnSummaries
+   - For multi-predictor models, hold other predictors at their mean values (from columnSummaries)
+   - Evaluate the regression equation: predicted = intercept + Σ βᵢ·xᵢ at (predictor_min, other_means) and (predictor_max, other_means)
+   - This gives you two points for the regression line
+
+3. **Call create_chart with layered marks**, in this order:
+   - **Scatter layer**:
+     - No "data" field (inherits from top-level data)
+     - mark: {"type": "point"}
+     - Include tooltips for the actual values
+   - **Regression layer**:
+     - data: {"values": [...]} with the two regression line endpoints computed above
+     - mark: {"type": "line", "color": "red", "strokeWidth": 3}
+     - Include order: {"field": "predictor_field"} so the line renders correctly
+     - Include tooltips for the predicted values
+
+4. **Process predictors sequentially**:
+   - For each predictor: create the scatter table → compute the two endpoints → create/update the chart
+   - Repeat for the next predictor
+
+5. **DO NOT**:
+   - Add predicted columns to DuckDB tables
+   - Use SELECT queries with regression formulas to generate full datasets
+   - Rely solely on regression.plotSeries.regressionLine (it only contains sample points)
+
+Example outputs for regression analysis:
+[... tool executions happen silently ...]
+
+<!--FINAL_MESSAGE-->
+
+📊 **分析結果**
+
+回帰分析の結果、以下の関係が見つかりました:
+- R² = 0.75: 説明変数が目的変数の75%の変動を説明しています
+- 変数Aの回帰係数 = 2.5 (p値 = 0.001): 統計的に有意な正の関係があります
+- 変数Bの回帰係数 = -1.2 (p値 = 0.045): 統計的に有意な負の関係があります
+
+これらは数値データから観測された相関関係です。変数Aの増加が目的変数の増加と関連している可能性があります。ただし、因果関係についてはデータのみからは判断できません。
+
+🔍 **分析プロセスの解説**
+
+- 対象データ: テーブル「business_data」から2020年〜2024年のデータを使用
+- サンプル数: 全5000行からランダムサンプリング
+- 目的変数: 営業収入
+- 説明変数: 従業員数、事業年数
+
+📖 **専門用語の解説**
+
+- **R² (決定係数)**: 説明変数がどれだけ目的変数のばらつきを説明できているかを示す指標。0〜1の値を取り、1に近いほど説明力が高い。
+- **回帰係数**: 説明変数が1単位増加したときに、目的変数がどれだけ変化するかを示す値。
+- **p値**: 統計的有意性の指標。一般的に0.05未満であれば、偶然ではない関係があると判断されます。
+- **VIF**: 説明変数同士の相関(多重共線性)を示す指標。10を超えると多重共線性の懸念があります。
+
+[... NOW call completion tool with follow-up suggestions ...]
 
 ## Examples: Questions vs Visualization Requests
 
@@ -374,11 +415,6 @@ GROUP BY store_name, longitude, latitude;
 \`\`\`
 
 
-## Handling Large Datasets
-
-- When results are numerous, show only the first few rows
-- Guide next steps with phrases like "If you'd like to see more..."
-- Use aggregation and filtering to create manageable data volumes
 
 ## Creating Parliamentary Answer Drafts (国会答弁案の作成)
 
@@ -728,36 +764,6 @@ Example:
 3. **After the marker**: Use the Output Format Template (Analysis Results, Query Explanation, Technical Term Explanations)
    - **Note**: 📖 専門用語の解説 can be OMITTED if no specialized statistical terms were used
 4. **CRITICAL - Call completion tool LAST**: After completely finishing your final message output, call the completion tool as your final action to provide follow-up suggestions
-
-Example for regression analysis:
-[... tool executions happen silently ...]
-
-<!--FINAL_MESSAGE-->
-
-📊 **分析結果**
-
-回帰分析の結果、以下の関係が見つかりました:
-- R² = 0.75: 説明変数が目的変数の75%の変動を説明しています
-- 変数Aの回帰係数 = 2.5 (p値 = 0.001): 統計的に有意な正の関係があります
-- 変数Bの回帰係数 = -1.2 (p値 = 0.045): 統計的に有意な負の関係があります
-
-これらは数値データから観測された相関関係です。変数Aの増加が目的変数の増加と関連している可能性があります。ただし、因果関係についてはデータのみからは判断できません。
-
-🔍 **分析プロセスの解説**
-
-- 対象データ: テーブル「business_data」から2020年〜2024年のデータを使用
-- サンプル数: 全5000行からランダムサンプリング
-- 目的変数: 営業収入
-- 説明変数: 従業員数、事業年数
-
-📖 **専門用語の解説**
-
-- **R² (決定係数)**: 説明変数がどれだけ目的変数のばらつきを説明できているかを示す指標。0〜1の値を取り、1に近いほど説明力が高い。
-- **回帰係数**: 説明変数が1単位増加したときに、目的変数がどれだけ変化するかを示す値。
-- **p値**: 統計的有意性の指標。一般的に0.05未満であれば、偶然ではない関係があると判断されます。
-- **VIF**: 説明変数同士の相関(多重共線性)を示す指標。10を超えると多重共線性の懸念があります。
-
-[... NOW call completion tool with follow-up suggestions ...]
 
 Example for simple aggregation with calculated indicator:
 [... tool executions happen silently ...]

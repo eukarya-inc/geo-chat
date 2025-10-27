@@ -1,15 +1,51 @@
 import { atom } from 'jotai';
-import { remoteStateAtom } from './remoteAtoms';
-import { localStateAtom } from './localAtoms';
-import type { Chat, ChatState } from './remoteAtoms';
+import {
+    remoteStateAtom,
+    type Chat,
+    type ChatState,
+    type ChatStateUpdate,
+    type ChartSpecs,
+    type MapSpecs,
+    type TableName,
+} from './remoteAtoms';
+import { selectedChatIdAtom, localStateAtom } from './localAtoms';
+import type { ChartSpec } from '../types/chart';
 
 // ===== Integrated View Atoms (combining remote and local state) =====
 // Current chat (retrieved from remote state)
-export const currentChatAtom = atom(get => {
-    const remoteState = get(remoteStateAtom);
-    const localState = get(localStateAtom);
-    return localState.selectedChatId ? remoteState.chats[localState.selectedChatId] : undefined;
-});
+export const currentChatAtom = atom(
+    get => {
+        const remoteState = get(remoteStateAtom);
+        const selectedChatId = get(selectedChatIdAtom);
+        if (!selectedChatId || !remoteState.chats[selectedChatId]) {
+            return null;
+        }
+        return remoteState.chats[selectedChatId];
+    },
+    (get, set, arg: Chat | ((prev: Chat | null) => Chat | null)) => {
+        const selectedChatId = get(selectedChatIdAtom);
+        if (!selectedChatId) return;
+
+        // The updater function is passed to set(remoteStateAtom) to ensure it receives the latest state.
+        // This prevents race conditions when multiple asynchronous operations update the state concurrently.
+        set(remoteStateAtom, prevRemoteState => {
+            const currentChat = prevRemoteState.chats[selectedChatId] ?? get(currentChatAtom);
+            const newChat = typeof arg === 'function' ? arg(currentChat) : arg;
+
+            if (!newChat) {
+                return prevRemoteState;
+            }
+
+            return {
+                ...prevRemoteState,
+                chats: {
+                    ...prevRemoteState.chats,
+                    [selectedChatId]: newChat,
+                },
+            };
+        });
+    }
+);
 
 // Current dashboard (retrieved from remote state)
 export const currentDashboardAtom = atom(get => {
@@ -159,55 +195,89 @@ export const selectTableAtom = atom(null, (get, set, tableName: string | null) =
 });
 
 // Update chat state (updates current chat)
-export const updateChatStateAtom = atom(null, (get, set, updates: Partial<ChatState>) => {
-    const remoteState = get(remoteStateAtom);
+export const updateChatStateAtom = atom(null, (get, set, updates: ChatStateUpdate) => {
     const localState = get(localStateAtom);
     const chatId = localState.selectedChatId;
 
-    if (!chatId || !remoteState.chats[chatId]) return;
+    if (!chatId) return;
 
-    // Use chartSpecs from updates if provided, otherwise keep existing
-    // This allows both updating specific tables and removing tables
-    const mergedChartSpecs =
-        updates.chartSpecs !== undefined ? updates.chartSpecs : remoteState.chats[chatId].chartSpecs;
+    // Use updater function pattern to ensure we always work with the latest state
+    // This prevents race conditions when multiple updates happen concurrently
+    set(remoteStateAtom, prevRemoteState => {
+        const currentChat = prevRemoteState.chats[chatId];
+        if (!currentChat) return prevRemoteState;
 
-    // Deep merge for mapSpecs
-    let mergedMapSpecs = remoteState.chats[chatId].mapSpecs;
-    if (updates.mapSpecs) {
-        mergedMapSpecs = { ...remoteState.chats[chatId].mapSpecs };
+        // Merge chartSpecs - updates are merged per table to preserve other tables' specs
+        const mergedChartSpecs = mergeChartSpecs(currentChat.chartSpecs, updates.chartSpecs);
 
-        // Deep merge each table's mapSpec
-        for (const [tableName, newMapSpec] of Object.entries(updates.mapSpecs)) {
-            const existingMapSpec = mergedMapSpecs?.[tableName] || {};
-            mergedMapSpecs[tableName] = {
-                ...existingMapSpec,
-                ...newMapSpec,
-                // Deep merge tableStyles if present
-                tableStyles: newMapSpec.tableStyles
-                    ? {
-                          ...existingMapSpec.tableStyles,
-                          ...newMapSpec.tableStyles,
-                      }
-                    : existingMapSpec.tableStyles,
-            };
+        // Merge mapSpecs - deep merge to preserve existing properties
+        const mergedMapSpecs = mergeMapSpecs(currentChat.mapSpecs, updates.mapSpecs);
+
+        // Create updated chat with merged specs
+        const updatedChat = {
+            ...currentChat,
+            ...updates,
+            chartSpecs: mergedChartSpecs,
+            mapSpecs: mergedMapSpecs,
+        };
+
+        return {
+            ...prevRemoteState,
+            chats: {
+                ...prevRemoteState.chats,
+                [chatId]: updatedChat,
+            },
+        };
+    });
+});
+
+// Helper: Merge chart specs per table (preserves specs for other tables)
+function mergeChartSpecs(
+    existing: ChartSpecs | undefined,
+    updates: Record<TableName, ChartSpec | null> | undefined
+): ChartSpecs {
+    // Start with existing specs to preserve all tables
+    const merged = { ...(existing || {}) };
+
+    if (!updates) return merged;
+
+    // Merge each table's spec
+    for (const [tableName, newChartSpec] of Object.entries(updates)) {
+        // null means deletion
+        if (newChartSpec === null) {
+            delete merged[tableName];
+        } else {
+            merged[tableName] = newChartSpec;
         }
     }
 
-    const updatedChat = {
-        ...remoteState.chats[chatId],
-        ...updates,
-        chartSpecs: mergedChartSpecs,
-        mapSpecs: mergedMapSpecs,
-    };
+    return merged;
+}
 
-    set(remoteStateAtom, {
-        ...remoteState,
-        chats: {
-            ...remoteState.chats,
-            [chatId]: updatedChat,
-        },
-    });
-});
+// Helper: Deep merge map specs per table
+function mergeMapSpecs(existing: MapSpecs | undefined, updates: MapSpecs | undefined): MapSpecs | undefined {
+    if (!updates) return existing;
+
+    const merged = { ...(existing || {}) };
+
+    // Deep merge each table's mapSpec
+    for (const [tableName, newMapSpec] of Object.entries(updates)) {
+        const existingMapSpec = merged[tableName] || {};
+        merged[tableName] = {
+            ...existingMapSpec,
+            ...newMapSpec,
+            // Deep merge tableStyles if present
+            tableStyles: newMapSpec.tableStyles
+                ? {
+                      ...existingMapSpec.tableStyles,
+                      ...newMapSpec.tableStyles,
+                  }
+                : existingMapSpec.tableStyles,
+        };
+    }
+
+    return merged;
+}
 
 // Update messages (updates ChatState)
 export const updateMessagesAtom = atom(
@@ -273,3 +343,9 @@ export const addTableHistoryAtom = atom(
         });
     }
 );
+
+// Current chat messages (derived state)
+export const currentChatMessagesAtom = atom(get => {
+    const currentChat = get(currentChatAtom);
+    return currentChat?.messages ?? [];
+});
