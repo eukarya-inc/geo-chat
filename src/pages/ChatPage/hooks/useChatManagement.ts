@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
     chatsAtom,
     localStateAtom,
@@ -10,18 +10,16 @@ import {
     selectChatAtom,
     updateMessagesAtom,
     updateChatStateAtom,
-    remoteStateAtom,
     currentChatStateAtom,
     type Chat,
     type ChatState,
 } from '../../../store/atoms';
 import type { StructuredMessage } from '../../../types/message';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
-import type { Chat as ChatListChat } from '../../../components/chat/ChatList';
 
 export function useChatManagement(dbContext: DBContext | null) {
     const chatsRecord = useAtomValue(chatsAtom); // Now a Record<string, Chat>
-    const [localState, setLocalState] = useAtom(localStateAtom);
+    const localState = useAtomValue(localStateAtom);
     const currentChat = useAtomValue(currentChatAtom);
     const currentChatState = useAtomValue(currentChatStateAtom);
     const createChat = useSetAtom(createChatAtom);
@@ -30,28 +28,19 @@ export function useChatManagement(dbContext: DBContext | null) {
     const selectChat = useSetAtom(selectChatAtom);
     const updateMessages = useSetAtom(updateMessagesAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
-    const setRemoteState = useSetAtom(remoteStateAtom);
     const hasInitialized = useRef(false);
 
     const selectedChatId = localState.selectedChatId;
 
     // Convert Record to array and sort by createdAt for ChatList format
-    const chatsWithMessages = useMemo((): ChatListChat[] => {
-        return Object.values(chatsRecord)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .map(chat => ({
-                id: chat.id,
-                title: chat.title,
-                createdAt: chat.createdAt,
-                messages: chat.messages,
-                selectedTable: chat.selectedTable,
-                mapSpecs: chat.mapSpecs,
-                isTitleDefault: chat.isTitleDefault,
-            }));
+    const chatsWithMessages = useMemo((): Chat[] => {
+        return Object.values(chatsRecord).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
     }, [chatsRecord]);
 
     // Current chat with full state
-    const currentChatWithState = useMemo((): ChatListChat | undefined => {
+    const currentChatWithState = useMemo((): Chat | undefined => {
         if (!currentChat || !currentChatState) return undefined;
         return {
             ...currentChat,
@@ -201,36 +190,7 @@ export function useChatManagement(dbContext: DBContext | null) {
 
     return {
         chats: chatsWithMessages,
-        setChats: (newChats: ChatListChat[]) => {
-            // For compatibility - update remote state directly
-            const newChatsRecord: Record<string, Chat> = {};
-
-            newChats.forEach(chat => {
-                newChatsRecord[chat.id] = {
-                    id: chat.id,
-                    title: chat.title,
-                    createdAt: chat.createdAt,
-                    selectedTable: chat.selectedTable || null,
-                    isTitleDefault: chat.isTitleDefault,
-                    messages: chat.messages,
-                    tables: {}, // Initialize empty tables record
-                    chartSpecs: undefined,
-                    mapSpecs: chat.mapSpecs,
-                };
-            });
-
-            setRemoteState(prev => ({
-                ...prev,
-                chats: newChatsRecord,
-            }));
-        },
         selectedChatId,
-        setSelectedChatId: (chatId: string | null) => {
-            setLocalState(prev => ({
-                ...prev,
-                selectedChatId: chatId,
-            }));
-        },
         currentChat: currentChatWithState,
         createNewChat,
         deleteChat: deleteChatHandler,
