@@ -17,7 +17,7 @@
         "test:browser": "vitest run --project=browser",
         "test:unit": "vitest run --project=unit",
         "test:full": "vitest run",
-        "check:light": "prettier --write --log-level error . && eslint . && npm run typecheck && npm run test:unit"
+        "check": "prettier --write --log-level error . && eslint . && npm run typecheck && npm run test:unit"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^1.2.12",

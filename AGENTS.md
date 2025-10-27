@@ -10,11 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
-- `npm run check:light` - Run format, lint, typecheck, and unit tests (fast feedback for development)
-- `npm test` - Run unit tests only (fast, used in check script)
+- `npm run check` - Run format, lint, typecheck, and unit tests (fast feedback for development)
+- `npm run test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
-- `npm run test:unit` - Run unit tests (same as `npm test`)
+- `npm run test:unit` - Run unit tests (same as `npm run test`)
 - `npm run test:full` - Run all tests including browser tests (used in CI)
 - `npm run preview` - Preview built application
 
@@ -44,12 +44,12 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Light Check After Code Changes
+## IMPORTANT: Always Run Check After Code Changes
 
 After making any code changes, you MUST run:
 
 ```bash
-npm run check:light
+npm run check
 ```
 
 This ensures:
@@ -63,7 +63,7 @@ This ensures:
 **Development command:**
 
 ```bash
-npm run check:light
+npm run check
 ```
 
 This runs: format → lint → typecheck → unit tests
@@ -178,7 +178,7 @@ The application includes comprehensive AI tools for data manipulation and visual
 - Tests are organized alongside source files with `.test.ts` or `.test.tsx` extensions
 - **Browser tests** (`.browser.test.ts`): Use for unit-test style tests that depend on browser-only APIs like DuckDB-WASM, MapLibre GL, or other browser-specific features
 - **Regular unit tests** (`.test.ts`): Use for tests that don't depend on browser APIs and can run in Node.js environment
-- Run unit tests with `npm test` (fast, for local development)
+- Run unit tests with `npm run test` (fast, for local development)
 - Run all tests with `npm run test:full` (includes browser tests, used in CI)
 - Watch mode with `npm run test:watch`
 - Run browser tests specifically with `npm run test:browser`
@@ -210,5 +210,5 @@ Use regular unit tests (`.test.ts`) when testing:
 
 ## Code Quality
 
-Use `npm run check:light` for development validation (format, lint, typecheck, test).
+Use `npm run check` for development validation (format, lint, typecheck, test).
 The command runs validation steps quietly, only showing errors to save context.
