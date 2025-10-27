@@ -11,8 +11,11 @@ export function useDashboardManagement() {
             let newDashboard: Dashboard | null = null;
 
             setRemoteState(prev => {
+                // Generate unique ID with timestamp and random component
+                const id = `dashboard-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
                 newDashboard = {
-                    id: `dashboard-${Date.now()}`,
+                    id,
                     title: title || `Dashboard ${Object.keys(prev.dashboards).length + 1}`,
                     createdAt: new Date(),
                     visualizations: [],

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { useDashboardManagement } from './useDashboardManagement';
 import type { Dashboard } from '../../../store/remoteAtoms';
@@ -30,7 +30,7 @@ describe('useDashboardManagement', () => {
 
         expect(newDashboard).toEqual(
             expect.objectContaining({
-                id: expect.stringMatching(/^dashboard-\d+$/),
+                id: expect.stringMatching(/^dashboard-\d+-[a-z0-9]+$/),
                 title: 'Test Dashboard',
                 createdAt: expect.any(Date),
                 visualizations: [],
@@ -64,32 +64,42 @@ describe('useDashboardManagement', () => {
         let dashboard1: Dashboard | undefined;
         let dashboard2: Dashboard | undefined;
 
-        // Create two dashboards with small delay to ensure unique IDs
+        // Create first dashboard
         act(() => {
             dashboard1 = result.current.createDashboard('Dashboard 1');
         });
 
-        // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
-
+        // Create second dashboard
         act(() => {
             dashboard2 = result.current.createDashboard('Dashboard 2');
         });
 
-        if (dashboard1 && dashboard2) {
-            // Verify both dashboards exist
-            expect(result.current.dashboards[dashboard1.id]).toBeDefined();
-            expect(result.current.dashboards[dashboard2.id]).toBeDefined();
+        // Ensure we have valid dashboards before proceeding
+        expect(dashboard1).toBeDefined();
+        expect(dashboard2).toBeDefined();
+        expect(dashboard1?.id).toBeDefined();
+        expect(dashboard2?.id).toBeDefined();
 
-            // Delete the first dashboard
-            act(() => {
-                result.current.deleteDashboard(dashboard1!.id);
-            });
+        // Store IDs for later verification
+        const dashboard1Id = dashboard1!.id;
+        const dashboard2Id = dashboard2!.id;
 
-            // First dashboard should be deleted, second should remain
-            expect(result.current.dashboards[dashboard1!.id]).toBeUndefined();
-            expect(result.current.dashboards[dashboard2!.id]).toBeDefined();
-        }
+        // Wait for both dashboards to be created in state
+        await waitFor(() => {
+            expect(result.current.dashboards[dashboard1Id]).toBeDefined();
+            expect(result.current.dashboards[dashboard2Id]).toBeDefined();
+        });
+
+        // Delete the first dashboard
+        act(() => {
+            result.current.deleteDashboard(dashboard1Id);
+        });
+
+        // Wait for deletion to complete and verify state
+        await waitFor(() => {
+            expect(result.current.dashboards[dashboard1Id]).toBeUndefined();
+            expect(result.current.dashboards[dashboard2Id]).toBeDefined();
+        });
     });
 
     it('should handle deleting non-existent dashboard gracefully', () => {
@@ -181,25 +191,32 @@ describe('useDashboardManagement', () => {
         let dashboard1: Dashboard | undefined;
         let dashboard2: Dashboard | undefined;
 
-        // Create two dashboards with small delay to ensure unique IDs
+        // Create first dashboard
         act(() => {
             dashboard1 = result.current.createDashboard('Dashboard 1');
         });
 
-        // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 1));
+        // Wait for state update
+        await waitFor(() => {
+            expect(dashboard1).toBeDefined();
+            expect(result.current.getAllDashboards()).toHaveLength(1);
+        });
 
+        // Create second dashboard
         act(() => {
             dashboard2 = result.current.createDashboard('Dashboard 2');
         });
 
-        const allDashboards = result.current.getAllDashboards();
-
-        expect(allDashboards).toHaveLength(2);
-        if (dashboard1 && dashboard2) {
-            expect(allDashboards).toContain(dashboard1);
-            expect(allDashboards).toContain(dashboard2);
-        }
+        // Wait for state update and verify final state
+        await waitFor(() => {
+            expect(dashboard2).toBeDefined();
+            const allDashboards = result.current.getAllDashboards();
+            expect(allDashboards).toHaveLength(2);
+            if (dashboard1 && dashboard2) {
+                expect(allDashboards).toContain(dashboard1);
+                expect(allDashboards).toContain(dashboard2);
+            }
+        });
     });
 
     it('should get specific dashboard by id', () => {
