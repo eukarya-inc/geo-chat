@@ -256,8 +256,13 @@ describe('kmeans', () => {
         expect(result.converged).toBe(true);
 
         // Check clustering quality
-        // Each cluster contains at least one point
-        expect(result.clusterSizes.every(size => size > 0)).toBe(true);
+        // With minimum cluster size constraint, some clusters may become empty
+        const nonEmptyClusters = result.clusterSizes.filter(size => size > 0);
+        expect(nonEmptyClusters.length).toBeGreaterThan(0);
+        // All non-empty clusters should have at least 3 points (minimum cluster size)
+        for (const size of nonEmptyClusters) {
+            expect(size).toBeGreaterThanOrEqual(3);
+        }
 
         // Inertia is a finite value
         expect(Number.isFinite(result.inertia)).toBe(true);
@@ -350,13 +355,77 @@ describe('kmeans', () => {
         expect(result.labels).toHaveLength(7);
 
         // Check clustering quality
-        // Each cluster contains at least one point
-        expect(result.clusterSizes.every(size => size > 0)).toBe(true);
+        // With minimum cluster size constraint, some clusters may become empty
+        const nonEmptyClusters = result.clusterSizes.filter(size => size > 0);
+        expect(nonEmptyClusters.length).toBeGreaterThan(0);
+        // All non-empty clusters should have at least 3 points (minimum cluster size)
+        for (const size of nonEmptyClusters) {
+            expect(size).toBeGreaterThanOrEqual(3);
+        }
 
         // Check convergence
         expect(result.converged).toBe(true);
 
         // Inertia is a finite value
         expect(Number.isFinite(result.inertia)).toBe(true);
+    });
+
+    it('should enforce minimum cluster size of 3 points', () => {
+        // Create data where one cluster would naturally have only 1-2 points
+        const X = [
+            // Main group 1 (close together)
+            [0, 0],
+            [0.5, 0.5],
+            [1, 1],
+            [0.8, 0.8],
+            // Main group 2 (close together)
+            [10, 10],
+            [10.5, 10.5],
+            [11, 11],
+            [10.8, 10.8],
+            // Outlier that would form a singleton cluster
+            [50, 50],
+        ];
+
+        const result = kmeans(X, { numClusters: 3 });
+
+        // All clusters should have at least 3 points or be empty
+        for (const size of result.clusterSizes) {
+            if (size > 0) {
+                expect(size).toBeGreaterThanOrEqual(3);
+            }
+        }
+
+        // Total points should still be 9
+        expect(result.clusterSizes.reduce((a, b) => a + b, 0)).toBe(9);
+    });
+
+    it('should handle case where multiple small clusters need merging', () => {
+        const X = [
+            // Group 1
+            [0, 0],
+            [0.5, 0.5],
+            [1, 1],
+            [0.8, 0.8],
+            // Group 2
+            [10, 10],
+            [10.5, 10.5],
+            [11, 11],
+            [10.8, 10.8],
+            // Two outliers
+            [50, 50],
+            [55, 55],
+        ];
+
+        const result = kmeans(X, { numClusters: 4 });
+
+        // All non-empty clusters should have at least 3 points
+        const nonEmptyClusters = result.clusterSizes.filter(size => size > 0);
+        for (const size of nonEmptyClusters) {
+            expect(size).toBeGreaterThanOrEqual(3);
+        }
+
+        // Total points should still be 10
+        expect(result.clusterSizes.reduce((a, b) => a + b, 0)).toBe(10);
     });
 });
