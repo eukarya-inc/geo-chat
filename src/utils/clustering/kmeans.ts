@@ -212,12 +212,6 @@ export function kmeans(dataMatrix: number[][], options: KMeansOptions): ClusterR
         totalMs,
     };
 
-    // Step 6: Enforce minimum cluster size (default: 3 points)
-    const minClusterSize = 3;
-    if (finalResult.clusterSizes.some(size => size < minClusterSize && size > 0)) {
-        mergeSingletonClusters(finalResult, scaledData, numClusters, numFeatures, minClusterSize);
-    }
-
     return finalResult;
 }
 
@@ -462,78 +456,6 @@ function computeInertia(dataMatrix: number[][], labels: number[], centroids: num
         inertia += euclideanDistanceSquared(dataMatrix[i], centroids[label]);
     }
     return inertia;
-}
-
-/**
- * Merge small clusters into nearest larger clusters
- * @param result - Cluster result to modify in-place
- * @param dataMatrix - Scaled data matrix
- * @param numClusters - Number of clusters
- * @param numFeatures - Number of features
- * @param minClusterSize - Minimum cluster size threshold
- */
-function mergeSingletonClusters(
-    result: ClusterResult,
-    dataMatrix: number[][],
-    numClusters: number,
-    numFeatures: number,
-    minClusterSize: number
-): void {
-    const { labels, centroids } = result;
-    const numSamples = labels.length;
-
-    // Identify clusters that are too small
-    const smallClusters = new Set<number>();
-    for (let clusterIdx = 0; clusterIdx < numClusters; clusterIdx += 1) {
-        if (result.clusterSizes[clusterIdx] < minClusterSize && result.clusterSizes[clusterIdx] > 0) {
-            smallClusters.add(clusterIdx);
-        }
-    }
-
-    if (smallClusters.size === 0) {
-        return; // No small clusters to merge
-    }
-
-    // Reassign points from small clusters to nearest large cluster
-    for (let i = 0; i < numSamples; i += 1) {
-        const currentCluster = labels[i];
-
-        if (smallClusters.has(currentCluster)) {
-            // Find nearest cluster that is large enough
-            let nearestCluster = currentCluster;
-            let minDist = Infinity;
-
-            for (let clusterIdx = 0; clusterIdx < numClusters; clusterIdx += 1) {
-                // Skip small clusters and current cluster
-                if (smallClusters.has(clusterIdx)) {
-                    continue;
-                }
-
-                const dist = euclideanDistance(dataMatrix[i], centroids[clusterIdx]);
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearestCluster = clusterIdx;
-                }
-            }
-
-            // Reassign to nearest large cluster
-            labels[i] = nearestCluster;
-        }
-    }
-
-    // Recompute cluster sizes
-    const newClusterSizes = new Array<number>(numClusters).fill(0);
-    for (const label of labels) {
-        newClusterSizes[label] += 1;
-    }
-    result.clusterSizes = newClusterSizes;
-
-    // Recompute centroids for affected clusters
-    result.centroids = computeCentroids(dataMatrix, labels, numClusters, numFeatures);
-
-    // Recompute inertia and silhouette score
-    result.inertia = computeInertia(dataMatrix, labels, result.centroids);
-    result.silhouetteScore = computeSilhouetteScore(dataMatrix, labels, numClusters);
 }
 
 /**
