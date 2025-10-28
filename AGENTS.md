@@ -11,10 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
 - `npm run check` - Run format, lint, typecheck, and unit tests (fast feedback for development)
-- `npm run test` - Run unit tests only (fast, used in check script)
+- `npm test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
-- `npm run test:unit` - Run unit tests (same as `npm run test`)
+- `npm run test:unit` - Run unit tests (same as `npm test`)
 - `npm run test:full` - Run all tests including browser tests (used in CI)
 - `npm run preview` - Preview built application
 
@@ -44,7 +44,7 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Check After Code Changes
+## IMPORTANT: Always Run Format, Lint, and Test After Changes
 
 After making any code changes, you MUST run:
 
@@ -56,24 +56,16 @@ This ensures:
 
 1. Code is automatically formatted with Prettier
 2. ESLint passes without errors or warnings
-3. TypeScript type checking succeeds
-4. Unit tests pass
-5. Fast feedback during development without heavy build processes
-
-**Development command:**
-
-```bash
-npm run check
-```
-
-This runs: format → lint → typecheck → unit tests
+3. TypeScript compilation succeeds
+4. All tests pass
+5. No regressions are introduced
 
 **Important notes:**
 
-- The `check` command provides fast feedback during development
-- Errors and warnings are clearly displayed when they occur
+- The `check` script runs: format (error-only) → lint (quiet) → unit test (silent)
+- Only unit tests are run for fast feedback; full tests (including browser tests) run in CI
+- Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
-- This is the primary command for development validation
 
 ## Critical Implementation Details
 
@@ -179,7 +171,7 @@ The application includes comprehensive AI tools for data manipulation and visual
 - Tests are organized alongside source files with `.test.ts` or `.test.tsx` extensions
 - **Browser tests** (`.browser.test.ts`): Use for unit-test style tests that depend on browser-only APIs like DuckDB-WASM, MapLibre GL, or other browser-specific features
 - **Regular unit tests** (`.test.ts`): Use for tests that don't depend on browser APIs and can run in Node.js environment
-- Run unit tests with `npm run test` (fast, for local development)
+- Run unit tests with `npm test` (fast, for local development)
 - Run all tests with `npm run test:full` (includes browser tests, used in CI)
 - Watch mode with `npm run test:watch`
 - Run browser tests specifically with `npm run test:browser`
@@ -211,7 +203,7 @@ Use regular unit tests (`.test.ts`) when testing:
 
 ## ⚠️ CRITICAL: Always Run Check Before Task Completion
 
-**IMPORTANT**: Before considering your task complete, you MUST run:
+**IMPORTANT**: After making any code changes and before considering your task complete, you MUST run:
 
 ```bash
 npm run check
@@ -220,16 +212,10 @@ npm run check
 This ensures:
 
 - Code is automatically formatted with Prettier
-- ESLint passes without errors or warnings
-- TypeScript type checking succeeds
+- Code follows the project's style guidelines
+- No syntax errors or warnings
+- TypeScript compilation succeeds
 - All tests pass
 - No regressions are introduced
 
-**IMPORTANT**: If the check command fails or shows warnings:
-
-1. **For test failures**: You MUST fix all failing tests before completing your task
-2. **For ESLint errors or warnings**: You MUST fix all errors and warnings before completing your task
-3. **For TypeScript errors**: You MUST fix all type errors before completing your task
-4. **For any other issues**: You MUST resolve all problems before completing your task
-
-The check command shows errors and warnings clearly when they occur, allowing you to identify and fix issues quickly.
+The check command runs all validation steps quietly, only showing errors to save context.
