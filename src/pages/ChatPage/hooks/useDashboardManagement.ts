@@ -12,7 +12,7 @@ export function useDashboardManagement() {
 
             setRemoteState(prev => {
                 // Generate unique ID with timestamp and random component
-                const id = `dashboard-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const id = `dashboard-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
                 newDashboard = {
                     id,
