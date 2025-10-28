@@ -5,9 +5,9 @@ import { kmeans } from '../../../utils/clustering/kmeans';
 import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
 const DEFAULT_MAX_ROWS = 100;
-const MAX_ALLOWED_ROWS = 5000;
+const MAX_ALLOWED_ROWS = 100; // Force maximum to 100 to prevent token overflow
 const MIN_REQUIRED_ROWS = 10;
-const AUTO_SAMPLING_THRESHOLD = 500;
+const AUTO_SAMPLING_THRESHOLD = 100; // Auto-sample to 100 rows
 const DEFAULT_K = 3;
 const MIN_K = 2;
 const MAX_K = 10;
@@ -42,15 +42,15 @@ EXAMPLES OF WHEN NOT TO USE:
 DEFAULT BEHAVIOR:
 - Automatically uses k=3 clusters (small/medium/large or low/medium/high grouping)
 - User can override by specifying different k value (2-10)
-- Analyzes up to 100 rows by default (configurable up to 5000)
+- Analyzes exactly 100 rows (fixed to prevent token overflow)
 
 IMPORTANT AUTO-SAMPLING:
-- If the input table has more than 500 rows, the tool automatically creates a sampled table with 500 rows
+- If the input table has more than 100 rows, the tool automatically creates a sampled table with 100 rows
 - The sampled table is named {original_table}_sampled_for_clustering
-- This prevents AI from stalling when processing large datasets
-- The tool analyzes up to max_rows (default: 100, max: 5000) from the table
-- For visualization, only 100 points are recommended due to Vega-Lite rendering limits
-- The tool will automatically suggest creating a sampled table for visualization
+- This prevents AI from stalling when processing large datasets and prevents token overflow
+- The tool analyzes up to max_rows (default: 100, max: 100) from the table
+- 100 points is optimal for both analysis and visualization
+- The tool will automatically suggest creating visualization
 
 IMPORTANT: After using this tool successfully, ALWAYS create visualizations:
 1. Create a new table with cluster labels added
@@ -85,7 +85,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 .min(MIN_REQUIRED_ROWS)
                 .max(MAX_ALLOWED_ROWS)
                 .optional()
-                .describe('Maximum number of rows to sample for analysis (default: 1000, max: 5000)'),
+                .describe('Maximum number of rows to sample for analysis (default: 100, max: 100)'),
             init_method: z
                 .enum(['random', 'kmeans++'])
                 .optional()
@@ -251,7 +251,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 
                 if (usedRows < totalRows) {
                     warnings.push(
-                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。より正確な結果が必要な場合はmax_rowsを増やしてください。`
+                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。100行に制限してトークンオーバーフローを防いでいます。`
                     );
                 }
 
