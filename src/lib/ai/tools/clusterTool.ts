@@ -4,10 +4,11 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { kmeans } from '../../../utils/clustering/kmeans';
 import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
-const DEFAULT_MAX_ROWS = 1000;
+const DEFAULT_MAX_ROWS = 100;
 const MAX_ALLOWED_ROWS = 5000;
 const MIN_REQUIRED_ROWS = 10;
 const MAX_VISUALIZATION_ROWS = 100;
+const AUTO_SAMPLING_THRESHOLD = 500;
 const DEFAULT_K = 3;
 const MIN_K = 2;
 const MAX_K = 10;
@@ -42,10 +43,13 @@ EXAMPLES OF WHEN NOT TO USE:
 DEFAULT BEHAVIOR:
 - Automatically uses k=3 clusters (small/medium/large or low/medium/high grouping)
 - User can override by specifying different k value (2-10)
-- Analyzes up to 1000 rows by default (configurable up to 5000)
+- Analyzes up to 100 rows by default (configurable up to 5000)
 
-IMPORTANT DATA SAMPLING:
-- The tool analyzes up to max_rows (default: 1000, max: 5000) data points
+IMPORTANT AUTO-SAMPLING:
+- If the input table has more than 500 rows, the tool automatically creates a sampled table with 500 rows
+- The sampled table is named {original_table}_sampled_for_clustering
+- This prevents AI from stalling when processing large datasets
+- The tool analyzes up to max_rows (default: 100, max: 5000) from the table
 - For visualization, only 100 points are recommended due to Vega-Lite rendering limits
 - The tool will automatically suggest creating a sampled table for visualization
 
@@ -90,13 +94,53 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
         }),
         execute: async ({ table_name, feature_columns, k = DEFAULT_K, max_rows, init_method }) => {
             try {
-                const tableName = table_name.trim();
+                let tableName = table_name.trim();
                 if (!tableName) {
                     return errorResponse('テーブル名が指定されていません。');
                 }
 
-                const sanitizedTable = quoteIdentifier(tableName);
-                const qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+                let sanitizedTable = quoteIdentifier(tableName);
+                let qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+
+                // Check table row count and auto-sample if needed
+                let originalTableName: string | null = null;
+                let originalRowCount: number | null = null;
+                const countQuery = `SELECT COUNT(*) as count FROM ${qualifiedTable};`;
+                const countResult = await dbContext.executeQuery(countQuery, schema);
+
+                if (Array.isArray(countResult) && countResult.length > 0) {
+                    const rowCount = Number(countResult[0]?.count);
+                    if (Number.isFinite(rowCount) && rowCount > AUTO_SAMPLING_THRESHOLD) {
+                        originalTableName = tableName;
+                        originalRowCount = rowCount;
+
+                        // Create sampled table
+                        const sampledTableName = `${tableName}_sampled_for_clustering`;
+                        const sampledSanitized = quoteIdentifier(sampledTableName);
+                        const sampledQualified = schema
+                            ? `${quoteIdentifier(schema)}.${sampledSanitized}`
+                            : sampledSanitized;
+
+                        // Drop existing sampled table if exists
+                        try {
+                            await dbContext.executeQuery(`DROP TABLE IF EXISTS ${sampledQualified};`, schema);
+                        } catch {
+                            // Ignore drop errors
+                        }
+
+                        // Create new sampled table using random sampling
+                        const createSampledQuery = `CREATE TABLE ${sampledQualified} AS
+                            SELECT * FROM ${qualifiedTable}
+                            ORDER BY random()
+                            LIMIT ${AUTO_SAMPLING_THRESHOLD};`;
+                        await dbContext.executeQuery(createSampledQuery, schema);
+
+                        // Update table reference to use sampled table
+                        tableName = sampledTableName;
+                        sanitizedTable = sampledSanitized;
+                        qualifiedTable = sampledQualified;
+                    }
+                }
                 const columns = await dbContext.getTableColumns(tableName, schema);
                 if (!columns || columns.length === 0) {
                     return errorResponse(`テーブル「${tableName}」のカラム情報が取得できませんでした。`);
@@ -360,9 +404,17 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     centroids: clustering.centroids,
                 };
 
+                // Build message with auto-sampling info
+                let message = '';
+                if (originalTableName && originalRowCount) {
+                    message = `テーブル「${originalTableName}」は${originalRowCount}行あったため、自動的に${AUTO_SAMPLING_THRESHOLD}行にサンプリングしたテーブル「${tableName}」を作成してクラスター分析を実行しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+                } else {
+                    message = `テーブル「${tableName}」のクラスター分析が完了しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+                }
+
                 const response: ClusterAnalysisResponse = {
                     success: true,
-                    message: `テーブル「${tableName}」のクラスター分析が完了しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`,
+                    message,
                     tableName,
                     featureColumns: providedFeatures,
                     dataInfo: {
