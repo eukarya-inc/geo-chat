@@ -50,6 +50,24 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
     });
 }
 
+// Define encoding field schemas for cluster visualization
+const clusterColorEncodingSchema = z
+    .object({
+        field: z.string(),
+        type: z.enum(['nominal', 'ordinal', 'quantitative', 'temporal']),
+        legend: z.unknown().optional(),
+    })
+    .strict()
+    .describe('Color encoding for cluster visualization');
+
+const clusterShapeEncodingSchema = z
+    .object({
+        field: z.string(),
+        type: z.enum(['nominal', 'ordinal', 'quantitative', 'temporal']),
+    })
+    .strict()
+    .describe('Shape encoding for cluster visualization');
+
 const baseSpecSchema = z
     .object({
         mark: z.union([z.string(), z.record(z.unknown())]).describe('The mark type'),
@@ -61,6 +79,37 @@ const baseSpecSchema = z
         config: z.record(z.unknown()).optional().describe('Chart configuration'),
     })
     .describe('Single-view Vega-Lite spec (excluding data, width, height)');
+
+// Cluster-specific schema with strict validation for cluster encodings
+const clusterSpecSchema = baseSpecSchema
+    .extend({
+        encoding: z
+            .object({
+                x: z.record(z.unknown()).optional(),
+                y: z.record(z.unknown()).optional(),
+                color: z.record(z.unknown()).optional(),
+                shape: clusterShapeEncodingSchema,
+                size: z.record(z.unknown()).optional(),
+                opacity: z.record(z.unknown()).optional(),
+                tooltip: z.union([z.array(z.record(z.unknown())), z.record(z.unknown())]).optional(),
+            })
+            .passthrough()
+            .superRefine((encoding, ctx) => {
+                // Validate color encoding for cluster
+                if (encoding.color && typeof encoding.color === 'object') {
+                    const colorEncoding = encoding.color as Record<string, unknown>;
+                    const result = clusterColorEncodingSchema.safeParse(colorEncoding);
+                    if (!result.success) {
+                        ctx.addIssue({
+                            code: z.ZodIssueCode.custom,
+                            message: `Invalid color encoding for cluster. Only 'field', 'type', and 'legend' keys are allowed. Error: ${result.error.message}`,
+                            path: ['color'],
+                        });
+                    }
+                }
+            }),
+    })
+    .describe('Cluster visualization spec with strict encoding validation');
 
 const layeredLayerSchema = baseSpecSchema
     .extend({
@@ -103,7 +152,7 @@ const layeredSpecSchema = z
     })
     .describe('Layered Vega-Lite spec (excluding data, width, height)');
 
-const chartSpecSchema = z.union([baseSpecSchema, layeredSpecSchema]);
+const chartSpecSchema = z.union([baseSpecSchema, clusterSpecSchema, layeredSpecSchema]);
 
 // Create the chart update tool for AI
 export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>) {
@@ -171,7 +220,17 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         DUAL-AXIS CHARTS (for future reference):
         - When you need different Y-axis scales (e.g., line + bar with different value ranges), explicitly add "resolve": {"scale": {"y": "independent"}}
 
+        CLUSTER VISUALIZATION:
+        - For cluster analysis results, use scatter plots with both "color" and "shape" encoding
+        - Cluster labels should always be "nominal" type
+        - Use "point" mark type for scatter plots
+        - Include feature columns and cluster label in tooltips with proper type specifications
+        - Both x and y axes should be "quantitative" type for numeric features
+        - Add axis titles for better readability
+
         Example specifications:
+
+        Example 1: Bar chart for categorical data comparison
         {
           "mark": "bar",
           "encoding": {
@@ -179,7 +238,8 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
             "y": {"field": "customer_count", "type": "quantitative", "title": "Customer Count"}
           }
         }
-        
+
+        Example 2: Line chart for time series data
         {
           "mark": "line",
           "encoding": {
@@ -187,7 +247,24 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
             "y": {"field": "sales", "type": "quantitative", "title": "Sales"}
           }
         }
-        
+
+        Example 3: Scatter plot for cluster analysis visualization
+        {
+          "mark": "point",
+          "encoding": {
+            "x": {"field": "feature1", "type": "quantitative", "axis": {"title": "Feature 1"}},
+            "y": {"field": "feature2", "type": "quantitative", "axis": {"title": "Feature 2"}},
+            "color": {"field": "cluster", "type": "nominal", "legend": {"title": "Cluster"}},
+            "shape": {"field": "cluster", "type": "nominal"},
+            "tooltip": [
+              {"field": "feature1", "type": "quantitative"},
+              {"field": "feature2", "type": "quantitative"},
+              {"field": "cluster", "type": "nominal"}
+            ]
+          }
+        }
+
+        Example 4: Layered chart for regression analysis (scatter + regression line)
         {
           "layer": [
             {
@@ -446,6 +523,37 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
                 encoding[channel] = ensureFieldType(encoding[channel]);
             }
         });
+
+        // Clean up cluster-related encodings
+        // For color encoding with cluster field, only keep field, type, and legend
+        if (encoding.color && typeof encoding.color === 'object') {
+            const colorEncoding = encoding.color as Record<string, unknown>;
+            if (
+                colorEncoding.field &&
+                typeof colorEncoding.field === 'string' &&
+                colorEncoding.field.toLowerCase().includes('cluster')
+            ) {
+                const { field, type, legend, ...rest } = colorEncoding;
+                if (Object.keys(rest).length > 0) {
+                    encoding.color = legend !== undefined ? { field, type, legend } : { field, type };
+                }
+            }
+        }
+
+        // For shape encoding with cluster field, only keep field and type
+        if (encoding.shape && typeof encoding.shape === 'object') {
+            const shapeEncoding = encoding.shape as Record<string, unknown>;
+            if (
+                shapeEncoding.field &&
+                typeof shapeEncoding.field === 'string' &&
+                shapeEncoding.field.toLowerCase().includes('cluster')
+            ) {
+                const { field, type, ...rest } = shapeEncoding;
+                if (Object.keys(rest).length > 0) {
+                    encoding.shape = { field, type };
+                }
+            }
+        }
 
         // Process tooltip fields
         if (encoding.tooltip) {
