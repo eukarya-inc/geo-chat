@@ -297,7 +297,7 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
         };
 
         loadInitialData();
-    }, [connection, tableName, arrowCache, dbContext, sortColumn, sortDirection, rawDataCache]);
+    }, [connection, tableName, arrowCache, dbContext, sortColumn, sortDirection]);
 
     const loadDataWindow = useCallback(
         async (startRow: number) => {
