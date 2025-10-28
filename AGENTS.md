@@ -70,9 +70,10 @@ This runs: format → lint → typecheck → unit tests
 
 **Important notes:**
 
-- Provides fast feedback during development
-- Output is suppressed on success; only errors are shown to save context
+- The `check` command provides fast feedback during development
+- Errors and warnings are clearly displayed when they occur
 - If any step fails, the command chain stops and shows the error
+- This is the primary command for development validation
 
 ## Critical Implementation Details
 
@@ -208,7 +209,27 @@ Use regular unit tests (`.test.ts`) when testing:
 - Avoid dataset-specific code - keep implementations generic and reusable.
 - When handling JSON data, ensure the approach works for any JSON structure, not just specific schemas.
 
-## Code Quality
+## ⚠️ CRITICAL: Always Run Check Before Task Completion
 
-Use `npm run check` for development validation (format, lint, typecheck, test).
-The command runs validation steps quietly, only showing errors to save context.
+**IMPORTANT**: Before considering your task complete, you MUST run:
+
+```bash
+npm run check
+```
+
+This ensures:
+
+- Code is automatically formatted with Prettier
+- ESLint passes without errors or warnings
+- TypeScript type checking succeeds
+- All tests pass
+- No regressions are introduced
+
+**IMPORTANT**: If the check command fails or shows warnings:
+
+1. **For test failures**: You MUST fix all failing tests before completing your task
+2. **For ESLint errors or warnings**: You MUST fix all errors and warnings before completing your task
+3. **For TypeScript errors**: You MUST fix all type errors before completing your task
+4. **For any other issues**: You MUST resolve all problems before completing your task
+
+The check command shows errors and warnings clearly when they occur, allowing you to identify and fix issues quickly.
