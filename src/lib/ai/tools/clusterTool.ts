@@ -7,7 +7,6 @@ import type { ClusterAnalysisResponse } from '../../../types/clustering';
 const DEFAULT_MAX_ROWS = 100;
 const MAX_ALLOWED_ROWS = 5000;
 const MIN_REQUIRED_ROWS = 10;
-const MAX_VISUALIZATION_ROWS = 100;
 const AUTO_SAMPLING_THRESHOLD = 500;
 const DEFAULT_K = 3;
 const MIN_K = 2;
@@ -260,107 +259,27 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     warnings.push('最大反復回数に到達しましたが収束しませんでした。結果が不安定な可能性があります。');
                 }
 
-                // Generate visualization suggestions - always create a single clustered table for scatter plot
-                const visualizationLimit = Math.min(usedRows, MAX_VISUALIZATION_ROWS);
-
-                if (usedRows > MAX_VISUALIZATION_ROWS) {
-                    suggestions.push(
-                        `分析には${usedRows}件のデータを使用しましたが、Vega-Liteでの散布図可視化には最大${MAX_VISUALIZATION_ROWS}点を推奨します。`
-                    );
-                }
-
-                // Use clustering.labels for SQL generation (before separating into diagnostics)
-                const labelsForVisualization = clustering.labels.slice(0, visualizationLimit);
-
-                suggestions.push(`次のステップ: クラスターラベルを含むテーブルを作成してください（散布図可視化用）：`);
+                // Provide guidance for AI to add cluster column using duckdb_query tool
                 suggestions.push(
-                    `CREATE TABLE ${tableName}_clustered_sampled AS SELECT *, CASE ${labelsForVisualization
-                        .map((label, idx) => `WHEN rowid = ${idx} THEN ${label}`)
-                        .join(' ')} END as cluster FROM ${tableName} LIMIT ${visualizationLimit};`
+                    `次のステップ: duckdb_queryツールを使って、テーブル「${tableName}」に cluster カラムを追加してください。`
+                );
+                suggestions.push(
+                    `cluster カラムの作成方法: 診断情報のlabels配列（${clustering.labels.length}件）を使用して、テーブル「${tableName}」の各行にクラスターラベルを設定してください。`
                 );
 
-                // 2D visualization suggestion with explicit Vega-Lite spec
+                // 2D visualization suggestion
                 if (providedFeatures.length === 2) {
                     const [feat1, feat2] = providedFeatures;
-                    const targetTable = `${tableName}_clustered_sampled`;
-
-                    // Provide explicit Vega-Lite specification for AI to follow
-                    const vegaSpec = {
-                        mark: 'point',
-                        encoding: {
-                            x: {
-                                field: feat1,
-                                type: 'quantitative',
-                                axis: { title: feat1 },
-                            },
-                            y: {
-                                field: feat2,
-                                type: 'quantitative',
-                                axis: { title: feat2 },
-                            },
-                            color: {
-                                field: 'cluster',
-                                type: 'nominal',
-                                legend: { title: 'クラスター' },
-                            },
-                            shape: {
-                                field: 'cluster',
-                                type: 'nominal',
-                            },
-                            tooltip: [
-                                { field: feat1, type: 'quantitative' },
-                                { field: feat2, type: 'quantitative' },
-                                { field: 'cluster', type: 'nominal' },
-                            ],
-                        },
-                    };
 
                     suggestions.push(
-                        `クラスター散布図を作成してください。テーブル「${targetTable}」に対して、以下のVega-Lite仕様を使用してください：\n${JSON.stringify(vegaSpec, null, 2)}`
+                        `可視化: テーブル「${tableName}」を使って、${feat1}と${feat2}の散布図を作成してください。clusterカラムで色分けしてください。`
                     );
                 }
 
-                // 3D+ visualization suggestion with explicit first projection
+                // 3D+ visualization suggestion
                 if (providedFeatures.length >= 3) {
-                    const targetTable = `${tableName}_clustered_sampled`;
-
-                    // Provide explicit Vega-Lite specification for the first projection
-                    const firstProjection = {
-                        mark: 'point',
-                        encoding: {
-                            x: {
-                                field: providedFeatures[0],
-                                type: 'quantitative',
-                                axis: { title: providedFeatures[0] },
-                            },
-                            y: {
-                                field: providedFeatures[1],
-                                type: 'quantitative',
-                                axis: { title: providedFeatures[1] },
-                            },
-                            color: {
-                                field: 'cluster',
-                                type: 'nominal',
-                                legend: { title: 'クラスター' },
-                            },
-                            shape: {
-                                field: 'cluster',
-                                type: 'nominal',
-                            },
-                            tooltip: [
-                                { field: providedFeatures[0], type: 'quantitative' },
-                                { field: providedFeatures[1], type: 'quantitative' },
-                                { field: 'cluster', type: 'nominal' },
-                            ],
-                        },
-                    };
-
                     suggestions.push(
-                        `特徴量が${providedFeatures.length}次元あります。まず(${providedFeatures[0]}, ${providedFeatures[1]})の2次元プロジェクションの散布図を作成してください。テーブル「${targetTable}」に対して、以下の仕様を使用：\n${JSON.stringify(firstProjection, null, 2)}`
-                    );
-
-                    suggestions.push(
-                        `追加の2次元プロジェクション例: (${providedFeatures[0]}, ${providedFeatures[2]})、(${providedFeatures[1]}, ${providedFeatures[2]}) など。同様の仕様で特徴量の組み合わせを変更してください。`
+                        `可視化: 特徴量が${providedFeatures.length}次元あります。テーブル「${tableName}」を使って、(${providedFeatures[0]}, ${providedFeatures[1]})の散布図を作成してください。clusterカラムで色分けしてください。`
                     );
                 }
 

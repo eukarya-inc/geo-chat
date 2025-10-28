@@ -343,7 +343,7 @@ describe('createClusterTool', () => {
         }
     });
 
-    it('should suggest multiple projections for 3D+ data', async () => {
+    it('should suggest scatter plot visualization for 3D+ data', async () => {
         vi.mocked(mockDbContext.getTableColumns).mockResolvedValue([
             { name: 'x', type: 'DOUBLE' },
             { name: 'y', type: 'DOUBLE' },
@@ -378,7 +378,8 @@ describe('createClusterTool', () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.suggestions?.some(s => s.includes('2次元プロジェクション'))).toBe(true);
+            expect(result.suggestions?.some(s => s.includes('散布図'))).toBe(true);
+            expect(result.suggestions?.some(s => s.includes('3次元'))).toBe(true);
         }
     });
 
