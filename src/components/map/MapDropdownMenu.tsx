@@ -40,8 +40,8 @@ export function MapDropdownMenu({
             }
 
             if (!mapContainer) {
-                // Try to find map container by looking for map element
-                mapContainer = document.querySelector('#map');
+                // Try to find map container by looking for any map element
+                mapContainer = document.querySelector('[id^="map-"]');
             }
 
             if (!mapContainer) {
@@ -93,8 +93,8 @@ export function MapDropdownMenu({
             }
 
             if (!mapContainer) {
-                // Try to find map container by looking for map element
-                mapContainer = document.querySelector('#map');
+                // Try to find map container by looking for any map element
+                mapContainer = document.querySelector('[id^="map-"]');
             }
 
             if (!mapContainer) {

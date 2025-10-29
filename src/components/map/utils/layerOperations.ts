@@ -7,8 +7,13 @@ import type { MapStyleManager } from '../mapStyleManager';
  * Remove all DuckDB sources and their layers from the map
  */
 export function removeAllDuckDBLayers(map: maplibregl.Map): void {
-    const allLayers = map.getStyle().layers || [];
-    const allSources = map.getStyle().sources || {};
+    const currentStyle = map.getStyle();
+    if (!currentStyle) {
+        // Style not loaded yet, skip cleanup
+        return;
+    }
+    const allLayers = currentStyle.layers || [];
+    const allSources = currentStyle.sources || {};
 
     // Remove all layers that use duckdb sources
     allLayers.forEach(layer => {
@@ -49,7 +54,12 @@ export function addTableLayers(map: maplibregl.Map, tableSpec: string, tableStyl
     // Check if source already exists, if so remove it first
     if (map.getSource(sourceId)) {
         // Remove all layers using this source
-        const allLayers = map.getStyle().layers || [];
+        const currentStyle = map.getStyle();
+        if (!currentStyle) {
+            // Style not loaded yet, skip cleanup
+            return;
+        }
+        const allLayers = currentStyle.layers || [];
         allLayers.forEach(layer => {
             if ('source' in layer && layer.source === sourceId) {
                 if (map.getLayer(layer.id)) {
