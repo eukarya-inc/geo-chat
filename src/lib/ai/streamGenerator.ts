@@ -13,6 +13,7 @@ import type { ChatState } from '../../store/remoteAtoms';
 import { createRegressionTool } from './tools/regressionTool';
 import { createPredictorSelectionTool } from './tools/predictorSelectionTool';
 import { createClusterTool } from './tools/clusterTool';
+import { createSegmentedRegressionTool } from './tools/segmentedRegressionTool';
 
 export interface StreamGeneratorOptions {
     messages: CoreMessage[];
@@ -67,6 +68,7 @@ export async function* createAIStreamGenerator({
                     select_predictors_for_regression: createPredictorSelectionTool(dbContext, schema),
                     perform_regression_analysis: createRegressionTool(dbContext, schema),
                     perform_cluster_analysis: createClusterTool(dbContext, schema),
+                    perform_segmented_regression_analysis: createSegmentedRegressionTool(dbContext, schema),
                     ...createGeocodingTools(dbContext),
                 }),
                 ...(onChartUpdate && createChartUpdateTool(onChartUpdate)
