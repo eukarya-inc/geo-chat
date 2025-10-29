@@ -12,6 +12,7 @@ import type { VegaChartSpec } from '../../types/chart';
 import type { ChatState } from '../../store/remoteAtoms';
 import { createRegressionTool } from './tools/regressionTool';
 import { createPredictorSelectionTool } from './tools/predictorSelectionTool';
+import { createClusterTool } from './tools/clusterTool';
 
 export interface StreamGeneratorOptions {
     messages: CoreMessage[];
@@ -65,6 +66,7 @@ export async function* createAIStreamGenerator({
                     duckdb_query: createDuckDBTool(dbContext, schema, apiKey, onChartDelete, onMapStyleDelete),
                     select_predictors_for_regression: createPredictorSelectionTool(dbContext, schema),
                     perform_regression_analysis: createRegressionTool(dbContext, schema),
+                    perform_cluster_analysis: createClusterTool(dbContext, schema),
                     ...createGeocodingTools(dbContext),
                 }),
                 ...(onChartUpdate && createChartUpdateTool(onChartUpdate)

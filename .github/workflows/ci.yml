@@ -9,7 +9,7 @@ on:
             - main
 
 jobs:
-    build:
+    lint-and-format:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -24,17 +24,45 @@ jobs:
             - name: Install dependencies
               run: npm ci --legacy-peer-deps
 
-            - name: Install Playwright browsers
-              run: npx playwright install webkit --with-deps
-
             - name: Run formatter
               run: npm run format:check
 
             - name: Run linter
               run: npm run lint
 
+    test:
+        runs-on: ubuntu-latest
+        container: mcr.microsoft.com/playwright:v1.54.2-jammy
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps
+
             - name: Run tests
               run: npm run test:full
+
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps
 
             - name: Build project
               run: npm run build
