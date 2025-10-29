@@ -277,9 +277,9 @@ describe('convertArrowToJS', () => {
         expect(result.hugeint_col).toBe(123456789012345);
         expect(typeof result.hugeint_col).toBe('number');
 
-        // Decimal with non-zero scale should remain string for now
-        // (we could enhance this later to convert to number too)
-        expect(result.decimal_col).toBe('123.45');
+        // Decimal with non-zero scale is also converted to number
+        expect(result.decimal_col).toBe(123.45);
+        expect(typeof result.decimal_col).toBe('number');
     });
 
     it('should handle double-quoted string numbers (JSON encoded)', () => {
