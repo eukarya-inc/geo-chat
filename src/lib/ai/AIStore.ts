@@ -6,6 +6,7 @@ import type { TableStyle } from '../../components/map';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
 import { generateContextMessage } from './contextMessage';
+import { sanitizeToolResult } from './toolResultSanitizer';
 
 interface ChatSession {
     id: string;
@@ -282,11 +283,15 @@ export class AIStore {
                     existingContent.push({ type: 'text' as const, text: streamingText });
                 }
 
+                // Sanitize tool result by removing large arrays to prevent message bloat
+                // This applies to ALL tools (duckdb_query, geocoding, etc.) generically
+                const sanitizedResult = sanitizeToolResult(part.result, { maxArraySize: 10 });
+
                 existingContent.push({
                     type: 'tool_result' as const,
                     id: part.toolCallId,
                     name: part.toolName,
-                    result: part.result,
+                    result: sanitizedResult,
                 });
 
                 updatedMessages[updatedMessages.length - 1] = {
