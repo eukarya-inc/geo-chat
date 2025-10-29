@@ -1,31 +1,13 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { streamText, type CoreMessage } from 'ai';
-import type { DBContext } from '../duckdb/dbContext';
-import { generateSystemPrompt } from './systemPrompt';
-import { createDuckDBTool } from './tools/duckdbTool';
-import { completionTool } from './tools/completionTool';
-import { createChartUpdateTool, createChartGetTool, createChartDeleteTool } from './tools/chartTool';
-import { createMapStyleTool } from './tools/mapStyleTool';
-import { createMapStyleGetTool } from './tools/mapStyleGetTool';
-import { createGeocodingTools } from './tools/geocodingTool';
-import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/remoteAtoms';
-import { createRegressionTool } from './tools/regressionTool';
-import { createPredictorSelectionTool } from './tools/predictorSelectionTool';
-import { createClusterTool } from './tools/clusterTool';
-import { createSegmentedRegressionTool } from './tools/segmentedRegressionTool';
+import type { Tools } from './tools';
 
 export interface StreamGeneratorOptions {
     messages: CoreMessage[];
     apiKey: string;
-    dbContext?: DBContext | null;
-    schema?: string | null;
+    systemPrompt: string;
+    tools: Tools;
     abortSignal?: AbortSignal;
-    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
-    onChartDelete?: (tableName: string) => Promise<void>;
-    getCurrentChatState?: () => ChatState | null;
-    onMapStyleUpdate?: (tableName: string, style: import('../../components/map').TableStyle) => Promise<void>;
-    onMapStyleDelete?: (tableName: string) => Promise<void>;
 }
 
 export type StreamPart =
@@ -42,14 +24,9 @@ export type StreamPart =
 export async function* createAIStreamGenerator({
     messages,
     apiKey,
-    dbContext,
-    schema = null,
+    systemPrompt,
+    tools,
     abortSignal,
-    onChartUpdate,
-    onChartDelete,
-    getCurrentChatState,
-    onMapStyleUpdate,
-    onMapStyleDelete,
 }: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
     try {
         const anthropicClient = createAnthropic({
@@ -58,49 +35,12 @@ export async function* createAIStreamGenerator({
                 'anthropic-dangerous-direct-browser-access': 'true',
             },
         });
-        const result = await streamText({
+
+        const result = streamText({
             model: anthropicClient('claude-sonnet-4-5-20250929'),
-            system: generateSystemPrompt(),
+            system: systemPrompt,
             messages,
-            tools: {
-                ...(dbContext && {
-                    duckdb_query: createDuckDBTool(dbContext, schema, apiKey, onChartDelete, onMapStyleDelete),
-                    select_predictors_for_regression: createPredictorSelectionTool(dbContext, schema),
-                    perform_regression_analysis: createRegressionTool(dbContext, schema),
-                    perform_cluster_analysis: createClusterTool(dbContext, schema),
-                    perform_segmented_regression_analysis: createSegmentedRegressionTool(dbContext, schema),
-                    ...createGeocodingTools(dbContext),
-                }),
-                ...(onChartUpdate && createChartUpdateTool(onChartUpdate, schema)
-                    ? {
-                          update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate, schema)!,
-                      }
-                    : {}),
-                ...(onChartDelete && createChartDeleteTool(onChartDelete)
-                    ? {
-                          delete_vega_chart_spec_for_table: createChartDeleteTool(onChartDelete)!,
-                      }
-                    : {}),
-                ...(getCurrentChatState
-                    ? {
-                          get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
-                          get_map_style_for_table: createMapStyleGetTool(
-                              tableName => getCurrentChatState()?.mapSpecs?.[tableName]
-                          ),
-                      }
-                    : {}),
-                ...(getCurrentChatState && onMapStyleUpdate
-                    ? {
-                          update_map_style_for_table: createMapStyleTool(
-                              tableName => getCurrentChatState()?.mapSpecs?.[tableName],
-                              onMapStyleUpdate,
-                              dbContext,
-                              schema
-                          )!,
-                      }
-                    : {}),
-                completion: completionTool,
-            },
+            tools,
             maxSteps: 50,
             maxTokens: 4000,
             maxRetries: 3,
@@ -189,11 +129,17 @@ export async function* createAIStreamGenerator({
 
                 case 'tool-result':
                     try {
+                        // Type assertion for tool-result properties
+                        const toolResult = part as unknown as {
+                            toolCallId: string;
+                            toolName: string;
+                            result: unknown;
+                        };
                         yield {
                             type: 'tool-result',
-                            toolCallId: part.toolCallId,
-                            toolName: part.toolName,
-                            result: part.result,
+                            toolCallId: toolResult.toolCallId,
+                            toolName: toolResult.toolName,
+                            result: toolResult.result,
                         };
                     } catch (error) {
                         console.warn('[Stream Generator] Tool result error (continuing):', error);

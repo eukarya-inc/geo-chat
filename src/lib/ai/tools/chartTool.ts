@@ -159,11 +159,9 @@ const chartSpecSchema = z.union([baseSpecSchema, clusterSpecSchema, layeredSpecS
 
 // Create the chart update tool for AI
 export function createChartUpdateTool(
-    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>,
+    onChartUpdate: (tableName: string, spec: VegaChartSpec) => Promise<void>,
     schema?: string | null
 ) {
-    if (!onChartUpdate) return null;
-
     return tool({
         description: `Update or create a Vega-Lite chart specification for a specific table.
 
@@ -614,9 +612,7 @@ export function processAIChartSpec(
 /**
  * Creates a tool for deleting a Vega-Lite chart specification for a table
  */
-export function createChartDeleteTool(onChartDelete?: (tableName: string) => Promise<void>) {
-    if (!onChartDelete) return null;
-
+export function createChartDeleteTool(onChartDelete: (tableName: string) => Promise<void>) {
     return tool({
         description:
             'Delete the Vega-Lite chart specification for a specific table. Use this when you want to remove a chart completely.',

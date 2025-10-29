@@ -8,11 +8,10 @@ import { fixMaplibreExpressionWithWarnings } from '../../../components/map/utils
 
 export function createMapStyleTool(
     getMapSpec: (tableName: string) => MapSpec | undefined,
-    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
+    onMapStyleUpdate: (tableName: string, style: TableStyle) => Promise<void>,
     dbContext?: DBContext | null,
     schema?: string | null
 ) {
-    if (!onMapStyleUpdate) return null;
     return tool({
         description: `Update map styles for a specific table and geometry type.
 

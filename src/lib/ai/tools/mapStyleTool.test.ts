@@ -23,11 +23,6 @@ describe('createMapStyleTool', () => {
         console.warn = originalConsoleWarn;
     });
 
-    it('should return null if onMapStyleUpdate is not provided', () => {
-        const tool = createMapStyleTool(mockGetMapSpec, undefined, null, null);
-        expect(tool).toBeNull();
-    });
-
     it('should create a tool with correct metadata', () => {
         const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
 
