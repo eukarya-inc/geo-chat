@@ -198,6 +198,14 @@ export async function scalableKmeans(dataMatrix: number[][], options: ScalableKM
             reclusteringMs: refinementMs,
             totalMs,
         },
+        sampleInfo:
+            sampleSize < numSamples
+                ? {
+                      sampleSize,
+                      totalSize: numSamples,
+                      sampleRatio: sampleSize / numSamples,
+                  }
+                : undefined,
     };
 
     return result;

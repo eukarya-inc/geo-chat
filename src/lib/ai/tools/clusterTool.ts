@@ -327,12 +327,15 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     // labels array removed - too large for AI context
                     // centroids included for cluster interpretation
                     centroids: clustering.centroids,
+                    sampleInfo: clustering.sampleInfo,
                 };
 
-                // Build message
-                const message = max_rows
+                // Build message with table creation marker for labels table
+                const baseMessage = max_rows
                     ? `テーブル「${tableName}」のクラスター分析が完了しました。最大${max_rows}行から有効な${usedRows}行を使用して${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`
                     : `テーブル「${tableName}」のクラスター分析が完了しました。${usedRows}行を使用して${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+
+                const message = `${baseMessage}\n\n<!--TABLE_CREATED:${labelsTableName}-->`;
 
                 const response: ClusterAnalysisResponse = {
                     success: true,
