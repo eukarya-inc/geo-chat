@@ -25,7 +25,7 @@ export function DataSourceSelector({
 
     if (showLinkInput) {
         return (
-            <div style={{ minWidth: '400px' }}>
+            <div className="min-w-[400px]">
                 <RemoteFile
                     dbContext={dbContext}
                     schema={schema}
@@ -42,22 +42,22 @@ export function DataSourceSelector({
 
     return (
         <>
-            <div style={{ width: 'fit-content', minWidth: '200px' }}>
+            <div className="w-fit min-w-[200px]">
                 <div
                     className="bg-white p-1 rounded-md flex flex-col gap-1"
                     style={{ outline: '1px rgba(0, 0, 0, 0.20) solid', outlineOffset: '-1px' }}
                 >
                     <button
                         onClick={() => setShowTableModal(true)}
-                        className="w-full px-2 py-1 rounded text-left text-sm hover:bg-[rgba(111,228,126,0.30)] transition-colors whitespace-nowrap"
-                        style={{ fontFamily: 'Inter', fontWeight: '400' }}
+                        className="w-full px-2 py-1 rounded text-left text-sm font-normal hover:bg-[rgba(111,228,126,0.30)] transition-colors whitespace-nowrap"
+                        style={{ fontFamily: 'Inter' }}
                     >
                         Add data from TABLES
                     </button>
                     <button
                         onClick={() => setShowLinkInput(true)}
-                        className="w-full px-2 py-1 rounded text-left text-sm hover:bg-[rgba(111,228,126,0.30)] transition-colors whitespace-nowrap"
-                        style={{ fontFamily: 'Inter', fontWeight: '400' }}
+                        className="w-full px-2 py-1 rounded text-left text-sm font-normal hover:bg-[rgba(111,228,126,0.30)] transition-colors whitespace-nowrap"
+                        style={{ fontFamily: 'Inter' }}
                     >
                         Add from link
                     </button>

@@ -1,22 +1,11 @@
 import { useState, useEffect } from 'react';
+import { TableCard } from './TableCard';
+import { MOCK_TABLES } from './constants';
 
 interface TableSelectionModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
-
-// Mock data for testing
-const MOCK_TABLES = [
-    'customer',
-    'orders',
-    'products',
-    'sales_2023',
-    'sales_2024',
-    'employees',
-    'inventory',
-    'suppliers',
-    'regions',
-];
 
 export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProps) {
     const [tables, setTables] = useState<string[]>([]);
@@ -73,26 +62,15 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
     }
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: 'rgba(0, 0, 0, 0.5)' }}
-            onClick={onClose}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
             <div
-                className="bg-white rounded-md overflow-hidden flex flex-col"
-                style={{
-                    padding: 24,
-                    outline: '1px black solid',
-                    outlineOffset: '-1px',
-                    gap: 20,
-                    maxWidth: '90vw',
-                    maxHeight: '90vh',
-                }}
+                className="bg-white rounded-md overflow-hidden flex flex-col p-6 gap-5 max-w-[90vw] max-h-[90vh]"
+                style={{ outline: '1px black solid', outlineOffset: '-1px' }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex justify-between items-start">
-                    <div style={{ fontFamily: 'Inter', fontWeight: '400', fontSize: 16 }}>
+                    <div className="text-base font-normal" style={{ fontFamily: 'Inter' }}>
                         Add data from LINKS TABLES
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded transition-colors">
@@ -108,108 +86,26 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
                 </div>
 
                 {/* Tables Grid */}
-                <div
-                    className="grid grid-cols-3 gap-3 overflow-y-auto"
-                    style={{ alignContent: 'flex-start', maxHeight: '60vh' }}
-                >
-                    {tables.map(table => {
-                        const isSelected = selectedTables.has(table);
-                        return (
-                            <button
-                                key={table}
-                                onClick={() => toggleTableSelection(table)}
-                                className="flex items-center gap-2 rounded hover:opacity-80 transition-opacity"
-                                style={{
-                                    width: 220,
-                                    padding: 12,
-                                    outline: isSelected ? '1px #6FE47E solid' : '1px rgba(0, 0, 0, 0.20) solid',
-                                    outlineOffset: '-1px',
-                                    background: isSelected ? 'rgba(111, 228, 126, 0.30)' : 'transparent',
-                                }}
-                            >
-                                {/* Table Icon */}
-                                <div className="w-6 h-6 relative flex-shrink-0">
-                                    <svg
-                                        width="24"
-                                        height="24"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M3 5.25H21V18C21 18.1989 20.921 18.3897 20.7803 18.5303C20.6397 18.671 20.4489 18.75 20.25 18.75H3.75C3.55109 18.75 3.36032 18.671 3.21967 18.5303C3.07902 18.3897 3 18.1989 3 18V5.25Z"
-                                            stroke="black"
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                        <path
-                                            d="M3 9.75H21"
-                                            stroke="black"
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                        <path
-                                            d="M3 14.25H21"
-                                            stroke="black"
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                        <path
-                                            d="M8.25 9.75V18.75"
-                                            stroke="black"
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                </div>
-                                {/* Table Info */}
-                                <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                    <div
-                                        className="truncate"
-                                        style={{
-                                            fontFamily: 'Inter',
-                                            fontWeight: '400',
-                                            fontSize: 14,
-                                            color: 'black',
-                                        }}
-                                    >
-                                        {table}
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontFamily: 'Inter',
-                                            fontWeight: '400',
-                                            fontSize: 12,
-                                            color: 'rgba(0, 0, 0, 0.60)',
-                                        }}
-                                    >
-                                        last update 1 hour ago
-                                    </div>
-                                </div>
-                            </button>
-                        );
-                    })}
+                <div className="grid grid-cols-3 gap-3 overflow-y-auto content-start max-h-[60vh]">
+                    {tables.map(table => (
+                        <TableCard
+                            key={table}
+                            tableName={table}
+                            isSelected={selectedTables.has(table)}
+                            onToggle={toggleTableSelection}
+                        />
+                    ))}
                 </div>
 
                 {/* Footer Buttons */}
                 <div className="flex justify-between items-start">
                     <button
                         onClick={handleCancel}
-                        className="px-2.5 py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="px-2.5 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-normal"
                         style={{
                             outline: '1px rgba(0, 0, 0, 0.50) solid',
                             outlineOffset: '-1px',
                             fontFamily: 'Inter',
-                            fontWeight: '400',
-                            fontSize: 14,
                         }}
                     >
                         Cancel
@@ -217,14 +113,8 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
                     <button
                         onClick={handleAddTables}
                         disabled={selectedTables.size === 0}
-                        className="px-2.5 py-2.5 rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                            background: '#6FE47E',
-                            fontFamily: 'Inter',
-                            fontWeight: '400',
-                            fontSize: 14,
-                            color: 'black',
-                        }}
+                        className="px-2.5 py-2.5 rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm font-normal text-black bg-[#6FE47E]"
+                        style={{ fontFamily: 'Inter' }}
                     >
                         Add data
                     </button>
