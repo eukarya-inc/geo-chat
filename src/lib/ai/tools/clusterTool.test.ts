@@ -56,11 +56,14 @@ describe('createClusterTool', () => {
         expect(result.success).toBe(true);
         if (result.success) {
             expect(result.tableName).toBe('test_table');
+            expect(result.labelsTableName).toBe('test_table_cluster_labels');
             expect(result.featureColumns).toEqual(['x', 'y']);
             expect(result.metrics.numClusters).toBe(2);
             expect(result.metrics.numSamples).toBe(10);
-            expect(result.diagnostics.labels).toHaveLength(10);
+            expect(result.diagnostics.centroids).toHaveLength(2);
             expect(result.suggestions).toBeDefined();
+            // Verify that labels table was created
+            expect(mockDbContext.executeQuery).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE'), null);
         }
     });
 

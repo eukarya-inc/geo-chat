@@ -245,6 +245,9 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 const warnings: string[] = [];
                 const suggestions: string[] = [];
 
+                // Define labels table name before using it in suggestions
+                const labelsTableName = `${tableName}_cluster_labels`;
+
                 if (skippedRows > 0) {
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
                 }
@@ -259,12 +262,15 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     warnings.push('最大反復回数に到達しましたが収束しませんでした。結果が不安定な可能性があります。');
                 }
 
-                // Provide guidance for AI to add cluster column using duckdb_query tool
+                // Provide guidance for AI on how to use cluster labels
                 suggestions.push(
-                    `次のステップ: duckdb_queryツールを使って、テーブル「${tableName}」に cluster カラムを追加してください。`
+                    `クラスターラベルは一時テーブル「${labelsTableName}」に保存されました。このテーブルには row_id (1から始まる行番号) と cluster (クラスターラベル) カラムがあります。`
                 );
                 suggestions.push(
-                    `cluster カラムの作成方法: 診断情報のlabels配列（${clustering.labels.length}件）を使用して、テーブル「${tableName}」の各行にクラスターラベルを設定してください。`
+                    `クラスターラベルを元のテーブルに結合する方法: SELECT t.*, l.cluster FROM ${tableName} t JOIN ${labelsTableName} l ON ROW_NUMBER() OVER () = l.row_id`
+                );
+                suggestions.push(
+                    `クラスターの特性: ${clustering.centroids.map((c, i) => `クラスター${i}: ${providedFeatures.map((f, j) => `${f}=${formatNumeric(c[j])}`).join(', ')}`).join(' / ')}`
                 );
 
                 // 2D visualization suggestion
@@ -272,14 +278,14 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     const [feat1, feat2] = providedFeatures;
 
                     suggestions.push(
-                        `可視化: テーブル「${tableName}」を使って、${feat1}と${feat2}の散布図を作成してください。clusterカラムで色分けしてください。`
+                        `可視化: ${feat1}と${feat2}の散布図を作成してください。クラスターラベルで色分けするには、テーブル「${labelsTableName}」をJOINしてください。`
                     );
                 }
 
                 // 3D+ visualization suggestion
                 if (providedFeatures.length >= 3) {
                     suggestions.push(
-                        `可視化: 特徴量が${providedFeatures.length}次元あります。テーブル「${tableName}」を使って、(${providedFeatures[0]}, ${providedFeatures[1]})の散布図を作成してください。clusterカラムで色分けしてください。`
+                        `可視化: 特徴量が${providedFeatures.length}次元あります。主要な2次元 (${providedFeatures[0]}, ${providedFeatures[1]}) の散布図を作成してください。クラスターラベルで色分けするには、テーブル「${labelsTableName}」をJOINしてください。`
                     );
                 }
 
@@ -316,10 +322,34 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     featureNames: clustering.featureNames,
                 };
 
+                // Create a temporary table with cluster labels for joining
+                const labelsSanitized = quoteIdentifier(labelsTableName);
+                const labelsQualified = schema ? `${quoteIdentifier(schema)}.${labelsSanitized}` : labelsSanitized;
+
+                try {
+                    // Drop existing labels table if exists
+                    try {
+                        await dbContext.executeQuery(`DROP TABLE IF EXISTS ${labelsQualified};`, schema);
+                    } catch {
+                        // Ignore drop errors
+                    }
+
+                    // Create labels table with row_id and cluster columns
+                    const labelsData = clustering.labels.map((label, idx) => `(${idx + 1}, ${label})`).join(', ');
+                    const createLabelsQuery = `CREATE TABLE ${labelsQualified} (row_id INTEGER, cluster INTEGER);
+                        INSERT INTO ${labelsQualified} VALUES ${labelsData};`;
+                    await dbContext.executeQuery(createLabelsQuery, schema);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    warnings.push(`クラスターラベルテーブルの作成に失敗しました: ${message}`);
+                }
+
+                // Diagnostics with minimal data to prevent token overflow
                 const diagnostics = {
                     timing: clustering.timing,
                     iterations: clustering.iterations,
-                    labels: clustering.labels,
+                    // labels array removed - too large for AI context
+                    // centroids included for cluster interpretation
                     centroids: clustering.centroids,
                 };
 
@@ -335,6 +365,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     success: true,
                     message,
                     tableName,
+                    labelsTableName,
                     featureColumns: providedFeatures,
                     dataInfo: {
                         totalRows,
