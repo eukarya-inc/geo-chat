@@ -6,6 +6,8 @@ import type { TableStyle } from '../../components/map';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
 import { generateContextMessage } from './contextMessage';
+import { generateSystemPrompt } from './systemPrompt';
+import { initTools } from './tools';
 
 interface ChatSession {
     id: string;
@@ -133,7 +135,7 @@ export class AIStore {
         this.notifyListeners();
 
         // Check if this is a TABLE_CREATED only message before setting loading
-        let coreMessages = messageConverter.toCoreMessages(newMessages);
+        const coreMessages = messageConverter.toCoreMessages(newMessages);
 
         // Skip AI if there are no messages to send (e.g., only TABLE_CREATED marker)
         // But still notify listeners so prompt suggestions can be triggered
@@ -145,41 +147,49 @@ export class AIStore {
             return;
         }
 
-        // ALWAYS inject fresh context for every AI request
-        // Context must be at the beginning to avoid "multiple system messages" error
-        try {
-            const contextMessage = await generateContextMessage(
-                options.dbContext || null,
-                options.schema || null,
-                options.selectedTable || null
-            );
-            if (contextMessage) {
-                // Add context as the FIRST system message
-                // This avoids the "multiple system messages separated by user/assistant" error
-                coreMessages = [{ role: 'system' as const, content: contextMessage }, ...coreMessages];
-            } else {
-                console.log('[AI Context] Not generated - no schema/dbContext or generation failed');
-            }
-        } catch (contextError) {
-            console.error('[AI Context] Error generating context:', contextError);
-            // Continue without context rather than blocking the request
-        }
-
         const controller = new AbortController();
         this.setLoading(chatId, true, controller);
 
         try {
-            const generator = createAIStreamGenerator({
-                messages: coreMessages,
-                apiKey: options.apiKey,
+            // Validate required parameters for tool initialization
+            if (
+                !options.dbContext ||
+                !options.onChartUpdate ||
+                !options.onChartDelete ||
+                !options.getCurrentChatState ||
+                !options.onMapStyleUpdate ||
+                !options.onMapStyleDelete
+            ) {
+                throw new Error('Required tool initialization parameters are missing');
+            }
+
+            // Build tools
+            const tools = await initTools({
                 dbContext: options.dbContext,
-                schema: options.schema,
-                abortSignal: controller.signal,
+                schema: options.schema || null,
+                apiKey: options.apiKey,
                 onChartUpdate: options.onChartUpdate,
                 onChartDelete: options.onChartDelete,
                 getCurrentChatState: options.getCurrentChatState,
                 onMapStyleUpdate: options.onMapStyleUpdate,
                 onMapStyleDelete: options.onMapStyleDelete,
+            });
+
+            // Generate system prompt with context
+            const baseSystemPrompt = generateSystemPrompt();
+            const contextMessage = await generateContextMessage(
+                options.dbContext,
+                options.schema || null,
+                options.selectedTable || null
+            );
+            const systemPrompt = contextMessage ? `${contextMessage}\n\n${baseSystemPrompt}` : baseSystemPrompt;
+
+            const generator = createAIStreamGenerator({
+                messages: coreMessages,
+                apiKey: options.apiKey,
+                systemPrompt,
+                tools,
+                abortSignal: controller.signal,
             });
 
             const assistantMessage: StructuredMessage = {
