@@ -68,6 +68,7 @@ export async function initTools(options: ToolsOptions): Promise<Tools> {
         options.onChartDelete,
         options.onMapStyleDelete
     );
+
     const select_predictors_for_regression = createPredictorSelectionTool(options.dbContext, options.schema);
     const perform_regression_analysis = createRegressionTool(options.dbContext, options.schema);
     const perform_cluster_analysis = createClusterTool(options.dbContext, options.schema);

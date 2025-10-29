@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { streamText, type CoreMessage } from 'ai';
+import { streamText, stepCountIs, type CoreMessage } from 'ai';
 import type { Tools } from './tools';
 
 export interface StreamGeneratorOptions {
@@ -41,10 +41,12 @@ export async function* createAIStreamGenerator({
             system: systemPrompt,
             messages,
             tools,
-            maxSteps: 50,
-            maxTokens: 4000,
+            maxOutputTokens: 4000,
             maxRetries: 3,
             abortSignal,
+            // Enable multi-step tool execution (default is stepCountIs(1))
+            // Allow up to 100 steps for complex agent workflows
+            stopWhen: stepCountIs(100),
         });
 
         // Stream the full response including text and tool calls
@@ -53,7 +55,7 @@ export async function* createAIStreamGenerator({
                 case 'text-delta':
                     yield {
                         type: 'text-delta',
-                        textDelta: part.textDelta,
+                        textDelta: part.text,
                     };
                     break;
 
@@ -119,7 +121,7 @@ export async function* createAIStreamGenerator({
                             type: 'tool-call',
                             toolCallId: part.toolCallId,
                             toolName: part.toolName,
-                            args: part.args,
+                            args: part.input,
                         };
                     } catch (error) {
                         console.warn('[Stream Generator] Tool call error (continuing):', error);
@@ -130,16 +132,17 @@ export async function* createAIStreamGenerator({
                 case 'tool-result':
                     try {
                         // Type assertion for tool-result properties
+                        // In AI SDK v5, tool results use 'output' instead of 'result'
                         const toolResult = part as unknown as {
                             toolCallId: string;
                             toolName: string;
-                            result: unknown;
+                            output: unknown;
                         };
                         yield {
                             type: 'tool-result',
                             toolCallId: toolResult.toolCallId,
                             toolName: toolResult.toolName,
-                            result: toolResult.result,
+                            result: toolResult.output, // Map 'output' to 'result' for consistency
                         };
                     } catch (error) {
                         console.warn('[Stream Generator] Tool result error (continuing):', error);

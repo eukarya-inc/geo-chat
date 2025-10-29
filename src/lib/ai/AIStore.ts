@@ -152,33 +152,34 @@ export class AIStore {
 
         try {
             // Validate required parameters for tool initialization
-            if (
-                !options.dbContext ||
-                !options.onChartUpdate ||
-                !options.onChartDelete ||
-                !options.getCurrentChatState ||
-                !options.onMapStyleUpdate ||
-                !options.onMapStyleDelete
-            ) {
-                throw new Error('Required tool initialization parameters are missing');
+            const missingParams: string[] = [];
+            if (!options.dbContext) missingParams.push('dbContext');
+            if (!options.onChartUpdate) missingParams.push('onChartUpdate');
+            if (!options.onChartDelete) missingParams.push('onChartDelete');
+            if (!options.getCurrentChatState) missingParams.push('getCurrentChatState');
+            if (!options.onMapStyleUpdate) missingParams.push('onMapStyleUpdate');
+            if (!options.onMapStyleDelete) missingParams.push('onMapStyleDelete');
+
+            if (missingParams.length > 0) {
+                throw new Error(`Required tool initialization parameters are missing: ${missingParams.join(', ')}`);
             }
 
-            // Build tools
+            // Build tools (TypeScript knows these are defined after validation)
             const tools = await initTools({
-                dbContext: options.dbContext,
+                dbContext: options.dbContext!,
                 schema: options.schema || null,
                 apiKey: options.apiKey,
-                onChartUpdate: options.onChartUpdate,
-                onChartDelete: options.onChartDelete,
-                getCurrentChatState: options.getCurrentChatState,
-                onMapStyleUpdate: options.onMapStyleUpdate,
-                onMapStyleDelete: options.onMapStyleDelete,
+                onChartUpdate: options.onChartUpdate!,
+                onChartDelete: options.onChartDelete!,
+                getCurrentChatState: options.getCurrentChatState!,
+                onMapStyleUpdate: options.onMapStyleUpdate!,
+                onMapStyleDelete: options.onMapStyleDelete!,
             });
 
             // Generate system prompt with context
             const baseSystemPrompt = generateSystemPrompt();
             const contextMessage = await generateContextMessage(
-                options.dbContext,
+                options.dbContext!,
                 options.schema || null,
                 options.selectedTable || null
             );

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMapStyleGetTool } from './mapStyleGetTool';
+import { executeToolForTest } from './toolTestHelper';
+import { createMapStyleGetTool, type MapStyleGetResult } from './mapStyleGetTool';
 import type { MapSpec } from '../../../store/remoteAtoms';
 import type { VectorTileLayer } from '../../../components/map';
 
@@ -16,14 +17,14 @@ describe('createMapStyleGetTool', () => {
 
         expect(tool).toBeDefined();
         expect(tool.description).toContain('Get the current map style configuration');
-        expect(tool.parameters).toBeDefined();
     });
 
     it('should handle map spec not available error', async () => {
         mockGetMapSpec = vi.fn(() => undefined);
 
         const tool = createMapStyleGetTool(mockGetMapSpec);
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleGetResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
             },
@@ -34,6 +35,9 @@ describe('createMapStyleGetTool', () => {
         );
 
         expect(result.success).toBe(false);
+        if (result.success) {
+            throw new Error('Expected failure result');
+        }
         expect(result.error).toContain('No map specification found');
         expect(result.tableStyles).toBeNull();
         expect(result.extraStyle).toBeNull();
@@ -43,7 +47,8 @@ describe('createMapStyleGetTool', () => {
         mockGetMapSpec = vi.fn(() => undefined);
 
         const tool = createMapStyleGetTool(mockGetMapSpec);
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleGetResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
             },
@@ -54,6 +59,9 @@ describe('createMapStyleGetTool', () => {
         );
 
         expect(result.success).toBe(false);
+        if (result.success) {
+            throw new Error('Expected failure result');
+        }
         expect(result.error).toContain('No map specification found for table "test_table"');
         expect(result.tableStyles).toBeNull();
         expect(result.extraStyle).toBeNull();
@@ -67,7 +75,8 @@ describe('createMapStyleGetTool', () => {
         mockGetMapSpec = vi.fn(() => mockMapSpec);
 
         const tool = createMapStyleGetTool(mockGetMapSpec);
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleGetResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
             },
@@ -78,9 +87,12 @@ describe('createMapStyleGetTool', () => {
         );
 
         expect(result.success).toBe(true);
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
         expect(result.tableStyles).toEqual([]);
         expect(result.extraStyle).toBeNull();
-        expect(result.metadata?.note).toContain('No custom styles configured. Default styles will be used');
+        expect(result.metadata.note).toContain('No custom styles configured. Default styles will be used');
     });
 
     it('should return table styles and extra style when configured', async () => {
@@ -106,7 +118,8 @@ describe('createMapStyleGetTool', () => {
         mockGetMapSpec = vi.fn(() => mockMapSpec);
 
         const tool = createMapStyleGetTool(mockGetMapSpec);
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleGetResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
             },
@@ -117,13 +130,16 @@ describe('createMapStyleGetTool', () => {
         );
 
         expect(result.success).toBe(true);
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
         expect(result.message).toContain('Retrieved map styles for table "test_table"');
         expect(result.tableStyles).toEqual([mockLayer]);
         expect(result.extraStyle).toEqual(mockExtraStyle);
-        expect(result.metadata?.hasTableStyles).toBe(true);
-        expect(result.metadata?.hasExtraStyle).toBe(true);
-        expect(result.metadata?.layerCount).toBe(1);
-        expect(result.metadata?.note).toBeNull();
+        expect(result.metadata.hasTableStyles).toBe(true);
+        expect(result.metadata.hasExtraStyle).toBe(true);
+        expect(result.metadata.layerCount).toBe(1);
+        expect(result.metadata.note).toBeNull();
     });
 
     it('should handle only table styles without extra style', async () => {
@@ -150,7 +166,8 @@ describe('createMapStyleGetTool', () => {
         mockGetMapSpec = vi.fn(() => mockMapSpec);
 
         const tool = createMapStyleGetTool(mockGetMapSpec);
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleGetResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
             },
@@ -161,10 +178,13 @@ describe('createMapStyleGetTool', () => {
         );
 
         expect(result.success).toBe(true);
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
         expect(result.tableStyles).toEqual(mockLayers);
         expect(result.extraStyle).toBeNull();
-        expect(result.metadata?.hasTableStyles).toBe(true);
-        expect(result.metadata?.hasExtraStyle).toBe(false);
-        expect(result.metadata?.layerCount).toBe(2);
+        expect(result.metadata.hasTableStyles).toBe(true);
+        expect(result.metadata.hasExtraStyle).toBe(false);
+        expect(result.metadata.layerCount).toBe(2);
     });
 });

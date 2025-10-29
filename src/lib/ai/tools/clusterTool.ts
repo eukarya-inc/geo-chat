@@ -65,7 +65,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 - Display cluster summary information as TEXT in your response, not as a new table
 - Only create tables for visualization purposes (scatter plots), not for summary statistics
 - If you need to show cluster statistics, use the clustering result data directly in your text response`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             feature_columns: z
                 .array(z.string())
@@ -91,7 +91,13 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 .optional()
                 .describe('Initialization method (default: kmeans++)'),
         }),
-        execute: async ({ table_name, feature_columns, k = DEFAULT_K, max_rows, init_method }) => {
+        execute: async ({
+            table_name,
+            feature_columns,
+            k = DEFAULT_K,
+            max_rows,
+            init_method,
+        }): Promise<ClusterAnalysisResponse> => {
             try {
                 let tableName = table_name.trim();
                 if (!tableName) {

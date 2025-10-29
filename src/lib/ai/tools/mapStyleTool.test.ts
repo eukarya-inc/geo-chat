@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMapStyleTool } from './mapStyleTool';
+import { executeToolForTest } from './toolTestHelper';
+import { createMapStyleTool, type MapStyleUpdateResult } from './mapStyleTool';
 import type { MapSpec } from '../../../store/remoteAtoms';
 import type { TableStyle, VectorTileLayer } from '../../../components/map';
 
@@ -28,7 +29,6 @@ describe('createMapStyleTool', () => {
 
         expect(tool).toBeDefined();
         expect(tool?.description).toContain('Update map styles');
-        expect(tool?.parameters).toBeDefined();
     });
 
     it('should create new styles when map spec is not available', async () => {
@@ -37,7 +37,8 @@ describe('createMapStyleTool', () => {
 
         const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
         if (!tool) throw new Error('Tool should be created');
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleUpdateResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 geometry_type: 'polygon',
@@ -51,6 +52,9 @@ describe('createMapStyleTool', () => {
         );
 
         expect(result.success).toBe(true);
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
         expect(result.message).toContain('Test update');
         expect(mockOnMapStyleUpdate).toHaveBeenCalledWith('test_table', [
             {
@@ -90,7 +94,8 @@ describe('createMapStyleTool', () => {
 
         const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
         if (!tool) throw new Error('Tool should be created');
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleUpdateResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 geometry_type: 'polygon',
@@ -104,6 +109,9 @@ describe('createMapStyleTool', () => {
         );
 
         expect(result.success).toBe(true);
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
         expect(result.message).toContain('Update polygon style');
         expect(mockOnMapStyleUpdate).toHaveBeenCalledWith('test_table', [
             {
@@ -137,7 +145,8 @@ describe('createMapStyleTool', () => {
 
         const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
         if (!tool) throw new Error('Tool should be created');
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleUpdateResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 geometry_type: 'point',
@@ -151,7 +160,10 @@ describe('createMapStyleTool', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.appliedUpdate?.geometryType).toBe('point');
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
+        expect(result.appliedUpdate.geometryType).toBe('point');
         expect(mockOnMapStyleUpdate).toHaveBeenCalledWith('test_table', [
             {
                 id: 'duckdb-points-test_table',
@@ -179,7 +191,8 @@ describe('createMapStyleTool', () => {
 
         const tool = createMapStyleTool(mockGetMapSpec, mockOnMapStyleUpdate, null, null);
         if (!tool) throw new Error('Tool should be created');
-        const result = await tool.execute(
+        const result = await executeToolForTest<MapStyleUpdateResult>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 geometry_type: 'line',
@@ -193,7 +206,10 @@ describe('createMapStyleTool', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.appliedUpdate?.geometryType).toBe('line');
+        if (!result.success) {
+            throw new Error('Expected success result');
+        }
+        expect(result.appliedUpdate.geometryType).toBe('line');
         expect(mockOnMapStyleUpdate).toHaveBeenCalledWith('test_table', [
             {
                 id: 'duckdb-lines-test_table',

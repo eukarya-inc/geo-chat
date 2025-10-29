@@ -3,6 +3,8 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from '../../duckdb/dbContext';
 import { createSegmentedRegressionTool } from './segmentedRegressionTool';
+import { executeToolForTest } from './toolTestHelper';
+import type { SegmentedRegressionAnalysisResponse } from '../../../types/segmentedRegression';
 
 describe('segmentedRegressionTool (browser, real DuckDB-WASM)', () => {
     let db: AsyncDuckDB;
@@ -104,7 +106,8 @@ describe('segmentedRegressionTool (browser, real DuckDB-WASM)', () => {
 
         const tool = createSegmentedRegressionTool(dbContext, null);
 
-        const result = await tool.execute(
+        const result = await executeToolForTest<SegmentedRegressionAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'y',
@@ -155,7 +158,8 @@ describe('segmentedRegressionTool (browser, real DuckDB-WASM)', () => {
 
         const tool = createSegmentedRegressionTool(dbContext, null);
 
-        const result = await tool.execute(
+        const result = await executeToolForTest<SegmentedRegressionAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table2',
                 target_column: 'y',
@@ -178,7 +182,8 @@ describe('segmentedRegressionTool (browser, real DuckDB-WASM)', () => {
 
         const tool = createSegmentedRegressionTool(dbContext, null);
 
-        const result = await tool.execute(
+        const result = await executeToolForTest<SegmentedRegressionAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table3',
                 target_column: 'y',
