@@ -9,6 +9,13 @@ interface ChartGenerationResult {
 }
 
 /**
+ * Generate duckdb:// URL for a table
+ */
+function createDuckDBUrl(tableName: string, schema: string | null): string {
+    return schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
+}
+
+/**
  * Generate a chart spec based on the selected chart type
  */
 export async function generateChartByType(
@@ -28,10 +35,6 @@ export async function generateChartByType(
         const categoricalColumns = columns.filter(col => isCategoricalType(col.type));
         const temporalColumns = columns.filter(col => isTemporalType(col.type));
 
-        // Select all columns for the query
-        const columnNames = columns.map(col => col.name).join(', ');
-        const qualifiedTableName = tableName;
-
         // Helper function to capitalize first character
         const capitalizeTableName = (name: string) => {
             return name.charAt(0).toUpperCase() + name.slice(1);
@@ -39,65 +42,55 @@ export async function generateChartByType(
 
         switch (chartType) {
             case 'scatter':
-                return generateScatterChart(
-                    qualifiedTableName,
-                    columnNames,
-                    numericColumns,
-                    capitalizeTableName(tableName)
-                );
+                return generateScatterChart(tableName, numericColumns, capitalizeTableName(tableName), schema);
 
             case 'line':
                 return generateLineChart(
-                    qualifiedTableName,
-                    columnNames,
+                    tableName,
                     temporalColumns,
                     numericColumns,
                     categoricalColumns,
-                    capitalizeTableName(tableName)
+                    capitalizeTableName(tableName),
+                    schema
                 );
 
             case 'bar':
                 return generateBarChart(
-                    qualifiedTableName,
-                    columnNames,
+                    tableName,
                     categoricalColumns,
                     numericColumns,
-                    capitalizeTableName(tableName)
+                    capitalizeTableName(tableName),
+                    schema
                 );
 
             case 'histogram':
-                return generateHistogramChart(
-                    qualifiedTableName,
-                    columnNames,
-                    numericColumns,
-                    capitalizeTableName(tableName)
-                );
+                return generateHistogramChart(tableName, numericColumns, capitalizeTableName(tableName), schema);
 
             case 'pie':
                 return generatePieChart(
-                    qualifiedTableName,
-                    columnNames,
+                    tableName,
                     categoricalColumns,
                     numericColumns,
-                    capitalizeTableName(tableName)
+                    capitalizeTableName(tableName),
+                    schema
                 );
 
             case 'heatmap':
                 return generateHeatmapChart(
-                    qualifiedTableName,
-                    columnNames,
+                    tableName,
                     categoricalColumns,
                     numericColumns,
-                    capitalizeTableName(tableName)
+                    capitalizeTableName(tableName),
+                    schema
                 );
 
             case 'box':
                 return generateBoxChart(
-                    qualifiedTableName,
-                    columnNames,
+                    tableName,
                     categoricalColumns,
                     numericColumns,
-                    capitalizeTableName(tableName)
+                    capitalizeTableName(tableName),
+                    schema
                 );
 
             default:
@@ -111,11 +104,13 @@ export async function generateChartByType(
 
 function generateBarChart(
     tableName: string,
-    columnNames: string,
     categoricalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Prefer categorical + numeric for bar chart
     if (categoricalColumns.length > 0 && numericColumns.length > 0) {
         const categoryColumn = categoricalColumns[0];
@@ -127,8 +122,7 @@ function generateBarChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `${valueColumn.name} by ${categoryColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: 'bar',
                 encoding: {
@@ -158,8 +152,7 @@ function generateBarChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `Count by ${column.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: 'bar',
                 encoding: {
@@ -185,10 +178,12 @@ function generateBarChart(
 
 function generateScatterChart(
     tableName: string,
-    columnNames: string,
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Need at least 2 numeric columns for scatter
     if (numericColumns.length >= 2) {
         const xColumn = numericColumns[0];
@@ -200,8 +195,7 @@ function generateScatterChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `${yColumn.name} vs ${xColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: { type: 'circle', size: 60, opacity: 0.7 },
                 encoding: {
@@ -227,10 +221,12 @@ function generateScatterChart(
 
 function generateHistogramChart(
     tableName: string,
-    columnNames: string,
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Need at least 1 numeric column for histogram
     if (numericColumns.length > 0) {
         const column = numericColumns[0];
@@ -241,8 +237,7 @@ function generateHistogramChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `Distribution of ${column.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: 'bar',
                 encoding: {
@@ -269,11 +264,13 @@ function generateHistogramChart(
 
 function generateHeatmapChart(
     tableName: string,
-    columnNames: string,
     categoricalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Need at least 2 categorical columns for heatmap
     if (categoricalColumns.length >= 2) {
         const xColumn = categoricalColumns[0];
@@ -285,8 +282,7 @@ function generateHeatmapChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `Heatmap: ${yColumn.name} vs ${xColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: 'rect',
                 encoding: {
@@ -317,11 +313,13 @@ function generateHeatmapChart(
 
 function generateBoxChart(
     tableName: string,
-    columnNames: string,
     categoricalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Need at least 1 numeric column for box plot
     if (numericColumns.length > 0) {
         const valueColumn = numericColumns[0];
@@ -335,8 +333,7 @@ function generateBoxChart(
                     ? `Distribution of ${valueColumn.name} by ${categoryColumn.name}`
                     : `Distribution of ${valueColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: { type: 'boxplot', extent: 'min-max' },
                 encoding: {
@@ -364,12 +361,14 @@ function generateBoxChart(
 
 function generateLineChart(
     tableName: string,
-    columnNames: string,
     temporalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
     categoricalColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Prefer temporal + numeric for line chart
     if (temporalColumns.length > 0 && numericColumns.length > 0) {
         const timeColumn = temporalColumns[0];
@@ -381,8 +380,7 @@ function generateLineChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `${valueColumn.name} over time`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: {
                     type: 'line',
@@ -417,8 +415,7 @@ function generateLineChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `${valueColumn.name} by ${categoryColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: {
                     type: 'line',
@@ -447,11 +444,13 @@ function generateLineChart(
 
 function generatePieChart(
     tableName: string,
-    columnNames: string,
     categoricalColumns: { name: string; type: string }[],
     numericColumns: { name: string; type: string }[],
-    title: string
+    title: string,
+    schema: string | null = null
 ): ChartGenerationResult | null {
+    const dataUrl = createDuckDBUrl(tableName, schema);
+
     // Prefer categorical + numeric for pie chart
     if (categoricalColumns.length > 0 && numericColumns.length > 0) {
         const categoryColumn = categoricalColumns[0];
@@ -463,8 +462,7 @@ function generatePieChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `${valueColumn.name} by ${categoryColumn.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: {
                     type: 'arc',
@@ -498,8 +496,7 @@ function generatePieChart(
                 $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                 title: `Count by ${column.name}`,
                 data: {
-                    sql: `SELECT ${columnNames} FROM ${tableName} LIMIT 1000`,
-                    values: [],
+                    url: dataUrl,
                 },
                 mark: {
                     type: 'arc',

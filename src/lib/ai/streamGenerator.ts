@@ -71,9 +71,9 @@ export async function* createAIStreamGenerator({
                     perform_segmented_regression_analysis: createSegmentedRegressionTool(dbContext, schema),
                     ...createGeocodingTools(dbContext),
                 }),
-                ...(onChartUpdate && createChartUpdateTool(onChartUpdate)
+                ...(onChartUpdate && createChartUpdateTool(onChartUpdate, schema)
                     ? {
-                          update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,
+                          update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate, schema)!,
                       }
                     : {}),
                 ...(onChartDelete && createChartDeleteTool(onChartDelete)
