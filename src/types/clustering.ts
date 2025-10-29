@@ -25,6 +25,12 @@ export interface ClusterDiagnostics {
     iterations: number; // Number of iterations executed
     // labels array is NOT included - too large for AI context (would cause token overflow)
     centroids: number[][]; // Centroid coordinates for each cluster [numClusters][numFeatures]
+    sampleInfo?: {
+        // Information about sample-based training (only for scalable k-means)
+        sampleSize: number; // Number of samples used for training
+        totalSize: number; // Total dataset size
+        sampleRatio: number; // Sample ratio (0-1)
+    };
 }
 
 // Complete clustering result (for internal use)
@@ -41,6 +47,12 @@ export interface ClusterResult {
     clusterSizes: number[]; // Size of each cluster
     featureNames: string[]; // Feature names
     timing: TimingInfo; // Execution time breakdown
+    sampleInfo?: {
+        // Information about sample-based training (only for scalable k-means)
+        sampleSize: number; // Number of samples used for training
+        totalSize: number; // Total dataset size
+        sampleRatio: number; // Sample ratio (0-1)
+    };
 }
 
 export interface ClusterDataInfo {
