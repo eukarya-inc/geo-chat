@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AIChat from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
 import { TablePanel } from '../../components/table/TablePanel';
-import RemoteFile from '../../components/remote-file';
+import { DataSourceSelector } from '../../components/data-source-selector';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
@@ -552,7 +552,7 @@ function ChatPage() {
                                         }}
                                         onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={onClose => (
-                                            <RemoteFile
+                                            <DataSourceSelector
                                                 dbContext={dbContext}
                                                 schema={schemaName}
                                                 onTableCreated={(tableName: string) => {
@@ -560,10 +560,10 @@ function ChatPage() {
                                                     if (dbContext) {
                                                         dbContext.notifyTableChange(tableName, schemaName);
                                                     }
-                                                    onClose();
                                                 }}
                                                 onSendMessage={sendMessageRef.current || undefined}
                                                 waitForDbContext={waitForDbContext}
+                                                onClose={onClose}
                                             />
                                         )}
                                         emptyMode={true}
@@ -622,7 +622,7 @@ function ChatPage() {
                                         }}
                                         onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={onClose => (
-                                            <RemoteFile
+                                            <DataSourceSelector
                                                 dbContext={dbContext}
                                                 schema={schemaName}
                                                 onTableCreated={(tableName: string) => {
@@ -630,10 +630,10 @@ function ChatPage() {
                                                     if (dbContext) {
                                                         dbContext.notifyTableChange(tableName, schemaName);
                                                     }
-                                                    onClose();
                                                 }}
                                                 onSendMessage={sendMessageRef.current || undefined}
                                                 waitForDbContext={waitForDbContext}
+                                                onClose={onClose}
                                             />
                                         )}
                                         showApiKeyInput={showApiKeyInput}
