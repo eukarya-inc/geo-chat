@@ -217,16 +217,22 @@ OUTPUT:
                             }
                         )) as RegressionAnalysisResponse;
 
-                        // Clean up segment table
+                        if (!regressionResult.success) {
+                            globalWarnings.push(`セグメント「${segmentLabel}」: ${regressionResult.message}`);
+                            // Clean up segment table before continuing
+                            try {
+                                await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedSegmentTable};`, schema);
+                            } catch {
+                                // Ignore cleanup errors
+                            }
+                            continue;
+                        }
+
+                        // Clean up segment table after successful regression
                         try {
                             await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedSegmentTable};`, schema);
                         } catch {
                             // Ignore cleanup errors
-                        }
-
-                        if (!regressionResult.success) {
-                            globalWarnings.push(`セグメント「${segmentLabel}」: ${regressionResult.message}`);
-                            continue;
                         }
 
                         segmentResults.push({
