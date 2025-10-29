@@ -2,12 +2,14 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
 import { kmeans } from '../../../utils/clustering/kmeans';
+import { scalableKmeans } from '../../../utils/clustering/scalableKmeans';
 import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
 const MIN_REQUIRED_ROWS = 10;
 const DEFAULT_K = 3;
 const MIN_K = 2;
 const MAX_K = 10;
+const LARGE_DATA_THRESHOLD = 10000; // Use scalable k-means for datasets > 10k rows
 
 export function createClusterTool(dbContext: DBContext, schema: string | null) {
     return tool({
@@ -194,11 +196,25 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 
                 let clustering;
                 try {
-                    clustering = kmeans(matrixX, {
-                        numClusters: k,
-                        featureNames: providedFeatures,
-                        initMethod: init_method ?? 'kmeans++',
-                    });
+                    // Use scalable k-means for large datasets (>10k rows)
+                    if (usedRows > LARGE_DATA_THRESHOLD) {
+                        clustering = await scalableKmeans(matrixX, {
+                            numClusters: k,
+                            featureNames: providedFeatures,
+                            initMethod: init_method ?? 'kmeans++',
+                            maxIterations: 20, // Reduced for sample training
+                            refinementIterations: 2, // 2 refinement passes on full data
+                            sampleRatio: 0.1, // 10% sample
+                            maxSampleSize: 10000,
+                        });
+                    } else {
+                        // Use standard k-means for smaller datasets
+                        clustering = kmeans(matrixX, {
+                            numClusters: k,
+                            featureNames: providedFeatures,
+                            initMethod: init_method ?? 'kmeans++',
+                        });
+                    }
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     return errorResponse(`クラスター分析の計算中にエラーが発生しました: ${message}`);
