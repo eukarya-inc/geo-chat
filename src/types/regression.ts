@@ -19,7 +19,6 @@ export interface RegressionDataInfo {
     totalRows: number;
     usedRows: number;
     skippedRows: number;
-    samplingLimit: number;
 }
 
 export interface RegressionAnalysisSuccess {
