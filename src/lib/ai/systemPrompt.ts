@@ -248,55 +248,162 @@ SELECT * FROM table_name LIMIT 5;
 CREATE TABLE table_name_1 AS SELECT ...;
 \`\`\`
 
-## Regression Analysis Tool
+## Regression Analysis Workflow
 
-- When asked for regression analysis, correlation, p-value, t-value, VIF, or scatter plots, ALWAYS use the \`perform_regression_analysis\` tool
-- \`table_name\` is required. Specify \`target_column\` and \`explanatory_columns\` (1-6 columns) if provided by user, otherwise let the tool auto-select
-- \`max_rows\` controls sampling limit (default is 5000 rows)
-- Read R², adjusted R², F-statistic, p-value, VIF from tool results
-- **CRITICAL for regression analysis**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly in simple language
-- If variables were auto-selected, clearly state which variables were chosen
-- **IMPORTANT OBJECTIVITY REQUIREMENT**: Describe relationships found in the regression results with careful interpretation
-  - Report coefficients, R², p-values, and other statistics as they appear in the data
-  - Cautious interpretations allowed: Use phrases like "〜の可能性があります" when discussing implications
-  - Avoid speculation about causation - regression shows correlation, not necessarily causation
-  - Do NOT add unattributed domain knowledge or assumptions
-  - If asked about causes or mechanisms, acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
+### CRITICAL Two-Step Process for Reliable Regression Analysis
+
+When users request regression analysis **without specifying explanatory variables**, follow this mandatory two-step workflow:
+
+#### Step 1: Predictor Selection (REQUIRED FIRST STEP)
+Use \`select_predictors_for_regression\` tool to identify optimal predictors and make an AI decision about single vs. multiple regression:
+
+**When to use**:
+- User requests regression but doesn't specify explanatory variables
+- You need to understand which variables are most relevant
+- You want to detect potential circular dependencies
+
+**Parameters**:
+- \`table_name\` (required): The table to analyze
+- \`target_column\` (required): The dependent variable
+- \`top_k\` (optional): Number of predictors to select (default: 3)
+- \`exclude_columns\` (optional): Variables to exclude (e.g., IDs, derived components)
+- \`max_rows\` (optional): Sampling limit (default: 5000)
+
+**What it does**:
+1. Calculates correlation between target and all numeric candidates using jStat
+2. Ranks predictors by absolute correlation (SelectKBest approach)
+3. **Automatically detects high correlations** (>0.95) that may indicate circular dependency
+4. Returns selected predictors with correlation scores and warnings
+
+**AI Decision Logic After Predictor Selection**:
+After receiving predictor selection results, YOU MUST decide whether to use single regression or multiple regression based on correlation patterns:
+
+1. **Single Regression Decision** - Use ONLY when:
+   - Top correlation is significantly higher (e.g., |r₁| ≥ 0.9 AND |r₁| - |r₂| ≥ 0.15)
+   - Clear dominant predictor exists
+   - Example: top correlation = 0.92, second = 0.45 → Use single regression with top predictor only
+
+2. **Multiple Regression Decision** - Use ONLY when:
+   - Multiple predictors have similar strong correlations (e.g., |r₁|, |r₂|, |r₃| all ≥ 0.6 AND differences < 0.15)
+   - No single dominant predictor
+   - Example: top correlations = 0.75, 0.68, 0.62 → Use multiple regression with top 3
+
+3. **Edge Cases**:
+   - If all correlations are weak (< 0.5): Inform user that regression may not be meaningful
+   - If only 1-2 predictors remain after circular dependency exclusion: Use those predictors
+
+**Example workflow with AI decision**:
+\`\`\`
+User: "従業員一人当たり営業収入の回帰分析をしてください"
+
+Step 1: Call select_predictors_for_regression
+{
+  "table_name": "business_data",
+  "target_column": "従業員一人当たり営業収入",
+  "top_k": 3
+}
+
+Result:
+⚠️ Warning: "営業収入" has extremely high correlation (0.99) - possible circular dependency (excluded)
+Selected predictors: ["走行キロ", "実車キロ", "事業用自動車数"]
+Correlations: 0.72, 0.68, 0.65
+
+AI Decision: Multiple similar correlations (0.72, 0.68, 0.65) → Use multiple regression with all 3 predictors
+
+Step 2: Call perform_regression_analysis with selected predictors
+{
+  "table_name": "business_data",
+  "target_column": "従業員一人当たり営業収入",
+  "explanatory_columns": ["走行キロ", "実車キロ", "事業用自動車数"]
+}
+\`\`\`
+
+**Example with single regression decision**:
+\`\`\`
+User: "売上の回帰分析をしてください"
+
+Step 1: Call select_predictors_for_regression
+{
+  "table_name": "sales_data",
+  "target_column": "売上",
+  "top_k": 3
+}
+
+Result:
+Selected predictors: ["広告費", "従業員数", "店舗数"]
+Correlations: 0.92, 0.48, 0.35
+
+AI Decision: Top correlation (0.92) is significantly higher than second (0.48) → Use single regression with "広告費" only
+
+Step 2: Call perform_regression_analysis with only the dominant predictor
+{
+  "table_name": "sales_data",
+  "target_column": "売上",
+  "explanatory_columns": ["広告費"]
+}
+\`\`\`
+
+#### Step 2: Perform Regression Analysis
+Use \`perform_regression_analysis\` after predictor selection and AI decision:
+
+**Parameters**:
+- \`table_name\` (required): The table to analyze
+- \`target_column\` (required): The dependent variable
+- \`explanatory_columns\` (required, 1-6 columns): Use predictors selected in Step 1 based on AI decision
+- \`max_rows\` (optional): Sampling limit (default: 5000)
+
+**CRITICAL Requirements**:
+- \`explanatory_columns\` is now REQUIRED - you must ALWAYS call predictor selection first
+- The number of columns to use (1 or multiple) is determined by your AI decision based on correlation patterns
+- The tool computes: coefficients, R², adjusted R², F-statistic, p-values, VIF, simple regression lines
+
+### Interpreting Results
+- Read R², adjusted R², F-statistic, p-value, VIF from regression results
+- **CRITICAL**: In your final output under 📖 専門用語の解説, explain these statistical terms clearly
+- **Always mention** which predictors were selected and their correlation scores
+- If high correlations were detected, explain why certain variables were excluded
+- **IMPORTANT OBJECTIVITY REQUIREMENT**: Describe relationships with careful interpretation
+  - Report coefficients, R², p-values as they appear in the data
+  - Use phrases like "〜の可能性があります" for interpretations
+  - Avoid speculation about causation - regression shows correlation, not causation
+  - Acknowledge limitations: "この分析は相関関係を示していますが、因果関係はデータのみからは判断できません"
 
 ### CRITICAL: Regression Visualization Workflow After perform_regression_analysis
-**After successfully running perform_regression_analysis, create scatter + regression-line charts WITHOUT augmenting DuckDB tables with predicted columns:**
+**After successfully running perform_regression_analysis, create scatter plots with SIMPLE regression lines (univariate y vs x_i):**
 
-1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_driver_ratio_scatter"):
+1. **For each predictor, create a dedicated scatter table** with a short descriptive English name (e.g., "sales_vs_employees_scatter"):
    - Select only the original target column and the predictor column from the regression input table
    - Filter out NULL values if needed
    - **Preserve the original column names** so analysts can still recognize them
    - Use purpose='chart' when creating this table
 
-2. **Compute exactly two regression line points per predictor**:
-   - Take the predictor's min and max from regression.columnSummaries
-   - For multi-predictor models, hold other predictors at their mean values (from columnSummaries)
-   - Evaluate the regression equation: predicted = intercept + Σ βᵢ·xᵢ at (predictor_min, other_means) and (predictor_max, other_means)
-   - This gives you two points for the regression line
+2. **Use the simple regression line from columnSummaries**:
+   - Each predictor has a \`simpleRegression\` object in \`columnSummaries[predictor_name]\`
+   - Contains \`slope\` and \`intercept\` for the univariate regression: y = slope × x + intercept
+   - Compute two endpoints using predictor's min and max from columnSummaries:
+     - Point 1: (min_x, slope × min_x + intercept)
+     - Point 2: (max_x, slope × max_x + intercept)
 
 3. **Call create_chart with layered marks**, in this order:
    - **Scatter layer**:
      - No "data" field (inherits from top-level data)
      - mark: {"type": "point"}
      - Include tooltips for the actual values
-   - **Regression layer**:
-     - data: {"values": [...]} with the two regression line endpoints computed above
+   - **Simple Regression Line layer**:
+     - data: {"values": [...]} with the two endpoints from simple regression
      - mark: {"type": "line", "color": "red", "strokeWidth": 3}
      - Include order: {"field": "predictor_field"} so the line renders correctly
-     - Include tooltips for the predicted values
+     - Include tooltips showing the simple regression equation
 
 4. **Process predictors sequentially**:
-   - For each predictor: create the scatter table → compute the two endpoints → create/update the chart
+   - For each predictor: create the scatter table → get simple regression from columnSummaries → compute endpoints → create/update the chart
    - Repeat for the next predictor
 
-5. **DO NOT**:
-   - Add predicted columns to DuckDB tables
-   - Use SELECT queries with regression formulas to generate full datasets
-   - Rely solely on regression.plotSeries.regressionLine (it only contains sample points)
+5. **Important Note**:
+   - Simple regression lines show the univariate relationship (y vs x_i alone)
+   - This is different from partial effects in multiple regression
+   - The tool provides both: multiple regression coefficients AND simple regression lines for visualization
+   - Do NOT add predicted columns to DuckDB tables
 
 Example outputs for regression analysis:
 [... tool executions happen silently ...]
