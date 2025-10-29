@@ -263,7 +263,7 @@ describe('kmeans', () => {
         expect(Number.isFinite(result.inertia)).toBe(true);
     });
 
-    it('should respect nInit parameter', () => {
+    it('should work with default parameters', () => {
         const X = [
             [0, 0],
             [1, 1],
@@ -271,13 +271,10 @@ describe('kmeans', () => {
             [11, 11],
         ];
 
-        // Works with nInit=1
-        const result1 = kmeans(X, { numClusters: 2, nInit: 1 });
+        // Works with default parameters (ml-kmeans handles initialization internally)
+        const result1 = kmeans(X, { numClusters: 2 });
         expect(result1.labels).toHaveLength(4);
-
-        // Works with nInit=5
-        const result5 = kmeans(X, { numClusters: 2, nInit: 5 });
-        expect(result5.labels).toHaveLength(4);
+        expect(result1.converged).toBe(true);
     });
 
     it('should work without robust scaling', () => {
@@ -341,7 +338,6 @@ describe('kmeans', () => {
 
         const result = kmeans(X, {
             numClusters: 2,
-            nInit: 3,
             trimRatio: 0.14, // Trim 1 point
             useRobustScaling: true,
         });

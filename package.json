@@ -16,7 +16,8 @@
         "test:watch": "vitest",
         "test:browser": "vitest run --project=browser",
         "test:unit": "vitest run --project=unit",
-        "test:full": "vitest run",
+        "test:full": "vitest run --project=unit --project=browser",
+        "test:benchmark": "vitest run --project=benchmark",
         "check": "prettier --write --log-level error . && eslint --quiet . && npm run typecheck && npm run test:unit > /dev/null 2>&1"
     },
     "dependencies": {
@@ -25,6 +26,7 @@
         "@glideapps/glide-data-grid": "^6.0.3",
         "@heroicons/react": "^2.2.0",
         "@maplibre/maplibre-gl-style-spec": "^23.3.0",
+        "@robzzson/silhouette": "^0.0.7",
         "@types/react-grid-layout": "^1.3.5",
         "@viz-js/viz": "^3.16.0",
         "ai": "^5.0.82",
@@ -36,6 +38,7 @@
         "lz-string": "^1.5.0",
         "maplibre-gl": "^5.3.1",
         "marked": "^4.3.0",
+        "ml-kmeans": "^6.0.0",
         "ml-matrix": "^6.12.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
