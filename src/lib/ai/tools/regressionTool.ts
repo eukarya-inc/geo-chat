@@ -4,8 +4,6 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { olsRegression, type RegressionResult } from '../../../utils/regression/ols';
 import type { ColumnSummary, RegressionAnalysisResponse, SimpleLinearRegression } from '../../../types/regression';
 
-const DEFAULT_MAX_ROWS = 5000;
-const MAX_ALLOWED_ROWS = 20000;
 const MIN_REQUIRED_ROWS = 10;
 const MAX_PREDICTORS = 6;
 
@@ -30,15 +28,8 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                 .describe(
                     'Predictor columns (1-6, required). Use select_features_for_regression tool first to identify optimal predictors.'
                 ),
-            max_rows: z
-                .number()
-                .int()
-                .min(MIN_REQUIRED_ROWS)
-                .max(MAX_ALLOWED_ROWS)
-                .optional()
-                .describe('Maximum number of rows to sample. Default 5000.'),
         }),
-        execute: async ({ table_name, target_column, explanatory_columns, max_rows }) => {
+        execute: async ({ table_name, target_column, explanatory_columns }) => {
             try {
                 const tableName = table_name.trim();
                 if (!tableName) {
@@ -85,10 +76,7 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
 
                 const columnsToFetch = [target_column, ...providedPredictors];
 
-                const limit = clamp(max_rows ?? DEFAULT_MAX_ROWS, MIN_REQUIRED_ROWS, MAX_ALLOWED_ROWS);
-                const query = `SELECT ${columnsToFetch
-                    .map(quoteIdentifier)
-                    .join(', ')} FROM ${qualifiedTable} LIMIT ${limit};`;
+                const query = `SELECT ${columnsToFetch.map(quoteIdentifier).join(', ')} FROM ${qualifiedTable};`;
                 const rows = await dbContext.executeQuery(query, schema);
 
                 if (!Array.isArray(rows) || rows.length === 0) {
@@ -193,12 +181,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
                 }
 
-                if (usedRows < totalRows) {
-                    warnings.push(
-                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。より正確な結果が必要な場合はmax_rowsを増やしてください。`
-                    );
-                }
-
                 // Generate suggestions for creating scatter plots with simple regression lines
                 const suggestions: string[] = [];
 
@@ -234,7 +216,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                         totalRows,
                         usedRows,
                         skippedRows,
-                        samplingLimit: limit,
                     },
                     regression,
                     columnSummaries,
@@ -394,10 +375,6 @@ function deduplicateStrings(values: string[]): string[] {
         }
     }
     return result;
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
 }
 
 function quoteIdentifier(identifier: string): string {

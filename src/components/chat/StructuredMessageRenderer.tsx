@@ -852,8 +852,7 @@ function renderRegressionToolResult(result: RegressionAnalysisResponse | undefin
                     </div>
                     <div className="leading-relaxed">
                         使用行数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}
-                        {formatInteger(dataInfo.totalRows)}（最大 {formatInteger(dataInfo.samplingLimit)} 行、除外{' '}
-                        {formatInteger(dataInfo.skippedRows)} 行）
+                        {formatInteger(dataInfo.totalRows)}（除外 {formatInteger(dataInfo.skippedRows)} 行）
                     </div>
                     <div className="leading-relaxed">
                         回帰式:{' '}
