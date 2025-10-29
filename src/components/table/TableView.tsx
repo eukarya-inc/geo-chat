@@ -121,6 +121,16 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
         return '[Blob]';
     }
 
+    // Handle objects (STRUCT, LIST, etc.)
+    if (typeof value === 'object' && value !== null) {
+        try {
+            return JSON.stringify(value);
+        } catch {
+            // If JSON.stringify fails (circular reference, etc.), fallback to String()
+            return String(value);
+        }
+    }
+
     return String(value);
 };
 
