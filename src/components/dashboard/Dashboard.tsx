@@ -1,11 +1,29 @@
 import { useState, useCallback } from 'react';
 import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, MapIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+    ChartBarIcon,
+    CogIcon,
+    MapIcon,
+    EllipsisVerticalIcon,
+    TrashIcon,
+    ArrowDownTrayIcon,
+} from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
 import { MapPanel } from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
+import {
+    getMapLibreCanvas,
+    forceMapRepaint,
+    calculateDashboardDimensions,
+    createManualComposite,
+    createOnCloneHandler,
+    createHtml2CanvasOptions,
+    downloadCanvasAsPNG,
+    hasMapContent,
+} from '../../utils/dashboardExport';
+import html2canvas from 'html2canvas';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -46,6 +64,7 @@ export function Dashboard({
     const [activeTab, setActiveTab] = useState<'charts' | 'layout'>('charts');
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [showMenuDropdown, setShowMenuDropdown] = useState(false);
 
     // Determine which visualizations are shown on dashboard
     const shownVisualizationIds = new Set(dashboard.layout.map(item => item.i));
@@ -108,6 +127,80 @@ export function Dashboard({
     const closeDropdown = useCallback(() => {
         setOpenDropdownId(null);
     }, []);
+
+    const handleSaveAsPNG = useCallback(async () => {
+        // Close the dropdown first
+        setShowMenuDropdown(false);
+
+        const gridElement = document.querySelector('.dashboard-grid-container');
+        if (!gridElement) {
+            alert('ダッシュボードの内容が見つかりません。');
+            return;
+        }
+
+        // Find canvas elements within the dashboard
+        const canvasElements = gridElement.querySelectorAll('canvas, .maplibregl-canvas');
+        console.log('Found canvas elements:', canvasElements.length);
+
+        // Check if dashboard has map content
+        const hasMapContentFlag = hasMapContent(gridElement);
+
+        if (hasMapContentFlag) {
+            try {
+                console.log('Processing dashboard with map content...');
+
+                // Get MapLibre GL canvas and force repaint
+                const mapCanvas = await getMapLibreCanvas(gridElement);
+                await forceMapRepaint(gridElement);
+
+                // Calculate dashboard dimensions
+                const dimensions = calculateDashboardDimensions(gridElement);
+                console.log('Dashboard dimensions:', dimensions);
+
+                // Try manual composite approach first if we have both maps and charts
+                if (mapCanvas && canvasElements.length > 0) {
+                    const compositeSuccess = await createManualComposite(
+                        gridElement,
+                        mapCanvas,
+                        dimensions.fullWidth,
+                        dimensions.fullHeight,
+                        dashboard.title || 'dashboard'
+                    );
+
+                    if (compositeSuccess) return;
+                }
+
+                // Fallback to html2canvas with enhanced map handling
+                console.log('Using html2canvas with enhanced map handling...');
+                const oncloneHandler = mapCanvas ? createOnCloneHandler(mapCanvas) : undefined;
+                const html2canvasOptions = createHtml2CanvasOptions(
+                    dimensions.fullWidth,
+                    dimensions.fullHeight,
+                    oncloneHandler
+                );
+
+                const canvas = await html2canvas(gridElement as HTMLElement, html2canvasOptions);
+                downloadCanvasAsPNG(canvas, `${dashboard.title || 'dashboard'}.png`);
+            } catch (error) {
+                console.error('Dashboard export with maps failed:', error);
+                alert('ダッシュボードの出力に失敗しました。再試行してください。');
+            }
+        } else if (canvasElements.length > 0) {
+            // Handle charts-only dashboard
+            try {
+                const dimensions = calculateDashboardDimensions(gridElement);
+                const html2canvasOptions = createHtml2CanvasOptions(dimensions.fullWidth, dimensions.fullHeight);
+
+                const canvas = await html2canvas(gridElement as HTMLElement, html2canvasOptions);
+                downloadCanvasAsPNG(canvas, `${dashboard.title || 'dashboard'}.png`);
+            } catch (error) {
+                console.error('Charts-only dashboard export failed:', error);
+                alert('ダッシュボードの出力に失敗しました。再試行してください。');
+            }
+        } else {
+            alert('ダッシュボードにチャートまたはマップが見つかりません。コンテンツを追加してから再試行してください。');
+        }
+    }, [dashboard.title, setShowMenuDropdown]);
 
     return (
         <div className="flex h-full">
@@ -242,99 +335,142 @@ export function Dashboard({
                 </div>
             </div>
 
-            {/* Right Side - Grid Layout */}
-            <div className="flex-1 h-full overflow-auto bg-gray-50">
-                <div className="p-4 h-full">
-                    {shownVisualizations.length > 0 ? (
-                        <ResponsiveGridLayout
-                            className="layout"
-                            layouts={{ lg: dashboard.layout }}
-                            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-                            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                            rowHeight={60}
-                            onLayoutChange={handleLayoutChange}
-                            onResizeStop={handleResizeStop}
-                            isDraggable={true}
-                            isResizable={true}
-                            resizeHandles={['se', 'sw', 'ne', 'nw']}
-                            draggableCancel="button"
-                        >
-                            {shownVisualizations.map(viz => (
-                                <div
-                                    key={viz.id}
-                                    className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
-                                    data-viz-id={viz.id}
-                                    style={{ height: '100%' }}
-                                >
-                                    {viz.type === 'chart' && viz.chartSpec ? (
-                                        <ChartPanel
-                                            chartSpec={viz.chartSpec}
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            configMode="modal"
-                                            vizId={viz.id}
-                                            onRemove={() => handleRemoveVisualization(viz.id)}
-                                            onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
-                                            showDataSourceButton={true}
-                                        />
-                                    ) : viz.type === 'map' && viz.tableName ? (
-                                        <MapPanel
-                                            title={viz.title}
-                                            tableName={viz.tableName}
-                                            geometryColumn={viz.geometryColumn}
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            mapSpec={viz.mapSpec}
-                                            onRemove={() => handleRemoveVisualization(viz.id)}
-                                            vizId={viz.id}
-                                        />
-                                    ) : (
-                                        <div className="h-full flex flex-col">
-                                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                    {viz.title}
-                                                </h4>
-                                            </div>
-                                            <div className="flex-1 p-2 overflow-hidden">
-                                                <div className="h-full flex items-center justify-center text-gray-500">
-                                                    <div className="text-center">
-                                                        <div className="mb-2">
-                                                            {viz.type === 'chart' && (
-                                                                <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                            )}
-                                                            {viz.type === 'map' && (
-                                                                <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+            {/* Right Side - Dashboard with Header */}
+            <div className="flex-1 h-full overflow-hidden flex flex-col">
+                {/* Dashboard Header */}
+                <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-lg font-medium text-gray-900">{dashboard.title}</h1>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* Menu Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowMenuDropdown(!showMenuDropdown)}
+                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+                                title="Options"
+                            >
+                                <EllipsisVerticalIcon className="w-4 h-4" />
+                            </button>
+
+                            {showMenuDropdown && (
+                                <>
+                                    {/* Backdrop to close dropdown */}
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowMenuDropdown(false)} />
+
+                                    {/* Dropdown menu */}
+                                    <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-md shadow-lg z-20">
+                                        <button
+                                            onClick={handleSaveAsPNG}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                                        >
+                                            <ArrowDownTrayIcon className="w-4 h-4" />
+                                            PNGとして保存
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Grid Layout Area */}
+                <div className="flex-1 h-full overflow-auto bg-gray-50 dashboard-grid-container">
+                    <div className="p-4 h-full">
+                        {shownVisualizations.length > 0 ? (
+                            <ResponsiveGridLayout
+                                className="layout"
+                                layouts={{ lg: dashboard.layout }}
+                                breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+                                cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+                                rowHeight={60}
+                                onLayoutChange={handleLayoutChange}
+                                onResizeStop={handleResizeStop}
+                                isDraggable={true}
+                                isResizable={true}
+                                resizeHandles={['se', 'sw', 'ne', 'nw']}
+                                draggableCancel="button"
+                            >
+                                {shownVisualizations.map(viz => (
+                                    <div
+                                        key={viz.id}
+                                        className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                        data-viz-id={viz.id}
+                                        style={{ height: '100%' }}
+                                    >
+                                        {viz.type === 'chart' && viz.chartSpec ? (
+                                            <ChartPanel
+                                                chartSpec={viz.chartSpec}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                configMode="modal"
+                                                vizId={viz.id}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
+                                                showDataSourceButton={true}
+                                            />
+                                        ) : viz.type === 'map' && viz.tableName ? (
+                                            <MapPanel
+                                                title={viz.title}
+                                                tableName={viz.tableName}
+                                                geometryColumn={viz.geometryColumn}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                mapSpec={viz.mapSpec}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                vizId={viz.id}
+                                            />
+                                        ) : (
+                                            <div className="h-full flex flex-col">
+                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
+                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                        {viz.title}
+                                                    </h4>
+                                                </div>
+                                                <div className="flex-1 p-2 overflow-hidden">
+                                                    <div className="h-full flex items-center justify-center text-gray-500">
+                                                        <div className="text-center">
+                                                            <div className="mb-2">
+                                                                {viz.type === 'chart' && (
+                                                                    <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                                {viz.type === 'map' && (
+                                                                    <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm">
+                                                                {viz.type === 'chart'
+                                                                    ? 'Chart spec missing'
+                                                                    : viz.type === 'map'
+                                                                      ? 'Map table missing'
+                                                                      : `${viz.type} visualization`}
+                                                            </p>
+                                                            {viz.sql && (
+                                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
+                                                                    {viz.sql}
+                                                                </p>
                                                             )}
                                                         </div>
-                                                        <p className="text-sm">
-                                                            {viz.type === 'chart'
-                                                                ? 'Chart spec missing'
-                                                                : viz.type === 'map'
-                                                                  ? 'Map table missing'
-                                                                  : `${viz.type} visualization`}
-                                                        </p>
-                                                        {viz.sql && (
-                                                            <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
-                                                                {viz.sql}
-                                                            </p>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+                                ))}
+                            </ResponsiveGridLayout>
+                        ) : (
+                            <div className="h-full flex items-center justify-center">
+                                <div className="text-center">
+                                    <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">Empty Dashboard</h3>
+                                    <p className="text-sm text-gray-500 mb-4">
+                                        Add charts from the sidebar to get started
+                                    </p>
                                 </div>
-                            ))}
-                        </ResponsiveGridLayout>
-                    ) : (
-                        <div className="h-full flex items-center justify-center">
-                            <div className="text-center">
-                                <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Empty Dashboard</h3>
-                                <p className="text-sm text-gray-500 mb-4">Add charts from the sidebar to get started</p>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
 

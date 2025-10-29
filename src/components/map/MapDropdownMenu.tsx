@@ -49,11 +49,80 @@ export function MapDropdownMenu({
                 return;
             }
 
-            // Use html2canvas to capture the entire map container
+            // Try to get MapLibre GL canvas directly first
+            const getMapLibreCanvas = (): HTMLCanvasElement | null => {
+                const mapCanvas = mapContainer!.querySelector('.maplibregl-canvas') as HTMLCanvasElement;
+                if (mapCanvas && mapCanvas.width > 0 && mapCanvas.height > 0) {
+                    // Try to get the map instance
+                    const mapElement = mapCanvas.closest('[data-viz-id]') || mapContainer;
+                    const mapInstance =
+                        (mapElement as HTMLElement & { _map?: unknown })?._map ||
+                        (mapCanvas.parentElement as HTMLElement & { _map?: unknown })?._map;
+
+                    const mapInstanceWithCanvas = mapInstance as { getCanvas?: () => HTMLCanvasElement };
+                    if (mapInstanceWithCanvas && typeof mapInstanceWithCanvas.getCanvas === 'function') {
+                        try {
+                            return mapInstanceWithCanvas.getCanvas();
+                        } catch (e) {
+                            console.warn('Failed to get canvas from MapLibre GL instance:', e);
+                        }
+                    }
+
+                    return mapCanvas;
+                }
+                return null;
+            };
+
+            const mapCanvas = getMapLibreCanvas();
+
+            if (mapCanvas) {
+                // Direct canvas approach
+                const containerRect = mapContainer.getBoundingClientRect();
+                const exportCanvas = document.createElement('canvas');
+                const ctx = exportCanvas.getContext('2d');
+
+                if (ctx) {
+                    exportCanvas.width = containerRect.width;
+                    exportCanvas.height = containerRect.height;
+
+                    // Set background
+                    ctx.fillStyle = '#f9fafb';
+                    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+                    try {
+                        ctx.drawImage(mapCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+                        exportCanvas.toBlob(blob => {
+                            if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                const filename = vizTitle ? `${vizTitle}.png` : 'map.png';
+                                a.download = filename;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            } else {
+                                alert('Failed to export map as image. Please try again.');
+                            }
+                        }, 'image/png');
+                        return;
+                    } catch (e) {
+                        console.warn('Direct canvas capture failed, falling back to html2canvas:', e);
+                    }
+                }
+            }
+
+            // Fallback to html2canvas with optimized settings
             const canvas = await html2canvas(mapContainer as HTMLElement, {
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: null,
+                ignoreElements: element => {
+                    // Skip MapLibre GL controls that can interfere
+                    if (element.classList.contains('maplibregl-control-container')) return true;
+                    if (element.classList.contains('maplibregl-ctrl')) return true;
+                    return false;
+                },
             });
 
             canvas.toBlob(blob => {
@@ -105,12 +174,90 @@ export function MapDropdownMenu({
                 return;
             }
 
-            // Use html2canvas to capture the entire map container
-            const canvas = await html2canvas(mapContainer as HTMLElement, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
-            });
+            // Try to get MapLibre GL canvas directly first
+            const getMapLibreCanvas = (): HTMLCanvasElement | null => {
+                const mapCanvas = mapContainer!.querySelector('.maplibregl-canvas') as HTMLCanvasElement;
+                if (mapCanvas && mapCanvas.width > 0 && mapCanvas.height > 0) {
+                    // Try to get the map instance
+                    const mapElement = mapCanvas.closest('[data-viz-id]') || mapContainer;
+                    const mapInstance =
+                        (mapElement as HTMLElement & { _map?: unknown })?._map ||
+                        (mapCanvas.parentElement as HTMLElement & { _map?: unknown })?._map;
+
+                    const mapInstanceWithCanvas = mapInstance as { getCanvas?: () => HTMLCanvasElement };
+                    if (mapInstanceWithCanvas && typeof mapInstanceWithCanvas.getCanvas === 'function') {
+                        try {
+                            return mapInstanceWithCanvas.getCanvas();
+                        } catch (e) {
+                            console.warn('Failed to get canvas from MapLibre GL instance:', e);
+                        }
+                    }
+
+                    return mapCanvas;
+                }
+                return null;
+            };
+
+            const mapCanvas = getMapLibreCanvas();
+            let canvas: HTMLCanvasElement;
+
+            if (mapCanvas) {
+                // Direct canvas approach
+                const containerRect = mapContainer.getBoundingClientRect();
+                const exportCanvas = document.createElement('canvas');
+                const ctx = exportCanvas.getContext('2d');
+
+                if (ctx) {
+                    exportCanvas.width = containerRect.width;
+                    exportCanvas.height = containerRect.height;
+
+                    // Set background
+                    ctx.fillStyle = '#f9fafb';
+                    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+                    try {
+                        ctx.drawImage(mapCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+                        canvas = exportCanvas;
+                    } catch (e) {
+                        console.warn('Direct canvas capture failed, falling back to html2canvas:', e);
+                        // Fall through to html2canvas approach
+                        canvas = await html2canvas(mapContainer as HTMLElement, {
+                            useCORS: true,
+                            allowTaint: true,
+                            backgroundColor: null,
+                            ignoreElements: element => {
+                                if (element.classList.contains('maplibregl-control-container')) return true;
+                                if (element.classList.contains('maplibregl-ctrl')) return true;
+                                return false;
+                            },
+                        });
+                    }
+                } else {
+                    // Fall back to html2canvas
+                    canvas = await html2canvas(mapContainer as HTMLElement, {
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: null,
+                        ignoreElements: element => {
+                            if (element.classList.contains('maplibregl-control-container')) return true;
+                            if (element.classList.contains('maplibregl-ctrl')) return true;
+                            return false;
+                        },
+                    });
+                }
+            } else {
+                // Fallback to html2canvas with optimized settings
+                canvas = await html2canvas(mapContainer as HTMLElement, {
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: null,
+                    ignoreElements: element => {
+                        if (element.classList.contains('maplibregl-control-container')) return true;
+                        if (element.classList.contains('maplibregl-ctrl')) return true;
+                        return false;
+                    },
+                });
+            }
 
             // Safari requires ClipboardItem to be created synchronously with a Promise
             const blobPromise = new Promise<Blob>((resolve, reject) => {
