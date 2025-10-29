@@ -4,6 +4,28 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import type { TopLevelSpec } from 'vega-lite';
+import { loader as vegaLoader, type Loader } from 'vega';
+import { exportDataAsJSON } from '../../lib/duckdb/dataExporter';
+
+// Create a custom loader that allows blob URLs
+function createBlobAwareLoader(): Loader {
+    const defaultLoader = vegaLoader();
+
+    return {
+        ...defaultLoader,
+        sanitize: async (uri: string, options) => {
+            // Allow blob URLs without modification
+            if (uri.startsWith('blob:')) {
+                return { href: uri };
+            }
+            // For other URLs, use default sanitization
+            return defaultLoader.sanitize(uri, options);
+        },
+    };
+}
+
+// Create the loader once to avoid recreating it on every render
+const blobAwareLoader = createBlobAwareLoader();
 
 interface VegaLiteChartProps {
     spec: VegaChartSpec;
@@ -22,21 +44,37 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     enableActions = false,
     onViewReady,
 }) => {
-    const [data, setData] = useState<Record<string, unknown>[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
     const [prevSchema, setPrevSchema] = useState(schema);
+    const [dataUrl, setDataUrl] = useState<string | null>(null);
     const vegaViewRef = useRef<View | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const cleanupUrlRef = useRef<(() => void) | null>(null);
+
+    // Cleanup Object URL on unmount or when URL changes
+    useEffect(() => {
+        return () => {
+            if (cleanupUrlRef.current) {
+                cleanupUrlRef.current();
+                cleanupUrlRef.current = null;
+            }
+        };
+    }, []);
 
     // Clear data when schema changes
     useEffect(() => {
         if (prevSchema !== schema && prevSchema !== null) {
-            setData([]);
+            setDataUrl(null);
             setError(null);
             setLoading(true);
             setPrevSchema(schema);
+            // Cleanup previous URL
+            if (cleanupUrlRef.current) {
+                cleanupUrlRef.current();
+                cleanupUrlRef.current = null;
+            }
         }
     }, [schema, prevSchema]);
 
@@ -115,7 +153,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         };
     }, []);
 
-    // Fetch data when spec changes
+    // Fetch data when spec changes - always use Object URL mode
     useEffect(() => {
         const fetchData = async () => {
             if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
@@ -127,12 +165,32 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                 setLoading(true);
                 setError(null);
 
-                // Execute SQL query for chart data
-                const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
-                setData(rows);
+                // Cleanup previous URL if exists
+                if (cleanupUrlRef.current) {
+                    cleanupUrlRef.current();
+                    cleanupUrlRef.current = null;
+                }
+                setDataUrl(null);
+
+                const sql = currentSpec.data.sql;
+
+                // Always use URL mode: export data as JSON and use Vega-Lite's URL loading
+                const exportResult = await exportDataAsJSON(dbContext, {
+                    sql,
+                    schema,
+                });
+
+                setDataUrl(exportResult.url);
+                cleanupUrlRef.current = exportResult.cleanup;
+
+                console.info(
+                    `Chart data exported: ${exportResult.rowCount} rows, ${(exportResult.sizeBytes / 1024).toFixed(2)} KB`
+                );
             } catch (err) {
                 console.error('Error fetching data for Vega-Lite chart:', err);
                 setError(err instanceof Error ? err.message : 'Failed to fetch data');
+                // Set dataUrl to null to prevent infinite retry loop
+                setDataUrl(null);
             } finally {
                 setLoading(false);
             }
@@ -141,15 +199,15 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         fetchData();
     }, [dbContext, currentSpec, schema]);
 
-    // Create final spec with data values, ensuring it's valid TopLevelSpec
+    // Create final spec with URL data, ensuring it's valid TopLevelSpec
     // Memoize to prevent unnecessary re-renders in VegaLite component
     // This must be before any conditional returns to follow React Hooks rules
     const finalSpec: TopLevelSpec = useMemo(
         () => ({
             ...currentSpec,
-            data: { values: data },
+            data: dataUrl ? { url: dataUrl, format: { type: 'json' } } : { values: [] },
         }),
-        [currentSpec, data]
+        [currentSpec, dataUrl]
     );
 
     if (loading) {
@@ -231,6 +289,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                         onViewReady?.(view);
                     }}
                     style={{ width: '100%', height: '100%' }}
+                    loader={blobAwareLoader}
                 />
             </div>
         </div>

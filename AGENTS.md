@@ -113,7 +113,7 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 
 - **Map component** (`src/components/Map.tsx`): MapLibre GL integration that renders selected table data and shows column information in popups. Handles JSON property extraction for all geometry types (points, lines, polygons).
 
-- **VegaLiteChart component** (`src/components/VegaLiteChart.tsx`): Interactive chart component for data visualization.
+- **VegaLiteChart component** (`src/components/chart/VegaLiteChart.tsx`): Interactive chart component for data visualization. Always uses Object URL-based loading for efficient performance with any dataset size. Object URLs are managed locally within the component.
 
 - **AI Chat components** (`src/components/chat/`): AI-powered SQL assistant with tools for map styling and data visualization. Uses Anthropic Claude with specialized tools for DuckDB queries and MapLibre style generation.
 
@@ -134,6 +134,8 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 - **SQL History Manager** (`src/lib/duckdb/sqlHistoryManager.ts`): Manages SQL query history with localStorage persistence.
 
 - **Database Context** (`src/lib/duckdb/dbContext.ts`): Provides centralized DuckDB connection management with schema support.
+
+- **Data Exporter** (`src/lib/duckdb/dataExporter.ts`): Exports query results as JSON Blobs with Object URLs for efficient dataset handling. Used by VegaLiteChart for all chart visualizations. Includes ObjectURLManager utility for proper memory cleanup (though VegaLiteChart manages its own URLs locally).
 
 ### State Management
 

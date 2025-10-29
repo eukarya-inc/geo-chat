@@ -502,8 +502,9 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
         ...restAiSpec,
         // Add data with SQL query
+        // VegaLiteChart component will always use Object URL mode for performance
         data: {
-            sql: `SELECT * FROM ${tableName} LIMIT 100`,
+            sql: `SELECT * FROM ${tableName}`,
             values: [],
         },
         // Set responsive container sizing
