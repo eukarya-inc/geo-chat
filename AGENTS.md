@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Verify Prettier formatting without writing
 - `npm run lint` - Run ESLint
 - `npm run typecheck` - Run TypeScript type checking without emitting files
-- `npm run check:light` - Run format, lint, typecheck, and unit tests (fast feedback for development)
+- `npm run check` - Run format, lint, typecheck, and unit tests (fast feedback for development)
 - `npm test` - Run unit tests only (fast, used in check script)
 - `npm run test:watch` - Run Vitest tests in watch mode
 - `npm run test:browser` - Run browser-specific tests
@@ -44,42 +44,26 @@ This repository has a pre-push hook that prevents direct pushes to main. All cha
 
 The pre-push hook will automatically reject any attempt to push directly to main with a helpful error message.
 
-## IMPORTANT: Always Run Light Check After Code Changes
+## IMPORTANT: Always Run Format, Lint, and Test After Changes
 
 After making any code changes, you MUST run:
 
 ```bash
-npm run check:light
+npm run check
 ```
 
 This ensures:
 
 1. Code is automatically formatted with Prettier
 2. ESLint passes without errors or warnings
-3. TypeScript type checking succeeds
-4. Unit tests pass
-5. Fast feedback during development without heavy build processes
-
-**Before committing**, you MUST run the full check:
-
-```bash
-npm run check
-```
-
-This runs:
-
-1. Code formatting with Prettier
-2. ESLint validation
-3. TypeScript type checking
-4. Full build process
-5. Unit tests
+3. TypeScript compilation succeeds
+4. All tests pass
+5. No regressions are introduced
 
 **Important notes:**
 
-- Use `check:light` for fast feedback during development (format + lint + typecheck + unit tests)
-- Use `check` before commits to ensure everything works (includes build + test)
-- The `check:light` script runs: format → lint → typecheck → unit test
-- The `check` script runs: format → lint → typecheck → build → unit test
+- The `check` script runs: format (error-only) → lint (quiet) → unit test (silent)
+- Only unit tests are run for fast feedback; full tests (including browser tests) run in CI
 - Output is suppressed on success; only errors are shown to save context
 - If any step fails, the command chain stops and shows the error
 
@@ -219,7 +203,7 @@ Use regular unit tests (`.test.ts`) when testing:
 
 ## ⚠️ CRITICAL: Always Run Check Before Task Completion
 
-**IMPORTANT**: Before considering your task complete, you MUST run:
+**IMPORTANT**: After making any code changes and before considering your task complete, you MUST run:
 
 ```bash
 npm run check
@@ -230,8 +214,7 @@ This ensures:
 - Code is automatically formatted with Prettier
 - Code follows the project's style guidelines
 - No syntax errors or warnings
-- TypeScript type checking succeeds
-- Build process completes successfully
+- TypeScript compilation succeeds
 - All tests pass
 - No regressions are introduced
 
