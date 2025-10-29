@@ -12,7 +12,7 @@ describe('DataSourceModal', () => {
             mark: 'circle',
             encoding: {},
             data: {
-                sql: 'SELECT * FROM test_table',
+                url: 'duckdb://test_table',
             },
         } as VegaChartSpec,
         timestamp: new Date(),

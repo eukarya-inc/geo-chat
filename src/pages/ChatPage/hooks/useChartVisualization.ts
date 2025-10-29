@@ -49,6 +49,7 @@ export function useChartVisualization(
             const existingSpec = currentChatState?.chartSpecs?.[tableName];
 
             // Create new chart spec
+            // Note: Object URLs are managed locally in VegaLiteChart component
             const newChartSpec: ChartSpec = {
                 id: `ai-chart-${tableName}-${Date.now()}`,
                 spec: spec,
@@ -78,6 +79,8 @@ export function useChartVisualization(
             if (!dbContext || !schemaName) {
                 throw new Error('Database context or schema not available');
             }
+
+            // Note: Object URLs are managed locally in VegaLiteChart component and will be cleaned up on unmount
 
             // Update remote state with null to indicate deletion
             // The atom merger will handle removing the entry

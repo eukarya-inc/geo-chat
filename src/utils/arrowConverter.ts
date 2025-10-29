@@ -49,13 +49,13 @@ export function convertArrowToJS(val: unknown, columnTypes?: Map<string, string>
     for (const [key, value] of Object.entries(val)) {
         let convertedValue = convertArrowToJS(value, columnTypes);
 
-        // Convert string to number for integer types that may be returned as strings
+        // Convert string to number for numeric types that may be returned as strings
         if (columnTypes && columnTypes.has(key)) {
             const colType = columnTypes.get(key)?.toUpperCase();
-            if (colType && isIntegerType(colType) && typeof convertedValue === 'string') {
+            if (colType && isNumericType(colType) && typeof convertedValue === 'string') {
                 let trimmedValue = convertedValue.trim();
 
-                // Remove surrounding quotes if present (handles cases like "\"50308\"")
+                // Remove surrounding quotes if present (handles cases like "\"50308\"" or "\"20.3\"")
                 // This can happen when data is double-encoded as JSON
                 if (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) {
                     trimmedValue = trimmedValue.slice(1, -1);
@@ -76,13 +76,14 @@ export function convertArrowToJS(val: unknown, columnTypes?: Map<string, string>
 }
 
 /**
- * Check if a DuckDB type is an integer type that might be returned as string
+ * Check if a DuckDB type is a numeric type (integer or decimal) that might be returned as string
  * Note: Arrow represents HUGEINT and other large integers as Decimal types
  */
-function isIntegerType(type: string): boolean {
+function isNumericType(type: string): boolean {
     const upperType = type.toUpperCase();
 
-    const integerTypes = [
+    const numericTypes = [
+        // Integer types
         'TINYINT',
         'SMALLINT',
         'INTEGER',
@@ -98,15 +99,15 @@ function isIntegerType(type: string): boolean {
         'INT2',
         'INT4',
         'INT8',
+        // Floating-point types
+        'FLOAT',
+        'DOUBLE',
+        'REAL',
+        'DECIMAL',
+        'NUMERIC',
     ];
 
-    if (integerTypes.some(t => upperType.includes(t))) {
-        return true;
-    }
-
-    // Check for Decimal with scale 0 (e.g., "Decimal[38e0]" for HUGEINT)
-    // Decimal with scale 0 represents integer values
-    if (upperType.includes('DECIMAL') && upperType.includes('E0')) {
+    if (numericTypes.some(t => upperType.includes(t))) {
         return true;
     }
 
