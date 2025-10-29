@@ -527,9 +527,6 @@ function ChatPage() {
                         {/* Center area - Chat input */}
                         <div className="flex-1 flex items-center justify-center px-8">
                             <div className="w-full max-w-2xl -mt-32">
-                                <h2 className="text-2xl text-center text-gray-700 mb-6">
-                                    What do you want to learn from the data?
-                                </h2>
                                 {!isLoadingApiKey && selectedChatId && (
                                     <AIChat
                                         dbContext={dbContext}

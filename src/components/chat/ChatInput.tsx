@@ -342,7 +342,7 @@ export default function ChatInput({
                     {showPopup && (
                         <div
                             ref={popupRef}
-                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                            className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
                             style={{ width: '500px', maxHeight: '400px' }}
                         >
                             <div className="relative">
@@ -439,7 +439,7 @@ export default function ChatInput({
                             {showPopup && (
                                 <div
                                     ref={popupRef}
-                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
+                                    className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
                                     style={{ width: '500px', maxHeight: '400px' }}
                                 >
                                     <div className="relative">
