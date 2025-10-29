@@ -5,17 +5,47 @@ import type { VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import type { TopLevelSpec } from 'vega-lite';
 import { loader as vegaLoader, type Loader } from 'vega';
-import { exportDataAsJSON } from '../../lib/duckdb/dataExporter';
 
-// Create a custom loader that allows blob URLs
-function createBlobAwareLoader(): Loader {
+// Create a custom loader that queries DuckDB directly
+function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader {
     const defaultLoader = vegaLoader();
 
     return {
         ...defaultLoader,
+        load: async (uri: string) => {
+            // Check if this is a DuckDB table URL: duckdb://schema/table
+            if (uri.startsWith('duckdb://')) {
+                // Extract table path from URI
+                const path = uri.replace('duckdb://', '');
+                const parts = path.split('/');
+
+                let tableName: string;
+                let schemaName: string | null = schema;
+
+                if (parts.length === 2) {
+                    // Format: duckdb://schema/table
+                    schemaName = parts[0];
+                    tableName = parts[1];
+                } else {
+                    // Format: duckdb://table (use default schema)
+                    tableName = parts[0];
+                }
+
+                // Build SQL query
+                const sql = `SELECT * FROM ${tableName}`;
+
+                // Execute query directly
+                const rows = await dbContext.executeQuery(sql, schemaName);
+
+                // Return data as JSON string (Vega will parse it)
+                return JSON.stringify(rows);
+            }
+            // For other URLs, use default loading
+            return defaultLoader.load(uri);
+        },
         sanitize: async (uri: string, options) => {
-            // Allow blob URLs without modification
-            if (uri.startsWith('blob:')) {
+            // Allow duckdb:// URLs without modification
+            if (uri.startsWith('duckdb://')) {
                 return { href: uri };
             }
             // For other URLs, use default sanitization
@@ -23,9 +53,6 @@ function createBlobAwareLoader(): Loader {
         },
     };
 }
-
-// Create the loader once to avoid recreating it on every render
-const blobAwareLoader = createBlobAwareLoader();
 
 interface VegaLiteChartProps {
     spec: VegaChartSpec;
@@ -51,17 +78,12 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     const [dataUrl, setDataUrl] = useState<string | null>(null);
     const vegaViewRef = useRef<View | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const cleanupUrlRef = useRef<(() => void) | null>(null);
 
-    // Cleanup Object URL on unmount or when URL changes
-    useEffect(() => {
-        return () => {
-            if (cleanupUrlRef.current) {
-                cleanupUrlRef.current();
-                cleanupUrlRef.current = null;
-            }
-        };
-    }, []);
+    // Create loader with current dbContext and schema
+    const duckdbLoader = useMemo(() => {
+        if (!dbContext) return vegaLoader();
+        return createDuckDBLoader(dbContext, schema);
+    }, [dbContext, schema]);
 
     // Clear data when schema changes
     useEffect(() => {
@@ -70,11 +92,6 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
             setError(null);
             setLoading(true);
             setPrevSchema(schema);
-            // Cleanup previous URL
-            if (cleanupUrlRef.current) {
-                cleanupUrlRef.current();
-                cleanupUrlRef.current = null;
-            }
         }
     }, [schema, prevSchema]);
 
@@ -153,50 +170,38 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         };
     }, []);
 
-    // Fetch data when spec changes - always use Object URL mode
+    // Set data URL when spec changes - loader will query DuckDB directly
     useEffect(() => {
-        const fetchData = async () => {
-            if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
-                setLoading(false);
-                return;
+        if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
+            setLoading(false);
+            setDataUrl(null);
+            return;
+        }
+
+        try {
+            setLoading(false);
+            setError(null);
+
+            const sql = currentSpec.data.sql;
+
+            // Extract table name from SQL: "SELECT * FROM table_name"
+            const tableMatch = sql.match(/FROM\s+([^\s;]+)/i);
+            if (!tableMatch) {
+                throw new Error('Could not extract table name from SQL');
             }
 
-            try {
-                setLoading(true);
-                setError(null);
+            const tableName = tableMatch[1];
 
-                // Cleanup previous URL if exists
-                if (cleanupUrlRef.current) {
-                    cleanupUrlRef.current();
-                    cleanupUrlRef.current = null;
-                }
-                setDataUrl(null);
+            // Create DuckDB URL: duckdb://schema/table or duckdb://table
+            const dataUri = schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
+            setDataUrl(dataUri);
 
-                const sql = currentSpec.data.sql;
-
-                // Always use URL mode: export data as JSON and use Vega-Lite's URL loading
-                const exportResult = await exportDataAsJSON(dbContext, {
-                    sql,
-                    schema,
-                });
-
-                setDataUrl(exportResult.url);
-                cleanupUrlRef.current = exportResult.cleanup;
-
-                console.info(
-                    `Chart data exported: ${exportResult.rowCount} rows, ${(exportResult.sizeBytes / 1024).toFixed(2)} KB`
-                );
-            } catch (err) {
-                console.error('Error fetching data for Vega-Lite chart:', err);
-                setError(err instanceof Error ? err.message : 'Failed to fetch data');
-                // Set dataUrl to null to prevent infinite retry loop
-                setDataUrl(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
+            console.info(`Chart configured to load from DuckDB: ${dataUri}`);
+        } catch (err) {
+            console.error('Error configuring Vega-Lite chart:', err);
+            setError(err instanceof Error ? err.message : 'Failed to configure chart');
+            setDataUrl(null);
+        }
     }, [dbContext, currentSpec, schema]);
 
     // Create final spec with URL data, ensuring it's valid TopLevelSpec
@@ -289,7 +294,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                         onViewReady?.(view);
                     }}
                     style={{ width: '100%', height: '100%' }}
-                    loader={blobAwareLoader}
+                    loader={duckdbLoader}
                 />
             </div>
         </div>
