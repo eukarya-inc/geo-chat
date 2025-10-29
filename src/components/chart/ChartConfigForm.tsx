@@ -122,13 +122,17 @@ export function ChartConfigForm({
     // Fetch columns from the current table
     useEffect(() => {
         const fetchColumns = async () => {
-            // Extract table name from the chart spec SQL if available
-            if (chartSpec.spec.data && 'sql' in chartSpec.spec.data && chartSpec.spec.data.sql) {
-                const sql = chartSpec.spec.data.sql;
-                const tableMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
-                if (tableMatch) {
+            // Extract table name from the chart spec data URL (duckdb://schema/table or duckdb://table)
+            if (chartSpec.spec.data && 'url' in chartSpec.spec.data && chartSpec.spec.data.url) {
+                const url = chartSpec.spec.data.url;
+                if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                    const path = url.replace('duckdb://', '');
+                    const parts = path.split('/');
+                    // Format: duckdb://schema/table or duckdb://table
+                    const tableName = parts.length === 2 ? parts[1] : parts[0];
+
                     try {
-                        const cols = await dbContext.getTableColumns(tableMatch[1], schema);
+                        const cols = await dbContext.getTableColumns(tableName, schema);
                         setColumns(cols);
                         // Mark that columns have finished loading
                         columnsLoadedRef.current = true;
@@ -152,13 +156,15 @@ export function ChartConfigForm({
 
     // Create chart config object
     const createChartConfig = useCallback((): ChartConfig | null => {
-        // Extract table name from the chart spec SQL if available
+        // Extract table name from the chart spec data URL (duckdb://schema/table or duckdb://table)
         let tableName = '';
-        if (chartSpec.spec.data && 'sql' in chartSpec.spec.data && chartSpec.spec.data.sql) {
-            const sql = chartSpec.spec.data.sql;
-            const tableMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
-            if (tableMatch) {
-                tableName = tableMatch[1];
+        if (chartSpec.spec.data && 'url' in chartSpec.spec.data && chartSpec.spec.data.url) {
+            const url = chartSpec.spec.data.url;
+            if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                const path = url.replace('duckdb://', '');
+                const parts = path.split('/');
+                // Format: duckdb://schema/table or duckdb://table
+                tableName = parts.length === 2 ? parts[1] : parts[0];
             }
         }
 

@@ -41,17 +41,20 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
             const data = chartSpec.spec.data as VegaChartSpec['data'];
 
             // Determine data source type and populate fields
-            if (data && 'sql' in data && data.sql) {
-                setDataSourceType('sql');
-                setSqlQuery(data.sql);
-                // Extract table name from SQL
-                const tableMatch = data.sql.match(/FROM\s+(?:["']?\w+["']?\.)?["']?(\w+)["']?/i);
-                if (tableMatch) {
-                    setTableName(tableMatch[1]);
+            if (data && 'url' in data && data.url) {
+                const url = data.url;
+                if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                    // Handle duckdb:// URLs - extract table name
+                    const path = url.replace('duckdb://', '');
+                    const parts = path.split('/');
+                    const extractedTableName = parts.length === 2 ? parts[1] : parts[0];
+                    setDataSourceType('sql');
+                    setTableName(extractedTableName);
+                    setSqlQuery(`SELECT * FROM ${extractedTableName}`);
+                } else {
+                    setDataSourceType('url');
+                    setDataUrl(typeof url === 'string' ? url : '');
                 }
-            } else if (data && 'url' in data && data.url) {
-                setDataSourceType('url');
-                setDataUrl(typeof data.url === 'string' ? data.url : '');
             } else if (data && 'values' in data && data.values) {
                 setDataSourceType('inline');
                 setInlineData(JSON.stringify(data.values, null, 2));

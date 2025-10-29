@@ -285,15 +285,11 @@ function ChatPage() {
 
         const chart = exportSpec;
 
-        // Extract SQL from chart spec
-        const chartSql = chart.spec?.data?.sql;
-
         const newVisualization = {
             id: `viz-${Date.now()}`,
             type: 'chart' as const,
             title: chart.title || 'Chart',
             chartSpec: chart,
-            sql: chartSql,
             createdAt: new Date(),
         };
 

@@ -172,7 +172,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
 
     // Set data URL when spec changes - loader will query DuckDB directly
     useEffect(() => {
-        if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
+        if (!dbContext || !currentSpec.data) {
             setLoading(false);
             setDataUrl(null);
             return;
@@ -182,21 +182,17 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
             setLoading(false);
             setError(null);
 
-            const sql = currentSpec.data.sql;
-
-            // Extract table name from SQL: "SELECT * FROM table_name"
-            const tableMatch = sql.match(/FROM\s+([^\s;]+)/i);
-            if (!tableMatch) {
-                throw new Error('Could not extract table name from SQL');
+            // Check if data.url exists with duckdb:// URL
+            if ('url' in currentSpec.data && currentSpec.data.url) {
+                const url = currentSpec.data.url;
+                if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                    setDataUrl(url);
+                    return;
+                }
             }
 
-            const tableName = tableMatch[1];
-
-            // Create DuckDB URL: duckdb://schema/table or duckdb://table
-            const dataUri = schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
-            setDataUrl(dataUri);
-
-            console.info(`Chart configured to load from DuckDB: ${dataUri}`);
+            // No valid data source found
+            setDataUrl(null);
         } catch (err) {
             console.error('Error configuring Vega-Lite chart:', err);
             setError(err instanceof Error ? err.message : 'Failed to configure chart');
