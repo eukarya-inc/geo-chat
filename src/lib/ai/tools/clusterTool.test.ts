@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createClusterTool } from './clusterTool';
 import type { DBContext } from '../../duckdb/dbContext';
+import { executeToolForTest } from './toolTestHelper';
+import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
 describe('createClusterTool', () => {
     let mockDbContext: DBContext;
@@ -41,17 +43,11 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
-            {
-                table_name: 'test_table',
-                feature_columns: ['x', 'y'],
-                k: 2,
-            },
-            {
-                messages: [],
-                toolCallId: '',
-            }
-        );
+        const result = await executeToolForTest<ClusterAnalysisResponse>(tool.execute, {
+            table_name: 'test_table',
+            feature_columns: ['x', 'y'],
+            k: 2,
+        });
 
         expect(result.success).toBe(true);
         if (result.success) {
@@ -87,8 +83,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
-            // @ts-expect-error - Testing default value by omitting k
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['feature1', 'feature2'],
@@ -107,7 +103,8 @@ describe('createClusterTool', () => {
 
     it('should return error for empty table name', async () => {
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: '',
                 feature_columns: ['x', 'y'],
@@ -129,7 +126,8 @@ describe('createClusterTool', () => {
         vi.mocked(mockDbContext.getTableColumns).mockResolvedValue([{ name: 'x', type: 'VARCHAR' }]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -154,7 +152,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -177,7 +176,8 @@ describe('createClusterTool', () => {
         vi.mocked(mockDbContext.getTableColumns).mockResolvedValue([{ name: 'x', type: 'DOUBLE' }]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x'],
@@ -205,7 +205,8 @@ describe('createClusterTool', () => {
         vi.mocked(mockDbContext.executeQuery).mockResolvedValue([]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -243,7 +244,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -285,7 +287,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -326,7 +329,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['width', 'height'],
@@ -367,7 +371,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y', 'z'],
@@ -406,7 +411,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y'],
@@ -444,7 +450,8 @@ describe('createClusterTool', () => {
         ]);
 
         const tool = createClusterTool(mockDbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<ClusterAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 feature_columns: ['x', 'y', 'x', 'y'], // Duplicates

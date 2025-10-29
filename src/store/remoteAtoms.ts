@@ -1,6 +1,6 @@
 import { atom } from 'jotai';
 import type { StructuredMessage } from '../types/message';
-import type { TableStyle } from '../components/map';
+import type { TableStyle as MapTableStyle } from '../components/map';
 import type { ChartSpec } from '../types/chart';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { Layout } from 'react-grid-layout';
@@ -34,8 +34,10 @@ export type TableCreationRecord = Table;
 // Map specification per table
 export interface MapSpec {
     style?: StyleSpecification; // Base style (replaces extraStyle)
-    tableStyles?: Record<string, TableStyle>; // Table-specific styles to be combined with base style
+    tableStyles?: Record<string, MapTableStyle>; // Table-specific styles to be combined with base style
 }
+
+export type TableStyle = MapTableStyle;
 
 // Dashboard visualization
 export interface DashboardVisualization {

@@ -7,10 +7,14 @@ export interface SuggestedPrompt {
     description: string;
 }
 
+export type CompletionResult = {
+    ok: boolean;
+};
+
 export const completionTool = tool({
     description:
         'Call this tool when all requested work is completed to provide suggested follow-up prompts for the user.',
-    parameters: z.object({
+    inputSchema: z.object({
         suggestedPrompts: z
             .array(
                 z.object({
@@ -30,7 +34,7 @@ export const completionTool = tool({
                 'Short conversation title/summary (max 20 characters). If provided and the current chat has a default title, it will be replaced with this title for better list display.'
             ),
     }),
-    execute: async () => {
+    execute: async (): Promise<CompletionResult> => {
         // Return minimal result since the tool_use already contains the suggestions and title
         // This saves memory by not duplicating the data
         return {

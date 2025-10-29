@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PredictorSelectionResponse } from '../../../types/predictorSelection';
+import { executeToolForTest } from './toolTestHelper';
 import { createPredictorSelectionTool } from './predictorSelectionTool';
 import type { DBContext } from '../../duckdb/dbContext';
 import { SQLHistoryManager } from '../../duckdb/sqlHistoryManager';
@@ -63,7 +65,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'target',
@@ -111,7 +114,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'business',
                 target_column: 'revenue_per_employee',
@@ -162,7 +166,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'target',
@@ -212,7 +217,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'target',
@@ -256,7 +262,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'target',
@@ -292,7 +299,8 @@ describe('createPredictorSelectionTool', () => {
         });
 
         const tool = createPredictorSelectionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<PredictorSelectionResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'predictor1',

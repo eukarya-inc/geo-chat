@@ -1,8 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
-import { createRegressionTool } from './regressionTool';
-import type { RegressionAnalysisResponse } from '../../../types/regression';
+import { performRegressionAnalysis } from './regressionTool';
 import type {
     SegmentRegressionResult,
     SegmentedRegressionAnalysisResponse,
@@ -13,9 +12,6 @@ const MAX_PREDICTORS = 6;
 const MAX_SEGMENTS = 10; // Limit number of segments to prevent excessive computation
 
 export function createSegmentedRegressionTool(dbContext: DBContext, schema: string | null) {
-    // Create a reusable regression tool instance
-    const regressionTool = createRegressionTool(dbContext, schema);
-
     return tool({
         description: `Perform multiple linear regression analysis on DuckDB tables, separately for each segment/cluster.
 This tool allows you to discover how relationships between variables differ across segments.
@@ -39,7 +35,7 @@ OUTPUT:
 - Separate regression results for each segment
 - Comparison of coefficients across segments
 - Identification of segments with strongest/weakest relationships`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z.string().describe('Dependent variable column (required)'),
             explanatory_columns: z
@@ -66,7 +62,7 @@ OUTPUT:
             explanatory_columns,
             segment_column,
             cluster_labels_table_name,
-        }) => {
+        }): Promise<SegmentedRegressionAnalysisResponse> => {
             try {
                 const tableName = table_name.trim();
                 if (!tableName) {
@@ -185,18 +181,12 @@ OUTPUT:
                             WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
                         await dbContext.executeQuery(createSegmentQuery, schema);
 
-                        // Call regressionTool for this segment
-                        const regressionResult = (await regressionTool.execute(
-                            {
-                                table_name: segmentTableName,
-                                target_column,
-                                explanatory_columns,
-                            },
-                            {
-                                messages: [],
-                                toolCallId: '',
-                            }
-                        )) as RegressionAnalysisResponse;
+                        // Call performRegressionAnalysis directly for this segment
+                        const regressionResult = await performRegressionAnalysis(dbContext, schema, {
+                            table_name: segmentTableName,
+                            target_column,
+                            explanatory_columns,
+                        });
 
                         if (!regressionResult.success) {
                             globalWarnings.push(`セグメント「${segmentLabel}」: ${regressionResult.message}`);

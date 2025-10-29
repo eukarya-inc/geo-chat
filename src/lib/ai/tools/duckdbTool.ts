@@ -42,7 +42,7 @@ export function createDuckDBTool(
 ) {
     return tool({
         description,
-        parameters: z.object({
+        inputSchema: z.object({
             sql: z.string().describe('SQL query to execute'),
             purpose: z
                 .enum(['chart', 'map', 'both', 'analysis', 'none'])

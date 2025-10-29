@@ -3,6 +3,22 @@ import { z } from 'zod';
 import type { VegaChartSpec } from '../../../types/chart';
 import type { ChatState } from '../../../store/remoteAtoms';
 
+export type ChartGetResult = {
+    success: boolean;
+    message: string;
+    spec: VegaChartSpec | null;
+};
+
+export type ChartUpdateResult = {
+    success: boolean;
+    message: string;
+};
+
+export type ChartDeleteResult = {
+    success: boolean;
+    message: string;
+};
+
 /**
  * Creates a tool for getting the current Vega-Lite chart specification for a table
  */
@@ -10,10 +26,10 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
     return tool({
         description:
             'Get the current Vega-Lite chart specification for a specific table. Returns null if no chart exists for the table.',
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to get chart for'),
         }),
-        execute: async ({ table_name }) => {
+        execute: async ({ table_name }): Promise<ChartGetResult> => {
             try {
                 const chatState = getCurrentChatState();
                 if (!chatState) {
@@ -306,7 +322,7 @@ export function createChartUpdateTool(
           ],
           "config": {"view": {"stroke": null}}
         }`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z
                 .union([chartSpecSchema, z.string().describe('JSON string representing a Vega-Lite spec')])
@@ -314,7 +330,7 @@ export function createChartUpdateTool(
                     'Single-view or layered Vega-Lite specification (object or JSON string, excluding data, width, height)'
                 ),
         }),
-        execute: async ({ table_name, vega_spec }) => {
+        execute: async ({ table_name, vega_spec }): Promise<ChartUpdateResult> => {
             try {
                 let specInput: Partial<VegaChartSpec>;
 
@@ -616,10 +632,10 @@ export function createChartDeleteTool(onChartDelete: (tableName: string) => Prom
     return tool({
         description:
             'Delete the Vega-Lite chart specification for a specific table. Use this when you want to remove a chart completely.',
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to delete chart for'),
         }),
-        execute: async ({ table_name }) => {
+        execute: async ({ table_name }): Promise<ChartDeleteResult> => {
             try {
                 await onChartDelete(table_name);
 

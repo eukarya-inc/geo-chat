@@ -1,6 +1,27 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { MapSpec } from '../../../store/remoteAtoms';
+import type { MapSpec, TableStyle } from '../../../store/remoteAtoms';
+import type { StyleSpecification } from 'maplibre-gl';
+
+export type MapStyleGetResult =
+    | {
+          success: false;
+          error: string;
+          tableStyles: null;
+          extraStyle: null;
+      }
+    | {
+          success: true;
+          message: string;
+          tableStyles: TableStyle;
+          extraStyle: StyleSpecification | null;
+          metadata: {
+              hasTableStyles: boolean;
+              hasExtraStyle: boolean;
+              layerCount: number;
+              note: string | null;
+          };
+      };
 
 /**
  * Creates a tool for getting the current map style configuration for a table
@@ -22,11 +43,11 @@ Use this tool to:
 - Get the base map style configuration
 - Verify if custom styles have been applied`,
 
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to get map styles for'),
         }),
 
-        execute: async ({ table_name }) => {
+        execute: async ({ table_name }): Promise<MapStyleGetResult> => {
             try {
                 const mapSpec = getMapSpec(table_name);
                 if (!mapSpec) {
