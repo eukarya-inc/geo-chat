@@ -2,12 +2,11 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
 import { olsRegression, type RegressionResult } from '../../../utils/regression/ols';
-import type { ColumnSummary, RegressionAnalysisResponse } from '../../../types/regression';
+import type { ColumnSummary, RegressionAnalysisResponse, SimpleLinearRegression } from '../../../types/regression';
 
 const DEFAULT_MAX_ROWS = 5000;
 const MAX_ALLOWED_ROWS = 20000;
 const MIN_REQUIRED_ROWS = 10;
-const MAX_AUTO_COLUMNS = 20;
 const MAX_PREDICTORS = 6;
 
 export function createRegressionTool(dbContext: DBContext, schema: string | null) {
@@ -23,19 +22,13 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
 3. Use layered chart spec with scatter points (layer 1) and regression line (layer 2)`,
         parameters: z.object({
             table_name: z.string().describe('Table name to analyze'),
-            target_column: z
-                .string()
-                .optional()
-                .describe(
-                    'Dependent variable column. When omitted the tool will pick a numeric column with the highest variance.'
-                ),
+            target_column: z.string().describe('Dependent variable column (required).'),
             explanatory_columns: z
                 .array(z.string())
                 .min(1)
                 .max(MAX_PREDICTORS)
-                .optional()
                 .describe(
-                    'Predictor columns (1-6). When omitted the tool automatically selects numeric columns highly correlated with the target.'
+                    'Predictor columns (1-6, required). Use select_features_for_regression tool first to identify optimal predictors.'
                 ),
             max_rows: z
                 .number()
@@ -70,13 +63,13 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     );
                 }
 
-                const providedPredictors = deduplicateStrings(explanatory_columns ?? []);
-
-                if (target_column && !numericColumns.includes(target_column)) {
+                if (!numericColumns.includes(target_column)) {
                     return errorResponse(
                         `目的変数カラム「${target_column}」は存在しないか数値型ではありません。数値カラムを指定してください。`
                     );
                 }
+
+                const providedPredictors = deduplicateStrings(explanatory_columns);
 
                 for (const predictor of providedPredictors) {
                     if (!numericColumns.includes(predictor)) {
@@ -90,20 +83,7 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     return errorResponse(`説明変数は最大${MAX_PREDICTORS}個まで指定可能です。`);
                 }
 
-                const needsAutoSelection =
-                    !target_column || providedPredictors.length === 0 || providedPredictors.includes(target_column);
-
-                const { columnsToFetch, truncated } = determineWorkingColumns({
-                    numericColumns,
-                    targetColumn: target_column ?? null,
-                    predictorColumns: providedPredictors,
-                    needsAutoSelection,
-                    maxColumns: MAX_AUTO_COLUMNS,
-                });
-
-                if (columnsToFetch.length === 0) {
-                    return errorResponse('分析対象となる数値カラムを特定できませんでした。');
-                }
+                const columnsToFetch = [target_column, ...providedPredictors];
 
                 const limit = clamp(max_rows ?? DEFAULT_MAX_ROWS, MIN_REQUIRED_ROWS, MAX_ALLOWED_ROWS);
                 const query = `SELECT ${columnsToFetch
@@ -128,40 +108,17 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     }
                 }
 
-                // Auto-select target when omitted
-                let targetColumn = target_column ?? '';
-                let autoTarget = false;
-                if (!targetColumn) {
-                    const detectedTarget = pickTargetColumn(numericData, columnsToFetch);
-                    autoTarget = true;
-                    if (!detectedTarget) {
-                        return errorResponse('適切な目的変数候補が見つかりませんでした。');
-                    }
-                    targetColumn = detectedTarget;
-                }
+                const targetColumn = target_column;
+                const predictorColumns = providedPredictors;
 
-                // Validate provided predictors and auto-select when needed
-                let predictorColumns = providedPredictors.filter(column => column !== targetColumn);
-                let autoPredictors = false;
-
-                if (predictorColumns.length === 0) {
-                    predictorColumns = pickPredictorColumns(numericData, columnsToFetch, targetColumn, MAX_PREDICTORS);
-                    autoPredictors = true;
-                }
-
-                if (predictorColumns.length === 0) {
-                    return errorResponse(
-                        '目的変数と十分な関連を持つ説明変数が見つかりませんでした。数値カラムを指定して再度お試しください。'
-                    );
+                if (!numericData[targetColumn]) {
+                    return errorResponse(`目的変数「${targetColumn}」のデータが取得できませんでした。`);
                 }
 
                 const missingColumns = predictorColumns.filter(column => !(column in numericData));
-                if (!numericData[targetColumn] || missingColumns.length > 0) {
+                if (missingColumns.length > 0) {
                     return errorResponse(
-                        `回帰分析に必要なカラムがデータに含まれていません（不足: ${[
-                            targetColumn,
-                            ...missingColumns,
-                        ].join(', ')}）。`
+                        `説明変数のデータが取得できませんでした（不足: ${missingColumns.join(', ')}）。`
                     );
                 }
 
@@ -229,14 +186,8 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     return errorResponse(`回帰分析の計算中にエラーが発生しました: ${message}`);
                 }
 
-                const columnSummaries = buildColumnSummaries(columnTrackers);
+                const columnSummaries = buildColumnSummaries(columnTrackers, targetColumn);
                 const warnings: string[] = [];
-
-                if (truncated) {
-                    warnings.push(
-                        `数値カラムが多いため、最初の${MAX_AUTO_COLUMNS}件を自動選択対象としました。他のカラムを分析する場合は明示的に指定してください。`
-                    );
-                }
 
                 if (skippedRows > 0) {
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
@@ -248,60 +199,29 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                     );
                 }
 
-                // Generate suggestions for creating regression line charts
+                // Generate suggestions for creating scatter plots with simple regression lines
                 const suggestions: string[] = [];
-                const { intercept, betas, names } = regression.coefficients;
-                const coefficientsAreFinite =
-                    Number.isFinite(intercept) &&
-                    betas.every(beta => Number.isFinite(beta)) &&
-                    names.length === betas.length;
 
-                if (coefficientsAreFinite) {
-                    const predictedField = `predicted_${targetColumn}`;
+                suggestions.push(
+                    '次のステップ: 各説明変数について散布図を作成し、単回帰直線を重ねてください。columnSummariesに各説明変数の単回帰直線パラメータ(slope, intercept)が含まれています。'
+                );
+
+                for (const predictor of predictorColumns) {
+                    const predictorSummary = columnSummaries[predictor];
+                    if (!predictorSummary || !predictorSummary.simpleRegression) continue;
+
+                    const { slope, intercept: simpleIntercept } = predictorSummary.simpleRegression;
+                    if (!Number.isFinite(slope) || !Number.isFinite(simpleIntercept)) continue;
+
+                    const { min: minX, max: maxX } = predictorSummary;
+                    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) continue;
+
+                    const minY = slope * minX + simpleIntercept;
+                    const maxY = slope * maxX + simpleIntercept;
 
                     suggestions.push(
-                        `次のステップ: 各説明変数について散布図テーブルを作成し、create_chartツールでlayered specを使用してください。回帰線の端点は回帰式 ${predictedField} = ${formatNumeric(intercept)} + Σ(βᵢ × xᵢ) を使って計算してください。`
+                        `説明変数「${predictor}」: 単回帰直線 y = ${formatNumeric(slope)} * x + ${formatNumeric(simpleIntercept)}、端点 (${formatNumeric(minX)}, ${formatNumeric(minY)}) と (${formatNumeric(maxX)}, ${formatNumeric(maxY)})`
                     );
-
-                    const computePredicted = (featureIndex: number, predictorValue: number): number => {
-                        let predictedValue = intercept;
-                        for (let idx = 0; idx < betas.length; idx += 1) {
-                            const featureName = names[idx];
-                            const contributionValue =
-                                idx === featureIndex ? predictorValue : (columnSummaries[featureName]?.mean ?? 0);
-                            predictedValue += betas[idx] * contributionValue;
-                        }
-                        return predictedValue;
-                    };
-
-                    for (const predictor of predictorColumns) {
-                        const predictorIndex = names.indexOf(predictor);
-                        if (predictorIndex === -1) continue;
-
-                        const predictorSummary = columnSummaries[predictor];
-                        if (!predictorSummary) continue;
-
-                        const { min: minX, max: maxX } = predictorSummary;
-                        if (!Number.isFinite(minX) || !Number.isFinite(maxX)) continue;
-
-                        const minPredicted = computePredicted(predictorIndex, minX);
-                        const maxPredicted = computePredicted(predictorIndex, maxX);
-                        if (!Number.isFinite(minPredicted) || !Number.isFinite(maxPredicted)) continue;
-
-                        const otherMeans = names
-                            .filter((_, idx) => idx !== predictorIndex)
-                            .map(name => {
-                                const mean = columnSummaries[name]?.mean ?? 0;
-                                return `${name}=${formatNumeric(mean)}`;
-                            })
-                            .join(', ');
-
-                        suggestions.push(
-                            `説明変数「${predictor}」: 回帰線の端点は (${formatNumeric(minX)}, ${formatNumeric(minPredicted)}) と (${formatNumeric(maxX)}, ${formatNumeric(maxPredicted)})${otherMeans ? ` (他の変数は平均値: ${otherMeans})` : ''}`
-                        );
-                    }
-                } else {
-                    warnings.push('回帰係数が有限値ではないため、回帰直線の端点を計算できません。');
                 }
 
                 const response: RegressionAnalysisResponse = {
@@ -315,10 +235,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
                         usedRows,
                         skippedRows,
                         samplingLimit: limit,
-                    },
-                    autoSelection: {
-                        target: autoTarget,
-                        predictors: autoPredictors,
                     },
                     regression,
                     columnSummaries,
@@ -335,48 +251,6 @@ Before creating any auxiliary tables, pick a short, descriptive English table na
     });
 }
 
-function determineWorkingColumns({
-    numericColumns,
-    targetColumn,
-    predictorColumns,
-    needsAutoSelection,
-    maxColumns,
-}: {
-    numericColumns: string[];
-    targetColumn: string | null;
-    predictorColumns: string[];
-    needsAutoSelection: boolean;
-    maxColumns: number;
-}): { columnsToFetch: string[]; truncated: boolean } {
-    const required = deduplicateStrings([targetColumn ?? '', ...predictorColumns].filter(Boolean));
-
-    if (!needsAutoSelection) {
-        return {
-            columnsToFetch: required,
-            truncated: false,
-        };
-    }
-
-    const columns: string[] = [...required];
-    const seen = new Set(columns);
-
-    for (const column of numericColumns) {
-        if (columns.length >= maxColumns) {
-            break;
-        }
-        if (!seen.has(column)) {
-            columns.push(column);
-            seen.add(column);
-        }
-    }
-
-    const truncated = numericColumns.length > columns.length;
-    return {
-        columnsToFetch: columns,
-        truncated,
-    };
-}
-
 function errorResponse(message: string, warnings?: string[]): RegressionAnalysisResponse {
     return {
         success: false,
@@ -385,8 +259,12 @@ function errorResponse(message: string, warnings?: string[]): RegressionAnalysis
     };
 }
 
-function buildColumnSummaries(columnValues: Record<string, number[]>): Record<string, ColumnSummary> {
+function buildColumnSummaries(
+    columnValues: Record<string, number[]>,
+    targetColumn?: string
+): Record<string, ColumnSummary> {
     const summaries: Record<string, ColumnSummary> = {};
+    const targetValues = targetColumn ? columnValues[targetColumn] : undefined;
 
     for (const [column, values] of Object.entries(columnValues)) {
         const numericValues = values.filter(value => Number.isFinite(value));
@@ -417,6 +295,26 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
         }
 
         const variance = count > 1 ? squaredDiffSum / (count - 1) : 0;
+
+        // Calculate simple linear regression for predictors (not target)
+        let simpleRegression: SimpleLinearRegression | undefined;
+        if (targetValues && column !== targetColumn && values.length === targetValues.length) {
+            // Get valid pairs for this predictor vs target
+            const validXValues: number[] = [];
+            const validYValues: number[] = [];
+            for (let i = 0; i < values.length; i += 1) {
+                const x = values[i];
+                const y = targetValues[i];
+                if (Number.isFinite(x) && Number.isFinite(y)) {
+                    validXValues.push(x);
+                    validYValues.push(y);
+                }
+            }
+            if (validXValues.length >= 2) {
+                simpleRegression = computeSimpleLinearRegression(validXValues, validYValues);
+            }
+        }
+
         summaries[column] = {
             column,
             count,
@@ -424,6 +322,7 @@ function buildColumnSummaries(columnValues: Record<string, number[]>): Record<st
             min: minValue,
             max: maxValue,
             stdDev: Math.sqrt(Math.max(variance, 0)),
+            simpleRegression,
         };
     }
 
@@ -441,129 +340,47 @@ function formatNumeric(value: number): string {
     return Object.is(precise, -0) ? '0' : precise.toString();
 }
 
-function pickTargetColumn(
-    numericData: Record<string, number[]>,
-    columnCandidates: string[],
-    minValues = MIN_REQUIRED_ROWS
-): string | null {
-    let bestColumn: string | null = null;
-    let bestVariance = -Infinity;
-
-    for (const column of columnCandidates) {
-        const series = numericData[column];
-        if (!series || series.length === 0) continue;
-        const values = series.filter(value => Number.isFinite(value));
-        if (values.length < minValues) continue;
-
-        const variance = computeVariance(values);
-        if (Number.isFinite(variance) && variance > bestVariance) {
-            bestVariance = variance;
-            bestColumn = column;
-        }
+/**
+ * Compute simple linear regression: y = slope * x + intercept
+ * Using least squares method
+ */
+function computeSimpleLinearRegression(xValues: number[], yValues: number[]): SimpleLinearRegression {
+    if (xValues.length !== yValues.length || xValues.length < 2) {
+        return { slope: Number.NaN, intercept: Number.NaN };
     }
 
-    if (!bestColumn) {
-        for (const column of columnCandidates) {
-            const series = numericData[column];
-            if (!series) continue;
-            const validCount = series.reduce((acc, value) => acc + (Number.isFinite(value) ? 1 : 0), 0);
-            if (validCount >= minValues) {
-                bestColumn = column;
-                break;
-            }
-        }
-    }
-
-    return bestColumn;
-}
-
-function pickPredictorColumns(
-    numericData: Record<string, number[]>,
-    columnCandidates: string[],
-    targetColumn: string,
-    maxPredictors: number,
-    minValues = MIN_REQUIRED_ROWS
-): string[] {
-    const targetSeries = numericData[targetColumn];
-    if (!targetSeries) return [];
-
-    const stats = columnCandidates
-        .filter(column => column !== targetColumn)
-        .map(column => {
-            const otherSeries = numericData[column];
-            if (!otherSeries) {
-                return { column, correlation: Number.NaN, pairCount: 0 };
-            }
-            const { correlation, pairCount } = computeCorrelation(targetSeries, otherSeries);
-            return {
-                column,
-                correlation,
-                pairCount,
-            };
-        })
-        .filter(item => item.pairCount >= minValues && Number.isFinite(item.correlation));
-
-    stats.sort((a, b) => {
-        const diff = Math.abs(b.correlation) - Math.abs(a.correlation);
-        if (diff !== 0) return diff;
-        return b.pairCount - a.pairCount;
-    });
-
-    return stats.slice(0, maxPredictors).map(item => item.column);
-}
-
-function computeVariance(values: number[]): number {
-    if (values.length === 0) return Number.NaN;
-    if (values.length === 1) return 0;
-    const mean = values.reduce((acc, value) => acc + value, 0) / values.length;
-    const sumSq = values.reduce((acc, value) => {
-        const diff = value - mean;
-        return acc + diff * diff;
-    }, 0);
-    return sumSq / (values.length - 1);
-}
-
-function computeCorrelation(seriesA: number[], seriesB: number[]): { correlation: number; pairCount: number } {
-    const length = Math.min(seriesA.length, seriesB.length);
-    if (length === 0) return { correlation: Number.NaN, pairCount: 0 };
-
-    let pairCount = 0;
+    const n = xValues.length;
     let sumX = 0;
     let sumY = 0;
-    let sumXX = 0;
-    let sumYY = 0;
     let sumXY = 0;
+    let sumXX = 0;
 
-    for (let i = 0; i < length; i += 1) {
-        const x = seriesA[i];
-        const y = seriesB[i];
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-
-        pairCount += 1;
+    for (let i = 0; i < n; i += 1) {
+        const x = xValues[i];
+        const y = yValues[i];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return { slope: Number.NaN, intercept: Number.NaN };
+        }
         sumX += x;
         sumY += y;
-        sumXX += x * x;
-        sumYY += y * y;
         sumXY += x * y;
+        sumXX += x * x;
     }
 
-    if (pairCount < 2) return { correlation: Number.NaN, pairCount };
+    const meanX = sumX / n;
+    const meanY = sumY / n;
 
-    const meanX = sumX / pairCount;
-    const meanY = sumY / pairCount;
-    const cov = sumXY - pairCount * meanX * meanY;
-    const varX = sumXX - pairCount * meanX * meanX;
-    const varY = sumYY - pairCount * meanY * meanY;
+    const numerator = sumXY - n * meanX * meanY;
+    const denominator = sumXX - n * meanX * meanX;
 
-    if (varX <= 0 || varY <= 0) {
-        return { correlation: 0, pairCount };
+    if (Math.abs(denominator) < 1e-10) {
+        return { slope: Number.NaN, intercept: meanY };
     }
 
-    const denominator = Math.sqrt(varX * varY);
-    return {
-        correlation: cov / denominator,
-        pairCount,
-    };
+    const slope = numerator / denominator;
+    const intercept = meanY - slope * meanX;
+
+    return { slope, intercept };
 }
 
 function deduplicateStrings(values: string[]): string[] {

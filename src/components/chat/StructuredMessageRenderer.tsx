@@ -226,6 +226,31 @@ const renderContentBlock = (
                     </CollapsibleSection>
                 );
             }
+            if (block.name === 'select_predictors_for_regression') {
+                const input = block.input as {
+                    table_name: string;
+                    target_column: string;
+                    top_k?: number;
+                    exclude_columns?: string[];
+                    max_rows?: number;
+                };
+                return (
+                    <CollapsibleSection
+                        key={index}
+                        title={`🔍 **説明変数選択を実行中: ${input.table_name}**`}
+                        defaultOpen={false}
+                    >
+                        <div className="p-2 text-xs space-y-1 text-gray-600">
+                            <div>目的変数: {input.target_column}</div>
+                            <div>選択数: 上位 {input.top_k ?? 3} 個</div>
+                            {input.exclude_columns && input.exclude_columns.length > 0 ? (
+                                <div>除外カラム: {input.exclude_columns.join(', ')}</div>
+                            ) : null}
+                            {input.max_rows ? <div>最大行数: {input.max_rows.toLocaleString()}</div> : null}
+                        </div>
+                    </CollapsibleSection>
+                );
+            }
             if (block.name === 'perform_regression_analysis') {
                 const input = block.input as {
                     table_name: string;
@@ -436,6 +461,11 @@ const renderContentBlock = (
                 }
             }
 
+            if (block.name === 'select_predictors_for_regression') {
+                const result = block.result as import('../../types/predictorSelection').PredictorSelectionResponse;
+                return renderPredictorSelectionToolResult(result, index);
+            }
+
             if (block.name === 'perform_regression_analysis') {
                 const result = block.result as RegressionAnalysisResponse;
                 return renderRegressionToolResult(result, index);
@@ -629,6 +659,154 @@ const renderContentBlock = (
     }
 };
 
+function renderPredictorSelectionToolResult(
+    result: import('../../types/predictorSelection').PredictorSelectionResponse | undefined,
+    key: number
+): React.ReactNode {
+    if (!result) {
+        return (
+            <CollapsibleSection key={key} title="❌ **説明変数選択の結果を取得できませんでした**" defaultOpen={false}>
+                <div className="p-2 text-xs text-red-600">結果オブジェクトが未定義です。</div>
+            </CollapsibleSection>
+        );
+    }
+
+    if (!result.success) {
+        return (
+            <CollapsibleSection key={key} title="❌ **説明変数選択に失敗しました**" defaultOpen>
+                <div className="p-2 text-xs space-y-1 text-red-600">
+                    <div>{result.message}</div>
+                    {result.warnings && result.warnings.length > 0 ? (
+                        <ul className="list-disc list-inside text-amber-500">
+                            {result.warnings.map((warning, idx) => (
+                                <li key={idx}>{warning}</li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </div>
+            </CollapsibleSection>
+        );
+    }
+
+    const {
+        tableName,
+        targetColumn,
+        selectedPredictors,
+        predictorCorrelations,
+        excludedPredictors,
+        candidateCount,
+        topK,
+        warnings,
+    } = result;
+
+    return (
+        <CollapsibleSection key={key} title={`🔍 **説明変数選択結果: ${targetColumn}**`} defaultOpen>
+            <div className="p-2 text-xs space-y-3 text-gray-700">
+                <div className="space-y-1">
+                    <div className="font-semibold text-gray-800">選択結果</div>
+                    <div>
+                        テーブル: <span className="font-medium">{tableName}</span>
+                    </div>
+                    <div>
+                        目的変数: <span className="font-medium">{targetColumn}</span>
+                    </div>
+                    <div>
+                        候補カラム数: <span className="font-medium">{candidateCount}</span> 個
+                    </div>
+                    <div>
+                        選択数: 上位 <span className="font-medium">{topK}</span> 個
+                    </div>
+                    <div className="leading-relaxed">
+                        選択された説明変数:{' '}
+                        <span className="font-medium bg-blue-50 px-1 py-0.5 rounded">
+                            {selectedPredictors.join(', ')}
+                        </span>
+                    </div>
+                </div>
+
+                {predictorCorrelations && predictorCorrelations.length > 0 ? (
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">相関スコア</div>
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-[400px] table-fixed border-collapse">
+                                <thead className="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th className="py-1 px-2 text-left font-semibold">説明変数</th>
+                                        <th className="py-1 px-2 text-right font-semibold">相関係数</th>
+                                        <th className="py-1 px-2 text-right font-semibold">絶対値</th>
+                                        <th className="py-1 px-2 text-right font-semibold">ペア数</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {predictorCorrelations.map(corr => (
+                                        <tr key={corr.predictor} className="border-t border-gray-200">
+                                            <td className="py-1 px-2 text-left">{corr.predictor}</td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(corr.correlation)}
+                                            </td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(corr.absoluteCorrelation)}
+                                            </td>
+                                            <td className="py-1 px-2 text-right">{formatInteger(corr.pairCount)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : null}
+
+                {excludedPredictors && excludedPredictors.length > 0 ? (
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">除外された説明変数</div>
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-[480px] table-fixed border-collapse">
+                                <thead className="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th className="py-1 px-2 text-left font-semibold">説明変数</th>
+                                        <th className="py-1 px-2 text-right font-semibold">相関係数</th>
+                                        <th className="py-1 px-2 text-left font-semibold">理由</th>
+                                        <th className="py-1 px-2 text-left font-semibold">詳細</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {excludedPredictors.map((exc, idx) => (
+                                        <tr key={idx} className="border-t border-gray-200">
+                                            <td className="py-1 px-2 text-left">{exc.predictor}</td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber(exc.correlation)}
+                                            </td>
+                                            <td className="py-1 px-2 text-left">
+                                                {exc.reason === 'high_correlation'
+                                                    ? '高相関'
+                                                    : exc.reason === 'user_excluded'
+                                                      ? 'ユーザー指定'
+                                                      : 'データ不足'}
+                                            </td>
+                                            <td className="py-1 px-2 text-left text-xs">{exc.details || '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : null}
+
+                {warnings && warnings.length > 0 ? (
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">注意事項</div>
+                        <ul className="list-disc list-inside text-amber-600">
+                            {warnings.map((warning, idx) => (
+                                <li key={idx}>{warning}</li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : null}
+            </div>
+        </CollapsibleSection>
+    );
+}
+
 function renderRegressionToolResult(result: RegressionAnalysisResponse | undefined, key: number): React.ReactNode {
     if (!result) {
         return (
@@ -655,7 +833,7 @@ function renderRegressionToolResult(result: RegressionAnalysisResponse | undefin
         );
     }
 
-    const { regression, targetColumn, predictorColumns, dataInfo, autoSelection, columnSummaries, warnings } = result;
+    const { regression, targetColumn, predictorColumns, dataInfo, columnSummaries, warnings } = result;
     const orderedColumns = [targetColumn, ...predictorColumns];
     const columnSummaryRows = orderedColumns
         .map(column => columnSummaries[column])
@@ -668,11 +846,9 @@ function renderRegressionToolResult(result: RegressionAnalysisResponse | undefin
                     <div className="font-semibold text-gray-800">モデル概要</div>
                     <div>
                         目的変数: <span className="font-medium">{targetColumn}</span>
-                        {autoSelection.target ? <span className="text-amber-600 ml-1">（自動選択）</span> : null}
                     </div>
                     <div className="leading-relaxed">
                         説明変数: <span className="font-medium">{predictorColumns.join(', ')}</span>
-                        {autoSelection.predictors ? <span className="text-amber-600 ml-1">（自動選択）</span> : null}
                     </div>
                     <div className="leading-relaxed">
                         使用行数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}

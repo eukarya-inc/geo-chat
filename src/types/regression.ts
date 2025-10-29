@@ -1,5 +1,10 @@
 import type { RegressionResult } from '../utils/regression/ols';
 
+export interface SimpleLinearRegression {
+    slope: number;
+    intercept: number;
+}
+
 export interface ColumnSummary {
     column: string;
     count: number;
@@ -7,6 +12,7 @@ export interface ColumnSummary {
     min: number;
     max: number;
     stdDev: number;
+    simpleRegression?: SimpleLinearRegression;
 }
 
 export interface RegressionDataInfo {
@@ -16,11 +22,6 @@ export interface RegressionDataInfo {
     samplingLimit: number;
 }
 
-export interface AutoSelectionInfo {
-    target: boolean;
-    predictors: boolean;
-}
-
 export interface RegressionAnalysisSuccess {
     success: true;
     message: string;
@@ -28,7 +29,6 @@ export interface RegressionAnalysisSuccess {
     targetColumn: string;
     predictorColumns: string[];
     dataInfo: RegressionDataInfo;
-    autoSelection: AutoSelectionInfo;
     regression: RegressionResult;
     columnSummaries: Record<string, ColumnSummary>;
     warnings?: string[];
