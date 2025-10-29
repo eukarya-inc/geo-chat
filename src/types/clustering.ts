@@ -47,7 +47,6 @@ export interface ClusterDataInfo {
     totalRows: number;
     usedRows: number;
     skippedRows: number;
-    samplingLimit: number;
 }
 
 export interface ClusterAnalysisSuccess {
