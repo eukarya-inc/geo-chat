@@ -4,10 +4,10 @@ import type { DBContext } from '../../duckdb/dbContext';
 import { kmeans } from '../../../utils/clustering/kmeans';
 import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
-const DEFAULT_MAX_ROWS = 1000;
-const MAX_ALLOWED_ROWS = 5000;
+const DEFAULT_MAX_ROWS = 100;
+const MAX_ALLOWED_ROWS = 100; // Force maximum to 100 to prevent token overflow
 const MIN_REQUIRED_ROWS = 10;
-const MAX_VISUALIZATION_ROWS = 100;
+const AUTO_SAMPLING_THRESHOLD = 100; // Auto-sample to 100 rows
 const DEFAULT_K = 3;
 const MIN_K = 2;
 const MAX_K = 10;
@@ -42,12 +42,15 @@ EXAMPLES OF WHEN NOT TO USE:
 DEFAULT BEHAVIOR:
 - Automatically uses k=3 clusters (small/medium/large or low/medium/high grouping)
 - User can override by specifying different k value (2-10)
-- Analyzes up to 1000 rows by default (configurable up to 5000)
+- Analyzes exactly 100 rows (fixed to prevent token overflow)
 
-IMPORTANT DATA SAMPLING:
-- The tool analyzes up to max_rows (default: 1000, max: 5000) data points
-- For visualization, only 100 points are recommended due to Vega-Lite rendering limits
-- The tool will automatically suggest creating a sampled table for visualization
+IMPORTANT AUTO-SAMPLING:
+- If the input table has more than 100 rows, the tool automatically creates a sampled table with 100 rows
+- The sampled table is named {original_table}_sampled_for_clustering
+- This prevents AI from stalling when processing large datasets and prevents token overflow
+- The tool analyzes up to max_rows (default: 100, max: 100) from the table
+- 100 points is optimal for both analysis and visualization
+- The tool will automatically suggest creating visualization
 
 IMPORTANT: After using this tool successfully, ALWAYS create visualizations:
 1. Create a new table with cluster labels added
@@ -82,7 +85,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 .min(MIN_REQUIRED_ROWS)
                 .max(MAX_ALLOWED_ROWS)
                 .optional()
-                .describe('Maximum number of rows to sample for analysis (default: 1000, max: 5000)'),
+                .describe('Maximum number of rows to sample for analysis (default: 100, max: 100)'),
             init_method: z
                 .enum(['random', 'kmeans++'])
                 .optional()
@@ -90,13 +93,53 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
         }),
         execute: async ({ table_name, feature_columns, k = DEFAULT_K, max_rows, init_method }) => {
             try {
-                const tableName = table_name.trim();
+                let tableName = table_name.trim();
                 if (!tableName) {
                     return errorResponse('テーブル名が指定されていません。');
                 }
 
-                const sanitizedTable = quoteIdentifier(tableName);
-                const qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+                let sanitizedTable = quoteIdentifier(tableName);
+                let qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+
+                // Check table row count and auto-sample if needed
+                let originalTableName: string | null = null;
+                let originalRowCount: number | null = null;
+                const countQuery = `SELECT COUNT(*) as count FROM ${qualifiedTable};`;
+                const countResult = await dbContext.executeQuery(countQuery, schema);
+
+                if (Array.isArray(countResult) && countResult.length > 0) {
+                    const rowCount = Number(countResult[0]?.count);
+                    if (Number.isFinite(rowCount) && rowCount > AUTO_SAMPLING_THRESHOLD) {
+                        originalTableName = tableName;
+                        originalRowCount = rowCount;
+
+                        // Create sampled table
+                        const sampledTableName = `${tableName}_sampled_for_clustering`;
+                        const sampledSanitized = quoteIdentifier(sampledTableName);
+                        const sampledQualified = schema
+                            ? `${quoteIdentifier(schema)}.${sampledSanitized}`
+                            : sampledSanitized;
+
+                        // Drop existing sampled table if exists
+                        try {
+                            await dbContext.executeQuery(`DROP TABLE IF EXISTS ${sampledQualified};`, schema);
+                        } catch {
+                            // Ignore drop errors
+                        }
+
+                        // Create new sampled table using random sampling
+                        const createSampledQuery = `CREATE TABLE ${sampledQualified} AS
+                            SELECT * FROM ${qualifiedTable}
+                            ORDER BY random()
+                            LIMIT ${AUTO_SAMPLING_THRESHOLD};`;
+                        await dbContext.executeQuery(createSampledQuery, schema);
+
+                        // Update table reference to use sampled table
+                        tableName = sampledTableName;
+                        sanitizedTable = sampledSanitized;
+                        qualifiedTable = sampledQualified;
+                    }
+                }
                 const columns = await dbContext.getTableColumns(tableName, schema);
                 if (!columns || columns.length === 0) {
                     return errorResponse(`テーブル「${tableName}」のカラム情報が取得できませんでした。`);
@@ -202,13 +245,16 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 const warnings: string[] = [];
                 const suggestions: string[] = [];
 
+                // Define labels table name before using it in suggestions
+                const labelsTableName = `${tableName}_cluster_labels`;
+
                 if (skippedRows > 0) {
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
                 }
 
                 if (usedRows < totalRows) {
                     warnings.push(
-                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。より正確な結果が必要な場合はmax_rowsを増やしてください。`
+                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。100行に制限してトークンオーバーフローを防いでいます。`
                     );
                 }
 
@@ -216,107 +262,30 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     warnings.push('最大反復回数に到達しましたが収束しませんでした。結果が不安定な可能性があります。');
                 }
 
-                // Generate visualization suggestions - always create a single clustered table for scatter plot
-                const visualizationLimit = Math.min(usedRows, MAX_VISUALIZATION_ROWS);
-
-                if (usedRows > MAX_VISUALIZATION_ROWS) {
-                    suggestions.push(
-                        `分析には${usedRows}件のデータを使用しましたが、Vega-Liteでの散布図可視化には最大${MAX_VISUALIZATION_ROWS}点を推奨します。`
-                    );
-                }
-
-                // Use clustering.labels for SQL generation (before separating into diagnostics)
-                const labelsForVisualization = clustering.labels.slice(0, visualizationLimit);
-
-                suggestions.push(`次のステップ: クラスターラベルを含むテーブルを作成してください（散布図可視化用）：`);
+                // Provide guidance for AI on how to use cluster labels
                 suggestions.push(
-                    `CREATE TABLE ${tableName}_clustered_sampled AS SELECT *, CASE ${labelsForVisualization
-                        .map((label, idx) => `WHEN rowid = ${idx} THEN ${label}`)
-                        .join(' ')} END as cluster FROM ${tableName} LIMIT ${visualizationLimit};`
+                    `クラスターラベルは一時テーブル「${labelsTableName}」に保存されました。このテーブルには row_id (1から始まる行番号) と cluster (クラスターラベル) カラムがあります。`
+                );
+                suggestions.push(
+                    `クラスターラベルを元のテーブルに結合する方法: SELECT t.*, l.cluster FROM ${tableName} t JOIN ${labelsTableName} l ON ROW_NUMBER() OVER () = l.row_id`
+                );
+                suggestions.push(
+                    `クラスターの特性: ${clustering.centroids.map((c, i) => `クラスター${i}: ${providedFeatures.map((f, j) => `${f}=${formatNumeric(c[j])}`).join(', ')}`).join(' / ')}`
                 );
 
-                // 2D visualization suggestion with explicit Vega-Lite spec
+                // 2D visualization suggestion
                 if (providedFeatures.length === 2) {
                     const [feat1, feat2] = providedFeatures;
-                    const targetTable = `${tableName}_clustered_sampled`;
-
-                    // Provide explicit Vega-Lite specification for AI to follow
-                    const vegaSpec = {
-                        mark: 'point',
-                        encoding: {
-                            x: {
-                                field: feat1,
-                                type: 'quantitative',
-                                axis: { title: feat1 },
-                            },
-                            y: {
-                                field: feat2,
-                                type: 'quantitative',
-                                axis: { title: feat2 },
-                            },
-                            color: {
-                                field: 'cluster',
-                                type: 'nominal',
-                                legend: { title: 'クラスター' },
-                            },
-                            shape: {
-                                field: 'cluster',
-                                type: 'nominal',
-                            },
-                            tooltip: [
-                                { field: feat1, type: 'quantitative' },
-                                { field: feat2, type: 'quantitative' },
-                                { field: 'cluster', type: 'nominal' },
-                            ],
-                        },
-                    };
 
                     suggestions.push(
-                        `クラスター散布図を作成してください。テーブル「${targetTable}」に対して、以下のVega-Lite仕様を使用してください：\n${JSON.stringify(vegaSpec, null, 2)}`
+                        `可視化: ${feat1}と${feat2}の散布図を作成してください。クラスターラベルで色分けするには、テーブル「${labelsTableName}」をJOINしてください。`
                     );
                 }
 
-                // 3D+ visualization suggestion with explicit first projection
+                // 3D+ visualization suggestion
                 if (providedFeatures.length >= 3) {
-                    const targetTable = `${tableName}_clustered_sampled`;
-
-                    // Provide explicit Vega-Lite specification for the first projection
-                    const firstProjection = {
-                        mark: 'point',
-                        encoding: {
-                            x: {
-                                field: providedFeatures[0],
-                                type: 'quantitative',
-                                axis: { title: providedFeatures[0] },
-                            },
-                            y: {
-                                field: providedFeatures[1],
-                                type: 'quantitative',
-                                axis: { title: providedFeatures[1] },
-                            },
-                            color: {
-                                field: 'cluster',
-                                type: 'nominal',
-                                legend: { title: 'クラスター' },
-                            },
-                            shape: {
-                                field: 'cluster',
-                                type: 'nominal',
-                            },
-                            tooltip: [
-                                { field: providedFeatures[0], type: 'quantitative' },
-                                { field: providedFeatures[1], type: 'quantitative' },
-                                { field: 'cluster', type: 'nominal' },
-                            ],
-                        },
-                    };
-
                     suggestions.push(
-                        `特徴量が${providedFeatures.length}次元あります。まず(${providedFeatures[0]}, ${providedFeatures[1]})の2次元プロジェクションの散布図を作成してください。テーブル「${targetTable}」に対して、以下の仕様を使用：\n${JSON.stringify(firstProjection, null, 2)}`
-                    );
-
-                    suggestions.push(
-                        `追加の2次元プロジェクション例: (${providedFeatures[0]}, ${providedFeatures[2]})、(${providedFeatures[1]}, ${providedFeatures[2]}) など。同様の仕様で特徴量の組み合わせを変更してください。`
+                        `可視化: 特徴量が${providedFeatures.length}次元あります。主要な2次元 (${providedFeatures[0]}, ${providedFeatures[1]}) の散布図を作成してください。クラスターラベルで色分けするには、テーブル「${labelsTableName}」をJOINしてください。`
                     );
                 }
 
@@ -353,17 +322,50 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     featureNames: clustering.featureNames,
                 };
 
+                // Create a temporary table with cluster labels for joining
+                const labelsSanitized = quoteIdentifier(labelsTableName);
+                const labelsQualified = schema ? `${quoteIdentifier(schema)}.${labelsSanitized}` : labelsSanitized;
+
+                try {
+                    // Drop existing labels table if exists
+                    try {
+                        await dbContext.executeQuery(`DROP TABLE IF EXISTS ${labelsQualified};`, schema);
+                    } catch {
+                        // Ignore drop errors
+                    }
+
+                    // Create labels table with row_id and cluster columns
+                    const labelsData = clustering.labels.map((label, idx) => `(${idx + 1}, ${label})`).join(', ');
+                    const createLabelsQuery = `CREATE TABLE ${labelsQualified} (row_id INTEGER, cluster INTEGER);
+                        INSERT INTO ${labelsQualified} VALUES ${labelsData};`;
+                    await dbContext.executeQuery(createLabelsQuery, schema);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    warnings.push(`クラスターラベルテーブルの作成に失敗しました: ${message}`);
+                }
+
+                // Diagnostics with minimal data to prevent token overflow
                 const diagnostics = {
                     timing: clustering.timing,
                     iterations: clustering.iterations,
-                    labels: clustering.labels,
+                    // labels array removed - too large for AI context
+                    // centroids included for cluster interpretation
                     centroids: clustering.centroids,
                 };
 
+                // Build message with auto-sampling info
+                let message = '';
+                if (originalTableName && originalRowCount) {
+                    message = `テーブル「${originalTableName}」は${originalRowCount}行あったため、自動的に${AUTO_SAMPLING_THRESHOLD}行にサンプリングしたテーブル「${tableName}」を作成してクラスター分析を実行しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+                } else {
+                    message = `テーブル「${tableName}」のクラスター分析が完了しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+                }
+
                 const response: ClusterAnalysisResponse = {
                     success: true,
-                    message: `テーブル「${tableName}」のクラスター分析が完了しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`,
+                    message,
                     tableName,
+                    labelsTableName,
                     featureColumns: providedFeatures,
                     dataInfo: {
                         totalRows,

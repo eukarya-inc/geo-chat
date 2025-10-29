@@ -18,11 +18,12 @@ export interface ClusterMetrics {
     featureNames: string[]; // Feature names
 }
 
-// Diagnostic information for debugging and performance analysis (not passed to AI)
+// Diagnostic information for debugging and performance analysis
+// Only minimal data is passed to AI to prevent token overflow
 export interface ClusterDiagnostics {
     timing: TimingInfo; // Execution time breakdown
     iterations: number; // Number of iterations executed
-    labels: number[]; // Cluster label for each data point (0 to numClusters-1)
+    // labels array is NOT included - too large for AI context (would cause token overflow)
     centroids: number[][]; // Centroid coordinates for each cluster [numClusters][numFeatures]
 }
 
@@ -53,6 +54,7 @@ export interface ClusterAnalysisSuccess {
     success: true;
     message: string;
     tableName: string;
+    labelsTableName: string; // Name of the temporary table containing cluster labels
     featureColumns: string[];
     dataInfo: ClusterDataInfo;
     metrics: ClusterMetrics; // Clustering metrics for AI decision making
