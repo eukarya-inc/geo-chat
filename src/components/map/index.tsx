@@ -145,8 +145,9 @@ const MapComponent: React.FC<MapProps> = ({
         registerDuckDBProtocol();
 
         // Remove all DuckDB sources and their layers to force complete refresh
-        const allLayers = mapRef.current.getStyle().layers || [];
-        const allSources = mapRef.current.getStyle().sources || {};
+        const mapStyle = mapRef.current.getStyle();
+        const allLayers = mapStyle?.layers || [];
+        const allSources = mapStyle?.sources || {};
 
         // Clear handler tracking when removing layers
         // No need to clear handlers as they're now global
@@ -330,10 +331,9 @@ const MapComponent: React.FC<MapProps> = ({
                         const sourceId = `duckdb-${selectedTable}`;
                         if (mapRef.current.getSource(sourceId)) {
                             // Get existing layers that use this source
+                            const mapStyle = mapRef.current.getStyle();
                             const layers =
-                                mapRef.current
-                                    .getStyle()
-                                    .layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
+                                mapStyle?.layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
 
                             // Remove layers
                             layers.forEach(layer => {

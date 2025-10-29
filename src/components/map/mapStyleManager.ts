@@ -142,7 +142,12 @@ export class MapStyleManager {
     }
 
     getSourceIds(): string[] {
-        return Object.keys(this.map.getStyle().sources || {});
+        const mapStyle = this.map.getStyle();
+        if (!mapStyle) {
+            console.warn('Map style is not available, returning empty source IDs');
+            return [];
+        }
+        return Object.keys(mapStyle.sources || {});
     }
 
     getLayerPaint(layerId: string): Record<string, unknown> | null {
