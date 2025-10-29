@@ -15,6 +15,13 @@ export interface SanitizeConfig {
     maxArraySize?: number;
 
     /**
+     * Maximum number of properties in an object.
+     * Objects with more properties than this will have excess properties removed.
+     * @default 20
+     */
+    maxProperties?: number;
+
+    /**
      * Maximum object depth to traverse.
      * Prevents infinite recursion and improves performance.
      * @default 5
@@ -24,6 +31,7 @@ export interface SanitizeConfig {
 
 const DEFAULT_CONFIG: Required<SanitizeConfig> = {
     maxArraySize: 10,
+    maxProperties: 20,
     maxDepth: 5,
 };
 
@@ -50,7 +58,7 @@ const DEFAULT_CONFIG: Required<SanitizeConfig> = {
  * ```
  */
 export function sanitizeToolResult(obj: unknown, config: SanitizeConfig = {}, depth: number = 0): unknown {
-    const { maxArraySize, maxDepth } = { ...DEFAULT_CONFIG, ...config };
+    const { maxArraySize, maxProperties, maxDepth } = { ...DEFAULT_CONFIG, ...config };
 
     // Prevent infinite recursion
     if (depth > maxDepth) {
@@ -75,22 +83,37 @@ export function sanitizeToolResult(obj: unknown, config: SanitizeConfig = {}, de
 
     // Handle objects
     if (typeof obj === 'object') {
+        const entries = Object.entries(obj);
         const sanitized: Record<string, unknown> = {};
-        let removedFields = 0;
+        let removedArrayFields = 0;
+        let removedPropertyCount = 0;
 
-        for (const [key, value] of Object.entries(obj)) {
+        // Limit number of properties
+        const entriesToProcess = entries.slice(0, maxProperties);
+        if (entries.length > maxProperties) {
+            removedPropertyCount = entries.length - maxProperties;
+        }
+
+        for (const [key, value] of entriesToProcess) {
             const sanitizedValue = sanitizeToolResult(value, config, depth + 1);
             // Only include fields that weren't removed (not undefined)
             if (sanitizedValue !== undefined) {
                 sanitized[key] = sanitizedValue;
             } else if (Array.isArray(value) && value.length > maxArraySize) {
                 // Field was removed due to large array
-                removedFields++;
+                removedArrayFields++;
             }
         }
 
-        if (removedFields > 0) {
-            console.log(`[Tool Result Sanitizer] Removed ${removedFields} large array field(s) from object`);
+        if (removedArrayFields > 0 || removedPropertyCount > 0) {
+            const messages: string[] = [];
+            if (removedArrayFields > 0) {
+                messages.push(`${removedArrayFields} large array field(s)`);
+            }
+            if (removedPropertyCount > 0) {
+                messages.push(`${removedPropertyCount} excess properties (max: ${maxProperties})`);
+            }
+            console.log(`[Tool Result Sanitizer] Removed ${messages.join(' and ')} from object`);
         }
 
         return sanitized;

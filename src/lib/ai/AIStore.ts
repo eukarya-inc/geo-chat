@@ -283,9 +283,13 @@ export class AIStore {
                     existingContent.push({ type: 'text' as const, text: streamingText });
                 }
 
-                // Sanitize tool result by removing large arrays to prevent message bloat
+                // Sanitize tool result by removing large arrays and objects with too many properties
                 // This applies to ALL tools (duckdb_query, geocoding, etc.) generically
-                const sanitizedResult = sanitizeToolResult(part.result, { maxArraySize: 10 });
+                const sanitizedResult = sanitizeToolResult(part.result, {
+                    maxArraySize: 10,
+                    maxProperties: 20,
+                    maxDepth: 5,
+                });
 
                 existingContent.push({
                     type: 'tool_result' as const,

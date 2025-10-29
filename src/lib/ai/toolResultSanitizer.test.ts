@@ -112,6 +112,131 @@ describe('sanitizeToolResult', () => {
         });
     });
 
+    it('should limit number of properties in an object', () => {
+        const input: Record<string, number> = {};
+        for (let i = 0; i < 30; i++) {
+            input[`prop${i}`] = i;
+        }
+
+        const result = sanitizeToolResult(input, { maxProperties: 20 }) as Record<string, number>;
+
+        // Should only keep first 20 properties
+        expect(Object.keys(result).length).toBe(20);
+        expect(result.prop0).toBe(0);
+        expect(result.prop19).toBe(19);
+        expect(result.prop20).toBeUndefined();
+        expect(result.prop29).toBeUndefined();
+    });
+
+    it('should keep objects with fewer properties than limit', () => {
+        const input = {
+            prop1: 'value1',
+            prop2: 'value2',
+            prop3: 'value3',
+        };
+
+        const result = sanitizeToolResult(input, { maxProperties: 20 });
+
+        expect(result).toEqual(input);
+    });
+
+    it('should limit properties in nested objects', () => {
+        const nestedObj: Record<string, unknown> = {};
+        for (let i = 0; i < 30; i++) {
+            nestedObj[`nested${i}`] = i;
+        }
+
+        const input = {
+            metadata: nestedObj,
+            count: 30,
+        };
+
+        const result = sanitizeToolResult(input, { maxProperties: 20 }) as {
+            metadata: Record<string, number>;
+            count: number;
+        };
+
+        // Root object has 2 properties (under limit)
+        expect(Object.keys(result).length).toBe(2);
+        expect(result.count).toBe(30);
+
+        // Nested object should be limited to 20 properties
+        expect(Object.keys(result.metadata).length).toBe(20);
+    });
+
+    it('should handle arrays containing objects with many properties', () => {
+        // Create objects with 30 properties each (total 31 including id)
+        const createLargeObject = (index: number) => {
+            const obj: Record<string, unknown> = { id: index };
+            for (let i = 0; i < 30; i++) {
+                obj[`field${i}`] = `value${i}`;
+            }
+            return obj;
+        };
+
+        const input = {
+            data: [createLargeObject(1), createLargeObject(2), createLargeObject(3)],
+        };
+
+        const result = sanitizeToolResult(input, { maxArraySize: 10, maxProperties: 20 }) as {
+            data: Array<Record<string, unknown>>;
+        };
+
+        // Array should be preserved (3 elements < 10)
+        expect(result.data).toBeDefined();
+        expect(result.data.length).toBe(3);
+
+        // Each object in the array should have properties limited to 20
+        result.data.forEach(obj => {
+            const keys = Object.keys(obj);
+            expect(keys.length).toBe(20);
+            // First 20 properties should be included (id, field0...field18)
+            expect(obj.id).toBeDefined(); // id is the first property
+            expect(obj.field0).toBeDefined(); // Early fields should be included
+            // field20 and beyond should be removed (because id + 30 fields = 31 total, limited to 20)
+            expect(obj.field20).toBeUndefined();
+            expect(obj.field29).toBeUndefined();
+        });
+    });
+
+    it('should remove large arrays even if they contain objects with few properties', () => {
+        const input = {
+            data: Array(100).fill({ id: 1, name: 'test', value: 42 }),
+        };
+
+        const result = sanitizeToolResult(input, { maxArraySize: 10, maxProperties: 20 });
+
+        // Large array should be removed entirely
+        expect(result).toEqual({});
+    });
+
+    it('should handle nested arrays with objects', () => {
+        const input = {
+            results: [
+                {
+                    items: Array(5).fill({ a: 1, b: 2 }), // Small array with small objects
+                },
+                {
+                    items: Array(20).fill({ a: 1, b: 2 }), // Large array - should be removed
+                },
+            ],
+        };
+
+        const result = sanitizeToolResult(input, { maxArraySize: 10, maxProperties: 20 }) as {
+            results: Array<{ items?: unknown[] }>;
+        };
+
+        expect(result.results).toBeDefined();
+        expect(result.results.length).toBe(2);
+
+        // First object should have items (small array preserved)
+        expect(result.results[0].items).toBeDefined();
+        expect(Array.isArray(result.results[0].items)).toBe(true);
+
+        // Second object should not have items (large array removed)
+        expect(result.results[1].items).toBeUndefined();
+    });
+
     it('should handle empty objects and arrays', () => {
         const input = {
             emptyArray: [],
