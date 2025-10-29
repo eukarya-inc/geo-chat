@@ -51,11 +51,14 @@ export function createChartGetTool(getCurrentChatState: () => ChatState | null) 
 }
 
 // Define encoding field schemas for cluster visualization
+// IMPORTANT: Do NOT include "legend" or "scale" properties in cluster color encoding.
+// Including them causes duplicate legends to appear (one for color, one for shape),
+// which creates a confusing visualization with mismatched legend entries.
+// Only "field" and "type" should be specified for cluster color encoding.
 const clusterColorEncodingSchema = z
     .object({
         field: z.string(),
         type: z.enum(['nominal', 'ordinal', 'quantitative', 'temporal']),
-        legend: z.unknown().optional(),
     })
     .strict()
     .describe('Color encoding for cluster visualization');
@@ -227,6 +230,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
         - Include feature columns and cluster label in tooltips with proper type specifications
         - Both x and y axes should be "quantitative" type for numeric features
         - Add axis titles for better readability
+        - IMPORTANT: For color encoding with cluster field, ONLY use "field" and "type" - DO NOT include "legend" or "scale" properties
 
         Example specifications:
 
@@ -254,7 +258,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
           "encoding": {
             "x": {"field": "feature1", "type": "quantitative", "axis": {"title": "Feature 1"}},
             "y": {"field": "feature2", "type": "quantitative", "axis": {"title": "Feature 2"}},
-            "color": {"field": "cluster", "type": "nominal", "legend": {"title": "Cluster"}},
+            "color": {"field": "cluster", "type": "nominal"},
             "shape": {"field": "cluster", "type": "nominal"},
             "tooltip": [
               {"field": "feature1", "type": "quantitative"},
@@ -525,7 +529,12 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         });
 
         // Clean up cluster-related encodings
-        // For color encoding with cluster field, only keep field, type, and legend
+        // For color encoding with cluster field, only keep field and type (remove legend and scale)
+        // CRITICAL: Including "legend" or "scale" in cluster color encoding causes duplicate legends
+        // to appear in the visualization - one for color and one for shape. This creates visual
+        // confusion with mismatched legend entries where cluster values appear twice with
+        // different visual encodings. By removing these properties, Vega-Lite will automatically
+        // create a unified legend that combines both color and shape encodings correctly.
         if (encoding.color && typeof encoding.color === 'object') {
             const colorEncoding = encoding.color as Record<string, unknown>;
             if (
@@ -533,10 +542,9 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
                 typeof colorEncoding.field === 'string' &&
                 colorEncoding.field.toLowerCase().includes('cluster')
             ) {
-                const { field, type, legend, ...rest } = colorEncoding;
-                if (Object.keys(rest).length > 0) {
-                    encoding.color = legend !== undefined ? { field, type, legend } : { field, type };
-                }
+                const { field, type } = colorEncoding;
+                // Always strip down to only field and type for cluster visualizations
+                encoding.color = { field, type };
             }
         }
 
