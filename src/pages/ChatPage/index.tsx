@@ -293,20 +293,10 @@ function ChatPage() {
             createdAt: new Date(),
         };
 
-        const newLayout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 4,
-            minW: 3,
-            minH: 2,
-        };
-
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout],
+            // Don't auto-add to layout - user must manually add from sidebar
         };
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboardId);
@@ -314,7 +304,7 @@ function ChatPage() {
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
-        // Automatically switch to the dashboard view to show the newly added chart
+        // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboardId);
     };
 
@@ -376,20 +366,10 @@ function ChatPage() {
             createdAt: new Date(),
         };
 
-        const newLayout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 8,
-            h: 6,
-            minW: 4,
-            minH: 3,
-        };
-
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout],
+            // Don't auto-add to layout - user must manually add from sidebar
         };
 
         // Remember the selected dashboard for next time
@@ -398,7 +378,7 @@ function ChatPage() {
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
-        // Automatically switch to the dashboard view to show the newly added map
+        // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboardId);
     };
 
