@@ -16,7 +16,7 @@ describe('HistoryCard', () => {
         render(<HistoryCard {...defaultProps} />);
 
         expect(screen.getByText('Test Card')).toBeInTheDocument();
-        expect(screen.getByText(mockDate.toLocaleString('ja-JP'))).toBeInTheDocument();
+        expect(screen.getByText(/last message/)).toBeInTheDocument();
     });
 
     it('should render subtitle when provided', () => {

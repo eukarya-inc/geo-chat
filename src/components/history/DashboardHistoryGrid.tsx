@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { Dashboard } from '../../store/remoteAtoms';
 import { HistoryCard } from './HistoryCard';
 
@@ -20,30 +20,36 @@ export function DashboardHistoryGrid({
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [deletingDashboardId, setDeletingDashboardId] = useState<string | null>(null);
 
-    const handleStartEdit = (dashboardId: string) => {
+    const handleStartEdit = useCallback((dashboardId: string) => {
         setEditingDashboardId(dashboardId);
         setDeletingDashboardId(null);
-    };
+    }, []);
 
-    const handleCancelEdit = () => {
+    const handleCancelEdit = useCallback(() => {
         setEditingDashboardId(null);
         setDeletingDashboardId(null);
-    };
+    }, []);
 
-    const handleRename = (dashboardId: string, newTitle: string) => {
-        onRenameDashboard(dashboardId, newTitle);
-        setEditingDashboardId(null);
-    };
+    const handleRename = useCallback(
+        (dashboardId: string, newTitle: string) => {
+            onRenameDashboard(dashboardId, newTitle);
+            setEditingDashboardId(null);
+        },
+        [onRenameDashboard]
+    );
 
-    const handleStartDelete = (dashboardId: string) => {
+    const handleStartDelete = useCallback((dashboardId: string) => {
         setDeletingDashboardId(dashboardId);
         setEditingDashboardId(null);
-    };
+    }, []);
 
-    const handleConfirmDelete = (dashboardId: string) => {
-        onDeleteDashboard(dashboardId);
-        setDeletingDashboardId(null);
-    };
+    const handleConfirmDelete = useCallback(
+        (dashboardId: string) => {
+            onDeleteDashboard(dashboardId);
+            setDeletingDashboardId(null);
+        },
+        [onDeleteDashboard]
+    );
 
     return (
         <div className="p-6 h-full overflow-y-auto bg-gray-50">

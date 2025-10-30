@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AIChat from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
 import { TablePanel } from '../../components/table/TablePanel';
-import RemoteFile from '../../components/remote-file';
+import { DataSourceSelector } from '../../components/data-source-selector';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
@@ -223,38 +223,47 @@ function ChatPage() {
     } = useDashboardManagement();
 
     // Navigation handler for sidebar buttons
-    const handleNavigate = (view: 'chat-list' | 'dashboard-list') => {
-        setViewMode(view);
-        selectChat('');
-        setSelectedDashboard(null);
-    };
+    const handleNavigate = useCallback(
+        (view: 'chat-list' | 'dashboard-list') => {
+            setViewMode(view);
+            selectChat('');
+            setSelectedDashboard(null);
+        },
+        [setViewMode, selectChat, setSelectedDashboard]
+    );
 
     // Chat handlers
-    const handleSelectChat = (chatId: string) => {
-        selectChat(chatId);
-        setViewMode('chat');
-        setSelectedDashboard(null);
-    };
+    const handleSelectChat = useCallback(
+        (chatId: string) => {
+            selectChat(chatId);
+            setViewMode('chat');
+            setSelectedDashboard(null);
+        },
+        [selectChat, setViewMode, setSelectedDashboard]
+    );
 
-    const handleCreateChat = () => {
+    const handleCreateChat = useCallback(() => {
         createNewChat();
         setViewMode('chat');
         setSelectedDashboard(null);
-    };
+    }, [createNewChat, setViewMode, setSelectedDashboard]);
 
     // Dashboard handlers
-    const handleSelectDashboard = (dashboardId: string) => {
-        setSelectedDashboard(dashboardId);
-        setViewMode('dashboard');
-        selectChat('');
-    };
+    const handleSelectDashboard = useCallback(
+        (dashboardId: string) => {
+            setSelectedDashboard(dashboardId);
+            setViewMode('dashboard');
+            selectChat('');
+        },
+        [setSelectedDashboard, setViewMode, selectChat]
+    );
 
-    const handleCreateDashboard = () => {
+    const handleCreateDashboard = useCallback(() => {
         const newDashboard = createDashboard();
         setSelectedDashboard(newDashboard.id);
         setViewMode('dashboard');
         selectChat('');
-    };
+    }, [createDashboard, setSelectedDashboard, setViewMode, selectChat]);
 
     const handleDeleteDashboard = (dashboardId: string) => {
         if (selectedDashboardId === dashboardId) {
@@ -409,8 +418,8 @@ function ChatPage() {
     const isEmptyChat = selectedChatId && !hasMessages;
 
     // Sidebar selection: highlight button only when showing list view
-    const isListView = viewMode.endsWith('-list');
-    const sidebarSelection = isListView ? (viewMode as 'chat-list' | 'dashboard-list') : undefined;
+    const sidebarSelection =
+        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat-list' ? 'chat-list' : undefined;
 
     return (
         <>
@@ -428,14 +437,12 @@ function ChatPage() {
 
                 {/* Main Content Area */}
                 {viewMode === 'chat-list' ? (
-                    /* Chat History Grid */
                     <div className="flex-1 h-full overflow-hidden">
                         <ChatHistoryGrid
-                            chats={Object.values(chats).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())}
+                            chats={chats}
                             onSelectChat={handleSelectChat}
                             onDeleteChat={deleteChat}
                             onRenameChat={renameChat}
-                            onCreateChat={handleCreateChat}
                         />
                     </div>
                 ) : viewMode === 'dashboard-list' ? (
@@ -492,55 +499,67 @@ function ChatPage() {
                         })()}
                     </div>
                 ) : isEmptyChat ? (
-                    /* Empty Chat Mode - Centered Input */
-                    <div className="flex-1 h-full flex items-center justify-center p-4">
-                        <div className="w-full max-w-3xl -mt-32">
-                            {!isLoadingApiKey && selectedChatId && (
-                                <AIChat
-                                    dbContext={dbContext}
-                                    apiKey={apiKey}
-                                    chatId={selectedChatId}
-                                    schemaName={schemaName}
-                                    onMessagesChange={handleMessagesChange}
-                                    updateChatMessages={updateChatMessages}
-                                    onSendMessageReady={handleSendMessageReady}
-                                    selectedTable={selectedTable}
-                                    onTableSelect={handleTableSelection}
-                                    onChartUpdate={updateChartFromAI}
-                                    onChartDelete={deleteChartFromAI}
-                                    getCurrentChatState={getCurrentChatState}
-                                    onMapStyleUpdate={async (
-                                        tableName: string,
-                                        style: import('../../components/map').TableStyle
-                                    ) => {
-                                        updateTableStyle(tableName, style);
-                                    }}
-                                    onMapStyleDelete={async (tableName: string) => {
-                                        deleteTableStyle(tableName);
-                                    }}
-                                    onConversationCompleted={handleConversationCompleted}
-                                    remoteFileComponent={onClose => (
-                                        <RemoteFile
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            onTableCreated={(tableName: string) => {
-                                                handleTableSelection(tableName);
-                                                if (dbContext) {
-                                                    dbContext.notifyTableChange(tableName, schemaName);
-                                                }
-                                                onClose();
-                                            }}
-                                            onSendMessage={sendMessageRef.current || undefined}
-                                            waitForDbContext={waitForDbContext}
-                                        />
-                                    )}
-                                    emptyMode={true}
-                                    onApiKeyChange={setApiKey}
-                                    onApiKeySave={saveApiKey}
-                                    showApiKeyInput={showApiKeyInput}
-                                    waitForDbContext={waitForDbContext}
-                                />
-                            )}
+                    /* Home Screen - Centered Input + History Grid */
+                    <div className="flex-1 h-full flex flex-col overflow-hidden">
+                        {/* Center area - Chat input */}
+                        <div className="flex-1 flex items-center justify-center px-8">
+                            <div className="w-full max-w-2xl -mt-32">
+                                {!isLoadingApiKey && selectedChatId && (
+                                    <AIChat
+                                        dbContext={dbContext}
+                                        apiKey={apiKey}
+                                        chatId={selectedChatId}
+                                        schemaName={schemaName}
+                                        onMessagesChange={handleMessagesChange}
+                                        updateChatMessages={updateChatMessages}
+                                        onSendMessageReady={handleSendMessageReady}
+                                        selectedTable={selectedTable}
+                                        onTableSelect={handleTableSelection}
+                                        onChartUpdate={updateChartFromAI}
+                                        onChartDelete={deleteChartFromAI}
+                                        getCurrentChatState={getCurrentChatState}
+                                        onMapStyleUpdate={async (
+                                            tableName: string,
+                                            style: import('../../components/map').TableStyle
+                                        ) => {
+                                            updateTableStyle(tableName, style);
+                                        }}
+                                        onMapStyleDelete={async (tableName: string) => {
+                                            deleteTableStyle(tableName);
+                                        }}
+                                        onConversationCompleted={handleConversationCompleted}
+                                        remoteFileComponent={onClose => (
+                                            <DataSourceSelector
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                onTableCreated={(tableName: string) => {
+                                                    handleTableSelection(tableName);
+                                                    if (dbContext) {
+                                                        dbContext.notifyTableChange(tableName, schemaName);
+                                                    }
+                                                }}
+                                                onSendMessage={sendMessageRef.current || undefined}
+                                                waitForDbContext={waitForDbContext}
+                                                onClose={onClose}
+                                            />
+                                        )}
+                                        emptyMode={true}
+                                        onApiKeyChange={setApiKey}
+                                        onApiKeySave={saveApiKey}
+                                        showApiKeyInput={showApiKeyInput}
+                                        waitForDbContext={waitForDbContext}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="border-t overflow-y-auto" style={{ maxHeight: '40vh' }}>
+                            <ChatHistoryGrid
+                                chats={chats}
+                                onSelectChat={handleSelectChat}
+                                onDeleteChat={deleteChat}
+                                onRenameChat={renameChat}
+                            />
                         </div>
                     </div>
                 ) : (
@@ -580,7 +599,7 @@ function ChatPage() {
                                         }}
                                         onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={onClose => (
-                                            <RemoteFile
+                                            <DataSourceSelector
                                                 dbContext={dbContext}
                                                 schema={schemaName}
                                                 onTableCreated={(tableName: string) => {
@@ -588,10 +607,10 @@ function ChatPage() {
                                                     if (dbContext) {
                                                         dbContext.notifyTableChange(tableName, schemaName);
                                                     }
-                                                    onClose();
                                                 }}
                                                 onSendMessage={sendMessageRef.current || undefined}
                                                 waitForDbContext={waitForDbContext}
+                                                onClose={onClose}
                                             />
                                         )}
                                         showApiKeyInput={showApiKeyInput}
