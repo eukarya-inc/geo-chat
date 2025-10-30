@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
     chatsAtom,
@@ -28,7 +28,6 @@ export function useChatManagement(dbContext: DBContext | null) {
     const selectChat = useSetAtom(selectChatAtom);
     const updateMessages = useSetAtom(updateMessagesAtom);
     const updateChatState = useSetAtom(updateChatStateAtom);
-    const hasInitialized = useRef(false);
 
     const selectedChatId = localState.selectedChatId;
 
@@ -51,34 +50,8 @@ export function useChatManagement(dbContext: DBContext | null) {
         };
     }, [currentChat, currentChatState]);
 
-    // Initialize first chat if no chats exist (independent of dbContext)
-    useEffect(() => {
-        // Only run once
-        if (hasInitialized.current) {
-            return;
-        }
-
-        const hasNoChats = Object.keys(chatsRecord).length === 0;
-        if (!hasNoChats) {
-            return;
-        }
-
-        hasInitialized.current = true;
-
-        const initializeFirstChat = async () => {
-            try {
-                const firstChat = await createChat();
-                // Select the first chat immediately
-                selectChat(firstChat.id);
-            } catch (error) {
-                console.error('Error creating initial chat:', error);
-                hasInitialized.current = false; // Reset on error
-            }
-        };
-
-        initializeFirstChat();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chatsRecord]); // Watch chatsRecord to check if empty
+    // Note: Chat is no longer automatically created on initialization.
+    // Chat will be created when the user sends their first message.
 
     // Create schema for the selected chat when dbContext becomes available
     useEffect(() => {
@@ -112,10 +85,13 @@ export function useChatManagement(dbContext: DBContext | null) {
     );
 
     // Chat management functions
-    const createNewChat = async () => {
-        if (!dbContext) {
+    const createNewChat = async (db?: DBContext | null): Promise<string | undefined> => {
+        // Use provided dbContext or fallback to hook's dbContext
+        const effectiveDb = db || dbContext;
+
+        if (!effectiveDb) {
             console.error('DBContext is not initialized');
-            return;
+            return undefined;
         }
 
         try {
@@ -124,13 +100,17 @@ export function useChatManagement(dbContext: DBContext | null) {
             // Create schema for the new chat
             const schemaName = chatIdToSchemaName(newChat.id);
             if (schemaName) {
-                await dbContext.createSchema(schemaName);
+                await effectiveDb.createSchema(schemaName);
             }
 
             // Notify table change to refresh table list
-            dbContext.notifyTableChange(undefined, schemaName);
+            effectiveDb.notifyTableChange(undefined, schemaName);
+
+            // Return the new chat ID
+            return newChat.id;
         } catch (error) {
             console.error('Error creating new chat:', error);
+            return undefined;
         }
     };
 
@@ -165,13 +145,9 @@ export function useChatManagement(dbContext: DBContext | null) {
 
     // Handle chat selection
     const selectChatHandler = async (chatId: string) => {
-        if (!dbContext) return;
-
-        // Find the chat being selected
-        const targetChat = chatsRecord[chatId];
-        if (!targetChat) return;
-
         // Set the selected chat ID
+        // Note: We don't check if targetChat exists because the chat might be
+        // newly created and not yet in chatsRecord due to async state updates
         selectChat(chatId);
     };
 

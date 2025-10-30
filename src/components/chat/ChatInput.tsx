@@ -7,7 +7,7 @@ interface ChatInputProps {
     value: string;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-    onSubmit: (e: React.FormEvent) => void;
+    onSubmit: (e: React.FormEvent) => void | Promise<void>;
     onStop: () => void;
     dbContext: DBContext | null;
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -15,12 +15,10 @@ interface ChatInputProps {
     className?: string;
     schemaName?: string | null;
     selectedTable?: string | null;
-    isLoading: boolean;
-    isCreatingTable: boolean;
-    isAnyLoading: boolean;
-    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
+    isLoading?: boolean;
+    isSubmitting?: boolean;
+    renderMenu?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
     disabled?: boolean;
-    isWaitingForDb?: boolean;
     showUrlGuide?: boolean;
     onShowUrlGuide?: () => void;
 }
@@ -46,14 +44,14 @@ export default function ChatInput({
     schemaName,
     selectedTable,
     isLoading,
-    isCreatingTable,
-    isAnyLoading,
-    remoteFileComponent,
+    isSubmitting: externalIsSubmitting,
+    renderMenu,
     disabled = false,
-    isWaitingForDb = false,
     showUrlGuide = false,
     onShowUrlGuide,
 }: ChatInputProps) {
+    const [internalIsSubmitting, setInternalIsSubmitting] = useState(false);
+    const isSubmitting = externalIsSubmitting !== undefined ? externalIsSubmitting : internalIsSubmitting;
     const [tables, setTables] = useState<string[]>([]);
     const [fields, setFields] = useState<Array<{ name: string; type: string }>>([]);
     const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
@@ -280,6 +278,18 @@ export default function ChatInput({
         [value, autocomplete, onChange, textareaRef]
     );
 
+    const handleSubmitWithLoading = useCallback(
+        async (e: React.FormEvent) => {
+            setInternalIsSubmitting(true);
+            try {
+                await onSubmit(e);
+            } finally {
+                setInternalIsSubmitting(false);
+            }
+        },
+        [onSubmit]
+    );
+
     // Handle keyboard navigation
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -323,14 +333,14 @@ export default function ChatInput({
             }
 
             // Handle Enter key for single-line URL submission
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && !isSubmitting) {
                 const trimmedValue = value.trim();
                 const isSingleLine = !trimmedValue.includes('\n');
                 const isUrl = extractDataUrl(trimmedValue) !== null;
 
                 if (isSingleLine && isUrl) {
                     e.preventDefault();
-                    onSubmit(e);
+                    handleSubmitWithLoading(e);
                     return;
                 }
             }
@@ -340,7 +350,7 @@ export default function ChatInput({
                 onKeyDown(e);
             }
         },
-        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, onSubmit]
+        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, isSubmitting, handleSubmitWithLoading]
     );
 
     // Scroll selected item into view
@@ -375,12 +385,12 @@ export default function ChatInput({
         }
     }, [showPopup]);
 
-    const handleButtonClick = (e: React.FormEvent) => {
+    const handleButtonClick = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isLoading) {
+        if (isLoading || isSubmitting) {
             onStop();
         } else {
-            onSubmit(e);
+            await handleSubmitWithLoading(e);
         }
     };
 
@@ -406,7 +416,7 @@ export default function ChatInput({
     };
 
     const renderMenuButton = () =>
-        remoteFileComponent ? (
+        renderMenu ? (
             <div className="relative">
                 <button
                     ref={buttonRef}
@@ -425,53 +435,37 @@ export default function ChatInput({
                             popupPosition === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1'
                         }`}
                     >
-                        {remoteFileComponent(() => setShowPopup(false), onShowUrlGuide)}
+                        {renderMenu(() => setShowPopup(false), onShowUrlGuide)}
                     </div>
                 )}
             </div>
         ) : null;
 
-    const renderSubmitButton = () => (
-        <button
-            type="button"
-            onClick={handleButtonClick}
-            disabled={
-                (!isLoading && !value.trim()) ||
-                (!isLoading && isAnyLoading) ||
-                isCreatingTable ||
-                isWaitingForDb ||
-                disabled
-            }
-            className={`p-2 rounded-full transition-colors duration-200 ${
-                isLoading
-                    ? 'text-red-600 hover:bg-red-50'
-                    : !value.trim() || isAnyLoading || isCreatingTable || isWaitingForDb || disabled
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-blue-600 hover:bg-blue-50'
-            } focus:outline-none`}
-            title={
-                isLoading
-                    ? '停止'
-                    : isWaitingForDb
-                      ? 'データベース初期化中...'
-                      : isCreatingTable
-                        ? 'テーブル作成中...'
-                        : disabled
-                          ? 'APIキーを設定してください'
-                          : !isLoading && isAnyLoading
-                            ? '他のチャットが処理中です'
-                            : '送信'
-            }
-        >
-            {isLoading ? (
-                <StopIcon className="w-5 h-5" />
-            ) : isCreatingTable || isWaitingForDb ? (
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-            ) : (
-                <PaperAirplaneIcon className="w-5 h-5" />
-            )}
-        </button>
-    );
+    const renderSubmitButton = () => {
+        return (
+            <button
+                type="button"
+                onClick={handleButtonClick}
+                disabled={(!isLoading && !value.trim()) || isSubmitting || disabled}
+                className={`p-2 rounded-full transition-colors duration-200 ${
+                    isLoading || isSubmitting
+                        ? 'text-red-600 hover:bg-red-50'
+                        : !value.trim() || disabled
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-blue-600 hover:bg-blue-50'
+                } focus:outline-none`}
+                title={isLoading || isSubmitting ? '停止' : disabled ? 'APIキーを設定してください' : '送信'}
+            >
+                {isLoading ? (
+                    <StopIcon className="w-5 h-5" />
+                ) : isSubmitting ? (
+                    <div className="w-5 h-5 border-[3px] border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                ) : (
+                    <PaperAirplaneIcon className="w-5 h-5" />
+                )}
+            </button>
+        );
+    };
 
     return (
         <div className={`flex gap-2 ${isMultiline ? 'flex-col' : 'items-center'} w-full`}>
@@ -540,7 +534,7 @@ export default function ChatInput({
             </div>
 
             {isMultiline ? (
-                <div className={`flex items-end gap-2 ${remoteFileComponent ? 'justify-between' : 'justify-end'}`}>
+                <div className={`flex items-end gap-2 ${renderMenu ? 'justify-between' : 'justify-end'}`}>
                     {renderMenuButton()}
                     {renderSubmitButton()}
                 </div>
