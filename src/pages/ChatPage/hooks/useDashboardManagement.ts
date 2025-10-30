@@ -45,6 +45,7 @@ export function useDashboardManagement() {
                 createdAt: dashboard.createdAt,
                 visualizations: [...dashboard.visualizations], // Create a new array
                 layout: [...dashboard.layout], // Create a new array
+                responsive: dashboard.responsive,
             };
 
             setRemoteState(prev => {
