@@ -9,7 +9,7 @@ interface TableSelectionModalProps {
 
 export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProps) {
     const [tables, setTables] = useState<TableInfo[]>([]);
-    const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
+    const [selectedTable, setSelectedTable] = useState<string | null>(null);
 
     // Fetch tables when modal opens (using mock data for now)
     useEffect(() => {
@@ -33,28 +33,20 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
     }, [isOpen]);
 
     const toggleTableSelection = useCallback((tableName: string) => {
-        setSelectedTables(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(tableName)) {
-                newSet.delete(tableName);
-            } else {
-                newSet.add(tableName);
-            }
-            return newSet;
-        });
+        setSelectedTable(prev => (prev === tableName ? null : tableName));
     }, []);
 
     const handleAddTables = useCallback(() => {
         // TODO: Implement table selection logic
-        // - Send selected tables to parent component
+        // - Send selected table to parent component
         // - Integrate with chat/AI system
         onClose();
-        setSelectedTables(new Set());
+        setSelectedTable(null);
     }, [onClose]);
 
     const handleCancel = useCallback(() => {
         onClose();
-        setSelectedTables(new Set());
+        setSelectedTable(null);
     }, [onClose]);
 
     if (!isOpen) {
@@ -92,7 +84,7 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
                             key={table.name}
                             tableName={table.name}
                             lastUpdated={table.lastUpdated}
-                            isSelected={selectedTables.has(table.name)}
+                            isSelected={selectedTable === table.name}
                             onToggle={toggleTableSelection}
                         />
                     ))}
@@ -113,7 +105,7 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
                     </button>
                     <button
                         onClick={handleAddTables}
-                        disabled={selectedTables.size === 0}
+                        disabled={selectedTable === null}
                         className="px-2.5 py-2.5 rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm font-normal text-black bg-[#6FE47E]"
                         style={{ fontFamily: 'Inter' }}
                     >
