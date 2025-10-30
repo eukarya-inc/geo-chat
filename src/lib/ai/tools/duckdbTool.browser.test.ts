@@ -116,7 +116,7 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         }
         expect(selectRes.dataTruncated).toBe(true); // Truncated by AI_RETURN_LIMIT
         expect(selectRes.totalRowCount).toBe(150); // DuckDB returned 150 rows
-        expect(selectRes.rowCount).toBe(100); // AI sees only 100 rows
+        expect(selectRes.rowCount).toBe(5); // AI sees only 5 rows (AI_RETURN_LIMIT)
         // columns/columnCount are no longer returned; infer locally if needed
         const inferredColumns = selectRes.data && selectRes.data.length > 0 ? Object.keys(selectRes.data[0]) : [];
         expect(inferredColumns).toEqual(['id']);
@@ -353,8 +353,8 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         }
         expect(res.dataTruncated).toBe(true); // Data was truncated by AI_RETURN_LIMIT
         expect(res.totalRowCount).toBe(1500); // DuckDB returned all 1500 rows
-        expect(res.rowCount).toBe(100); // AI sees only 100 rows
-        expect(res.data?.length).toBe(100); // Data truncated to AI_RETURN_LIMIT
+        expect(res.rowCount).toBe(5); // AI sees only 5 rows (AI_RETURN_LIMIT)
+        expect(res.data?.length).toBe(5); // Data truncated to AI_RETURN_LIMIT
     });
 
     it('generates SQL explanation when API key is provided', async () => {
