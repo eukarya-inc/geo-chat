@@ -243,18 +243,10 @@ function ChatPage() {
     );
 
     const handleCreateChat = useCallback(() => {
-        const emptyChat = Object.values(chats)
-            .filter(chat => !chat.messages || chat.messages.length === 0)
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-
-        if (emptyChat) {
-            selectChat(emptyChat.id);
-        } else {
-            createNewChat();
-        }
+        createNewChat();
         setViewMode('chat');
         setSelectedDashboard(null);
-    }, [chats, selectChat, createNewChat, setViewMode, setSelectedDashboard]);
+    }, [createNewChat, setViewMode, setSelectedDashboard]);
 
     // Dashboard handlers
     const handleSelectDashboard = useCallback(
