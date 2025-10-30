@@ -113,7 +113,7 @@ export function createDuckDBTool(
                 let data = result as Record<string, unknown>[];
 
                 // Hard limit on data returned to AI to prevent token limit issues
-                const AI_RETURN_LIMIT = 100; // Maximum rows to actually return to AI
+                const AI_RETURN_LIMIT = 5; // Maximum rows to actually return to AI
                 let truncated = false;
                 const originalLength = data.length;
 
@@ -361,7 +361,7 @@ export function createDuckDBTool(
 
                 // Add suggestions for large datasets (only if not already added by table creation)
                 if (!createdTableName) {
-                    if (data.length > 100) {
+                    if (originalLength > 100) {
                         if (!toolResult.suggestions) {
                             toolResult.suggestions = [];
                         }
@@ -371,7 +371,7 @@ export function createDuckDBTool(
                             'LIMIT句を使って必要な行数のみを取得できます',
                             'GROUP BYを使ってカテゴリ別の集計ができます'
                         );
-                    } else if (data.length > 20) {
+                    } else if (originalLength > 20) {
                         if (!toolResult.suggestions) {
                             toolResult.suggestions = [];
                         }
