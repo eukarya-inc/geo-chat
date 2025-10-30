@@ -224,7 +224,7 @@ function ChatPage() {
 
     // Navigation handler for sidebar buttons
     const handleNavigate = useCallback(
-        (view: 'chat-history' | 'dashboard-list') => {
+        (view: 'chat-list' | 'dashboard-list') => {
             setViewMode(view);
             selectChat('');
             setSelectedDashboard(null);
@@ -443,7 +443,7 @@ function ChatPage() {
 
     // Sidebar selection: highlight button only when showing list view
     const sidebarSelection =
-        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat-history' ? 'chat-history' : undefined;
+        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat-list' ? 'chat-list' : undefined;
 
     return (
         <>
@@ -460,7 +460,7 @@ function ChatPage() {
                 </div>
 
                 {/* Main Content Area */}
-                {viewMode === 'chat-history' ? (
+                {viewMode === 'chat-list' ? (
                     <div className="flex-1 h-full overflow-hidden">
                         <ChatHistoryGrid
                             chats={chats}
