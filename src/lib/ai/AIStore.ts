@@ -8,6 +8,7 @@ import { messageConverter } from './messageConverter';
 import { generateContextMessage } from './contextMessage';
 import { generateSystemPrompt } from './systemPrompt';
 import { initTools } from './tools';
+import { generatePromptSuggestions } from './promptSuggestionService';
 
 interface ChatSession {
     id: string;
@@ -138,12 +139,32 @@ export class AIStore {
         const coreMessages = messageConverter.toCoreMessages(newMessages);
 
         // Skip AI if there are no messages to send (e.g., only TABLE_CREATED marker)
-        // But still notify listeners so prompt suggestions can be triggered
+        // This happens when user explicitly imports a table
         if (coreMessages.length === 0) {
             // Don't set loading state for TABLE_CREATED messages
             // Just ensure messages are persisted and listeners are notified
             options.onMessagesChange?.(newMessages);
             this.notifyListeners();
+
+            // Trigger prompt suggestions for explicit table import
+            if (
+                userMessage.content &&
+                typeof userMessage.content === 'string' &&
+                userMessage.content.includes('<!--TABLE_CREATED:')
+            ) {
+                const match = userMessage.content.match(/<!--TABLE_CREATED:(.+?)-->/);
+                const tableName = match?.[1];
+                if (tableName && options.dbContext && options.apiKey) {
+                    // Fire and forget - don't await
+                    this.addPromptSuggestions(chatId, tableName, {
+                        apiKey: options.apiKey,
+                        dbContext: options.dbContext,
+                        schema: options.schema,
+                        onMessagesChange: options.onMessagesChange,
+                    });
+                }
+            }
+
             return;
         }
 
@@ -392,6 +413,132 @@ export class AIStore {
     clearSession(chatId: string): void {
         this.sessions.delete(chatId);
         this.notifyListeners();
+    }
+
+    async addPromptSuggestions(
+        chatId: string,
+        tableName: string,
+        options: {
+            apiKey: string;
+            dbContext: DBContext;
+            schema?: string | null;
+            onMessagesChange?: (messages: StructuredMessage[]) => void;
+        }
+    ): Promise<void> {
+        const session = this.sessions.get(chatId);
+        if (!session) return;
+
+        // Check if we already have prompt suggestions for this table
+        const hasPromptSuggestions = session.messages.some(
+            msg =>
+                msg.role === 'assistant' &&
+                Array.isArray(msg.content) &&
+                msg.content.some(
+                    block =>
+                        (block.type === 'tool_result' &&
+                            block.name === 'completion' &&
+                            block.result &&
+                            typeof block.result === 'object' &&
+                            'suggestedPrompts' in block.result &&
+                            'completionMessage' in block.result &&
+                            typeof block.result.completionMessage === 'string' &&
+                            block.result.completionMessage.includes(tableName)) ||
+                        (block.type === 'tool_use' &&
+                            block.name === 'completion' &&
+                            block.input &&
+                            typeof block.input === 'object' &&
+                            'suggestedPrompts' in block.input)
+                )
+        );
+
+        if (hasPromptSuggestions) {
+            return;
+        }
+
+        // Add loading message
+        const loadingMessage: StructuredMessage = {
+            role: 'assistant',
+            content: [
+                {
+                    type: 'text',
+                    text: `テーブル「${tableName}」を分析中... おすすめの分析を生成しています...`,
+                },
+            ],
+        };
+
+        const messagesWithLoading = [...session.messages, loadingMessage];
+        session.messages = messagesWithLoading;
+        options.onMessagesChange?.(messagesWithLoading);
+        this.notifyListeners();
+
+        try {
+            const prompts = await generatePromptSuggestions(
+                tableName,
+                options.dbContext,
+                options.schema || null,
+                options.apiKey
+            );
+
+            // Remove loading message
+            const cleanMessages = session.messages.filter(msg => {
+                if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                    return !msg.content.some(
+                        block =>
+                            block.type === 'text' &&
+                            block.text.includes('を分析中... おすすめの分析を生成しています...')
+                    );
+                }
+                return true;
+            });
+
+            if (prompts.length > 0) {
+                const promptMessage: StructuredMessage = {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'tool_result',
+                            id: `synthetic-${Date.now()}`,
+                            name: 'completion',
+                            result: {
+                                success: true,
+                                suggestedPrompts: prompts.map((p, i) => ({
+                                    id: `prompt-${i}`,
+                                    text: p.text,
+                                    description: p.category,
+                                })),
+                                completionMessage: `テーブル「${tableName}」が作成されました。以下の分析をお試しください:`,
+                                timestamp: new Date().toISOString(),
+                            },
+                        },
+                    ],
+                };
+
+                const updatedMessages = [...cleanMessages, promptMessage];
+                session.messages = updatedMessages;
+                options.onMessagesChange?.(updatedMessages);
+                this.notifyListeners();
+            } else {
+                session.messages = cleanMessages;
+                options.onMessagesChange?.(cleanMessages);
+                this.notifyListeners();
+            }
+        } catch (error) {
+            console.error('Failed to generate prompt suggestions:', error);
+            // Remove loading message on error
+            const cleanMessages = session.messages.filter(msg => {
+                if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                    return !msg.content.some(
+                        block =>
+                            block.type === 'text' &&
+                            block.text.includes('を分析中... おすすめの分析を生成しています...')
+                    );
+                }
+                return true;
+            });
+            session.messages = cleanMessages;
+            options.onMessagesChange?.(cleanMessages);
+            this.notifyListeners();
+        }
     }
 }
 
