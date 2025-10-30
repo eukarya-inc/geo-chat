@@ -137,13 +137,20 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     useEffect(() => {
         if (!containerRef.current) return;
 
-        const resizeObserver = new ResizeObserver(() => {
-            if (vegaViewRef.current) {
-                // Use requestAnimationFrame to avoid resize loop
-                requestAnimationFrame(() => {
-                    vegaViewRef.current?.resize();
-                });
-            }
+        const resizeObserver = new ResizeObserver(entries => {
+            // ResizeObserver may fire before vegaViewRef is set
+            // Use setTimeout to defer the resize call slightly
+            setTimeout(() => {
+                if (vegaViewRef.current) {
+                    const entry = entries[0];
+                    if (entry) {
+                        // Use requestAnimationFrame to avoid resize loop
+                        requestAnimationFrame(() => {
+                            vegaViewRef.current?.resize();
+                        });
+                    }
+                }
+            }, 0);
         });
 
         resizeObserver.observe(containerRef.current);
