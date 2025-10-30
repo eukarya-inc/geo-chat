@@ -497,7 +497,7 @@ export default function Chat({
     };
 
     return (
-        <div className="p-2.5 bg-gray-100 text-gray-800 text-left h-screen flex flex-col overflow-hidden">
+        <>
             <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -729,6 +729,6 @@ export default function Chat({
                     Enterで改行、Shift+Enterで送信
                 </div>
             </div>
-        </div>
+        </>
     );
 }
