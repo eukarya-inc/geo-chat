@@ -22,7 +22,12 @@ interface ChatProps {
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     getCurrentChatState?: () => ChatState | null;
-    renderMenu?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
+    onLoadSample?: (url: string) => void | Promise<void>;
+    renderMenu?: (
+        onClose: () => void,
+        onShowUrlGuide?: () => void,
+        onLoadSample?: (url: string) => void
+    ) => React.ReactNode;
 }
 
 export default function Chat({
@@ -39,6 +44,7 @@ export default function Chat({
     selectedTable,
     onTableSelect,
     getCurrentChatState,
+    onLoadSample,
     renderMenu,
 }: ChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,12 +59,26 @@ export default function Chat({
     const [tableGeometries, setTableGeometries] = useState<Record<string, boolean>>({});
     const checkedTablesRef = useRef<Set<string>>(new Set());
     const [showUrlGuide, setShowUrlGuide] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleShowUrlGuide = useCallback(() => {
         setShowUrlGuide(true);
         textareaRef.current?.focus();
         setTimeout(() => setShowUrlGuide(false), 5000);
     }, []);
+
+    const handleLoadSample = useCallback(
+        (url: string) => {
+            console.log('Chat handleLoadSample called with url:', url, 'onLoadSample:', onLoadSample);
+            if (onLoadSample) {
+                onLoadSample(url);
+            } else {
+                console.log('Chat handleLoadSample: calling sendMessage with url:', url);
+                sendMessage(url);
+            }
+        },
+        [onLoadSample, sendMessage]
+    );
 
     const handleInputChangeWithGuide = useCallback(
         (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -269,6 +289,7 @@ export default function Chat({
             handleInputChange(changeEvent);
             // Reset scroll tracking when sending a new message
             userHasScrolledRef.current = false;
+            console.log('Chat handlePromptSelection: calling sendMessage with promptText:', promptText);
             sendMessage(promptText);
             // Scroll to bottom with delay when sending message from prompt
             setTimeout(() => {
@@ -492,7 +513,13 @@ export default function Chat({
     const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
             e.preventDefault();
-            handleFormSubmit(e as unknown as React.FormEvent);
+            // Set isSubmitting state and call submit handler
+            setIsSubmitting(true);
+            const submitEvent = { preventDefault: () => {} } as React.FormEvent;
+            userHasScrolledRef.current = false;
+            handleFormSubmit(submitEvent).finally(() => {
+                setIsSubmitting(false);
+            });
         }
     };
 
@@ -714,19 +741,30 @@ export default function Chat({
                         onStop={handleStop}
                         dbContext={dbContext}
                         textareaRef={textareaRef}
-                        placeholder="Shift+Enterで送信、@でテーブル名、#でフィールド名を補完"
+                        placeholder="質問してみましょう"
                         className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
                         schemaName={schemaName}
                         selectedTable={selectedTable}
                         isLoading={isLoading}
-                        renderMenu={renderMenu}
+                        isSubmitting={isSubmitting}
+                        renderMenu={
+                            renderMenu
+                                ? (onClose, onShowUrlGuide) => {
+                                      console.log(
+                                          'Chat renderMenu wrapper called, handleLoadSample:',
+                                          handleLoadSample
+                                      );
+                                      return renderMenu(onClose, onShowUrlGuide, handleLoadSample);
+                                  }
+                                : undefined
+                        }
                         disabled={!apiKey}
                         showUrlGuide={showUrlGuide}
                         onShowUrlGuide={handleShowUrlGuide}
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
-                    Enterで改行、Shift+Enterで送信
+                    @でテーブル名、#で列名、Enterで改行、Shift+Enterで送信
                 </div>
             </div>
         </>

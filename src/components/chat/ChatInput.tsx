@@ -63,6 +63,7 @@ export default function ChatInput({
     });
     const [isMultiline, setIsMultiline] = useState(false);
     const [textareaHeight, setTextareaHeight] = useState(44);
+    const [isOverflowing, setIsOverflowing] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [showPopup, setShowPopup] = useState(false);
@@ -136,33 +137,62 @@ export default function ChatInput({
         const totalPadding = paddingTop + paddingBottom;
         const singleLineHeight = lineHeight + totalPadding;
 
-        const lines = value.split('\n').length;
-        if (lines > 1) {
-            setIsMultiline(true);
-            const effectiveLines = Math.min(lines, MAX_LINES);
-            setTextareaHeight(effectiveLines * lineHeight + totalPadding);
-            return;
-        }
-
-        const updateForWrappedContent = () => {
+        const updateHeight = () => {
             const currentTextarea = textareaRef.current;
             if (!currentTextarea) {
                 return;
             }
 
+            const lines = value.split('\n').length;
+
+            // If multiple lines with newlines, use line count
+            if (lines > 1) {
+                setIsMultiline(true);
+                const effectiveLines = Math.min(lines, MAX_LINES);
+                const newHeight = effectiveLines * lineHeight + totalPadding;
+                setTextareaHeight(newHeight);
+                setIsOverflowing(lines > MAX_LINES);
+
+                // Scroll to bottom if overflowing
+                if (lines > MAX_LINES) {
+                    requestAnimationFrame(() => {
+                        if (currentTextarea) {
+                            currentTextarea.scrollTop = currentTextarea.scrollHeight;
+                        }
+                    });
+                }
+                return;
+            }
+
+            // For single line, temporarily reset height to get accurate scrollHeight
+            const previousHeight = currentTextarea.style.height;
+            currentTextarea.style.height = `${MIN_HEIGHT}px`;
             const contentHeight = currentTextarea.scrollHeight;
+            currentTextarea.style.height = previousHeight;
+
             if (contentHeight > singleLineHeight + 1) {
                 const neededLines = Math.min(Math.ceil((contentHeight - totalPadding) / lineHeight), MAX_LINES);
                 const newHeight = neededLines * lineHeight + totalPadding;
                 setIsMultiline(true);
                 setTextareaHeight(newHeight);
+                setIsOverflowing(neededLines >= MAX_LINES);
+
+                // Scroll to bottom if overflowing
+                if (neededLines >= MAX_LINES) {
+                    requestAnimationFrame(() => {
+                        if (currentTextarea) {
+                            currentTextarea.scrollTop = currentTextarea.scrollHeight;
+                        }
+                    });
+                }
             } else {
                 setIsMultiline(false);
                 setTextareaHeight(MIN_HEIGHT);
+                setIsOverflowing(false);
             }
         };
 
-        requestAnimationFrame(updateForWrappedContent);
+        requestAnimationFrame(updateHeight);
     }, [value, textareaRef]);
 
     // Track if we're clicking on the dropdown
@@ -293,7 +323,8 @@ export default function ChatInput({
     // Handle keyboard navigation
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (autocomplete.isOpen && filteredItems.length > 0) {
+            // Handle autocomplete first (but not for Shift+Enter)
+            if (autocomplete.isOpen && filteredItems.length > 0 && !(e.key === 'Enter' && e.shiftKey)) {
                 switch (e.key) {
                     case 'ArrowDown':
                         e.preventDefault();
@@ -332,7 +363,7 @@ export default function ChatInput({
                 }
             }
 
-            // Handle Enter key for single-line URL submission
+            // Handle Enter key for single-line URL submission (but don't block Shift+Enter)
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && !isSubmitting) {
                 const trimmedValue = value.trim();
                 const isSingleLine = !trimmedValue.includes('\n');
@@ -345,7 +376,7 @@ export default function ChatInput({
                 }
             }
 
-            // Call original onKeyDown if provided and autocomplete didn't handle the event
+            // Always call original onKeyDown to allow parent to handle Shift+Enter and other keys
             if (onKeyDown) {
                 onKeyDown(e);
             }
@@ -474,8 +505,8 @@ export default function ChatInput({
             <div className={isMultiline ? 'w-full' : 'flex-1'}>
                 <div
                     ref={containerRef}
-                    style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}
-                    className="relative"
+                    style={{ minHeight: `${textareaHeight}px`, transition: 'min-height 0.3s ease' }}
+                    className="relative flex flex-col justify-end"
                 >
                     {showUrlGuide && (
                         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none z-10">
@@ -493,7 +524,12 @@ export default function ChatInput({
                         onBlur={handleBlur}
                         placeholder={placeholder}
                         className={className}
-                        style={{ height: '100%', display: 'block' }}
+                        style={{
+                            height: `${textareaHeight}px`,
+                            width: '100%',
+                            display: 'block',
+                            overflow: isOverflowing ? 'auto' : 'hidden',
+                        }}
                     />
 
                     {autocomplete.isOpen && filteredItems.length > 0 && (
