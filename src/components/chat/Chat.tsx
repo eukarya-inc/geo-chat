@@ -69,11 +69,9 @@ export default function Chat({
 
     const handleLoadSample = useCallback(
         (url: string) => {
-            console.log('Chat handleLoadSample called with url:', url, 'onLoadSample:', onLoadSample);
             if (onLoadSample) {
                 onLoadSample(url);
             } else {
-                console.log('Chat handleLoadSample: calling sendMessage with url:', url);
                 sendMessage(url);
             }
         },
@@ -289,7 +287,6 @@ export default function Chat({
             handleInputChange(changeEvent);
             // Reset scroll tracking when sending a new message
             userHasScrolledRef.current = false;
-            console.log('Chat handlePromptSelection: calling sendMessage with promptText:', promptText);
             sendMessage(promptText);
             // Scroll to bottom with delay when sending message from prompt
             setTimeout(() => {
@@ -749,13 +746,7 @@ export default function Chat({
                         isSubmitting={isSubmitting}
                         renderMenu={
                             renderMenu
-                                ? (onClose, onShowUrlGuide) => {
-                                      console.log(
-                                          'Chat renderMenu wrapper called, handleLoadSample:',
-                                          handleLoadSample
-                                      );
-                                      return renderMenu(onClose, onShowUrlGuide, handleLoadSample);
-                                  }
+                                ? (onClose, onShowUrlGuide) => renderMenu(onClose, onShowUrlGuide, handleLoadSample)
                                 : undefined
                         }
                         disabled={!apiKey}

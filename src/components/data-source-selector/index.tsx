@@ -17,7 +17,6 @@ export function DataSourceSelector({ onClose, onShowUrlGuide, sampleUrl, onLoadS
     };
 
     const handleLoadSample = () => {
-        console.log('DataSourceSelector handleLoadSample called, sampleUrl:', sampleUrl, 'onLoadSample:', onLoadSample);
         onClose();
         onLoadSample(sampleUrl);
     };
