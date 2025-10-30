@@ -10,7 +10,7 @@ import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
 import { MapPanel } from '../../components/map';
-import { ChatList } from '../../components/chat/ChatList';
+import { Sidebar } from '../../components/Sidebar';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
 import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
@@ -265,15 +265,6 @@ function ChatPage() {
         },
         [selectChat, setViewMode, setSelectedDashboard]
     );
-
-    const handleCreateChat = useCallback(async () => {
-        const newChatId = await createNewChat();
-        if (newChatId) {
-            selectChat(newChatId);
-        }
-        setViewMode('chat');
-        setSelectedDashboard(null);
-    }, [createNewChat, selectChat, setViewMode, setSelectedDashboard]);
 
     // Dashboard handlers
     const handleSelectDashboard = useCallback(
@@ -563,16 +554,8 @@ function ChatPage() {
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
-                {/* Sidebar with Chat List */}
-                <div className="w-64 h-full border-r border-gray-300 bg-gray-50 flex-shrink-0">
-                    <ChatList
-                        onCreateChat={handleCreateChat}
-                        onCreateDashboard={handleCreateDashboard}
-                        isInitialized={!!dbContext}
-                        selectedView={sidebarSelection}
-                        onNavigate={handleNavigate}
-                    />
-                </div>
+                {/* Sidebar */}
+                <Sidebar selectedView={sidebarSelection} onNavigate={handleNavigate} />
 
                 {/* Main Content Area */}
                 {viewMode === 'dashboard-list' ? (
@@ -630,7 +613,7 @@ function ChatPage() {
                     </div>
                 ) : showHomeScreen ? (
                     /* Home Screen - Centered Input + History Grid */
-                    <div className="flex-1 h-full overflow-y-auto">
+                    <div className="flex-1 h-full overflow-y-auto bg-gray-50">
                         <div className="min-h-full flex flex-col">
                             {/* Spacer */}
                             <div className="h-[35vh]" />
@@ -680,7 +663,7 @@ function ChatPage() {
                     /* Chat Mode - Split View */
                     <>
                         {/* Left Half - AI Chat (Modeling Tools) */}
-                        <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
+                        <div className="w-1/2 h-full flex flex-col overflow-hidden pr-1.5 p-2.5 bg-gray-50 text-gray-800 text-left">
                             {showApiKeyInput && !isLoadingApiKey && (
                                 <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} onSave={saveApiKey} />
                             )}
@@ -688,240 +671,233 @@ function ChatPage() {
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
                             )}
                             {!isLoadingApiKey && dbContext && selectedChatId && (
-                                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                    <Chat
-                                        dbContext={dbContext}
-                                        apiKey={apiKey}
-                                        schemaName={schemaName}
-                                        messages={messages}
-                                        isLoading={isLoading}
-                                        input={input}
-                                        handleInputChange={handleInputChange}
-                                        handleSubmit={handleSubmit}
-                                        handleStop={handleStop}
-                                        sendMessage={sendMessage}
-                                        selectedTable={selectedTable}
-                                        onTableSelect={handleTableSelection}
-                                        getCurrentChatState={getCurrentChatState}
-                                        renderMenu={(onClose, onShowUrlGuide) => (
-                                            <DataSourceSelector
-                                                onClose={onClose}
-                                                onShowUrlGuide={onShowUrlGuide}
-                                                sampleUrl={getSampleDataUrl()}
-                                                onLoadSample={url => {
-                                                    sendMessage(url);
-                                                }}
-                                            />
-                                        )}
-                                    />
-                                </div>
+                                <Chat
+                                    dbContext={dbContext}
+                                    apiKey={apiKey}
+                                    schemaName={schemaName}
+                                    messages={messages}
+                                    isLoading={isLoading}
+                                    input={input}
+                                    handleInputChange={handleInputChange}
+                                    handleSubmit={handleSubmit}
+                                    handleStop={handleStop}
+                                    sendMessage={sendMessage}
+                                    selectedTable={selectedTable}
+                                    onTableSelect={handleTableSelection}
+                                    getCurrentChatState={getCurrentChatState}
+                                    renderMenu={(onClose, onShowUrlGuide) => (
+                                        <DataSourceSelector
+                                            onClose={onClose}
+                                            onShowUrlGuide={onShowUrlGuide}
+                                            sampleUrl={getSampleDataUrl()}
+                                            onLoadSample={url => {
+                                                sendMessage(url);
+                                            }}
+                                        />
+                                    )}
+                                />
                             )}
                         </div>
 
                         {/* Right Half - DuckDB and Table */}
-                        <div className="w-1/2 h-full flex flex-col overflow-hidden">
-                            <div className="flex-1 overflow-hidden flex flex-col">
-                                {dbContext && selectedTable && connection && (
-                                    <>
-                                        {/* Table Selector Header */}
-                                        <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
-                                            <div className="flex items-center gap-2">
-                                                <TableCellsIcon className="w-4 h-4 text-gray-600" />
-                                                <div className="flex-1">
-                                                    <TableSelector
-                                                        dbContext={dbContext}
-                                                        selectedTable={selectedTable}
-                                                        onTableSelect={handleTableSelection}
-                                                        schema={schemaName}
-                                                    />
-                                                </div>
+                        <div className="w-1/2 h-full flex flex-col overflow-hidden py-2.5 pl-1.5 pr-2.5 bg-gray-50">
+                            {dbContext && selectedTable && connection && (
+                                <div className="flex-1 overflow-hidden flex flex-col bg-white border border-gray-300 rounded-md">
+                                    {/* Table Selector Header */}
+                                    <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-md">
+                                        <div className="flex items-center gap-2">
+                                            <TableCellsIcon className="w-4 h-4 text-gray-600" />
+                                            <div className="flex-1">
+                                                <TableSelector
+                                                    dbContext={dbContext}
+                                                    selectedTable={selectedTable}
+                                                    onTableSelect={handleTableSelection}
+                                                    schema={schemaName}
+                                                />
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {/* Tab Navigation */}
-                                        <div className="flex-shrink-0 border-b border-gray-200 bg-white">
-                                            <div className="flex">
-                                                <button
-                                                    onClick={() => setActiveTab('sql')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'sql'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    クエリ
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('table')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'table'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    テーブル
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('chart')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'chart'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    <span className="flex items-center gap-1.5">
-                                                        グラフ
-                                                        {displayChartSpec && (
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                                        )}
-                                                    </span>
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('map')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'map'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    <span className="flex items-center gap-1.5">
-                                                        地図
-                                                        {selectedGeometryColumn && (
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                                        )}
-                                                    </span>
-                                                </button>
-                                            </div>
+                                    {/* Tab Navigation */}
+                                    <div className="flex-shrink-0 border-b border-gray-200 bg-white">
+                                        <div className="flex">
+                                            <button
+                                                onClick={() => setActiveTab('sql')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'sql'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                クエリ
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('table')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'table'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                テーブル
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('chart')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'chart'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-1.5">
+                                                    グラフ
+                                                    {displayChartSpec && (
+                                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                    )}
+                                                </span>
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('map')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'map'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-1.5">
+                                                    地図
+                                                    {selectedGeometryColumn && (
+                                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                    )}
+                                                </span>
+                                            </button>
                                         </div>
+                                    </div>
 
-                                        {/* Tab Content */}
-                                        <div className="flex-1 overflow-hidden">
-                                            {/* SQL Tab */}
-                                            {activeTab === 'sql' && (
-                                                <div className="h-full p-4 overflow-auto">
-                                                    <TableSQLDisplay
-                                                        tableName={selectedTable}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName}
-                                                    />
-                                                </div>
-                                            )}
-
-                                            {/* Table Tab */}
-                                            {activeTab === 'table' && (
-                                                <TablePanel
-                                                    key={`${selectedChatId}-${selectedTable}`}
-                                                    connection={connection}
+                                    {/* Tab Content */}
+                                    <div className="flex-1 overflow-hidden">
+                                        {/* SQL Tab */}
+                                        {activeTab === 'sql' && (
+                                            <div className="h-full p-4 overflow-auto">
+                                                <TableSQLDisplay
                                                     tableName={selectedTable}
                                                     dbContext={dbContext}
-                                                    schema={schemaName || null}
+                                                    schema={schemaName}
                                                 />
-                                            )}
+                                            </div>
+                                        )}
 
-                                            {/* Chart Tab */}
-                                            {activeTab === 'chart' &&
-                                                selectedTable &&
-                                                (displayChartSpec && connection && selectedChatId ? (
-                                                    <ChartPanel
-                                                        chartSpec={displayChartSpec}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName || 'main'}
-                                                        configMode="panel"
-                                                        onViewReady={view => {
-                                                            chatPageVegaViewRef.current = view;
-                                                        }}
-                                                        onConfigOpen={() => setShowChartConfig(!showChartConfig)}
-                                                        onJsonSourceOpen={() => setShowChartSpecModal(true)}
-                                                        onRemove={() => {
-                                                            if (selectedTable && deleteChartFromAI) {
-                                                                deleteChartFromAI(selectedTable);
-                                                                setConfiguredChartSpec(null);
-                                                                setShowChartConfig(false);
-                                                            }
-                                                        }}
-                                                        onSpecChange={handleChartSpecChange}
-                                                        showConfigPanel={showChartConfig}
-                                                        onCloseConfigPanel={() => setShowChartConfig(false)}
-                                                        autoApplyChanges={true}
-                                                        showApplyButton={false}
-                                                        showMenuExportButton={true}
-                                                        onExport={() => {
-                                                            if (getAllDashboards().length > 0) {
-                                                                setExportType('chart');
-                                                                setShowExportModal(true);
-                                                            }
-                                                        }}
-                                                        isExportDisabled={getAllDashboards().length === 0}
-                                                        exportTooltip={
-                                                            getAllDashboards().length > 0
-                                                                ? 'このグラフをダッシュボードにエクスポート'
-                                                                : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <ChartTypeSelector onSelectType={handleChartTypeSelect} />
-                                                    </div>
-                                                ))}
+                                        {/* Table Tab */}
+                                        {activeTab === 'table' && (
+                                            <TablePanel
+                                                key={`${selectedChatId}-${selectedTable}`}
+                                                connection={connection}
+                                                tableName={selectedTable}
+                                                dbContext={dbContext}
+                                                schema={schemaName || null}
+                                            />
+                                        )}
 
-                                            {/* Map Tab */}
-                                            {activeTab === 'map' &&
-                                                connection &&
-                                                selectedTable &&
-                                                (selectedGeometryColumn ? (
-                                                    <MapPanel
-                                                        title={selectedTable}
-                                                        tableName={selectedTable}
-                                                        geometryColumn={selectedGeometryColumn}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName || undefined}
-                                                        mapSpec={{ tableStyles, style: mapStyle }}
-                                                        showRemoveButton={false}
-                                                        onExport={() => {
-                                                            if (getAllDashboards().length > 0) {
-                                                                setExportType('map');
-                                                                setShowExportModal(true);
-                                                            }
-                                                        }}
-                                                        showExportButton={true}
-                                                        isExportDisabled={getAllDashboards().length === 0}
-                                                        exportTooltip={
-                                                            getAllDashboards().length > 0
-                                                                ? 'この地図をダッシュボードにエクスポート'
-                                                                : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
+                                        {/* Chart Tab */}
+                                        {activeTab === 'chart' &&
+                                            selectedTable &&
+                                            (displayChartSpec && connection && selectedChatId ? (
+                                                <ChartPanel
+                                                    chartSpec={displayChartSpec}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || 'main'}
+                                                    configMode="panel"
+                                                    onViewReady={view => {
+                                                        chatPageVegaViewRef.current = view;
+                                                    }}
+                                                    onConfigOpen={() => setShowChartConfig(!showChartConfig)}
+                                                    onJsonSourceOpen={() => setShowChartSpecModal(true)}
+                                                    onRemove={() => {
+                                                        if (selectedTable && deleteChartFromAI) {
+                                                            deleteChartFromAI(selectedTable);
+                                                            setConfiguredChartSpec(null);
+                                                            setShowChartConfig(false);
                                                         }
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <div className="text-center text-gray-500 max-w-md">
-                                                            <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                                                            <p className="text-lg mb-4">
-                                                                ジオメトリカラムが存在しません
-                                                            </p>
-                                                            <p className="text-sm mb-2">
-                                                                地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
-                                                            </p>
-                                                            <p className="text-sm mb-4">以下の方法をお試しください：</p>
-                                                            <ul className="text-sm text-left mb-4 space-y-2">
-                                                                <li>• ジオメトリ情報を含むデータを読み込む</li>
-                                                                <li>
-                                                                    •
-                                                                    緯度経度カラムからジオメトリを生成するようAIに依頼する
-                                                                </li>
-                                                                <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
-                                                            </ul>
-                                                        </div>
+                                                    }}
+                                                    onSpecChange={handleChartSpecChange}
+                                                    showConfigPanel={showChartConfig}
+                                                    onCloseConfigPanel={() => setShowChartConfig(false)}
+                                                    autoApplyChanges={true}
+                                                    showApplyButton={false}
+                                                    showMenuExportButton={true}
+                                                    onExport={() => {
+                                                        if (getAllDashboards().length > 0) {
+                                                            setExportType('chart');
+                                                            setShowExportModal(true);
+                                                        }
+                                                    }}
+                                                    isExportDisabled={getAllDashboards().length === 0}
+                                                    exportTooltip={
+                                                        getAllDashboards().length > 0
+                                                            ? 'このグラフをダッシュボードにエクスポート'
+                                                            : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
+                                                    }
+                                                />
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center bg-gray-50">
+                                                    <ChartTypeSelector onSelectType={handleChartTypeSelect} />
+                                                </div>
+                                            ))}
+
+                                        {/* Map Tab */}
+                                        {activeTab === 'map' &&
+                                            connection &&
+                                            selectedTable &&
+                                            (selectedGeometryColumn ? (
+                                                <MapPanel
+                                                    title={selectedTable}
+                                                    tableName={selectedTable}
+                                                    geometryColumn={selectedGeometryColumn}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || undefined}
+                                                    mapSpec={{ tableStyles, style: mapStyle }}
+                                                    showRemoveButton={false}
+                                                    onExport={() => {
+                                                        if (getAllDashboards().length > 0) {
+                                                            setExportType('map');
+                                                            setShowExportModal(true);
+                                                        }
+                                                    }}
+                                                    showExportButton={true}
+                                                    isExportDisabled={getAllDashboards().length === 0}
+                                                    exportTooltip={
+                                                        getAllDashboards().length > 0
+                                                            ? 'この地図をダッシュボードにエクスポート'
+                                                            : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
+                                                    }
+                                                />
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center bg-gray-50">
+                                                    <div className="text-center text-gray-500 max-w-md">
+                                                        <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                                                        <p className="text-lg mb-4">ジオメトリカラムが存在しません</p>
+                                                        <p className="text-sm mb-2">
+                                                            地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
+                                                        </p>
+                                                        <p className="text-sm mb-4">以下の方法をお試しください：</p>
+                                                        <ul className="text-sm text-left mb-4 space-y-2">
+                                                            <li>• ジオメトリ情報を含むデータを読み込む</li>
+                                                            <li>
+                                                                • 緯度経度カラムからジオメトリを生成するようAIに依頼する
+                                                            </li>
+                                                            <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
+                                                        </ul>
                                                     </div>
-                                                ))}
-                                        </div>
-                                    </>
-                                )}
-                                {dbContext && !selectedTable && (
-                                    <div className="flex items-center justify-center h-full text-gray-500">
-                                        テーブルを選択してください
+                                                </div>
+                                            ))}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
+                            {dbContext && !selectedTable && (
+                                <div className="flex items-center justify-center h-full text-gray-500">
+                                    テーブルを選択してください
+                                </div>
+                            )}
                         </div>
                         {/* End of Right Half */}
                     </>
