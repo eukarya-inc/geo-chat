@@ -213,12 +213,14 @@ export class AIStore {
                 const match = userMessage.content.match(/<!--TABLE_CREATED:(.+?)-->/);
                 const tableName = match?.[1];
                 if (tableName && options.dbContext && options.apiKey) {
-                    // Fire and forget - don't await
+                    // Generate prompt suggestions in background without blocking
                     this.addPromptSuggestions(chatId, tableName, {
                         apiKey: options.apiKey,
                         dbContext: options.dbContext,
                         schema: options.schema,
                         onMessagesChange: options.onMessagesChange,
+                    }).catch(err => {
+                        console.error('Failed to generate prompt suggestions:', err);
                     });
                 }
             }

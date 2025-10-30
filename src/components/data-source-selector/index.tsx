@@ -1,28 +1,14 @@
 import { useState } from 'react';
 import { TableSelectionModal } from '../table-selection-modal';
-import type { DBContext } from '../../lib/duckdb/dbContext';
-import { createTableFromUrl } from '../../utils/tableCreation';
 
 interface DataSourceSelectorProps {
-    dbContext: DBContext | null;
-    schema?: string | null;
-    onTableCreated?: (tableName: string) => void;
-    waitForDbContext?: () => Promise<DBContext>;
     onClose: () => void;
     onShowUrlGuide?: () => void;
-    // Simple sendMessage function
-    sendMessage: (message: string) => void | Promise<void>;
+    sampleUrl: string;
+    onLoadSample: (url: string) => void | Promise<void>;
 }
 
-export function DataSourceSelector({
-    dbContext,
-    schema,
-    onTableCreated,
-    waitForDbContext,
-    onClose,
-    onShowUrlGuide,
-    sendMessage,
-}: DataSourceSelectorProps) {
+export function DataSourceSelector({ onClose, onShowUrlGuide, sampleUrl, onLoadSample }: DataSourceSelectorProps) {
     const [showTableModal, setShowTableModal] = useState(false);
 
     const handleLinkClick = () => {
@@ -30,32 +16,9 @@ export function DataSourceSelector({
         onShowUrlGuide?.();
     };
 
-    const handleLoadSample = async () => {
+    const handleLoadSample = () => {
         onClose();
-
-        try {
-            let db = dbContext;
-
-            if (!db) {
-                if (!waitForDbContext) {
-                    console.error('データベースが初期化されていません');
-                    return;
-                }
-                db = await waitForDbContext();
-            }
-
-            const basePath = import.meta.env.BASE_URL || '/';
-            const sampleUrl = `${window.location.origin}${basePath}data/customer.parquet`;
-
-            const { tableName, message } = await createTableFromUrl(sampleUrl, db, schema || null);
-
-            // Send message via provided sendMessage function
-            sendMessage(message);
-
-            onTableCreated?.(tableName);
-        } catch (error) {
-            console.error('サンプルデータの読み込みに失敗しました:', error);
-        }
+        onLoadSample(sampleUrl);
     };
 
     return (

@@ -22,6 +22,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
 import { localStateAtom, viewModeAtom } from '../../store/localAtoms';
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
+import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 import {
     chatIdToSchemaName,
     useApiKeyManagement,
@@ -168,6 +169,14 @@ function ChatPage() {
         syncImmediately();
     }, [syncImmediately]);
 
+    // Wrapper for updateChatMessages (keep same signature for compatibility)
+    const updateChatMessagesWithAutoSelect = useCallback(
+        (chatId: string, messages: StructuredMessage[]) => {
+            updateChatMessages(chatId, messages);
+        },
+        [updateChatMessages]
+    );
+
     // Check and update chat title when messages change
     const checkAndUpdateChatTitle = useCallback(
         (messages: StructuredMessage[]) => {
@@ -193,33 +202,32 @@ function ChatPage() {
     const handleMessagesChange = useCallback(
         (messages: StructuredMessage[]) => {
             if (selectedChatId) {
-                updateChatMessages(selectedChatId, messages);
+                updateChatMessagesWithAutoSelect(selectedChatId, messages);
             }
             checkAndUpdateChatTitle(messages);
         },
-        [selectedChatId, updateChatMessages, checkAndUpdateChatTitle]
+        [selectedChatId, updateChatMessagesWithAutoSelect, checkAndUpdateChatTitle]
     );
 
     // Use AI Chat hook for Split View
-    const { messages, isLoading, isAnyLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } =
-        useAIChat({
-            chatId: selectedChatId || 'default',
-            schema: schemaName,
-            dbContext,
-            apiKey,
-            selectedTable,
-            onMessagesChange: handleMessagesChange,
-            onChartUpdate: updateChartFromAI,
-            onChartDelete: deleteChartFromAI,
-            getCurrentChatState,
-            onMapStyleUpdate: async (tableName: string, style: import('./../../components/map').TableStyle) => {
-                updateTableStyle(tableName, style);
-            },
-            onMapStyleDelete: async (tableName: string) => {
-                deleteTableStyle(tableName);
-            },
-            onConversationCompleted: handleConversationCompleted,
-        });
+    const { messages, isLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } = useAIChat({
+        chatId: selectedChatId || 'default',
+        schema: schemaName,
+        dbContext,
+        apiKey,
+        selectedTable,
+        onMessagesChange: handleMessagesChange,
+        onChartUpdate: updateChartFromAI,
+        onChartDelete: deleteChartFromAI,
+        getCurrentChatState,
+        onMapStyleUpdate: async (tableName: string, style: import('./../../components/map').TableStyle) => {
+            updateTableStyle(tableName, style);
+        },
+        onMapStyleDelete: async (tableName: string) => {
+            deleteTableStyle(tableName);
+        },
+        onConversationCompleted: handleConversationCompleted,
+    });
 
     // Sync table creation history to remote state
     useTableHistorySync(dbContext, selectedChatId);
@@ -240,7 +248,7 @@ function ChatPage() {
 
     // Navigation handler for sidebar buttons
     const handleNavigate = useCallback(
-        (view: 'chat-list' | 'dashboard-list') => {
+        (view: 'chat' | 'dashboard-list') => {
             setViewMode(view);
             selectChat('');
             setSelectedDashboard(null);
@@ -258,11 +266,14 @@ function ChatPage() {
         [selectChat, setViewMode, setSelectedDashboard]
     );
 
-    const handleCreateChat = useCallback(() => {
-        createNewChat();
+    const handleCreateChat = useCallback(async () => {
+        const newChatId = await createNewChat();
+        if (newChatId) {
+            selectChat(newChatId);
+        }
         setViewMode('chat');
         setSelectedDashboard(null);
-    }, [createNewChat, setViewMode, setSelectedDashboard]);
+    }, [createNewChat, selectChat, setViewMode, setSelectedDashboard]);
 
     // Dashboard handlers
     const handleSelectDashboard = useCallback(
@@ -287,6 +298,120 @@ function ChatPage() {
         }
         deleteDashboard(dashboardId);
     };
+
+    // Get sample data URL
+    const getSampleDataUrl = useCallback(() => {
+        const basePath = import.meta.env.BASE_URL || '/';
+        return `${window.location.origin}${basePath}data/customer.parquet`;
+    }, []);
+
+    // Handle sending message with chat creation (for EmptyChat)
+    // Returns the new chat ID and optional table name without selecting the chat, so caller can control when to switch
+    const handleSendMessageWithChatCreation = useCallback(
+        async (message: string): Promise<{ chatId: string; tableName?: string } | null> => {
+            try {
+                // Wait for DuckDB to be ready
+                let db = dbContext;
+                if (!db) {
+                    if (!waitForDbContext) {
+                        console.error('DuckDB is not initialized');
+                        return null;
+                    }
+                    db = await waitForDbContext();
+                }
+
+                // Check if message is a URL
+                const dataUrl = extractDataUrl(message);
+
+                if (dataUrl) {
+                    // URL case: create table first, then send the result message
+                    const newChatId = await createNewChat(db);
+                    if (!newChatId) {
+                        console.error('Failed to create chat');
+                        return null;
+                    }
+
+                    const newSchemaName = chatIdToSchemaName(newChatId);
+                    const { tableName, message: tableMessage } = await createTableFromUrl(
+                        dataUrl,
+                        db,
+                        newSchemaName || null
+                    );
+
+                    // Create a promise that resolves when messages are added
+                    let resolveMessageAdded: (() => void) | null = null;
+                    const messageAddedPromise = new Promise<void>(resolve => {
+                        resolveMessageAdded = resolve;
+                    });
+
+                    // Create onMessagesChange for this specific chat
+                    const newChatOnMessagesChange = (messages: StructuredMessage[]) => {
+                        updateChatMessagesWithAutoSelect(newChatId, messages);
+                        // Resolve promise when first message is added
+                        if (messages.length > 0 && resolveMessageAdded) {
+                            resolveMessageAdded();
+                            resolveMessageAdded = null;
+                        }
+                    };
+
+                    // Pass db, schema and onMessagesChange as overrides
+                    await sendMessage(tableMessage, newChatId, db, newSchemaName, {
+                        onMessagesChange: newChatOnMessagesChange,
+                    });
+
+                    // Wait for messages to be added
+                    await messageAddedPromise;
+
+                    // Return the chat ID and table name without selecting it
+                    return { chatId: newChatId, tableName };
+                } else {
+                    // Normal message case
+                    const newChatId = await createNewChat(db);
+                    if (!newChatId) {
+                        return null;
+                    }
+
+                    const newSchemaName = chatIdToSchemaName(newChatId);
+
+                    // Create onMessagesChange for this specific chat
+                    const newChatOnMessagesChange = (messages: StructuredMessage[]) => {
+                        updateChatMessagesWithAutoSelect(newChatId, messages);
+                    };
+
+                    // Start sending message in background (don't wait)
+                    sendMessage(message, newChatId, db, newSchemaName, {
+                        onMessagesChange: newChatOnMessagesChange,
+                    });
+
+                    // Return the chat ID immediately without waiting for message to complete
+                    return { chatId: newChatId };
+                }
+            } catch (error) {
+                console.error('Failed to create chat:', error);
+                throw error;
+            }
+        },
+        [dbContext, waitForDbContext, createNewChat, sendMessage, updateChatMessagesWithAutoSelect]
+    );
+
+    // Handle chat created event from EmptyChat
+    const handleChatCreated = useCallback(
+        (chatId: string, tableName?: string) => {
+            selectChat(chatId);
+
+            // If a table was created, notify table change to trigger auto-selection
+            if (tableName && dbContext) {
+                const schemaName = chatIdToSchemaName(chatId);
+                // Use setTimeout to ensure the chat is fully switched before notifying
+                setTimeout(() => {
+                    if (dbContext) {
+                        dbContext.notifyTableChange(tableName, schemaName);
+                    }
+                }, 100);
+            }
+        },
+        [selectChat, dbContext]
+    );
 
     // Chart export to dashboard functionality
     const handleExportChartToDashboard = (dashboardId: string) => {
@@ -428,14 +553,12 @@ function ChatPage() {
         }
     };
 
-    // Check if current chat has any messages
-    const currentChatMessages = getCurrentChatState()?.messages || [];
-    const hasMessages = currentChatMessages.length > 0;
-    const isEmptyChat = selectedChatId && !hasMessages;
+    // Show Home Screen when no chat is selected
+    const showHomeScreen = !selectedChatId;
 
-    // Sidebar selection: highlight button only when showing list view
+    // Sidebar selection: highlight button based on current view
     const sidebarSelection =
-        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat-list' ? 'chat-list' : undefined;
+        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat' && !selectedChatId ? 'chat' : undefined;
 
     return (
         <>
@@ -452,16 +575,7 @@ function ChatPage() {
                 </div>
 
                 {/* Main Content Area */}
-                {viewMode === 'chat-list' ? (
-                    <div className="flex-1 h-full overflow-hidden">
-                        <ChatHistoryGrid
-                            chats={chats}
-                            onSelectChat={handleSelectChat}
-                            onDeleteChat={deleteChat}
-                            onRenameChat={renameChat}
-                        />
-                    </div>
-                ) : viewMode === 'dashboard-list' ? (
+                {viewMode === 'dashboard-list' ? (
                     /* Dashboard History Grid */
                     <div className="flex-1 h-full overflow-hidden">
                         <DashboardHistoryGrid
@@ -514,7 +628,7 @@ function ChatPage() {
                             );
                         })()}
                     </div>
-                ) : isEmptyChat ? (
+                ) : showHomeScreen ? (
                     /* Home Screen - Centered Input + History Grid */
                     <div className="flex-1 h-full overflow-y-auto">
                         <div className="min-h-full flex flex-col">
@@ -523,8 +637,8 @@ function ChatPage() {
 
                             {/* Chat input */}
                             <div className="flex items-center justify-center px-8 pb-24">
-                                <div className="w-full max-w-2xl">
-                                    {!isLoadingApiKey && selectedChatId && (
+                                <div className="w-full max-w-2xl relative">
+                                    {!isLoadingApiKey && (
                                         <EmptyChat
                                             dbContext={dbContext}
                                             apiKey={apiKey}
@@ -532,22 +646,18 @@ function ChatPage() {
                                             onApiKeyChange={setApiKey}
                                             onApiKeySave={saveApiKey}
                                             showApiKeyInput={showApiKeyInput}
-                                            waitForDbContext={waitForDbContext}
-                                            sendMessage={sendMessage}
-                                            remoteFileComponent={(onClose, onShowUrlGuide) => (
+                                            sendMessage={handleSendMessageWithChatCreation}
+                                            onChatCreated={handleChatCreated}
+                                            renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
                                                 <DataSourceSelector
-                                                    dbContext={dbContext}
-                                                    schema={schemaName}
-                                                    onTableCreated={(tableName: string) => {
-                                                        handleTableSelection(tableName);
-                                                        if (dbContext) {
-                                                            dbContext.notifyTableChange(tableName, schemaName);
-                                                        }
-                                                    }}
-                                                    waitForDbContext={waitForDbContext}
                                                     onClose={onClose}
                                                     onShowUrlGuide={onShowUrlGuide}
-                                                    sendMessage={sendMessage}
+                                                    sampleUrl={getSampleDataUrl()}
+                                                    onLoadSample={url => {
+                                                        if (onLoadSample) {
+                                                            onLoadSample(url);
+                                                        }
+                                                    }}
                                                 />
                                             )}
                                         />
@@ -577,7 +687,7 @@ function ChatPage() {
                             {isLoadingApiKey && (
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
                             )}
-                            {!isLoadingApiKey && dbContext && selectedChatId ? (
+                            {!isLoadingApiKey && dbContext && selectedChatId && (
                                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                                     <Chat
                                         dbContext={dbContext}
@@ -585,7 +695,6 @@ function ChatPage() {
                                         schemaName={schemaName}
                                         messages={messages}
                                         isLoading={isLoading}
-                                        isAnyLoading={isAnyLoading}
                                         input={input}
                                         handleInputChange={handleInputChange}
                                         handleSubmit={handleSubmit}
@@ -594,37 +703,19 @@ function ChatPage() {
                                         selectedTable={selectedTable}
                                         onTableSelect={handleTableSelection}
                                         getCurrentChatState={getCurrentChatState}
-                                        remoteFileComponent={(onClose, onShowUrlGuide) => (
+                                        renderMenu={(onClose, onShowUrlGuide) => (
                                             <DataSourceSelector
-                                                dbContext={dbContext}
-                                                schema={schemaName}
-                                                onTableCreated={(tableName: string) => {
-                                                    handleTableSelection(tableName);
-                                                    if (dbContext) {
-                                                        dbContext.notifyTableChange(tableName, schemaName);
-                                                    }
-                                                }}
-                                                waitForDbContext={waitForDbContext}
                                                 onClose={onClose}
                                                 onShowUrlGuide={onShowUrlGuide}
-                                                sendMessage={sendMessage}
+                                                sampleUrl={getSampleDataUrl()}
+                                                onLoadSample={url => {
+                                                    sendMessage(url);
+                                                }}
                                             />
                                         )}
                                     />
                                 </div>
-                            ) : !isLoadingApiKey && dbContext ? (
-                                <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
-                                    <div className="text-center">
-                                        <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
-                                        <button
-                                            onClick={() => createNewChat()}
-                                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                        >
-                                            新しいチャットを作成
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : null}
+                            )}
                         </div>
 
                         {/* Right Half - DuckDB and Table */}

@@ -14,7 +14,6 @@ interface ChatProps {
     schemaName?: string | null;
     messages: StructuredMessage[];
     isLoading: boolean;
-    isAnyLoading: boolean;
     input: string;
     handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     handleSubmit: (e: React.FormEvent) => Promise<void>;
@@ -23,7 +22,7 @@ interface ChatProps {
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     getCurrentChatState?: () => ChatState | null;
-    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
+    renderMenu?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
 }
 
 export default function Chat({
@@ -32,7 +31,6 @@ export default function Chat({
     schemaName,
     messages,
     isLoading,
-    isAnyLoading,
     input,
     handleInputChange,
     handleSubmit: originalHandleSubmit,
@@ -41,7 +39,7 @@ export default function Chat({
     selectedTable,
     onTableSelect,
     getCurrentChatState,
-    remoteFileComponent,
+    renderMenu,
 }: ChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -707,11 +705,11 @@ export default function Chat({
                         value={input}
                         onChange={handleInputChangeWithGuide}
                         onKeyDown={handleKeyPress}
-                        onSubmit={e => {
+                        onSubmit={async e => {
                             e.preventDefault();
                             // Reset scroll tracking when sending a new message
                             userHasScrolledRef.current = false;
-                            handleFormSubmit(e);
+                            await handleFormSubmit(e);
                         }}
                         onStop={handleStop}
                         dbContext={dbContext}
@@ -721,11 +719,8 @@ export default function Chat({
                         schemaName={schemaName}
                         selectedTable={selectedTable}
                         isLoading={isLoading}
-                        isCreatingTable={false}
-                        isAnyLoading={isAnyLoading}
-                        remoteFileComponent={remoteFileComponent}
+                        renderMenu={renderMenu}
                         disabled={!apiKey}
-                        isWaitingForDb={false}
                         showUrlGuide={showUrlGuide}
                         onShowUrlGuide={handleShowUrlGuide}
                     />

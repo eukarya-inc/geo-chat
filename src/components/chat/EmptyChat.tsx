@@ -2,7 +2,6 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import ChatInput from './ChatInput';
 import ApiKeyInput from './ApiKeyInput';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 
 interface EmptyChatProps {
     dbContext: DBContext | null;
@@ -11,9 +10,13 @@ interface EmptyChatProps {
     onApiKeyChange?: (value: string) => void;
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
     showApiKeyInput?: boolean;
-    waitForDbContext?: () => Promise<DBContext>;
-    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
-    sendMessage: (message: string) => void | Promise<void>;
+    renderMenu?: (
+        onClose: () => void,
+        onShowUrlGuide?: () => void,
+        onLoadSample?: (url: string) => void
+    ) => React.ReactNode;
+    sendMessage: (message: string) => Promise<{ chatId: string; tableName?: string } | null>;
+    onChatCreated?: (chatId: string, tableName?: string) => void;
 }
 
 export default function EmptyChat({
@@ -23,16 +26,34 @@ export default function EmptyChat({
     onApiKeyChange,
     onApiKeySave,
     showApiKeyInput,
-    waitForDbContext,
-    remoteFileComponent,
+    renderMenu,
     sendMessage,
+    onChatCreated,
 }: EmptyChatProps) {
     const [input, setInput] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [tableCreationError, setTableCreationError] = useState<string | null>(null);
-    const [isWaitingForDb, setIsWaitingForDb] = useState(false);
     const [showUrlGuide, setShowUrlGuide] = useState(false);
+    const [isLoadingSample, setIsLoadingSample] = useState(false);
+
+    const handleLoadSample = useCallback(
+        async (url: string) => {
+            setIsLoadingSample(true);
+            try {
+                const result = await sendMessage(url);
+                if (result && onChatCreated) {
+                    onChatCreated(result.chatId, result.tableName);
+                }
+            } catch (error) {
+                console.error('Failed to load sample:', error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                setTableCreationError(`サンプルデータの読み込みに失敗しました: ${errorMessage}`);
+            } finally {
+                setIsLoadingSample(false);
+            }
+        },
+        [sendMessage, onChatCreated]
+    );
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value);
@@ -54,59 +75,21 @@ export default function EmptyChat({
             const trimmedInput = input.trim();
             if (!trimmedInput) return;
 
-            const dataUrl = extractDataUrl(trimmedInput);
-
-            if (dataUrl) {
-                setIsCreatingTable(true);
-                setTableCreationError(null);
-                try {
-                    let db = dbContext;
-                    if (!db) {
-                        if (!waitForDbContext) {
-                            throw new Error('DuckDB is not initialized');
-                        }
-                        setIsWaitingForDb(true);
-                        try {
-                            db = await waitForDbContext();
-                        } finally {
-                            setIsWaitingForDb(false);
-                        }
-                    }
-
-                    const { message } = await createTableFromUrl(dataUrl, db, schemaName || null);
-
-                    setInput('');
-                    sendMessage(message);
-                } catch (error) {
-                    console.error('Failed to create table from URL:', error);
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    setTableCreationError(`テーブルの作成に失敗しました: ${errorMessage}`);
-                } finally {
-                    setIsCreatingTable(false);
+            // Don't clear input immediately - let the spinner show
+            try {
+                const result = await sendMessage(trimmedInput);
+                // After promise resolves, notify parent to switch chat
+                if (result && onChatCreated) {
+                    onChatCreated(result.chatId, result.tableName);
                 }
-            } else {
-                try {
-                    if (!dbContext) {
-                        if (!waitForDbContext) {
-                            throw new Error('DuckDB is not initialized');
-                        }
-                        setIsWaitingForDb(true);
-                        try {
-                            await waitForDbContext();
-                        } finally {
-                            setIsWaitingForDb(false);
-                        }
-                    }
-                    sendMessage(trimmedInput);
-                    setInput('');
-                } catch (error) {
-                    console.error('Failed to submit message:', error);
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    setTableCreationError(`メッセージの送信に失敗しました: ${errorMessage}`);
-                }
+                // Input will be cleared when chat switches, so no need to clear here
+            } catch (error) {
+                console.error('Failed to submit message:', error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                setTableCreationError(`メッセージの送信に失敗しました: ${errorMessage}`);
             }
         },
-        [input, dbContext, schemaName, sendMessage, waitForDbContext]
+        [input, sendMessage, onChatCreated]
     );
 
     useEffect(() => {
@@ -114,13 +97,6 @@ export default function EmptyChat({
             textareaRef.current.focus();
         }
     }, []);
-
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing && !isCreatingTable) {
-            e.preventDefault();
-            handleSubmit(e);
-        }
-    };
 
     return (
         <div className="flex flex-col gap-8 items-center relative">
@@ -163,11 +139,13 @@ export default function EmptyChat({
                         </div>
                     </div>
                 )}
-                <div className="flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full rounded-3xl">
+                <form
+                    onSubmit={handleSubmit}
+                    className="flex-shrink-0 bg-white border border-gray-400 px-4 py-1 w-full rounded-3xl"
+                >
                     <ChatInput
                         value={input}
                         onChange={handleInputChange}
-                        onKeyDown={handleKeyPress}
                         onSubmit={handleSubmit}
                         onStop={() => {}}
                         dbContext={dbContext}
@@ -176,16 +154,17 @@ export default function EmptyChat({
                         className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
                         schemaName={schemaName}
                         selectedTable={null}
-                        isLoading={false}
-                        isCreatingTable={isCreatingTable}
-                        isAnyLoading={isCreatingTable || isWaitingForDb}
-                        remoteFileComponent={remoteFileComponent}
-                        disabled={!apiKey}
-                        isWaitingForDb={isWaitingForDb}
+                        {...(isLoadingSample && { isSubmitting: true })}
+                        renderMenu={
+                            renderMenu
+                                ? (onClose, onShowUrlGuide) => renderMenu(onClose, onShowUrlGuide, handleLoadSample)
+                                : undefined
+                        }
+                        disabled={!apiKey || isLoadingSample}
                         showUrlGuide={showUrlGuide}
                         onShowUrlGuide={handleShowUrlGuide}
                     />
-                </div>
+                </form>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
                     Enterで改行、Shift+Enterで送信
                 </div>

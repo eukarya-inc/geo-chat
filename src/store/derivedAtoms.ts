@@ -83,7 +83,7 @@ export const currentTableShowGraphAtom = atom(get => {
 });
 
 // ===== Convenient Operation Atoms (using both states) =====
-// Create chat (updates both remote and local)
+// Create chat (updates remote state and sessions, but does NOT auto-select)
 export const createChatAtom = atom(null, async (get, set) => {
     const remoteState = get(remoteStateAtom);
     const localState = get(localStateAtom);
@@ -108,10 +108,9 @@ export const createChatAtom = atom(null, async (get, set) => {
         },
     });
 
-    // Update local state
+    // Update local state - create session but DON'T auto-select
     set(localStateAtom, {
         ...localState,
-        selectedChatId: newChat.id,
         sessions: {
             ...localState.sessions,
             [newChat.id]: {

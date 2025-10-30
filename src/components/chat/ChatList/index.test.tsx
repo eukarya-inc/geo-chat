@@ -52,7 +52,7 @@ describe('ChatList', () => {
     });
 
     it('should highlight selected view', () => {
-        const { rerender } = render(<ChatList {...defaultProps} selectedView="chat-list" />);
+        const { rerender } = render(<ChatList {...defaultProps} selectedView="chat" />);
 
         const chatButton = screen.getByText('Chat');
         expect(chatButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');
@@ -78,7 +78,7 @@ describe('ChatList', () => {
 
         const chatButton = screen.getByText('Chat');
         fireEvent.click(chatButton);
-        expect(mockOnNavigate).toHaveBeenCalledWith('chat-list');
+        expect(mockOnNavigate).toHaveBeenCalledWith('chat');
 
         const dashboardButton = screen.getByText('Dashboard');
         fireEvent.click(dashboardButton);
