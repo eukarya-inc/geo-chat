@@ -20,8 +20,9 @@ import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
-import { localStateAtom, viewModeAtom } from '../../store/localAtoms';
+import { localStateAtom, viewModeAtom, chatWidthPercentageAtom } from '../../store/localAtoms';
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
+import { ResizableHandle } from '../../components/ResizableHandle';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
 import {
     chatIdToSchemaName,
@@ -117,6 +118,9 @@ function ChatPage() {
 
     // View mode management (for history grids)
     const [viewMode, setViewMode] = useAtom(viewModeAtom);
+
+    // Chat width management
+    const [chatWidthPercentage, setChatWidthPercentage] = useAtom(chatWidthPercentageAtom);
 
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
@@ -435,18 +439,13 @@ function ChatPage() {
     // Wrap sendMessage to handle URL processing for existing chat
     const sendMessageWithUrlProcessing = useCallback(
         (message: string) => {
-            console.log('sendMessageWithUrlProcessing called with message:', message);
-            // Check if message is a URL
             const dataUrl = extractDataUrl(message);
-            console.log('extractDataUrl result:', dataUrl);
 
             if (dataUrl) {
                 // URL case: create table from URL
-                console.log('URL detected, calling handleSendMessageWithUrl');
                 handleSendMessageWithUrl(message);
             } else {
                 // Normal message case: send directly
-                console.log('No URL detected, calling sendMessage directly');
                 sendMessage(message);
             }
         },
@@ -457,23 +456,19 @@ function ChatPage() {
     const handleSubmitWithUrlProcessing = useCallback(
         async (e: React.FormEvent) => {
             e.preventDefault();
-            console.log('handleSubmitWithUrlProcessing called with input:', input);
 
             if (!input.trim()) return;
 
             const messageToSend = input.trim();
             const dataUrl = extractDataUrl(messageToSend);
-            console.log('handleSubmitWithUrlProcessing extractDataUrl result:', dataUrl);
 
             if (dataUrl) {
                 // URL case: create table from URL (don't use handleSubmit)
-                console.log('URL detected in submit, calling handleSendMessageWithUrl');
                 // Clear input first
                 handleInputChange({ target: { value: '' } } as React.ChangeEvent<HTMLTextAreaElement>);
                 await handleSendMessageWithUrl(messageToSend);
             } else {
                 // Normal message case: use original handleSubmit
-                console.log('No URL detected in submit, calling original handleSubmit');
                 await handleSubmit(e);
             }
         },
@@ -739,7 +734,11 @@ function ChatPage() {
                     /* Chat Mode - Split View */
                     <>
                         {/* Left Half - AI Chat (Modeling Tools) */}
-                        <div className="w-1/2 h-full flex flex-col overflow-hidden pr-1.5 p-2.5 bg-gray-50 text-gray-800 text-left">
+                        <div
+                            className="h-full flex flex-col overflow-hidden py-4 pl-4 pr-2 bg-gray-50 text-gray-800 text-left"
+                            style={{ width: `${chatWidthPercentage}%` }}
+                            data-chat-width={chatWidthPercentage}
+                        >
                             {showApiKeyInput && !isLoadingApiKey && (
                                 <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} onSave={saveApiKey} />
                             )}
@@ -762,23 +761,30 @@ function ChatPage() {
                                     onTableSelect={handleTableSelection}
                                     getCurrentChatState={getCurrentChatState}
                                     onLoadSample={handleSendMessageWithUrl}
-                                    renderMenu={(onClose, onShowUrlGuide, onLoadSample) => {
-                                        console.log('ChatPage renderMenu called, onLoadSample:', onLoadSample);
-                                        return (
-                                            <DataSourceSelector
-                                                onClose={onClose}
-                                                onShowUrlGuide={onShowUrlGuide}
-                                                sampleUrl={getSampleDataUrl()}
-                                                onLoadSample={onLoadSample || (() => {})}
-                                            />
-                                        );
-                                    }}
+                                    renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
+                                        <DataSourceSelector
+                                            onClose={onClose}
+                                            onShowUrlGuide={onShowUrlGuide}
+                                            sampleUrl={getSampleDataUrl()}
+                                            onLoadSample={onLoadSample || (() => {})}
+                                        />
+                                    )}
                                 />
                             )}
                         </div>
 
+                        {/* Resizable Handle */}
+                        <ResizableHandle
+                            onResize={setChatWidthPercentage}
+                            minWidthPercentage={20}
+                            maxWidthPercentage={80}
+                        />
+
                         {/* Right Half - DuckDB and Table */}
-                        <div className="w-1/2 h-full flex flex-col overflow-hidden py-2.5 pl-1.5 pr-2.5 bg-gray-50">
+                        <div
+                            className="h-full flex flex-col overflow-hidden py-4 pl-2 pr-4 bg-gray-50"
+                            style={{ width: `${100 - chatWidthPercentage}%` }}
+                        >
                             {dbContext && selectedTable && connection && (
                                 <div className="flex-1 overflow-hidden flex flex-col bg-white border border-gray-300 rounded-md">
                                     {/* Table Selector Header */}
