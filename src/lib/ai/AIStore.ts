@@ -10,6 +10,20 @@ import { generateSystemPrompt } from './systemPrompt';
 import { initTools } from './tools';
 import { generatePromptSuggestions } from './promptSuggestionService';
 
+interface ChatContext {
+    apiKey: string;
+    dbContext?: DBContext;
+    schema?: string | null;
+    selectedTable?: string | null;
+    onMessagesChange?: (messages: StructuredMessage[]) => void;
+    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+    onChartDelete?: (tableName: string) => Promise<void>;
+    getCurrentChatState?: () => ChatState | null;
+    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+    onMapStyleDelete?: (tableName: string) => Promise<void>;
+    onMessageComplete?: () => void;
+}
+
 interface ChatSession {
     id: string;
     schema: string | null;
@@ -24,6 +38,7 @@ type Listener = () => void;
 
 export class AIStore {
     private sessions: Map<string, ChatSession> = new Map();
+    private contexts: Map<string, ChatContext> = new Map();
     private listeners: Set<Listener> = new Set();
 
     subscribe(listener: Listener): () => void {
@@ -35,6 +50,21 @@ export class AIStore {
 
     getSnapshot(): ChatSession[] {
         return Array.from(this.sessions.values());
+    }
+
+    registerChatContext(chatId: string, context: ChatContext): void {
+        this.contexts.set(chatId, context);
+    }
+
+    updateChatContext(chatId: string, partialContext: Partial<ChatContext>): void {
+        const existingContext = this.contexts.get(chatId);
+        if (existingContext) {
+            this.contexts.set(chatId, { ...existingContext, ...partialContext });
+        }
+    }
+
+    getChatContext(chatId: string): ChatContext | undefined {
+        return this.contexts.get(chatId);
     }
 
     getChatSession(chatId: string): ChatSession | undefined {
@@ -95,6 +125,9 @@ export class AIStore {
         }
     }
 
+    // Simplified sendMessage that uses registered context
+    async sendMessage(chatId: string, message: string): Promise<void>;
+    // Legacy sendMessage with explicit options (for backward compatibility)
     async sendMessage(
         chatId: string,
         message: string,
@@ -111,7 +144,32 @@ export class AIStore {
             onMapStyleDelete?: (tableName: string) => Promise<void>;
             onMessageComplete?: () => void;
         }
+    ): Promise<void>;
+    async sendMessage(
+        chatId: string,
+        message: string,
+        options?: {
+            apiKey: string;
+            dbContext?: DBContext;
+            schema?: string | null;
+            selectedTable?: string | null;
+            onMessagesChange?: (messages: StructuredMessage[]) => void;
+            onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+            onChartDelete?: (tableName: string) => Promise<void>;
+            getCurrentChatState?: () => ChatState | null;
+            onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+            onMapStyleDelete?: (tableName: string) => Promise<void>;
+            onMessageComplete?: () => void;
+        }
     ): Promise<void> {
+        // If no options provided, use registered context
+        if (!options) {
+            const context = this.contexts.get(chatId);
+            if (!context) {
+                throw new Error(`No context registered for chat ${chatId}. Call registerChatContext first.`);
+            }
+            options = context;
+        }
         const session = this.getOrCreateSession(chatId, options.schema || null);
 
         if (!message.trim() || session.isLoading) return;

@@ -52,7 +52,37 @@ export function useAIChat({
 
     useEffect(() => {
         aiStore.getOrCreateSession(chatId, schema || null);
-    }, [chatId, schema]);
+
+        // Register chat context for simplified sendMessage
+        if (resolvedApiKey) {
+            aiStore.registerChatContext(chatId, {
+                apiKey: resolvedApiKey,
+                dbContext: dbContext || undefined,
+                schema,
+                selectedTable,
+                onMessagesChange,
+                onChartUpdate,
+                onChartDelete,
+                getCurrentChatState,
+                onMapStyleUpdate,
+                onMapStyleDelete,
+                onMessageComplete: onConversationCompleted,
+            });
+        }
+    }, [
+        chatId,
+        schema,
+        resolvedApiKey,
+        dbContext,
+        selectedTable,
+        onMessagesChange,
+        onChartUpdate,
+        onChartDelete,
+        getCurrentChatState,
+        onMapStyleUpdate,
+        onMapStyleDelete,
+        onConversationCompleted,
+    ]);
 
     const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setInput(e.target.value);

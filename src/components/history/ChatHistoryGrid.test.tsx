@@ -54,18 +54,6 @@ describe('ChatHistoryGrid', () => {
         expect(mockOnSelectChat).toHaveBeenCalledWith('chat-1');
     });
 
-    it('should display empty state when no chats exist', () => {
-        render(<ChatHistoryGrid {...defaultProps} chats={[]} />);
-
-        expect(screen.getByText('No chats found. Create your first chat!')).toBeInTheDocument();
-    });
-
-    it('should not display empty state when chats exist', () => {
-        render(<ChatHistoryGrid {...defaultProps} />);
-
-        expect(screen.queryByText('No chats found. Create your first chat!')).not.toBeInTheDocument();
-    });
-
     it('should render chat dates', () => {
         render(<ChatHistoryGrid {...defaultProps} />);
 

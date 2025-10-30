@@ -64,6 +64,5 @@ export { useSchemaManagement } from './useSchemaManagement';
 export { useTableSelection } from './useTableSelection';
 export { useMapVisualization } from './useMapVisualization';
 export { useChartVisualization } from './useChartVisualization';
-export { useMessageHandling } from './useMessageHandling';
 export { useTableHistorySync } from './useTableHistorySync';
 export { useDashboardManagement } from './useDashboardManagement';
