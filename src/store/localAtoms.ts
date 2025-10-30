@@ -17,6 +17,7 @@ export interface LocalState {
     sessions: Record<string, SessionState>;
     dashboardLayouts: Record<string, Layout[]>;
     isSidebarOpen: boolean;
+    chatWidthPercentage: number; // Chat panel width in percentage (default: 50)
 
     // API key (saved locally for security)
     apiKey: string;
@@ -45,6 +46,7 @@ export const localStateAtom = atom<LocalState>({
     selectedDashboardId: null,
     dashboardLayouts: {},
     isSidebarOpen: true,
+    chatWidthPercentage: 50,
     apiKey: '',
     showApiKeyInput: false,
 });
@@ -87,6 +89,14 @@ export const isSidebarOpenAtom = atom(
     (get, set, update: boolean) => {
         const state = get(localStateAtom);
         set(localStateAtom, { ...state, isSidebarOpen: update });
+    }
+);
+
+export const chatWidthPercentageAtom = atom(
+    get => get(localStateAtom).chatWidthPercentage,
+    (get, set, update: number) => {
+        const state = get(localStateAtom);
+        set(localStateAtom, { ...state, chatWidthPercentage: update });
     }
 );
 
