@@ -35,6 +35,7 @@ export default function EmptyChat({
     const [tableCreationError, setTableCreationError] = useState<string | null>(null);
     const [showUrlGuide, setShowUrlGuide] = useState(false);
     const [isLoadingSample, setIsLoadingSample] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleLoadSample = useCallback(
         async (url: string) => {
@@ -75,7 +76,8 @@ export default function EmptyChat({
             const trimmedInput = input.trim();
             if (!trimmedInput) return;
 
-            // Don't clear input immediately - let the spinner show
+            // Set isSubmitting to show spinner
+            setIsSubmitting(true);
             try {
                 const result = await sendMessage(trimmedInput);
                 // After promise resolves, notify parent to switch chat
@@ -87,9 +89,26 @@ export default function EmptyChat({
                 console.error('Failed to submit message:', error);
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 setTableCreationError(`メッセージの送信に失敗しました: ${errorMessage}`);
+            } finally {
+                setIsSubmitting(false);
             }
         },
         [input, sendMessage, onChatCreated]
+    );
+
+    const handleKeyPress = useCallback(
+        (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+            if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                // Set isSubmitting state and call submit handler
+                setIsSubmitting(true);
+                const submitEvent = { preventDefault: () => {} } as React.FormEvent;
+                handleSubmit(submitEvent).finally(() => {
+                    setIsSubmitting(false);
+                });
+            }
+        },
+        [handleSubmit]
     );
 
     useEffect(() => {
@@ -146,6 +165,7 @@ export default function EmptyChat({
                     <ChatInput
                         value={input}
                         onChange={handleInputChange}
+                        onKeyDown={handleKeyPress}
                         onSubmit={handleSubmit}
                         onStop={() => {}}
                         dbContext={dbContext}
@@ -154,7 +174,7 @@ export default function EmptyChat({
                         className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
                         schemaName={schemaName}
                         selectedTable={null}
-                        {...(isLoadingSample && { isSubmitting: true })}
+                        isSubmitting={isLoadingSample || isSubmitting}
                         renderMenu={
                             renderMenu
                                 ? (onClose, onShowUrlGuide) => renderMenu(onClose, onShowUrlGuide, handleLoadSample)

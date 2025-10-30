@@ -404,6 +404,82 @@ function ChatPage() {
         [selectChat, dbContext]
     );
 
+    // Handle sending message with URL - creates table from URL in existing chat
+    const handleSendMessageWithUrl = useCallback(
+        async (url: string) => {
+            if (!selectedChatId || !schemaName || !dbContext) {
+                console.error('Cannot process URL: missing chat ID, schema, or dbContext');
+                return;
+            }
+
+            try {
+                // Extract and validate URL
+                const dataUrl = extractDataUrl(url);
+                if (!dataUrl) {
+                    console.error('Invalid URL:', url);
+                    return;
+                }
+
+                // Create table from URL in the current chat's schema
+                const { message: tableMessage } = await createTableFromUrl(dataUrl, dbContext, schemaName);
+
+                // Send the result message to AI
+                sendMessage(tableMessage);
+            } catch (error) {
+                console.error('Failed to create table from URL:', error);
+            }
+        },
+        [selectedChatId, schemaName, dbContext, sendMessage]
+    );
+
+    // Wrap sendMessage to handle URL processing for existing chat
+    const sendMessageWithUrlProcessing = useCallback(
+        (message: string) => {
+            console.log('sendMessageWithUrlProcessing called with message:', message);
+            // Check if message is a URL
+            const dataUrl = extractDataUrl(message);
+            console.log('extractDataUrl result:', dataUrl);
+
+            if (dataUrl) {
+                // URL case: create table from URL
+                console.log('URL detected, calling handleSendMessageWithUrl');
+                handleSendMessageWithUrl(message);
+            } else {
+                // Normal message case: send directly
+                console.log('No URL detected, calling sendMessage directly');
+                sendMessage(message);
+            }
+        },
+        [handleSendMessageWithUrl, sendMessage]
+    );
+
+    // Wrap handleSubmit to handle URL processing
+    const handleSubmitWithUrlProcessing = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+            console.log('handleSubmitWithUrlProcessing called with input:', input);
+
+            if (!input.trim()) return;
+
+            const messageToSend = input.trim();
+            const dataUrl = extractDataUrl(messageToSend);
+            console.log('handleSubmitWithUrlProcessing extractDataUrl result:', dataUrl);
+
+            if (dataUrl) {
+                // URL case: create table from URL (don't use handleSubmit)
+                console.log('URL detected in submit, calling handleSendMessageWithUrl');
+                // Clear input first
+                handleInputChange({ target: { value: '' } } as React.ChangeEvent<HTMLTextAreaElement>);
+                await handleSendMessageWithUrl(messageToSend);
+            } else {
+                // Normal message case: use original handleSubmit
+                console.log('No URL detected in submit, calling original handleSubmit');
+                await handleSubmit(e);
+            }
+        },
+        [input, handleInputChange, handleSendMessageWithUrl, handleSubmit]
+    );
+
     // Chart export to dashboard functionality
     const handleExportChartToDashboard = (dashboardId: string) => {
         const exportSpec = displayChartSpec; // Use configured chart if available
@@ -679,22 +755,24 @@ function ChatPage() {
                                     isLoading={isLoading}
                                     input={input}
                                     handleInputChange={handleInputChange}
-                                    handleSubmit={handleSubmit}
+                                    handleSubmit={handleSubmitWithUrlProcessing}
                                     handleStop={handleStop}
-                                    sendMessage={sendMessage}
+                                    sendMessage={sendMessageWithUrlProcessing}
                                     selectedTable={selectedTable}
                                     onTableSelect={handleTableSelection}
                                     getCurrentChatState={getCurrentChatState}
-                                    renderMenu={(onClose, onShowUrlGuide) => (
-                                        <DataSourceSelector
-                                            onClose={onClose}
-                                            onShowUrlGuide={onShowUrlGuide}
-                                            sampleUrl={getSampleDataUrl()}
-                                            onLoadSample={url => {
-                                                sendMessage(url);
-                                            }}
-                                        />
-                                    )}
+                                    onLoadSample={handleSendMessageWithUrl}
+                                    renderMenu={(onClose, onShowUrlGuide, onLoadSample) => {
+                                        console.log('ChatPage renderMenu called, onLoadSample:', onLoadSample);
+                                        return (
+                                            <DataSourceSelector
+                                                onClose={onClose}
+                                                onShowUrlGuide={onShowUrlGuide}
+                                                sampleUrl={getSampleDataUrl()}
+                                                onLoadSample={onLoadSample || (() => {})}
+                                            />
+                                        );
+                                    }}
                                 />
                             )}
                         </div>
