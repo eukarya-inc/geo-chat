@@ -342,27 +342,9 @@ export default function ChatInput({
                     {showPopup && (
                         <div
                             ref={popupRef}
-                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                            style={{ width: '500px', maxHeight: '400px' }}
+                            className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
                         >
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowPopup(false)}
-                                    className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M6 18L18 6M6 6l12 12"
-                                        />
-                                    </svg>
-                                </button>
-                                <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                    {remoteFileComponent(() => setShowPopup(false))}
-                                </div>
-                            </div>
+                            {remoteFileComponent(() => setShowPopup(false))}
                         </div>
                     )}
                 </div>
@@ -439,32 +421,9 @@ export default function ChatInput({
                             {showPopup && (
                                 <div
                                     ref={popupRef}
-                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                    style={{ width: '500px', maxHeight: '400px' }}
+                                    className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
                                 >
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowPopup(false)}
-                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M6 18L18 6M6 6l12 12"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                            {remoteFileComponent(() => setShowPopup(false))}
-                                        </div>
-                                    </div>
+                                    {remoteFileComponent(() => setShowPopup(false))}
                                 </div>
                             )}
                         </div>
