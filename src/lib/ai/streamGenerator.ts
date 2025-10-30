@@ -10,12 +10,18 @@ export interface StreamGeneratorOptions {
     abortSignal?: AbortSignal;
 }
 
+export interface TokenUsage {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+}
+
 export type StreamPart =
     | { type: 'text-delta'; textDelta: string }
     | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
     | { type: 'tool-result'; toolCallId: string; toolName: string; result: unknown }
     | { type: 'error'; error: string }
-    | { type: 'finish' };
+    | { type: 'finish'; usage?: TokenUsage };
 
 /**
  * Create a generator that streams AI responses
@@ -155,7 +161,24 @@ export async function* createAIStreamGenerator({
             }
         }
 
-        yield { type: 'finish' };
+        // Get token usage from the final result
+        await result.text;
+        const usage = await result.usage;
+
+        yield {
+            type: 'finish',
+            usage:
+                usage &&
+                usage.inputTokens !== undefined &&
+                usage.outputTokens !== undefined &&
+                usage.totalTokens !== undefined
+                    ? {
+                          inputTokens: usage.inputTokens,
+                          outputTokens: usage.outputTokens,
+                          totalTokens: usage.totalTokens,
+                      }
+                    : undefined,
+        };
     } catch (error) {
         // Handle abort error
         if (error instanceof Error && error.name === 'AbortError') {

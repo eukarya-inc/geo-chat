@@ -37,9 +37,17 @@ export interface ToolResultContent {
 
 export type StructuredContent = TextContent | ToolUseContent | ToolResultContent;
 
+// Token usage information (AI SDK v5)
+export interface TokenUsage {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+}
+
 // Message with structured content support
 export interface StructuredMessage {
     role: 'user' | 'assistant';
     content: string | StructuredContent[];
     streaming?: string; // Temporary streaming text that hasn't been committed to structured content yet
+    usage?: TokenUsage; // Token usage for assistant messages
 }
