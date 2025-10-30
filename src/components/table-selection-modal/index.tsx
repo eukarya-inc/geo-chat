@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TableCard } from './TableCard';
-import { MOCK_TABLES } from './constants';
+import { MOCK_TABLES, type TableInfo } from './constants';
 
 interface TableSelectionModalProps {
     isOpen: boolean;
@@ -8,7 +8,7 @@ interface TableSelectionModalProps {
 }
 
 export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProps) {
-    const [tables, setTables] = useState<string[]>([]);
+    const [tables, setTables] = useState<TableInfo[]>([]);
     const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
 
     // Fetch tables when modal opens (using mock data for now)
@@ -89,9 +89,10 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
                 <div className="grid grid-cols-3 gap-3 overflow-y-auto content-start max-h-[60vh]">
                     {tables.map(table => (
                         <TableCard
-                            key={table}
-                            tableName={table}
-                            isSelected={selectedTables.has(table)}
+                            key={table.name}
+                            tableName={table.name}
+                            lastUpdated={table.lastUpdated}
+                            isSelected={selectedTables.has(table.name)}
                             onToggle={toggleTableSelection}
                         />
                     ))}

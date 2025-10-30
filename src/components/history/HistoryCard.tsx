@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { getRelativeTime } from '../../utils/timeUtils';
 
@@ -36,6 +36,7 @@ export function HistoryCard({
 }: HistoryCardProps) {
     const [editingTitle, setEditingTitle] = useState(title);
     const [isHovered, setIsHovered] = useState(false);
+    const relativeTime = useMemo(() => getRelativeTime(date), [date]);
 
     const handleSaveEdit = () => {
         if (onRename && editingTitle.trim()) {
@@ -151,7 +152,7 @@ export function HistoryCard({
             </div>
             {!isEditing && (
                 <>
-                    <p className="text-sm text-gray-500">last message {getRelativeTime(date)}</p>
+                    <p className="text-sm text-gray-500">last message {relativeTime}</p>
                     {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
                 </>
             )}

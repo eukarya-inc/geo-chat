@@ -1,10 +1,15 @@
+import { useMemo } from 'react';
+import { getRelativeTime } from '../../utils/timeUtils';
+
 interface TableCardProps {
     tableName: string;
+    lastUpdated: Date;
     isSelected: boolean;
     onToggle: (tableName: string) => void;
 }
 
-export function TableCard({ tableName, isSelected, onToggle }: TableCardProps) {
+export function TableCard({ tableName, lastUpdated, isSelected, onToggle }: TableCardProps) {
+    const relativeTime = useMemo(() => getRelativeTime(lastUpdated), [lastUpdated]);
     return (
         <button
             onClick={() => onToggle(tableName)}
@@ -62,7 +67,7 @@ export function TableCard({ tableName, isSelected, onToggle }: TableCardProps) {
                     {tableName}
                 </div>
                 <div className="text-xs font-normal text-black/60" style={{ fontFamily: 'Inter' }}>
-                    last update 1 hour ago
+                    last update {relativeTime}
                 </div>
             </div>
         </button>
