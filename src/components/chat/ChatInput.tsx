@@ -16,8 +16,6 @@ interface ChatInputProps {
     className?: string;
     schemaName?: string | null;
     selectedTable?: string | null;
-    isMultiline: boolean;
-    textareaHeight: number;
     isLoading: boolean;
     isCreatingTable: boolean;
     isAnyLoading: boolean;
@@ -46,8 +44,6 @@ export default function ChatInput({
     className,
     schemaName,
     selectedTable,
-    isMultiline,
-    textareaHeight,
     isLoading,
     isCreatingTable,
     isAnyLoading,
@@ -64,6 +60,8 @@ export default function ChatInput({
         selectedIndex: 0,
         triggerType: '@',
     });
+    const [isMultiline, setIsMultiline] = useState(false);
+    const [textareaHeight, setTextareaHeight] = useState(44);
     const listRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [showPopup, setShowPopup] = useState(false);
@@ -107,6 +105,63 @@ export default function ChatInput({
 
         fetchFields();
     }, [dbContext, selectedTable, schemaName]);
+
+    // Calculate textarea height based on content
+    useEffect(() => {
+        const MIN_HEIGHT = 44;
+        const MAX_LINES = 10;
+
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        const trimmed = value.trim();
+
+        if (!trimmed) {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        const computedStyle = window.getComputedStyle(textarea);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const totalPadding = paddingTop + paddingBottom;
+        const singleLineHeight = lineHeight + totalPadding;
+
+        const lines = value.split('\n').length;
+        if (lines > 1) {
+            setIsMultiline(true);
+            const effectiveLines = Math.min(lines, MAX_LINES);
+            setTextareaHeight(effectiveLines * lineHeight + totalPadding);
+            return;
+        }
+
+        const updateForWrappedContent = () => {
+            const currentTextarea = textareaRef.current;
+            if (!currentTextarea) {
+                return;
+            }
+
+            const contentHeight = currentTextarea.scrollHeight;
+            if (contentHeight > singleLineHeight + 1) {
+                const neededLines = Math.min(Math.ceil((contentHeight - totalPadding) / lineHeight), MAX_LINES);
+                const newHeight = neededLines * lineHeight + totalPadding;
+                setIsMultiline(true);
+                setTextareaHeight(newHeight);
+            } else {
+                setIsMultiline(false);
+                setTextareaHeight(MIN_HEIGHT);
+            }
+        };
+
+        requestAnimationFrame(updateForWrappedContent);
+    }, [value, textareaRef]);
 
     // Track if we're clicking on the dropdown
     const isClickingDropdownRef = useRef(false);

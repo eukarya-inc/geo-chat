@@ -543,7 +543,6 @@ function ChatPage() {
                                                 onClose={onClose}
                                             />
                                         )}
-                                        emptyMode={true}
                                         onApiKeyChange={setApiKey}
                                         onApiKeySave={saveApiKey}
                                         showApiKeyInput={showApiKeyInput}
@@ -613,7 +612,6 @@ function ChatPage() {
                                                 onClose={onClose}
                                             />
                                         )}
-                                        showApiKeyInput={showApiKeyInput}
                                         waitForDbContext={waitForDbContext}
                                     />
                                 </div>
