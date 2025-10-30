@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
+import { useState, useCallback, useEffect } from 'react';
+import ReactGridLayout, { Responsive, WidthProvider, Layout } from 'react-grid-layout';
 import { ChartBarIcon, CogIcon, MapIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
 import { MapPanel } from '../map';
@@ -9,6 +9,7 @@ import type { DashboardVisualization as DashboardVisualizationType } from '../..
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
+const GridLayout = WidthProvider(ReactGridLayout);
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 // Re-export for backward compatibility, but use the one from remoteAtoms
@@ -20,6 +21,7 @@ export interface Dashboard {
     createdAt: Date;
     visualizations: DashboardVisualization[];
     layout: Layout[];
+    responsive?: boolean;
 }
 
 interface DashboardProps {
@@ -57,6 +59,21 @@ export function Dashboard({
         },
         [onLayoutChange]
     );
+
+    const handleResponsiveLayoutChange = useCallback(
+        (layout: Layout[]) => {
+            // For responsive mode, save the current breakpoint's layout
+            onLayoutChange(layout);
+        },
+        [onLayoutChange]
+    );
+
+    const handleToggleResponsive = useCallback(() => {
+        onUpdateDashboard({
+            ...dashboard,
+            responsive: !dashboard.responsive,
+        });
+    }, [dashboard, onUpdateDashboard]);
 
     const handleResizeStop = useCallback(() => {
         // Dispatch resize event to trigger chart resize
@@ -242,6 +259,22 @@ export function Dashboard({
                             <h3 className="text-sm font-semibold text-gray-700">Layout Settings</h3>
                             <div className="space-y-2">
                                 <div className="p-3 bg-white border border-gray-200 rounded">
+                                    <label className="flex items-center justify-between cursor-pointer">
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-600">Responsive Mode</div>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Adjust layout based on screen size
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={dashboard.responsive ?? false}
+                                            onChange={handleToggleResponsive}
+                                            className="w-4 h-4 text-blue-500 border-gray-300 rounded focus:ring-blue-500"
+                                        />
+                                    </label>
+                                </div>
+                                <div className="p-3 bg-white border border-gray-200 rounded">
                                     <label className="text-xs font-medium text-gray-600">Grid Columns</label>
                                     <p className="text-sm text-gray-500">12 columns (default)</p>
                                 </div>
@@ -259,86 +292,168 @@ export function Dashboard({
             <div className="flex-1 h-full overflow-auto bg-gray-50">
                 <div className="p-4 h-full">
                     {shownVisualizations.length > 0 ? (
-                        <ResponsiveGridLayout
-                            className="layout"
-                            layouts={{ lg: dashboard.layout }}
-                            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-                            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                            rowHeight={60}
-                            onLayoutChange={handleLayoutChange}
-                            onResizeStop={handleResizeStop}
-                            isDraggable={true}
-                            isResizable={true}
-                            resizeHandles={['se', 'sw', 'ne', 'nw']}
-                            draggableCancel="button"
-                        >
-                            {shownVisualizations.map(viz => (
-                                <div
-                                    key={viz.id}
-                                    className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
-                                    data-viz-id={viz.id}
-                                    style={{ height: '100%' }}
-                                >
-                                    {viz.type === 'chart' && viz.chartSpec ? (
-                                        <ChartPanel
-                                            chartSpec={viz.chartSpec}
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            configMode="modal"
-                                            vizId={viz.id}
-                                            onRemove={() => handleRemoveVisualization(viz.id)}
-                                            onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
-                                            showDataSourceButton={true}
-                                        />
-                                    ) : viz.type === 'map' && viz.tableName ? (
-                                        <MapPanel
-                                            title={viz.title}
-                                            tableName={viz.tableName}
-                                            geometryColumn={viz.geometryColumn}
-                                            dbContext={dbContext}
-                                            schema={schemaName}
-                                            mapSpec={viz.mapSpec}
-                                            onRemove={() => handleRemoveVisualization(viz.id)}
-                                            vizId={viz.id}
-                                        />
-                                    ) : (
-                                        <div className="h-full flex flex-col">
-                                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                    {viz.title}
-                                                </h4>
-                                            </div>
-                                            <div className="flex-1 p-2 overflow-hidden">
-                                                <div className="h-full flex items-center justify-center text-gray-500">
-                                                    <div className="text-center">
-                                                        <div className="mb-2">
-                                                            {viz.type === 'chart' && (
-                                                                <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                            )}
-                                                            {viz.type === 'map' && (
-                                                                <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+                        dashboard.responsive ? (
+                            <ResponsiveGridLayout
+                                className="layout"
+                                layouts={{ lg: dashboard.layout }}
+                                breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+                                cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+                                rowHeight={60}
+                                onLayoutChange={handleResponsiveLayoutChange}
+                                onResizeStop={handleResizeStop}
+                                isDraggable={true}
+                                isResizable={true}
+                                resizeHandles={['se', 'sw', 'ne', 'nw']}
+                                draggableCancel="button"
+                            >
+                                {shownVisualizations.map(viz => (
+                                    <div
+                                        key={viz.id}
+                                        className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                        data-viz-id={viz.id}
+                                        style={{ height: '100%' }}
+                                    >
+                                        {viz.type === 'chart' && viz.chartSpec ? (
+                                            <ChartPanel
+                                                chartSpec={viz.chartSpec}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                configMode="modal"
+                                                vizId={viz.id}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
+                                                showDataSourceButton={true}
+                                            />
+                                        ) : viz.type === 'map' && viz.tableName ? (
+                                            <MapPanel
+                                                title={viz.title}
+                                                tableName={viz.tableName}
+                                                geometryColumn={viz.geometryColumn}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                mapSpec={viz.mapSpec}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                vizId={viz.id}
+                                            />
+                                        ) : (
+                                            <div className="h-full flex flex-col">
+                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
+                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                        {viz.title}
+                                                    </h4>
+                                                </div>
+                                                <div className="flex-1 p-2 overflow-hidden">
+                                                    <div className="h-full flex items-center justify-center text-gray-500">
+                                                        <div className="text-center">
+                                                            <div className="mb-2">
+                                                                {viz.type === 'chart' && (
+                                                                    <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                                {viz.type === 'map' && (
+                                                                    <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm">
+                                                                {viz.type === 'chart'
+                                                                    ? 'Chart spec missing'
+                                                                    : viz.type === 'map'
+                                                                      ? 'Map table missing'
+                                                                      : `${viz.type} visualization`}
+                                                            </p>
+                                                            {viz.sql && (
+                                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
+                                                                    {viz.sql}
+                                                                </p>
                                                             )}
                                                         </div>
-                                                        <p className="text-sm">
-                                                            {viz.type === 'chart'
-                                                                ? 'Chart spec missing'
-                                                                : viz.type === 'map'
-                                                                  ? 'Map table missing'
-                                                                  : `${viz.type} visualization`}
-                                                        </p>
-                                                        {viz.sql && (
-                                                            <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
-                                                                {viz.sql}
-                                                            </p>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </ResponsiveGridLayout>
+                                        )}
+                                    </div>
+                                ))}
+                            </ResponsiveGridLayout>
+                        ) : (
+                            <GridLayout
+                                className="layout"
+                                layout={dashboard.layout}
+                                cols={12}
+                                rowHeight={60}
+                                onLayoutChange={handleLayoutChange}
+                                onResizeStop={handleResizeStop}
+                                isDraggable={true}
+                                isResizable={true}
+                                resizeHandles={['se', 'sw', 'ne', 'nw']}
+                                draggableCancel="button"
+                            >
+                                {shownVisualizations.map(viz => (
+                                    <div
+                                        key={viz.id}
+                                        className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                        data-viz-id={viz.id}
+                                        style={{ height: '100%' }}
+                                    >
+                                        {viz.type === 'chart' && viz.chartSpec ? (
+                                            <ChartPanel
+                                                chartSpec={viz.chartSpec}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                configMode="modal"
+                                                vizId={viz.id}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
+                                                showDataSourceButton={true}
+                                            />
+                                        ) : viz.type === 'map' && viz.tableName ? (
+                                            <MapPanel
+                                                title={viz.title}
+                                                tableName={viz.tableName}
+                                                geometryColumn={viz.geometryColumn}
+                                                dbContext={dbContext}
+                                                schema={schemaName}
+                                                mapSpec={viz.mapSpec}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                vizId={viz.id}
+                                            />
+                                        ) : (
+                                            <div className="h-full flex flex-col">
+                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
+                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                                                        {viz.title}
+                                                    </h4>
+                                                </div>
+                                                <div className="flex-1 p-2 overflow-hidden">
+                                                    <div className="h-full flex items-center justify-center text-gray-500">
+                                                        <div className="text-center">
+                                                            <div className="mb-2">
+                                                                {viz.type === 'chart' && (
+                                                                    <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                                {viz.type === 'map' && (
+                                                                    <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm">
+                                                                {viz.type === 'chart'
+                                                                    ? 'Chart spec missing'
+                                                                    : viz.type === 'map'
+                                                                      ? 'Map table missing'
+                                                                      : `${viz.type} visualization`}
+                                                            </p>
+                                                            {viz.sql && (
+                                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
+                                                                    {viz.sql}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </GridLayout>
+                        )
                     ) : (
                         <div className="h-full flex items-center justify-center">
                             <div className="text-center">

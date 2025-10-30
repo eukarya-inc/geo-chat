@@ -59,6 +59,7 @@ export interface Dashboard {
     createdAt: Date;
     visualizations: DashboardVisualization[];
     layout: Layout[];
+    responsive?: boolean;
 }
 
 // Consolidated Chat type that includes both metadata and state
