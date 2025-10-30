@@ -23,7 +23,7 @@ interface ChatProps {
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
     getCurrentChatState?: () => ChatState | null;
-    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
 }
 
 export default function Chat({
@@ -54,6 +54,23 @@ export default function Chat({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [tableGeometries, setTableGeometries] = useState<Record<string, boolean>>({});
     const checkedTablesRef = useRef<Set<string>>(new Set());
+    const [showUrlGuide, setShowUrlGuide] = useState(false);
+
+    const handleShowUrlGuide = useCallback(() => {
+        setShowUrlGuide(true);
+        textareaRef.current?.focus();
+        setTimeout(() => setShowUrlGuide(false), 5000);
+    }, []);
+
+    const handleInputChangeWithGuide = useCallback(
+        (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+            handleInputChange(e);
+            if (showUrlGuide) {
+                setShowUrlGuide(false);
+            }
+        },
+        [handleInputChange, showUrlGuide]
+    );
 
     const scrollToBottom = useCallback(() => {
         isProgrammaticScrollRef.current = true;
@@ -688,7 +705,7 @@ export default function Chat({
                 <div className="bg-white border border-gray-300 rounded-md p-2">
                     <ChatInput
                         value={input}
-                        onChange={handleInputChange}
+                        onChange={handleInputChangeWithGuide}
                         onKeyDown={handleKeyPress}
                         onSubmit={e => {
                             e.preventDefault();
@@ -709,6 +726,8 @@ export default function Chat({
                         remoteFileComponent={remoteFileComponent}
                         disabled={!apiKey}
                         isWaitingForDb={false}
+                        showUrlGuide={showUrlGuide}
+                        onShowUrlGuide={handleShowUrlGuide}
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">

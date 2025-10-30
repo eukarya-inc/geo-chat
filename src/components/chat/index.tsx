@@ -24,7 +24,7 @@ interface AIChatProps {
     getCurrentChatState?: () => ChatState | null;
     onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
     onMapStyleDelete?: (tableName: string) => Promise<void>;
-    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
     onConversationCompleted?: () => void;
     waitForDbContext?: () => Promise<DBContext>;
     onApiKeyChange?: (value: string) => void;

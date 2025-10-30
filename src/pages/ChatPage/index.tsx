@@ -500,65 +500,72 @@ function ChatPage() {
                     </div>
                 ) : isEmptyChat ? (
                     /* Home Screen - Centered Input + History Grid */
-                    <div className="flex-1 h-full flex flex-col overflow-hidden">
-                        {/* Center area - Chat input */}
-                        <div className="flex-1 flex items-center justify-center px-8">
-                            <div className="w-full max-w-2xl -mt-32">
-                                {!isLoadingApiKey && selectedChatId && (
-                                    <AIChat
-                                        dbContext={dbContext}
-                                        apiKey={apiKey}
-                                        chatId={selectedChatId}
-                                        schemaName={schemaName}
-                                        onMessagesChange={handleMessagesChange}
-                                        updateChatMessages={updateChatMessages}
-                                        onSendMessageReady={handleSendMessageReady}
-                                        selectedTable={selectedTable}
-                                        onTableSelect={handleTableSelection}
-                                        onChartUpdate={updateChartFromAI}
-                                        onChartDelete={deleteChartFromAI}
-                                        getCurrentChatState={getCurrentChatState}
-                                        onMapStyleUpdate={async (
-                                            tableName: string,
-                                            style: import('../../components/map').TableStyle
-                                        ) => {
-                                            updateTableStyle(tableName, style);
-                                        }}
-                                        onMapStyleDelete={async (tableName: string) => {
-                                            deleteTableStyle(tableName);
-                                        }}
-                                        onConversationCompleted={handleConversationCompleted}
-                                        remoteFileComponent={onClose => (
-                                            <DataSourceSelector
-                                                dbContext={dbContext}
-                                                schema={schemaName}
-                                                onTableCreated={(tableName: string) => {
-                                                    handleTableSelection(tableName);
-                                                    if (dbContext) {
-                                                        dbContext.notifyTableChange(tableName, schemaName);
-                                                    }
-                                                }}
-                                                onSendMessage={sendMessageRef.current || undefined}
-                                                waitForDbContext={waitForDbContext}
-                                                onClose={onClose}
-                                            />
-                                        )}
-                                        onApiKeyChange={setApiKey}
-                                        onApiKeySave={saveApiKey}
-                                        showApiKeyInput={showApiKeyInput}
-                                        waitForDbContext={waitForDbContext}
-                                    />
-                                )}
-                            </div>
-                        </div>
+                    <div className="flex-1 h-full overflow-y-auto">
+                        <div className="min-h-full flex flex-col">
+                            {/* Spacer */}
+                            <div className="h-[35vh]" />
 
-                        <div className="border-t overflow-y-auto" style={{ maxHeight: '40vh' }}>
-                            <ChatHistoryGrid
-                                chats={chats}
-                                onSelectChat={handleSelectChat}
-                                onDeleteChat={deleteChat}
-                                onRenameChat={renameChat}
-                            />
+                            {/* Chat input */}
+                            <div className="flex items-center justify-center px-8 pb-24">
+                                <div className="w-full max-w-2xl">
+                                    {!isLoadingApiKey && selectedChatId && (
+                                        <AIChat
+                                            dbContext={dbContext}
+                                            apiKey={apiKey}
+                                            chatId={selectedChatId}
+                                            schemaName={schemaName}
+                                            onMessagesChange={handleMessagesChange}
+                                            updateChatMessages={updateChatMessages}
+                                            onSendMessageReady={handleSendMessageReady}
+                                            selectedTable={selectedTable}
+                                            onTableSelect={handleTableSelection}
+                                            onChartUpdate={updateChartFromAI}
+                                            onChartDelete={deleteChartFromAI}
+                                            getCurrentChatState={getCurrentChatState}
+                                            onMapStyleUpdate={async (
+                                                tableName: string,
+                                                style: import('../../components/map').TableStyle
+                                            ) => {
+                                                updateTableStyle(tableName, style);
+                                            }}
+                                            onMapStyleDelete={async (tableName: string) => {
+                                                deleteTableStyle(tableName);
+                                            }}
+                                            onConversationCompleted={handleConversationCompleted}
+                                            remoteFileComponent={(onClose, onShowUrlGuide) => (
+                                                <DataSourceSelector
+                                                    dbContext={dbContext}
+                                                    schema={schemaName}
+                                                    onTableCreated={(tableName: string) => {
+                                                        handleTableSelection(tableName);
+                                                        if (dbContext) {
+                                                            dbContext.notifyTableChange(tableName, schemaName);
+                                                        }
+                                                    }}
+                                                    onSendMessage={sendMessageRef.current || undefined}
+                                                    waitForDbContext={waitForDbContext}
+                                                    onClose={onClose}
+                                                    onShowUrlGuide={onShowUrlGuide}
+                                                />
+                                            )}
+                                            onApiKeyChange={setApiKey}
+                                            onApiKeySave={saveApiKey}
+                                            showApiKeyInput={showApiKeyInput}
+                                            waitForDbContext={waitForDbContext}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Chat history grid */}
+                            <div className="px-8 pb-8">
+                                <ChatHistoryGrid
+                                    chats={chats}
+                                    onSelectChat={handleSelectChat}
+                                    onDeleteChat={deleteChat}
+                                    onRenameChat={renameChat}
+                                />
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -597,7 +604,7 @@ function ChatPage() {
                                             deleteTableStyle(tableName);
                                         }}
                                         onConversationCompleted={handleConversationCompleted}
-                                        remoteFileComponent={onClose => (
+                                        remoteFileComponent={(onClose, onShowUrlGuide) => (
                                             <DataSourceSelector
                                                 dbContext={dbContext}
                                                 schema={schemaName}
@@ -610,6 +617,7 @@ function ChatPage() {
                                                 onSendMessage={sendMessageRef.current || undefined}
                                                 waitForDbContext={waitForDbContext}
                                                 onClose={onClose}
+                                                onShowUrlGuide={onShowUrlGuide}
                                             />
                                         )}
                                         waitForDbContext={waitForDbContext}

@@ -12,7 +12,7 @@ interface EmptyChatProps {
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
     showApiKeyInput?: boolean;
     waitForDbContext?: () => Promise<DBContext>;
-    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
     onSendMessage: (message: string) => void;
 }
 
@@ -32,9 +32,19 @@ export default function EmptyChat({
     const [isCreatingTable, setIsCreatingTable] = useState(false);
     const [tableCreationError, setTableCreationError] = useState<string | null>(null);
     const [isWaitingForDb, setIsWaitingForDb] = useState(false);
+    const [showUrlGuide, setShowUrlGuide] = useState(false);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value);
+        if (showUrlGuide) {
+            setShowUrlGuide(false);
+        }
+    };
+
+    const handleShowUrlGuide = () => {
+        setShowUrlGuide(true);
+        textareaRef.current?.focus();
+        setTimeout(() => setShowUrlGuide(false), 5000);
     };
 
     const handleSubmit = useCallback(
@@ -172,6 +182,8 @@ export default function EmptyChat({
                         remoteFileComponent={remoteFileComponent}
                         disabled={!apiKey}
                         isWaitingForDb={isWaitingForDb}
+                        showUrlGuide={showUrlGuide}
+                        onShowUrlGuide={handleShowUrlGuide}
                     />
                 </div>
                 <div className="flex justify-end mt-1 text-xs text-gray-500 leading-tight">
