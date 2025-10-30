@@ -223,20 +223,26 @@ function ChatPage() {
     } = useDashboardManagement();
 
     // Navigation handler for sidebar buttons
-    const handleNavigate = (view: 'chat-history' | 'dashboard-list') => {
-        setViewMode(view);
-        selectChat('');
-        setSelectedDashboard(null);
-    };
+    const handleNavigate = useCallback(
+        (view: 'chat-history' | 'dashboard-list') => {
+            setViewMode(view);
+            selectChat('');
+            setSelectedDashboard(null);
+        },
+        [setViewMode, selectChat, setSelectedDashboard]
+    );
 
     // Chat handlers
-    const handleSelectChat = (chatId: string) => {
-        selectChat(chatId);
-        setViewMode('chat');
-        setSelectedDashboard(null);
-    };
+    const handleSelectChat = useCallback(
+        (chatId: string) => {
+            selectChat(chatId);
+            setViewMode('chat');
+            setSelectedDashboard(null);
+        },
+        [selectChat, setViewMode, setSelectedDashboard]
+    );
 
-    const handleCreateChat = () => {
+    const handleCreateChat = useCallback(() => {
         const emptyChat = Object.values(chats)
             .filter(chat => !chat.messages || chat.messages.length === 0)
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
@@ -248,21 +254,24 @@ function ChatPage() {
         }
         setViewMode('chat');
         setSelectedDashboard(null);
-    };
+    }, [chats, selectChat, createNewChat, setViewMode, setSelectedDashboard]);
 
     // Dashboard handlers
-    const handleSelectDashboard = (dashboardId: string) => {
-        setSelectedDashboard(dashboardId);
-        setViewMode('dashboard');
-        selectChat('');
-    };
+    const handleSelectDashboard = useCallback(
+        (dashboardId: string) => {
+            setSelectedDashboard(dashboardId);
+            setViewMode('dashboard');
+            selectChat('');
+        },
+        [setSelectedDashboard, setViewMode, selectChat]
+    );
 
-    const handleCreateDashboard = () => {
+    const handleCreateDashboard = useCallback(() => {
         const newDashboard = createDashboard();
         setSelectedDashboard(newDashboard.id);
         setViewMode('dashboard');
         selectChat('');
-    };
+    }, [createDashboard, setSelectedDashboard, setViewMode, selectChat]);
 
     const handleDeleteDashboard = (dashboardId: string) => {
         if (selectedDashboardId === dashboardId) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TableCard } from './TableCard';
 import { MOCK_TABLES, type TableInfo } from './constants';
 
@@ -32,7 +32,7 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
         fetchTables();
     }, [isOpen]);
 
-    const toggleTableSelection = (tableName: string) => {
+    const toggleTableSelection = useCallback((tableName: string) => {
         setSelectedTables(prev => {
             const newSet = new Set(prev);
             if (newSet.has(tableName)) {
@@ -42,20 +42,20 @@ export function TableSelectionModal({ isOpen, onClose }: TableSelectionModalProp
             }
             return newSet;
         });
-    };
+    }, []);
 
-    const handleAddTables = () => {
+    const handleAddTables = useCallback(() => {
         // TODO: Implement table selection logic
         // - Send selected tables to parent component
         // - Integrate with chat/AI system
         onClose();
         setSelectedTables(new Set());
-    };
+    }, [onClose]);
 
-    const handleCancel = () => {
+    const handleCancel = useCallback(() => {
         onClose();
         setSelectedTables(new Set());
-    };
+    }, [onClose]);
 
     if (!isOpen) {
         return null;

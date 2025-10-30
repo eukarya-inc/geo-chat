@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { Chat } from '../../store/remoteAtoms';
 import { HistoryCard } from './HistoryCard';
 
@@ -13,30 +13,36 @@ export function ChatHistoryGrid({ chats, onSelectChat, onDeleteChat, onRenameCha
     const [editingChatId, setEditingChatId] = useState<string | null>(null);
     const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
-    const handleStartEdit = (chatId: string) => {
+    const handleStartEdit = useCallback((chatId: string) => {
         setEditingChatId(chatId);
         setDeletingChatId(null);
-    };
+    }, []);
 
-    const handleCancelEdit = () => {
+    const handleCancelEdit = useCallback(() => {
         setEditingChatId(null);
         setDeletingChatId(null);
-    };
+    }, []);
 
-    const handleRename = (chatId: string, newTitle: string) => {
-        onRenameChat(chatId, newTitle);
-        setEditingChatId(null);
-    };
+    const handleRename = useCallback(
+        (chatId: string, newTitle: string) => {
+            onRenameChat(chatId, newTitle);
+            setEditingChatId(null);
+        },
+        [onRenameChat]
+    );
 
-    const handleStartDelete = (chatId: string) => {
+    const handleStartDelete = useCallback((chatId: string) => {
         setDeletingChatId(chatId);
         setEditingChatId(null);
-    };
+    }, []);
 
-    const handleConfirmDelete = (chatId: string) => {
-        onDeleteChat(chatId);
-        setDeletingChatId(null);
-    };
+    const handleConfirmDelete = useCallback(
+        (chatId: string) => {
+            onDeleteChat(chatId);
+            setDeletingChatId(null);
+        },
+        [onDeleteChat]
+    );
 
     return (
         <div className="p-6 h-full overflow-y-auto bg-gray-50">
