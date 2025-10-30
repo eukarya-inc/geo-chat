@@ -109,6 +109,19 @@ export function Dashboard({
         setOpenDropdownId(null);
     }, []);
 
+    // Trigger resize event after dashboard mount and when visualizations change
+    // This ensures Vega charts recalculate their size correctly
+    useEffect(() => {
+        // Use setTimeout to ensure grid layout has finished rendering
+        const timerId = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+
+        return () => {
+            clearTimeout(timerId);
+        };
+    }, [shownVisualizations.length]);
+
     return (
         <div className="flex h-full">
             {/* Left Sidebar with Tabs */}
