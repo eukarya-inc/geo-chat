@@ -63,12 +63,6 @@ export function ChatHistoryGrid({ chats, onSelectChat, onDeleteChat, onRenameCha
                     />
                 ))}
             </div>
-
-            {chats.length === 0 && (
-                <div className="text-center text-gray-500 mt-12">
-                    <p>No chats found. Create your first chat!</p>
-                </div>
-            )}
         </div>
     );
 }

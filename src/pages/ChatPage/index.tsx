@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AIChat from '../../components/chat';
+import { Chat, EmptyChat } from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
+import { useAIChat } from '../../lib/ai/useAIChat';
 import { TablePanel } from '../../components/table/TablePanel';
 import { DataSourceSelector } from '../../components/data-source-selector';
 import TableSQLDisplay from '../../components/query';
@@ -29,7 +30,6 @@ import {
     useTableSelection,
     useMapVisualization,
     useChartVisualization,
-    useMessageHandling,
     useTableHistorySync,
     useDashboardManagement,
 } from './hooks';
@@ -189,21 +189,37 @@ function ChatPage() {
         [selectedChatId, chats, extractCompletionTitle, renameChat]
     );
 
-    // Message handling
-    const {
-        sendMessageRef,
-        handleSendMessageReady,
-        handleMessagesChange: originalHandleMessagesChange,
-    } = useMessageHandling(selectedChatId, updateChatMessages);
-
-    // Wrap handleMessagesChange to check for title updates
+    // Message handling - now handled directly by AIStore
     const handleMessagesChange = useCallback(
         (messages: StructuredMessage[]) => {
-            originalHandleMessagesChange(messages);
+            if (selectedChatId) {
+                updateChatMessages(selectedChatId, messages);
+            }
             checkAndUpdateChatTitle(messages);
         },
-        [originalHandleMessagesChange, checkAndUpdateChatTitle]
+        [selectedChatId, updateChatMessages, checkAndUpdateChatTitle]
     );
+
+    // Use AI Chat hook for Split View
+    const { messages, isLoading, isAnyLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } =
+        useAIChat({
+            chatId: selectedChatId || 'default',
+            schema: schemaName,
+            dbContext,
+            apiKey,
+            selectedTable,
+            onMessagesChange: handleMessagesChange,
+            onChartUpdate: updateChartFromAI,
+            onChartDelete: deleteChartFromAI,
+            getCurrentChatState,
+            onMapStyleUpdate: async (tableName: string, style: import('./../../components/map').TableStyle) => {
+                updateTableStyle(tableName, style);
+            },
+            onMapStyleDelete: async (tableName: string) => {
+                deleteTableStyle(tableName);
+            },
+            onConversationCompleted: handleConversationCompleted,
+        });
 
     // Sync table creation history to remote state
     useTableHistorySync(dbContext, selectedChatId);
@@ -509,29 +525,15 @@ function ChatPage() {
                             <div className="flex items-center justify-center px-8 pb-24">
                                 <div className="w-full max-w-2xl">
                                     {!isLoadingApiKey && selectedChatId && (
-                                        <AIChat
+                                        <EmptyChat
                                             dbContext={dbContext}
                                             apiKey={apiKey}
-                                            chatId={selectedChatId}
                                             schemaName={schemaName}
-                                            onMessagesChange={handleMessagesChange}
-                                            updateChatMessages={updateChatMessages}
-                                            onSendMessageReady={handleSendMessageReady}
-                                            selectedTable={selectedTable}
-                                            onTableSelect={handleTableSelection}
-                                            onChartUpdate={updateChartFromAI}
-                                            onChartDelete={deleteChartFromAI}
-                                            getCurrentChatState={getCurrentChatState}
-                                            onMapStyleUpdate={async (
-                                                tableName: string,
-                                                style: import('../../components/map').TableStyle
-                                            ) => {
-                                                updateTableStyle(tableName, style);
-                                            }}
-                                            onMapStyleDelete={async (tableName: string) => {
-                                                deleteTableStyle(tableName);
-                                            }}
-                                            onConversationCompleted={handleConversationCompleted}
+                                            onApiKeyChange={setApiKey}
+                                            onApiKeySave={saveApiKey}
+                                            showApiKeyInput={showApiKeyInput}
+                                            waitForDbContext={waitForDbContext}
+                                            sendMessage={sendMessage}
                                             remoteFileComponent={(onClose, onShowUrlGuide) => (
                                                 <DataSourceSelector
                                                     dbContext={dbContext}
@@ -542,16 +544,12 @@ function ChatPage() {
                                                             dbContext.notifyTableChange(tableName, schemaName);
                                                         }
                                                     }}
-                                                    onSendMessage={sendMessageRef.current || undefined}
                                                     waitForDbContext={waitForDbContext}
                                                     onClose={onClose}
                                                     onShowUrlGuide={onShowUrlGuide}
+                                                    sendMessage={sendMessage}
                                                 />
                                             )}
-                                            onApiKeyChange={setApiKey}
-                                            onApiKeySave={saveApiKey}
-                                            showApiKeyInput={showApiKeyInput}
-                                            waitForDbContext={waitForDbContext}
                                         />
                                     )}
                                 </div>
@@ -581,29 +579,21 @@ function ChatPage() {
                             )}
                             {!isLoadingApiKey && dbContext && selectedChatId ? (
                                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                    <AIChat
+                                    <Chat
                                         dbContext={dbContext}
                                         apiKey={apiKey}
-                                        chatId={selectedChatId}
                                         schemaName={schemaName}
-                                        onMessagesChange={handleMessagesChange}
-                                        updateChatMessages={updateChatMessages}
-                                        onSendMessageReady={handleSendMessageReady}
+                                        messages={messages}
+                                        isLoading={isLoading}
+                                        isAnyLoading={isAnyLoading}
+                                        input={input}
+                                        handleInputChange={handleInputChange}
+                                        handleSubmit={handleSubmit}
+                                        handleStop={handleStop}
+                                        sendMessage={sendMessage}
                                         selectedTable={selectedTable}
                                         onTableSelect={handleTableSelection}
-                                        onChartUpdate={updateChartFromAI}
-                                        onChartDelete={deleteChartFromAI}
                                         getCurrentChatState={getCurrentChatState}
-                                        onMapStyleUpdate={async (
-                                            tableName: string,
-                                            style: import('../../components/map').TableStyle
-                                        ) => {
-                                            updateTableStyle(tableName, style);
-                                        }}
-                                        onMapStyleDelete={async (tableName: string) => {
-                                            deleteTableStyle(tableName);
-                                        }}
-                                        onConversationCompleted={handleConversationCompleted}
                                         remoteFileComponent={(onClose, onShowUrlGuide) => (
                                             <DataSourceSelector
                                                 dbContext={dbContext}
@@ -614,13 +604,12 @@ function ChatPage() {
                                                         dbContext.notifyTableChange(tableName, schemaName);
                                                     }
                                                 }}
-                                                onSendMessage={sendMessageRef.current || undefined}
                                                 waitForDbContext={waitForDbContext}
                                                 onClose={onClose}
                                                 onShowUrlGuide={onShowUrlGuide}
+                                                sendMessage={sendMessage}
                                             />
                                         )}
-                                        waitForDbContext={waitForDbContext}
                                     />
                                 </div>
                             ) : !isLoadingApiKey && dbContext ? (

@@ -7,20 +7,21 @@ interface DataSourceSelectorProps {
     dbContext: DBContext | null;
     schema?: string | null;
     onTableCreated?: (tableName: string) => void;
-    onSendMessage?: (message: string) => void;
     waitForDbContext?: () => Promise<DBContext>;
     onClose: () => void;
     onShowUrlGuide?: () => void;
+    // Simple sendMessage function
+    sendMessage: (message: string) => void | Promise<void>;
 }
 
 export function DataSourceSelector({
     dbContext,
     schema,
     onTableCreated,
-    onSendMessage,
     waitForDbContext,
     onClose,
     onShowUrlGuide,
+    sendMessage,
 }: DataSourceSelectorProps) {
     const [showTableModal, setShowTableModal] = useState(false);
 
@@ -48,9 +49,8 @@ export function DataSourceSelector({
 
             const { tableName, message } = await createTableFromUrl(sampleUrl, db, schema || null);
 
-            if (onSendMessage) {
-                onSendMessage(message);
-            }
+            // Send message via provided sendMessage function
+            sendMessage(message);
 
             onTableCreated?.(tableName);
         } catch (error) {

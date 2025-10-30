@@ -13,7 +13,7 @@ interface EmptyChatProps {
     showApiKeyInput?: boolean;
     waitForDbContext?: () => Promise<DBContext>;
     remoteFileComponent?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
-    onSendMessage: (message: string) => void;
+    sendMessage: (message: string) => void | Promise<void>;
 }
 
 export default function EmptyChat({
@@ -25,7 +25,7 @@ export default function EmptyChat({
     showApiKeyInput,
     waitForDbContext,
     remoteFileComponent,
-    onSendMessage,
+    sendMessage,
 }: EmptyChatProps) {
     const [input, setInput] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -76,7 +76,7 @@ export default function EmptyChat({
                     const { message } = await createTableFromUrl(dataUrl, db, schemaName || null);
 
                     setInput('');
-                    onSendMessage(message);
+                    sendMessage(message);
                 } catch (error) {
                     console.error('Failed to create table from URL:', error);
                     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -97,7 +97,7 @@ export default function EmptyChat({
                             setIsWaitingForDb(false);
                         }
                     }
-                    onSendMessage(trimmedInput);
+                    sendMessage(trimmedInput);
                     setInput('');
                 } catch (error) {
                     console.error('Failed to submit message:', error);
@@ -106,7 +106,7 @@ export default function EmptyChat({
                 }
             }
         },
-        [input, dbContext, schemaName, onSendMessage, waitForDbContext]
+        [input, dbContext, schemaName, sendMessage, waitForDbContext]
     );
 
     useEffect(() => {
