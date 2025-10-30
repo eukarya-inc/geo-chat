@@ -362,11 +362,13 @@ export class AIStore {
                         ...lastMessage,
                         content: existingContent,
                         streaming: undefined,
+                        usage: part.usage,
                     };
                 } else {
                     updatedMessages[updatedMessages.length - 1] = {
                         ...lastMessage,
                         streaming: undefined,
+                        usage: part.usage,
                     };
                 }
                 newStreamingText = '';
