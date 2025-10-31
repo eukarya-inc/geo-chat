@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import type { Chat, ChartSpecs } from '../../../store/remoteAtoms';
@@ -10,24 +10,23 @@ export function useSchemaManagement(
     chats: Chat[],
     onChartSpecCleanup?: (cleanedChartSpecs: ChartSpecs) => void
 ) {
-    const [connection, setConnection] = useState<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
+    const connectionRef = useRef<Awaited<ReturnType<AsyncDuckDB['connect']>> | null>(null);
 
     // Combined schema switching and connection setup
     useEffect(() => {
         if (!dbContext || !schemaName) return;
 
-        let currentConnection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null = null;
         let isCleanedUp = false;
 
         const switchSchemaAndConnect = async () => {
-            // First close any existing connection
-            if (connection) {
+            // First close any existing connection from ref
+            if (connectionRef.current) {
                 try {
-                    await connection.close();
+                    await connectionRef.current.close();
                 } catch (e) {
                     console.error('Error closing previous connection:', e);
                 }
-                setConnection(null);
+                connectionRef.current = null;
             }
 
             // Wait a bit longer to ensure all connections are fully closed
@@ -36,13 +35,11 @@ export function useSchemaManagement(
             try {
                 // Create new connection with the new schema
                 const conn = await dbContext.createManagedConnection(schemaName);
-                currentConnection = conn;
+                connectionRef.current = conn;
 
                 if (!isCleanedUp) {
-                    // Ensure connection is fully ready before setting it
+                    // Ensure connection is fully ready before using it
                     await new Promise(resolve => setTimeout(resolve, 100));
-
-                    setConnection(conn);
 
                     // Restore table selection for this chat
                     const targetChat = chats.find(
@@ -83,10 +80,16 @@ export function useSchemaManagement(
                             }
                         }
                     }
+                } else {
+                    // Component unmounted before we could set state, close connection immediately
+                    conn.close().catch(e => {
+                        console.error('Error closing connection after unmount:', e);
+                    });
+                    connectionRef.current = null;
                 }
             } catch (error) {
                 console.error('Error switching schema and creating connection:', error);
-                setConnection(null);
+                connectionRef.current = null;
             }
         };
 
@@ -94,8 +97,9 @@ export function useSchemaManagement(
 
         return () => {
             isCleanedUp = true;
-            if (currentConnection) {
-                currentConnection.close().catch(() => {});
+            if (connectionRef.current) {
+                connectionRef.current.close().catch(() => {});
+                connectionRef.current = null;
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
