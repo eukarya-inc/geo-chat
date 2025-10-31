@@ -12,6 +12,7 @@ import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } f
 import { MapPanel } from '../../components/map';
 import { Sidebar } from '../../components/Sidebar';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
+import type { Dashboard as DashboardType } from '../../store/remoteAtoms';
 import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
@@ -476,7 +477,7 @@ function ChatPage() {
     );
 
     // Chart export to dashboard functionality
-    const handleExportChartToDashboard = (dashboardId: string) => {
+    const handleExportChartToDashboard = (dashboardIdOrDashboard: string | DashboardType) => {
         const exportSpec = displayChartSpec; // Use configured chart if available
         if (!selectedChatId || !exportSpec || !selectedTable) {
             console.warn('Cannot export chart: missing selectedChatId, chartSpec, or selectedTable');
@@ -488,10 +489,12 @@ function ChatPage() {
             updateChartFromAI(selectedTable, configuredChartSpec.spec);
         }
 
-        const dashboard = getDashboard(dashboardId);
+        // Get dashboard object
+        const dashboard =
+            typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
 
         if (!dashboard) {
-            console.error('Dashboard not found:', dashboardId);
+            console.error('Dashboard not found:', dashboardIdOrDashboard);
             return;
         }
 
@@ -509,16 +512,15 @@ function ChatPage() {
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            // Don't auto-add to layout - user must manually add from sidebar
         };
         // Remember the selected dashboard for next time
-        setLastSelectedExportDashboard(dashboardId);
+        setLastSelectedExportDashboard(dashboard.id);
 
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
-        handleSelectDashboard(dashboardId);
+        handleSelectDashboard(dashboard.id);
     };
 
     // Chart configuration handlers
@@ -552,17 +554,19 @@ function ChatPage() {
     const displayChartSpec = configuredChartSpec || chartSpec;
 
     // Map export to dashboard functionality
-    const handleExportMapToDashboard = (dashboardId: string) => {
+    const handleExportMapToDashboard = (dashboardIdOrDashboard: string | DashboardType) => {
         if (!selectedChatId || !selectedTable) {
             console.warn('Cannot export map: missing selectedChatId or selectedTable');
             return;
         }
 
-        const dashboard = getDashboard(dashboardId);
+        // Get dashboard object
+        const dashboard =
+            typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
         const mapSpecs = getCurrentChatState()?.mapSpecs;
 
         if (!dashboard) {
-            console.error('Dashboard not found:', dashboardId);
+            console.error('Dashboard not found:', dashboardIdOrDashboard);
             return;
         }
 
@@ -583,17 +587,16 @@ function ChatPage() {
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            // Don't auto-add to layout - user must manually add from sidebar
         };
 
         // Remember the selected dashboard for next time
-        setLastSelectedExportDashboard(dashboardId);
+        setLastSelectedExportDashboard(dashboard.id);
 
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
-        handleSelectDashboard(dashboardId);
+        handleSelectDashboard(dashboard.id);
     };
 
     // Chart type selection handler
@@ -912,17 +915,10 @@ function ChatPage() {
                                                     showApplyButton={false}
                                                     showMenuExportButton={true}
                                                     onExport={() => {
-                                                        if (getAllDashboards().length > 0) {
-                                                            setExportType('chart');
-                                                            setShowExportModal(true);
-                                                        }
+                                                        setExportType('chart');
+                                                        setShowExportModal(true);
                                                     }}
-                                                    isExportDisabled={getAllDashboards().length === 0}
-                                                    exportTooltip={
-                                                        getAllDashboards().length > 0
-                                                            ? 'このグラフをダッシュボードにエクスポート'
-                                                            : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
-                                                    }
+                                                    exportTooltip="このグラフをダッシュボードにエクスポート"
                                                 />
                                             ) : (
                                                 <div className="h-full flex items-center justify-center bg-gray-50">
@@ -944,18 +940,11 @@ function ChatPage() {
                                                     mapSpec={{ tableStyles, style: mapStyle }}
                                                     showRemoveButton={false}
                                                     onExport={() => {
-                                                        if (getAllDashboards().length > 0) {
-                                                            setExportType('map');
-                                                            setShowExportModal(true);
-                                                        }
+                                                        setExportType('map');
+                                                        setShowExportModal(true);
                                                     }}
                                                     showExportButton={true}
-                                                    isExportDisabled={getAllDashboards().length === 0}
-                                                    exportTooltip={
-                                                        getAllDashboards().length > 0
-                                                            ? 'この地図をダッシュボードにエクスポート'
-                                                            : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
-                                                    }
+                                                    exportTooltip="この地図をダッシュボードにエクスポート"
                                                 />
                                             ) : (
                                                 <div className="h-full flex items-center justify-center bg-gray-50">
@@ -997,6 +986,12 @@ function ChatPage() {
                 onClose={() => setShowExportModal(false)}
                 dashboards={getAllDashboards()}
                 onExport={exportType === 'chart' ? handleExportChartToDashboard : handleExportMapToDashboard}
+                onCreateDashboard={createDashboard}
+                onNavigateToDashboard={dashboardId => {
+                    setSelectedDashboard(dashboardId);
+                    setViewMode('dashboard');
+                    selectChat('');
+                }}
                 title={exportType === 'chart' ? displayChartSpec?.title || 'Chart' : `${selectedTable} Map`}
                 type={exportType}
                 lastSelectedDashboard={lastSelectedExportDashboard}
