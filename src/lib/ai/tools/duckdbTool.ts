@@ -164,7 +164,6 @@ export function createDuckDBTool(
                             if (newTables.length > 0) {
                                 // Take the first new table (there should only be one from a single CREATE TABLE)
                                 createdTableName = newTables[0];
-                                console.log(`[DuckDB Tool] Detected newly created table: ${createdTableName}`);
                             } else {
                                 // For CREATE OR REPLACE TABLE, table already exists
                                 // Try to extract table name from SQL
