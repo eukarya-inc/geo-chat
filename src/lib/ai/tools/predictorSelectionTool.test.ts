@@ -23,6 +23,7 @@ function createMockDBContext(overrides: Partial<DBContext> = {}): DBContext {
         describeTable: async () => [],
         getPoolStats: () => [],
         closeSchemaConnections: async () => {},
+        closeAllConnections: async () => {},
         createSchema: async () => {},
         deleteSchema: async () => {},
         downloadTable: async () => ({}) as Blob,

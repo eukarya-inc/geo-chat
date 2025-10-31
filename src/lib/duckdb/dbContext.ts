@@ -25,6 +25,7 @@ export interface DBContext {
     ): Promise<Array<{ column_name: string; column_type: string; [key: string]: any }>>;
     getPoolStats(): { schema: string | null; total: number; inUse: number }[];
     closeSchemaConnections(schema: string | null): Promise<void>;
+    closeAllConnections(): Promise<void>;
 
     // Schema management methods
     createSchema(schemaName: string): Promise<void>;
@@ -124,7 +125,7 @@ class DatabaseContext implements DBContext {
         }
     }
 
-    private async closeAllConnections(): Promise<void> {
+    async closeAllConnections(): Promise<void> {
         for (const connections of this.connectionPool.values()) {
             for (const pooledConn of connections) {
                 try {
