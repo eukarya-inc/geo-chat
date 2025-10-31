@@ -10,7 +10,7 @@ interface ExportModalProps {
     onCreateDashboard?: (title?: string) => Dashboard;
     onNavigateToDashboard?: (dashboardId: string) => void;
     title?: string;
-    type?: 'chart' | 'map';
+    type?: 'chart' | 'map' | 'table';
     lastSelectedDashboard?: string | null;
 }
 

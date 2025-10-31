@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
 import { MapPanel } from '../map';
+import { TablePanel } from '../table/TablePanel';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
@@ -416,6 +417,14 @@ export function Dashboard({
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
                                             />
+                                        ) : viz.type === 'table' && viz.tableName ? (
+                                            <TablePanel
+                                                tableName={viz.tableName}
+                                                dbContext={dbContext}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                showRemoveButton={true}
+                                            />
                                         ) : (
                                             <div className="h-full flex flex-col">
                                                 <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
@@ -495,6 +504,14 @@ export function Dashboard({
                                                 mapSpec={viz.mapSpec}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
+                                            />
+                                        ) : viz.type === 'table' && viz.tableName ? (
+                                            <TablePanel
+                                                tableName={viz.tableName}
+                                                dbContext={dbContext}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
+                                                onRemove={() => handleRemoveVisualization(viz.id)}
+                                                showRemoveButton={true}
                                             />
                                         ) : (
                                             <div className="h-full flex flex-col">

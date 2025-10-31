@@ -41,7 +41,7 @@ function ChatPage() {
     const { dbContext, isInitializing } = useDuckDB();
     const [activeTab, setActiveTab] = useState<'sql' | 'table' | 'chart' | 'map'>('table');
     const [showExportModal, setShowExportModal] = useState(false);
-    const [exportType, setExportType] = useState<'chart' | 'map'>('chart');
+    const [exportType, setExportType] = useState<'chart' | 'map' | 'table'>('chart');
     const [lastSelectedExportDashboard, setLastSelectedExportDashboard] = useState<string | null>(null);
     const [showChartConfig, setShowChartConfig] = useState(false);
     const [configuredChartSpec, setConfiguredChartSpec] = useState<ChartSpec | null>(null);
@@ -599,6 +599,48 @@ function ChatPage() {
         handleSelectDashboard(dashboard.id);
     };
 
+    // Table export to dashboard functionality
+    const handleExportTableToDashboard = (dashboardIdOrDashboard: string | DashboardType) => {
+        if (!selectedChatId || !selectedTable) {
+            console.warn('Cannot export table: missing selectedChatId or selectedTable');
+            return;
+        }
+
+        // Get dashboard object
+        const dashboard =
+            typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
+
+        if (!dashboard) {
+            console.error('Dashboard not found:', dashboardIdOrDashboard);
+            return;
+        }
+
+        // Create table visualization
+        const newVisualization = {
+            id: `viz-${Date.now()}`,
+            type: 'table' as const,
+            title: `Table: ${selectedTable}`,
+            tableName: selectedTable,
+            sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
+            createdAt: new Date(),
+            chatId: selectedChatId,
+        };
+
+        const updatedDashboard = {
+            ...dashboard,
+            visualizations: [...dashboard.visualizations, newVisualization],
+        };
+
+        // Remember the selected dashboard for next time
+        setLastSelectedExportDashboard(dashboard.id);
+
+        // Update the dashboard
+        updateDashboard(updatedDashboard);
+
+        // Switch to the dashboard view to show available visualizations
+        handleSelectDashboard(dashboard.id);
+    };
+
     // Chart type selection handler
     const handleChartTypeSelect = async (chartType: ChartTypeOption) => {
         if (!selectedTable || !dbContext || !updateChartFromAI) {
@@ -880,17 +922,22 @@ function ChatPage() {
                                         {activeTab === 'table' && (
                                             <TablePanel
                                                 key={`${selectedChatId}-${selectedTable}`}
-                                                connection={connection}
                                                 tableName={selectedTable}
                                                 dbContext={dbContext}
                                                 schema={schemaName || null}
+                                                showExportButton={true}
+                                                onExport={() => {
+                                                    setExportType('table');
+                                                    setShowExportModal(true);
+                                                }}
+                                                exportTooltip="このテーブルをダッシュボードにエクスポート"
                                             />
                                         )}
 
                                         {/* Chart Tab */}
                                         {activeTab === 'chart' &&
                                             selectedTable &&
-                                            (displayChartSpec && connection && selectedChatId ? (
+                                            (displayChartSpec && selectedChatId ? (
                                                 <ChartPanel
                                                     chartSpec={displayChartSpec}
                                                     dbContext={dbContext}
@@ -928,7 +975,6 @@ function ChatPage() {
 
                                         {/* Map Tab */}
                                         {activeTab === 'map' &&
-                                            connection &&
                                             selectedTable &&
                                             (selectedGeometryColumn ? (
                                                 <MapPanel
@@ -985,7 +1031,13 @@ function ChatPage() {
                 isOpen={showExportModal}
                 onClose={() => setShowExportModal(false)}
                 dashboards={getAllDashboards()}
-                onExport={exportType === 'chart' ? handleExportChartToDashboard : handleExportMapToDashboard}
+                onExport={
+                    exportType === 'chart'
+                        ? handleExportChartToDashboard
+                        : exportType === 'map'
+                          ? handleExportMapToDashboard
+                          : handleExportTableToDashboard
+                }
                 onCreateDashboard={createDashboard}
                 onNavigateToDashboard={dashboardId => {
                     setSelectedDashboard(dashboardId);

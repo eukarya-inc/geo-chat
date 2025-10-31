@@ -1,4 +1,4 @@
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { DropdownMenu, type DropdownMenuItem } from '../common/DropdownMenu';
 
@@ -6,9 +6,23 @@ interface TableDropdownMenuProps {
     tableName: string;
     dbContext: DBContext;
     schema?: string | null;
+    onExport?: () => void;
+    showExportButton?: boolean;
+    isExportDisabled?: boolean;
+    onRemove?: () => void;
+    showRemoveButton?: boolean;
 }
 
-export function TableDropdownMenu({ tableName, dbContext, schema }: TableDropdownMenuProps) {
+export function TableDropdownMenu({
+    tableName,
+    dbContext,
+    schema,
+    onExport,
+    showExportButton = false,
+    isExportDisabled = false,
+    onRemove,
+    showRemoveButton = false,
+}: TableDropdownMenuProps) {
     const handleDownload = async (format: 'parquet' | 'csv' | 'json') => {
         try {
             // Use the downloadTable method from DBContext
@@ -34,11 +48,6 @@ export function TableDropdownMenu({ tableName, dbContext, schema }: TableDropdow
 
     const menuItems: DropdownMenuItem[] = [
         {
-            title: 'Parquet形式でダウンロード',
-            icon: <ArrowDownTrayIcon className="w-4 h-4" />,
-            onClick: () => handleDownload('parquet'),
-        },
-        {
             title: 'CSV形式でダウンロード',
             icon: <ArrowDownTrayIcon className="w-4 h-4" />,
             onClick: () => handleDownload('csv'),
@@ -48,6 +57,33 @@ export function TableDropdownMenu({ tableName, dbContext, schema }: TableDropdow
             icon: <ArrowDownTrayIcon className="w-4 h-4" />,
             onClick: () => handleDownload('json'),
         },
+        {
+            title: 'Parquet形式でダウンロード',
+            icon: <ArrowDownTrayIcon className="w-4 h-4" />,
+            onClick: () => handleDownload('parquet'),
+        },
+        ...(showExportButton && onExport
+            ? [
+                  {
+                      title: 'ダッシュボードにエクスポート',
+                      icon: <ArrowUpTrayIcon className="w-4 h-4" />,
+                      onClick: onExport,
+                      disabled: isExportDisabled,
+                      divider: 'before' as const,
+                  } as DropdownMenuItem,
+              ]
+            : []),
+        ...(showRemoveButton && onRemove
+            ? [
+                  {
+                      title: 'テーブルを削除',
+                      icon: <TrashIcon className="w-4 h-4" />,
+                      onClick: onRemove,
+                      variant: 'danger' as const,
+                      divider: 'before' as const,
+                  } as DropdownMenuItem,
+              ]
+            : []),
     ];
 
     return <DropdownMenu title="テーブルオプション" items={menuItems} menuWidth="w-64" />;
