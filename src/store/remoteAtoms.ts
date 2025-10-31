@@ -50,6 +50,7 @@ export interface DashboardVisualization {
     geometryColumn?: string; // Geometry column for map visualizations
     sql?: string; // SQL query used to generate the visualization
     createdAt: Date;
+    chatId?: string; // Chat ID that this visualization belongs to (for schema resolution)
 }
 
 // Dashboard

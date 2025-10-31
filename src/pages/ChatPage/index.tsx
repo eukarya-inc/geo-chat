@@ -24,8 +24,8 @@ import { localStateAtom, viewModeAtom, chatWidthPercentageAtom } from '../../sto
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
 import { ResizableHandle } from '../../components/ResizableHandle';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
+import { chatIdToSchemaName } from '../../utils/schema';
 import {
-    chatIdToSchemaName,
     useApiKeyManagement,
     useChatManagement,
     useSchemaManagement,
@@ -503,6 +503,7 @@ function ChatPage() {
             title: chart.title || 'Chart',
             chartSpec: chart,
             createdAt: new Date(),
+            chatId: selectedChatId,
         };
 
         const updatedDashboard = {
@@ -576,6 +577,7 @@ function ChatPage() {
             geometryColumn: selectedGeometryColumn,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
+            chatId: selectedChatId,
         };
 
         const updatedDashboard = {

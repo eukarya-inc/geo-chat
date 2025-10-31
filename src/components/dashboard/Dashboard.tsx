@@ -6,6 +6,7 @@ import { MapPanel } from '../map';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
+import { chatIdToSchemaName } from '../../utils/schema';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -317,7 +318,7 @@ export function Dashboard({
                                             <ChartPanel
                                                 chartSpec={viz.chartSpec}
                                                 dbContext={dbContext}
-                                                schema={schemaName}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 configMode="modal"
                                                 vizId={viz.id}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
@@ -330,7 +331,7 @@ export function Dashboard({
                                                 tableName={viz.tableName}
                                                 geometryColumn={viz.geometryColumn}
                                                 dbContext={dbContext}
-                                                schema={schemaName}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 mapSpec={viz.mapSpec}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
@@ -397,7 +398,7 @@ export function Dashboard({
                                             <ChartPanel
                                                 chartSpec={viz.chartSpec}
                                                 dbContext={dbContext}
-                                                schema={schemaName}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 configMode="modal"
                                                 vizId={viz.id}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
@@ -410,7 +411,7 @@ export function Dashboard({
                                                 tableName={viz.tableName}
                                                 geometryColumn={viz.geometryColumn}
                                                 dbContext={dbContext}
-                                                schema={schemaName}
+                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 mapSpec={viz.mapSpec}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
