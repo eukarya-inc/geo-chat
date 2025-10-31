@@ -28,6 +28,8 @@ interface ChatProps {
         onShowUrlGuide?: () => void,
         onLoadSample?: (url: string) => void
     ) => React.ReactNode;
+    onChartIconClick?: (tableName: string) => void;
+    onMapIconClick?: (tableName: string) => void;
 }
 
 export default function Chat({
@@ -46,6 +48,8 @@ export default function Chat({
     getCurrentChatState,
     onLoadSample,
     renderMenu,
+    onChartIconClick,
+    onMapIconClick,
 }: ChatProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -549,6 +553,8 @@ export default function Chat({
                                         onPromptClick={handlePromptSelection}
                                         chartSpecs={chartSpecs}
                                         tableGeometries={tableGeometries}
+                                        onChartIconClick={onChartIconClick}
+                                        onMapIconClick={onMapIconClick}
                                     />
                                 </div>
                             ) : (
@@ -570,6 +576,8 @@ export default function Chat({
                                                 onPromptClick={handlePromptSelection}
                                                 chartSpecs={chartSpecs}
                                                 tableGeometries={tableGeometries}
+                                                onChartIconClick={onChartIconClick}
+                                                onMapIconClick={onMapIconClick}
                                             />
                                         </div>
                                     </div>
@@ -658,6 +666,8 @@ export default function Chat({
                                                             onPromptClick={handlePromptSelection}
                                                             chartSpecs={chartSpecs}
                                                             tableGeometries={tableGeometries}
+                                                            onChartIconClick={onChartIconClick}
+                                                            onMapIconClick={onMapIconClick}
                                                         />
                                                     </div>
                                                 );
@@ -678,6 +688,8 @@ export default function Chat({
                                                                 onPromptClick={handlePromptSelection}
                                                                 chartSpecs={chartSpecs}
                                                                 tableGeometries={tableGeometries}
+                                                                onChartIconClick={onChartIconClick}
+                                                                onMapIconClick={onMapIconClick}
                                                             />
                                                             {isCurrentlyLoading &&
                                                                 group.assistantMessage.streaming !== undefined && (
@@ -702,6 +714,8 @@ export default function Chat({
                                                                 onPromptClick={handlePromptSelection}
                                                                 chartSpecs={chartSpecs}
                                                                 tableGeometries={tableGeometries}
+                                                                onChartIconClick={onChartIconClick}
+                                                                onMapIconClick={onMapIconClick}
                                                             />
                                                         </div>
                                                     )}
