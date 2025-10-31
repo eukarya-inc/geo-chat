@@ -36,6 +36,7 @@ const MapComponent: React.FC<MapProps> = ({
     const [mapError, setMapError] = useState<string | null>(null);
     const [mvtError, setMvtError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isLoadingTiles, setIsLoadingTiles] = useState<boolean>(false);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
@@ -50,6 +51,8 @@ const MapComponent: React.FC<MapProps> = ({
     const tileAbortControllerRef = useRef<AbortController | null>(null);
     // Track MVT errors with a ref to allow protocol handler to report errors
     const mvtErrorRef = useRef<string | null>(null);
+    // Track number of in-flight tile requests
+    const pendingTileRequestsRef = useRef<number>(0);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -132,6 +135,10 @@ const MapComponent: React.FC<MapProps> = ({
         // Clear MVT errors when table/columns change
         setMvtError(null);
         mvtErrorRef.current = null;
+
+        // Reset tile loading state
+        pendingTileRequestsRef.current = 0;
+        setIsLoadingTiles(false);
 
         // Abort any in-flight tile requests from the previous table/columns
         if (tileAbortControllerRef.current) {
@@ -480,6 +487,12 @@ const MapComponent: React.FC<MapProps> = ({
                     return { data: freshCopy };
                 }
 
+                // Track tile loading start
+                pendingTileRequestsRef.current += 1;
+                if (pendingTileRequestsRef.current === 1) {
+                    setIsLoadingTiles(true);
+                }
+
                 try {
                     if (!connectionRef.current) {
                         throw new Error('Database connection is not available');
@@ -657,6 +670,13 @@ const MapComponent: React.FC<MapProps> = ({
                     return { data: returnData };
                 } catch {
                     return { data: new Uint8Array() };
+                } finally {
+                    // Track tile loading end
+                    pendingTileRequestsRef.current -= 1;
+                    if (pendingTileRequestsRef.current <= 0) {
+                        pendingTileRequestsRef.current = 0;
+                        setIsLoadingTiles(false);
+                    }
                 }
             });
         } catch {
@@ -959,88 +979,41 @@ const MapComponent: React.FC<MapProps> = ({
     }, [onMapReady, isInitialized]);
 
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-            <div
-                id={mapId}
-                style={{
-                    width: '100%',
-                    height: '100%',
-                }}
-            ></div>
+        <div className="relative w-full h-full">
+            <div id={mapId} className="w-full h-full"></div>
 
             {isLoading && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        background: 'rgba(255, 255, 255, 0.8)',
-                        padding: '10px',
-                        borderRadius: '5px',
-                    }}
-                >
-                    Loading map...
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80 px-2.5 py-2 rounded">
+                    読み込み中...
                 </div>
             )}
             {mapError && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '10px',
-                        left: '10px',
-                        background: 'rgba(255, 0, 0, 0.7)',
-                        color: 'white',
-                        padding: '10px',
-                        borderRadius: '5px',
-                        maxWidth: '80%',
-                    }}
-                >
+                <div className="absolute top-2.5 left-2.5 bg-red-600/70 text-white px-2.5 py-2 rounded max-w-[80%]">
                     Error: {mapError}
                 </div>
             )}
             {mvtError && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '10px',
-                        right: '10px',
-                        background: 'rgba(255, 165, 0, 0.9)',
-                        color: 'white',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        maxWidth: '400px',
-                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                        fontSize: '14px',
-                        lineHeight: '1.5',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                    }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                        <strong style={{ fontSize: '15px' }}>地図レンダリングエラー</strong>
+                <div className="absolute top-2.5 right-2.5 bg-orange-500/90 text-white px-4 py-3 rounded-lg max-w-md shadow-md text-sm leading-normal flex flex-col gap-2">
+                    <div className="flex justify-between items-start">
+                        <strong className="text-base">地図レンダリングエラー</strong>
                         <button
                             onClick={() => {
                                 setMvtError(null);
                                 mvtErrorRef.current = null;
                             }}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontSize: '20px',
-                                lineHeight: '1',
-                                padding: '0',
-                                marginLeft: '8px',
-                            }}
+                            className="bg-transparent border-none text-white cursor-pointer text-xl leading-none p-0 ml-2 hover:opacity-70 transition-opacity"
                             title="Close"
                         >
                             ×
                         </button>
                     </div>
-                    <div style={{ fontSize: '13px', opacity: 0.95 }}>{mvtError}</div>
+                    <div className="text-[13px] opacity-95">{mvtError}</div>
+                </div>
+            )}
+            {isLoadingTiles && !mvtError && (
+                <div className="absolute top-2.5 right-2.5 bg-white/95 px-3 py-2 rounded-md shadow-sm flex items-center gap-2 text-sm text-gray-600 z-10">
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                    <span>読み込み中...</span>
                 </div>
             )}
         </div>
