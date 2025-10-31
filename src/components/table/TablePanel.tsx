@@ -7,7 +7,8 @@ import { VisualizationHeader } from '../common/VisualizationHeader';
 import { createExportButton } from '../common/VisualizationToolButtons';
 
 interface TablePanelProps {
-    tableName: string;
+    title?: string; // Display title (can be customized)
+    tableName: string; // Actual table name in DuckDB (immutable)
     dbContext: DBContext;
     schema?: string | null;
     onExport?: () => void;
@@ -16,9 +17,12 @@ interface TablePanelProps {
     exportTooltip?: string;
     onRemove?: () => void;
     showRemoveButton?: boolean;
+    editable?: boolean;
+    onTitleChange?: (newTitle: string) => void;
 }
 
 export function TablePanel({
+    title,
     tableName,
     dbContext,
     schema,
@@ -28,6 +32,8 @@ export function TablePanel({
     exportTooltip,
     onRemove,
     showRemoveButton = false,
+    editable = false,
+    onTitleChange,
 }: TablePanelProps) {
     const [connection, setConnection] = useState<AsyncDuckDBConnection | null>(null);
 
@@ -79,8 +85,10 @@ export function TablePanel({
         <div className="h-full flex flex-col overflow-hidden">
             {/* Table Title Bar with Menu */}
             <VisualizationHeader
-                title={tableName || 'Table'}
+                title={title || tableName || 'Table'}
                 toolButtons={toolButtons}
+                editable={editable}
+                onTitleChange={onTitleChange}
                 menu={
                     <TableDropdownMenu
                         tableName={tableName}

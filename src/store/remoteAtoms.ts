@@ -37,6 +37,7 @@ export type TableCreationRecord = Table;
 
 // Map specification per table
 export interface MapSpec {
+    title?: string; // Display title for the map
     style?: StyleSpecification; // Base style (replaces extraStyle)
     tableStyles?: Record<string, MapTableStyle>; // Table-specific styles to be combined with base style
 }

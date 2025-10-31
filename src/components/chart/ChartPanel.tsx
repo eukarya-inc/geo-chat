@@ -39,6 +39,9 @@ interface ChartPanelProps {
     onExport?: () => void;
     isExportDisabled?: boolean;
     exportTooltip?: string;
+    // Title editing
+    editable?: boolean;
+    onTitleChange?: (newTitle: string) => void;
 }
 
 export function ChartPanel({
@@ -63,6 +66,8 @@ export function ChartPanel({
     onExport,
     isExportDisabled = false,
     exportTooltip,
+    editable = false,
+    onTitleChange,
 }: ChartPanelProps) {
     const [vegaViewRef, setVegaViewRef] = useState<View | null>(null);
 
@@ -192,7 +197,7 @@ export function ChartPanel({
     const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
         if (!onSpecChange) return;
         // Generate new spec from config
-        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec);
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, schema);
         const updatedSpec: ChartSpec = {
             ...chartSpec,
             title: config.title as string,
@@ -241,6 +246,8 @@ export function ChartPanel({
                 <VisualizationHeader
                     title={chartSpec.title || 'Chart'}
                     toolButtons={toolButtons}
+                    editable={editable}
+                    onTitleChange={onTitleChange}
                     menu={
                         <ChartDropdownMenu
                             chartSpec={chartSpec}

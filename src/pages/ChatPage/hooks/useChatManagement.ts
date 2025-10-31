@@ -186,6 +186,7 @@ export function useChatManagement(dbContext: DBContext | null) {
                 tables: chat.tables,
                 chartSpecs: chat.chartSpecs,
                 mapSpecs: chat.mapSpecs,
+                tableSpecs: chat.tableSpecs,
             } as ChatState;
         }, [chatsRecord, localState.selectedChatId]),
     };
