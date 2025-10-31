@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSetAtom, useAtomValue } from 'jotai';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { selectTableAtom, currentChatAtom } from '../../../store/atoms';
 
-export function useTableSelection(
-    dbContext: DBContext | null,
-    schemaName: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
-) {
+export function useTableSelection(dbContext: DBContext | null, schemaName: string | null) {
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [prevSchemaName, setPrevSchemaName] = useState<string | null>(null);
     const setTableInAtom = useSetAtom(selectTableAtom);
@@ -71,12 +66,7 @@ export function useTableSelection(
     useEffect(() => {
         const restoreTableSelection = async () => {
             // Only restore if we have a connection and this is the right chat
-            if (
-                connection &&
-                currentChat &&
-                `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName &&
-                dbContext
-            ) {
+            if (currentChat && `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName && dbContext) {
                 if (currentChat.selectedTable) {
                     // Check if the table actually exists in this schema
                     try {
@@ -102,7 +92,7 @@ export function useTableSelection(
         };
 
         restoreTableSelection();
-    }, [connection, currentChat, dbContext, schemaName, setTableInAtom]);
+    }, [currentChat, dbContext, schemaName, setTableInAtom]);
 
     return {
         selectedTable,

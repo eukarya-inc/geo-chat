@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { checkTableGeometry } from '../../../utils/duckdb';
 import type { TableStyle } from '../../../components/map';
 import { updateChatStateAtom, currentChatStateAtom } from '../../../store/atoms';
+import type { DBContext } from '../../../lib/duckdb/dbContext';
 
-export function useMapVisualization(
-    selectedTable: string | null,
-    connection: Awaited<ReturnType<AsyncDuckDB['connect']>> | null
-) {
+export function useMapVisualization(selectedTable: string | null, db: DBContext | null) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string | undefined>(undefined);
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -29,12 +26,12 @@ export function useMapVisualization(
     // Check for geom column and available columns when table is selected
     useEffect(() => {
         const checkGeomColumn = async () => {
-            if (!selectedTable || !connection) {
+            if (!selectedTable || !db) {
                 setSelectedGeometryColumn(undefined);
                 return;
             }
 
-            const result = await checkTableGeometry(connection, selectedTable);
+            const result = await checkTableGeometry(db, selectedTable);
 
             if (result.geometryColumns.length > 0) {
                 setSelectedGeometryColumn(result.geometryColumns[0]);
@@ -45,7 +42,7 @@ export function useMapVisualization(
         };
 
         checkGeomColumn();
-    }, [selectedTable, connection]);
+    }, [selectedTable, db]);
 
     // Update table styles for current table
     const updateTableStyle = useCallback(

@@ -143,13 +143,13 @@ function ChatPage() {
     const schemaName = chatIdToSchemaName(selectedChatId);
 
     // Schema management (uses chats state from above)
-    const { connection } = useSchemaManagement(dbContext, schemaName, chats, cleanedChartSpecs => {
+    useSchemaManagement(dbContext, schemaName, chats, cleanedChartSpecs => {
         // Update the chat state with cleaned chartSpecs when orphaned specs are removed
         updateChatState({ chartSpecs: cleanedChartSpecs });
     });
 
     // Table selection
-    const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName, connection);
+    const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName);
 
     // Map visualization
     const {
@@ -159,7 +159,7 @@ function ChatPage() {
         mapStyle,
         updateTableStyle,
         deleteTableStyle,
-    } = useMapVisualization(selectedTable, connection);
+    } = useMapVisualization(selectedTable, dbContext);
 
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(
@@ -832,7 +832,7 @@ function ChatPage() {
                             className="h-full flex flex-col overflow-hidden py-4 pl-2 pr-4 bg-gray-50"
                             style={{ width: `${100 - chatWidthPercentage}%` }}
                         >
-                            {dbContext && selectedTable && connection && (
+                            {dbContext && selectedTable && (
                                 <div className="flex-1 overflow-hidden flex flex-col bg-white border border-gray-300 rounded-md">
                                     {/* Table Selector Header */}
                                     <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-md">

@@ -1,6 +1,7 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { Table as ArrowTable, tableFromArrays } from 'apache-arrow';
 import { convertArrowToJS } from './arrowConverter';
+import { DBContext } from '../lib/duckdb/dbContext';
 
 export interface TableColumn {
     name: string;
@@ -505,17 +506,13 @@ export function isBlobColumn(columnType: string): boolean {
 /**
  * Check if a table has a geometry column and return column information
  */
-export async function checkTableGeometry(
-    connection: AsyncDuckDBConnection,
-    tableName: string
-): Promise<GeometryCheckResult> {
+export async function checkTableGeometry(db: DBContext, tableName: string): Promise<GeometryCheckResult> {
     try {
         // Query table schema using PRAGMA table_info
-        const result = await connection.query(`PRAGMA table_info('${tableName}')`);
-        const columns = result.toArray();
+        const result = await db.executeQuery(`PRAGMA table_info('${tableName}')`);
 
         // Extract column information
-        const columnInfo: ColumnInfo[] = columns.map(row => {
+        const columnInfo: ColumnInfo[] = result.map(row => {
             const rowData = row as Record<string, unknown>;
             return {
                 column_name: String(rowData.name || ''),
