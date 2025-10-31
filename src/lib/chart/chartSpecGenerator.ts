@@ -1,4 +1,5 @@
 import type { VegaChartSpec } from '../../types/chart';
+import { createDuckDBUrl } from '../../utils/schema';
 
 // Column information interface
 export interface ColumnInfo {
@@ -42,7 +43,8 @@ export function getFieldTypeFromColumns(fieldName: string, columns: ColumnInfo[]
 export function generateChartSpec(
     config: ChartConfig,
     columns: ColumnInfo[],
-    initialSpec: VegaChartSpec
+    initialSpec: VegaChartSpec,
+    schema?: string | null
 ): VegaChartSpec {
     if (!config.tableName || !config.plotType) return initialSpec;
 
@@ -85,6 +87,9 @@ export function generateChartSpec(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { width: _width, height: _height, ...restInitialSpec } = initialSpec as unknown as Record<string, unknown>;
 
+    // Create DuckDB URL for data source
+    const dataUrl = createDuckDBUrl(config.tableName, schema);
+
     const baseSpec: Record<string, unknown> = {
         ...restInitialSpec,
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -93,8 +98,7 @@ export function generateChartSpec(
         height: config.height || 'container',
         mark,
         data: {
-            sql: `SELECT * FROM ${config.tableName} LIMIT 1000`,
-            values: [],
+            url: dataUrl,
         },
     };
 

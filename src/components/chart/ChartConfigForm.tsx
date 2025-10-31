@@ -201,9 +201,9 @@ export function ChartConfigForm({
             return;
         }
 
-        // Skip if columns just loaded (first time columns populated)
+        // Skip if columns are being loaded for the first time
         // This prevents re-render when columns are fetched asynchronously
-        if (columnsLoadedRef.current && columns.length > 0) {
+        if (columnsLoadedRef.current) {
             columnsLoadedRef.current = false; // Reset after handling first load
             return;
         }

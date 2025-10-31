@@ -164,7 +164,7 @@ const layeredSpecSchema = z
             if (layerData && typeof layerData === 'object' && layerData !== null && !('values' in layerData)) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
-                    message: `Layer ${index} must use data.values directly, not data.sql or data.name`,
+                    message: `Layer ${index} must use data.values directly, not data.url or data.name`,
                     path: ['layer', index, 'data'],
                 });
             }

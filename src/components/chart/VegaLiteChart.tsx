@@ -300,8 +300,9 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
 
 export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
     // Custom comparison to prevent re-renders when only unrelated props change
+    // Use deep comparison for spec to detect changes in chart configuration
     return (
-        prevProps.spec === nextProps.spec &&
+        JSON.stringify(prevProps.spec) === JSON.stringify(nextProps.spec) &&
         prevProps.dbContext === nextProps.dbContext &&
         prevProps.schema === nextProps.schema &&
         prevProps.showHeader === nextProps.showHeader &&
