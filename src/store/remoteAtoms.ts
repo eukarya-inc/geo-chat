@@ -2,6 +2,7 @@ import { atom } from 'jotai';
 import type { StructuredMessage } from '../types/message';
 import type { TableStyle as MapTableStyle } from '../components/map';
 import type { ChartSpec } from '../types/chart';
+import type { TableSpec } from '../types/table';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { Layout } from 'react-grid-layout';
 
@@ -15,6 +16,9 @@ export type ChartSpecs = Record<TableName, ChartSpec>;
 
 // Map specifications per table
 export type MapSpecs = Record<TableName, MapSpec>;
+
+// Table specifications per table
+export type TableSpecs = Record<TableName, TableSpec>;
 
 // ===== Remote state type definitions (server sync target) =====
 export interface Table {
@@ -76,6 +80,7 @@ export interface Chat {
     tables: Record<string, Table>; // Changed from tableHistory array to tables Record
     chartSpecs?: ChartSpecs; // Chart specs per table (e.g., scatter plots for each explanatory variable)
     mapSpecs?: MapSpecs; // Map styles per table
+    tableSpecs?: TableSpecs; // Table specs per table (for dashboard export)
     chartUserDeleted?: string[]; // List of table keys (schema-table) where user deleted charts
 }
 
@@ -83,9 +88,10 @@ export interface Chat {
 export type ChatState = Omit<Chat, 'id' | 'title' | 'createdAt' | 'selectedTable'>;
 
 // ChatStateUpdate allows null values for deletion (used in updateChatStateAtom)
-export type ChatStateUpdate = Partial<Omit<ChatState, 'chartSpecs' | 'mapSpecs'>> & {
+export type ChatStateUpdate = Partial<Omit<ChatState, 'chartSpecs' | 'mapSpecs' | 'tableSpecs'>> & {
     chartSpecs?: Record<TableName, ChartSpec | null>; // ChartSpec | null for deletion support
     mapSpecs?: MapSpecs;
+    tableSpecs?: Record<TableName, TableSpec | null>; // TableSpec | null for deletion support
 };
 
 export interface RemoteState {
@@ -116,6 +122,7 @@ export const chatStatesAtom = atom(get => {
             tables: chat.tables,
             chartSpecs: chat.chartSpecs,
             mapSpecs: chat.mapSpecs,
+            tableSpecs: chat.tableSpecs,
             chartUserDeleted: chat.chartUserDeleted,
         };
     }

@@ -6,10 +6,12 @@ import {
     type ChatStateUpdate,
     type ChartSpecs,
     type MapSpecs,
+    type TableSpecs,
     type TableName,
 } from './remoteAtoms';
 import { selectedChatIdAtom, localStateAtom } from './localAtoms';
 import type { ChartSpec } from '../types/chart';
+import type { TableSpec } from '../types/table';
 
 // ===== Integrated View Atoms (combining remote and local state) =====
 // Current chat (retrieved from remote state)
@@ -212,12 +214,16 @@ export const updateChatStateAtom = atom(null, (get, set, updates: ChatStateUpdat
         // Merge mapSpecs - deep merge to preserve existing properties
         const mergedMapSpecs = mergeMapSpecs(currentChat.mapSpecs, updates.mapSpecs);
 
+        // Merge tableSpecs - updates are merged per table to preserve other tables' specs
+        const mergedTableSpecs = mergeTableSpecs(currentChat.tableSpecs, updates.tableSpecs);
+
         // Create updated chat with merged specs
         const updatedChat = {
             ...currentChat,
             ...updates,
             chartSpecs: mergedChartSpecs,
             mapSpecs: mergedMapSpecs,
+            tableSpecs: mergedTableSpecs,
         };
 
         return {
@@ -273,6 +279,28 @@ function mergeMapSpecs(existing: MapSpecs | undefined, updates: MapSpecs | undef
                   }
                 : existingMapSpec.tableStyles,
         };
+    }
+
+    return merged;
+}
+
+// Helper: Merge table specs per table (similar to chart specs)
+function mergeTableSpecs(
+    existing: TableSpecs | undefined,
+    updates: Record<TableName, TableSpec | null> | undefined
+): TableSpecs | undefined {
+    if (!updates) return existing;
+
+    const merged = { ...(existing || {}) };
+
+    // Merge each table's spec
+    for (const [tableName, newTableSpec] of Object.entries(updates)) {
+        // null means deletion
+        if (newTableSpec === null) {
+            delete merged[tableName];
+        } else {
+            merged[tableName] = newTableSpec;
+        }
     }
 
     return merged;
