@@ -59,7 +59,7 @@ export function useApiKeyManagement() {
 }
 
 // Re-export the split hooks for direct use if needed
-export { useChatManagement, chatIdToSchemaName } from './useChatManagement';
+export { useChatManagement } from './useChatManagement';
 export { useSchemaManagement } from './useSchemaManagement';
 export { useTableSelection } from './useTableSelection';
 export { useMapVisualization } from './useMapVisualization';
