@@ -1,6 +1,13 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactGridLayout, { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, MapIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+    ChartBarIcon,
+    CogIcon,
+    MapIcon,
+    EllipsisVerticalIcon,
+    TrashIcon,
+    PencilIcon,
+} from '@heroicons/react/24/outline';
 import { ChartPanel } from '../chart';
 import { MapPanel } from '../map';
 import type { ChartSpec } from '../../types/chart';
@@ -49,6 +56,9 @@ export function Dashboard({
     const [activeTab, setActiveTab] = useState<'charts' | 'layout'>('charts');
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editedTitle, setEditedTitle] = useState(dashboard.title);
+    const titleInputRef = useRef<HTMLInputElement>(null);
 
     // Determine which visualizations are shown on dashboard
     const shownVisualizationIds = new Set(dashboard.layout.map(item => item.i));
@@ -126,6 +136,46 @@ export function Dashboard({
     const closeDropdown = useCallback(() => {
         setOpenDropdownId(null);
     }, []);
+
+    const handleStartEditingTitle = useCallback(() => {
+        setIsEditingTitle(true);
+        setEditedTitle(dashboard.title);
+    }, [dashboard.title]);
+
+    const handleSaveTitle = useCallback(() => {
+        const trimmedTitle = editedTitle.trim();
+        if (trimmedTitle && trimmedTitle !== dashboard.title) {
+            onUpdateDashboard({
+                ...dashboard,
+                title: trimmedTitle,
+            });
+        }
+        setIsEditingTitle(false);
+    }, [editedTitle, dashboard, onUpdateDashboard]);
+
+    const handleCancelEditingTitle = useCallback(() => {
+        setIsEditingTitle(false);
+        setEditedTitle(dashboard.title);
+    }, [dashboard.title]);
+
+    const handleTitleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                handleSaveTitle();
+            } else if (e.key === 'Escape') {
+                handleCancelEditingTitle();
+            }
+        },
+        [handleSaveTitle, handleCancelEditingTitle]
+    );
+
+    // Focus input when editing starts
+    useEffect(() => {
+        if (isEditingTitle && titleInputRef.current) {
+            titleInputRef.current.focus();
+            titleInputRef.current.select();
+        }
+    }, [isEditingTitle]);
 
     // Trigger resize event after dashboard mount and when visualizations change
     // This ensures Vega charts recalculate their size correctly
@@ -290,8 +340,38 @@ export function Dashboard({
             </div>
 
             {/* Right Side - Grid Layout */}
-            <div className="flex-1 h-full overflow-auto bg-gray-50">
-                <div className="p-4 h-full">
+            <div className="flex-1 h-full flex flex-col bg-gray-50">
+                {/* Dashboard Title Header */}
+                <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200">
+                    {isEditingTitle ? (
+                        <div className="flex items-center gap-2">
+                            <input
+                                ref={titleInputRef}
+                                type="text"
+                                value={editedTitle}
+                                onChange={e => setEditedTitle(e.target.value)}
+                                onKeyDown={handleTitleKeyDown}
+                                onBlur={handleSaveTitle}
+                                className="flex-1 text-2xl font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                                placeholder="Dashboard name"
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-3 group">
+                            <h1 className="text-2xl font-bold text-gray-900">{dashboard.title}</h1>
+                            <button
+                                onClick={handleStartEditingTitle}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                title="Edit dashboard name"
+                            >
+                                <PencilIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Grid Layout Area */}
+                <div className="flex-1 overflow-auto p-4">
                     {shownVisualizations.length > 0 ? (
                         dashboard.responsive ? (
                             <ResponsiveGridLayout
