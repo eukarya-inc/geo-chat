@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { VegaLite } from 'react-vega';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { parseDuckDBUrl } from '../../utils/schema';
 import type { VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import type { TopLevelSpec } from 'vega-lite';
@@ -13,23 +14,16 @@ function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader
     return {
         ...defaultLoader,
         load: async (uri: string) => {
-            // Check if this is a DuckDB table URL: duckdb://schema/table
+            // Check if this is a DuckDB table URL: duckdb://schema.table or duckdb://table
             if (uri.startsWith('duckdb://')) {
-                // Extract table path from URI
-                const path = uri.replace('duckdb://', '');
-                const parts = path.split('/');
-
-                let tableName: string;
-                let schemaName: string | null = schema;
-
-                if (parts.length === 2) {
-                    // Format: duckdb://schema/table
-                    schemaName = parts[0];
-                    tableName = parts[1];
-                } else {
-                    // Format: duckdb://table (use default schema)
-                    tableName = parts[0];
+                const parsed = parseDuckDBUrl(uri);
+                if (!parsed) {
+                    throw new Error(`Invalid DuckDB URL: ${uri}`);
                 }
+
+                const { schemaName: urlSchema, tableName } = parsed;
+                // Use schema from URL if provided, otherwise use default schema
+                const schemaName = urlSchema || schema;
 
                 // Build SQL query
                 const sql = `SELECT * FROM ${tableName}`;

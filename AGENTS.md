@@ -113,7 +113,7 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 
 - **Map component** (`src/components/Map.tsx`): MapLibre GL integration that renders selected table data and shows column information in popups. Handles JSON property extraction for all geometry types (points, lines, polygons).
 
-- **VegaLiteChart component** (`src/components/chart/VegaLiteChart.tsx`): Interactive chart component for data visualization. Uses a custom Vega loader that queries DuckDB directly using the `duckdb://schema/table` URL scheme. The loader executes `SELECT * FROM table` when Vega requests data, eliminating serialization overhead.
+- **VegaLiteChart component** (`src/components/chart/VegaLiteChart.tsx`): Interactive chart component for data visualization. Uses a custom Vega loader that queries DuckDB directly using the `duckdb://schema.table` or `duckdb://table` URL scheme. The loader executes `SELECT * FROM table` when Vega requests data, eliminating serialization overhead.
 
 - **AI Chat components** (`src/components/chat/`): AI-powered SQL assistant with tools for map styling and data visualization. Uses Anthropic Claude with specialized tools for DuckDB queries and MapLibre style generation.
 

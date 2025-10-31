@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartTypeIconGrid, ChartTypeOption } from './ChartTypeIconGrid';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
+import { parseDuckDBUrl } from '../../utils/schema';
 import type { ChartConfig, ColumnInfo } from '../../lib/chart/chartSpecGenerator';
 
 interface ChartConfigFormProps {
@@ -122,14 +123,13 @@ export function ChartConfigForm({
     // Fetch columns from the current table
     useEffect(() => {
         const fetchColumns = async () => {
-            // Extract table name from the chart spec data URL (duckdb://schema/table or duckdb://table)
+            // Extract table name from the chart spec data URL (duckdb://schema.table or duckdb://table)
             if (chartSpec.spec.data && 'url' in chartSpec.spec.data && chartSpec.spec.data.url) {
                 const url = chartSpec.spec.data.url;
                 if (typeof url === 'string' && url.startsWith('duckdb://')) {
-                    const path = url.replace('duckdb://', '');
-                    const parts = path.split('/');
-                    // Format: duckdb://schema/table or duckdb://table
-                    const tableName = parts.length === 2 ? parts[1] : parts[0];
+                    const parsed = parseDuckDBUrl(url);
+                    if (!parsed) return;
+                    const tableName = parsed.tableName;
 
                     try {
                         const cols = await dbContext.getTableColumns(tableName, schema);
@@ -156,15 +156,15 @@ export function ChartConfigForm({
 
     // Create chart config object
     const createChartConfig = useCallback((): ChartConfig | null => {
-        // Extract table name from the chart spec data URL (duckdb://schema/table or duckdb://table)
+        // Extract table name from the chart spec data URL (duckdb://schema.table or duckdb://table)
         let tableName = '';
         if (chartSpec.spec.data && 'url' in chartSpec.spec.data && chartSpec.spec.data.url) {
             const url = chartSpec.spec.data.url;
             if (typeof url === 'string' && url.startsWith('duckdb://')) {
-                const path = url.replace('duckdb://', '');
-                const parts = path.split('/');
-                // Format: duckdb://schema/table or duckdb://table
-                tableName = parts.length === 2 ? parts[1] : parts[0];
+                const parsed = parseDuckDBUrl(url);
+                if (parsed) {
+                    tableName = parsed.tableName;
+                }
             }
         }
 

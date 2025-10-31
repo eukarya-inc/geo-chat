@@ -1,6 +1,8 @@
 /**
  * Utilities for generating and handling Mapbox Vector Tiles (MVT)
  */
+import { parseDuckDBUrl } from '../../../utils/schema';
+
 export interface QueryParams {
     zxy: {
         z: number;
@@ -180,9 +182,15 @@ export function parseDuckDBTileUrl(
     const [, tableSpec, z, x, y] = match;
     const zxy = { z: parseInt(z), x: parseInt(x), y: parseInt(y) };
 
-    // Parse schema.table or just table
-    const tableParts = tableSpec.split('.');
-    const tableName = tableParts.length === 2 ? tableParts[1] : tableSpec;
+    // Parse schema.table using shared utility
+    const baseUrl = `duckdb://${tableSpec}`;
+    const parsed = parseDuckDBUrl(baseUrl);
+    if (!parsed) {
+        console.error('Failed to parse table spec:', tableSpec);
+        return null;
+    }
+
+    const tableName = parsed.tableName;
 
     return { tableSpec, tableName, zxy };
 }
