@@ -77,7 +77,7 @@ export function generateVectorTileQuery(params: QueryParams): string {
             ST_Transform(ST_SimplifyPreserveTopology("${geomCol}", ${simplify}), 'EPSG:4326', 'EPSG:3857', true),
             ST_Extent(ST_TileEnvelope(${zxy.z}, ${zxy.x}, ${zxy.y})),
             4096,
-            256,
+            0,
             false
         )${columnList ? `, ${columnList}` : ''}
     }`;
