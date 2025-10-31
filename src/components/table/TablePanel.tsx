@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { TableView } from './TableView';
@@ -36,15 +36,21 @@ export function TablePanel({
     onTitleChange,
 }: TablePanelProps) {
     const [connection, setConnection] = useState<AsyncDuckDBConnection | null>(null);
+    const connectionRef = useRef<AsyncDuckDBConnection | null>(null);
 
     useEffect(() => {
         let isMounted = true;
-        let conn: AsyncDuckDBConnection | null = null;
 
         const initConnection = async () => {
-            conn = await dbContext.createManagedConnection(schema || null);
+            const conn = await dbContext.createManagedConnection(schema || null);
+            connectionRef.current = conn;
             if (isMounted) {
                 setConnection(conn);
+            } else {
+                // Component unmounted before we could set state, close connection immediately
+                conn.close().catch(err => {
+                    console.error('Failed to close connection:', err);
+                });
             }
         };
 
@@ -52,10 +58,11 @@ export function TablePanel({
 
         return () => {
             isMounted = false;
-            if (conn) {
-                conn.close().catch(err => {
+            if (connectionRef.current) {
+                connectionRef.current.close().catch(err => {
                     console.error('Failed to close connection:', err);
                 });
+                connectionRef.current = null;
             }
         };
     }, [dbContext, schema]);
