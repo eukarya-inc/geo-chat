@@ -100,8 +100,4 @@ export function useSchemaManagement(
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [schemaName, dbContext]); // Only depend on schemaName and dbContext
-
-    return {
-        connection,
-    };
 }
