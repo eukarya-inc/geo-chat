@@ -48,11 +48,11 @@ export interface ToolsOptions {
     dbContext: DBContext;
     schema: string | null;
     apiKey: string;
-    onChartUpdate: (tableName: string, spec: VegaChartSpec) => Promise<void>;
-    onChartDelete: (tableName: string) => Promise<void>;
-    getCurrentChatState: () => ChatState | null;
-    onMapStyleUpdate: (tableName: string, style: TableStyle) => Promise<void>;
-    onMapStyleDelete: (tableName: string) => Promise<void>;
+    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
+    onChartDelete?: (tableName: string) => Promise<void>;
+    getCurrentChatState?: () => ChatState | null;
+    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>;
+    onMapStyleDelete?: (tableName: string) => Promise<void>;
 }
 
 /**
@@ -84,10 +84,10 @@ export async function initTools(options: ToolsOptions): Promise<Tools> {
 
     // Create map style tools
     const get_map_style_for_table = createMapStyleGetTool(
-        tableName => options.getCurrentChatState()?.mapSpecs?.[tableName]
+        tableName => options.getCurrentChatState?.()?.mapSpecs?.[tableName]
     );
     const update_map_style_for_table = createMapStyleTool(
-        tableName => options.getCurrentChatState()?.mapSpecs?.[tableName],
+        tableName => options.getCurrentChatState?.()?.mapSpecs?.[tableName],
         options.onMapStyleUpdate,
         options.dbContext,
         options.schema

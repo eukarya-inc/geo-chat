@@ -6,7 +6,6 @@ import { setupWorker } from 'msw/browser';
 import { suppressConsole } from '../../test/console';
 import { initializeDuckDB } from '../../test/duckdb';
 import { collectStream } from '../../test/streamCollector';
-import { createMockTools } from '../../test/tools';
 import { createAIMockHandler } from '../../test/aiMockHandler';
 
 describe('streamGenerator integration test (browser, real DuckDB-WASM)', () => {
@@ -51,10 +50,7 @@ describe('streamGenerator integration test (browser, real DuckDB-WASM)', () => {
     });
 
     it('streams AI response with DuckDB tool execution for data analysis', async () => {
-        // Create mock tools using helper function
-        const { tools } = createMockTools(dbContext);
-
-        // Create stream generator
+        // Create stream generator - tools and system prompt are now generated internally
         const generator = createAIStreamGenerator({
             messages: [
                 {
@@ -63,8 +59,9 @@ describe('streamGenerator integration test (browser, real DuckDB-WASM)', () => {
                 },
             ],
             apiKey: 'test-api-key',
-            systemPrompt: 'あなたはデータ分析アシスタントです。DuckDBを使ってデータを分析し、結果を説明してください。',
-            tools,
+            dbContext,
+            schema: null,
+            selectedTable: null,
         });
 
         // Collect stream parts

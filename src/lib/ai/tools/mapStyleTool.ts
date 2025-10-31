@@ -24,8 +24,8 @@ export type MapStyleUpdateResult =
       };
 
 export function createMapStyleTool(
-    getMapSpec: (tableName: string) => MapSpec | undefined,
-    onMapStyleUpdate: (tableName: string, style: TableStyle) => Promise<void>,
+    getMapSpec?: (tableName: string) => MapSpec | undefined,
+    onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
     dbContext?: DBContext | null,
     schema?: string | null
 ) {
@@ -250,7 +250,7 @@ To show/hide layers, include a visibility property in the style.`,
         }): Promise<MapStyleUpdateResult> => {
             try {
                 // Get current map spec to check existing styles
-                const mapSpec = getMapSpec(table_name);
+                const mapSpec = getMapSpec?.(table_name);
 
                 // Check if table has geometry column using DESCRIBE
                 if (dbContext) {
@@ -583,7 +583,7 @@ Available columns in '${table_name}': ${columnInfo}`,
                 });
 
                 // Apply the update through callback
-                await onMapStyleUpdate(table_name, updatedLayers);
+                await onMapStyleUpdate?.(table_name, updatedLayers);
 
                 return {
                     success: true,
