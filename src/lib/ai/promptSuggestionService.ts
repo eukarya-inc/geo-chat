@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../duckdb/dbContext';
+import { simplifyDataForAI } from '../../utils/dataSimplifier';
 
 const SuggestedPromptsSchema = z.object({
     prompts: z
@@ -34,6 +35,12 @@ export async function generatePromptSuggestions(
         // Get sample data
         const sampleData = await dbContext.executeQuery(`SELECT * FROM ${tableName} LIMIT 5`, schema);
 
+        // Simplify sample data to remove large blob/geometry values
+        const simplifiedSampleData = simplifyDataForAI(
+            sampleData as Record<string, unknown>[],
+            schemaData as Array<{ column_name: string; column_type: string }>
+        );
+
         const anthropic = createAnthropic({
             apiKey,
             headers: {
@@ -50,7 +57,7 @@ Schema:
 ${JSON.stringify(schemaData, null, 2)}
 
 Sample Data (first 5 rows):
-${JSON.stringify(sampleData, null, 2)}
+${JSON.stringify(simplifiedSampleData, null, 2)}
 
 Based on this table structure and data, suggest 6-8 specific, actionable prompts in Japanese that the user can click to perform various analyses.
 

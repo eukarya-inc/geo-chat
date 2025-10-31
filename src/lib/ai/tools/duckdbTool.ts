@@ -7,6 +7,7 @@ import { formatSQL } from '../../../utils/sqlFormatter';
 import { checkSQLType } from '../../../utils/sqlTypeChecker';
 import { getTableInfo } from '../../../utils/tableInfo';
 import type { ColumnStatistics } from '../../../utils/tableInfo';
+import { simplifyDataForAI } from '../../../utils/dataSimplifier';
 
 export type Result =
     | {
@@ -123,6 +124,28 @@ export function createDuckDBTool(
                     );
                     data = data.slice(0, AI_RETURN_LIMIT);
                     truncated = true;
+                }
+
+                // Simplify data for AI consumption (replace blob/geometry with placeholders)
+                // Only if we have data to simplify
+                if (data.length > 0 && !sqlType.isTableOperation) {
+                    try {
+                        // For SELECT queries, get schema to properly simplify binary data
+                        // Extract table name from SQL for DESCRIBE (basic implementation)
+                        // This is a best-effort approach - complex queries may not extract table name correctly
+                        const fromMatch = executeSql.match(/FROM\s+([^\s,;()]+)/i);
+                        if (fromMatch && fromMatch[1]) {
+                            const tableName = fromMatch[1].replace(/['"]/g, '');
+                            const schemaData = await dbContext.executeQuery(`DESCRIBE ${tableName}`, schema);
+                            data = simplifyDataForAI(
+                                data,
+                                schemaData as Array<{ column_name: string; column_type: string }>
+                            );
+                        }
+                    } catch (schemaError) {
+                        // If we can't get schema, continue without simplification
+                        console.warn('[DuckDB Tool] Could not get schema for data simplification:', schemaError);
+                    }
                 }
 
                 // Simple table refresh for DDL operations
