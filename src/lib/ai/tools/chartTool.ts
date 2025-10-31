@@ -2,6 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { VegaChartSpec } from '../../../types/chart';
 import type { ChatState } from '../../../store/remoteAtoms';
+import { createDuckDBUrl } from '../../../utils/schema';
 
 export type ChartGetResult = {
     success: boolean;
@@ -519,7 +520,7 @@ export function processAIChartSpec(
     const { width: _width, height: _height, ...restAiSpec } = aiSpec as any;
 
     // Create duckdb URL for data
-    const dataUrl = schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
+    const dataUrl = createDuckDBUrl(tableName, schema);
 
     // Ensure required Vega-Lite schema
     const processedSpec = {

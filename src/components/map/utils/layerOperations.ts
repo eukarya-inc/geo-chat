@@ -2,6 +2,7 @@ import maplibregl from 'maplibre-gl';
 import type { TableStyle, VectorTileLayer, ExtraStyle } from '../types';
 import { getDefaultTableStyle } from './mapHelpers';
 import type { MapStyleManager } from '../mapStyleManager';
+import { createDuckDBUrl } from '../../../utils/schema';
 
 /**
  * Remove all DuckDB sources and their layers from the map
@@ -80,9 +81,8 @@ export function addTableLayers(
     // Add the source
     try {
         // Include schema in tile URL if provided
-        const tileUrl = schema
-            ? `duckdb://${schema}.${tableSpec}/{z}/{x}/{y}.pbf`
-            : `duckdb://${tableSpec}/{z}/{x}/{y}.pbf`;
+        const baseUrl = createDuckDBUrl(tableSpec, schema);
+        const tileUrl = `${baseUrl}/{z}/{x}/{y}.pbf`;
         map.addSource(sourceId, {
             type: 'vector',
             tiles: [tileUrl],

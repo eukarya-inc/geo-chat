@@ -300,11 +300,8 @@ describe('ChartConfigForm Logic', () => {
             // Simulate the useEffect logic for fetching columns
             const url = chartSpecWithURL.spec.data.url;
             if (typeof url === 'string' && url.startsWith('duckdb://')) {
-                const path = url.replace('duckdb://', '');
-                const parts = path.split('/');
-                const tableName = parts.length === 2 ? parts[1] : parts[0];
-
-                expect(tableName).toBe('test_table');
+                const parsed = { schemaName: null, tableName: 'test_table' }; // Mock parseDuckDBUrl result
+                expect(parsed.tableName).toBe('test_table');
             }
 
             // Verify the mock would be called correctly

@@ -1,16 +1,10 @@
 import type { DBContext } from '../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../types/chart';
+import { createDuckDBUrl } from './schema';
 
 interface ChartGenerationResult {
     spec: VegaChartSpec;
     title: string;
-}
-
-/**
- * Generate duckdb:// URL for a table
- */
-function createDuckDBUrl(tableName: string, schema: string | null): string {
-    return schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
 }
 
 export async function generateDefaultCharts(

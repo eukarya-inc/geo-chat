@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import type { ChartSpec, VegaChartSpec } from '../../types/chart';
+import { parseDuckDBUrl } from '../../utils/schema';
 
 interface DataSourceModalProps {
     isOpen: boolean;
@@ -44,10 +45,10 @@ export function DataSourceModal({ isOpen, onClose, chartSpec, onUpdateChart }: D
             if (data && 'url' in data && data.url) {
                 const url = data.url;
                 if (typeof url === 'string' && url.startsWith('duckdb://')) {
-                    // Handle duckdb:// URLs - extract table name
-                    const path = url.replace('duckdb://', '');
-                    const parts = path.split('/');
-                    const extractedTableName = parts.length === 2 ? parts[1] : parts[0];
+                    // Handle duckdb:// URLs - extract table name (format: duckdb://schema.table or duckdb://table)
+                    const parsed = parseDuckDBUrl(url);
+                    if (!parsed) return;
+                    const extractedTableName = parsed.tableName;
                     setDataSourceType('sql');
                     setTableName(extractedTableName);
                     setSqlQuery(`SELECT * FROM ${extractedTableName}`);
