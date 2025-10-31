@@ -1,4 +1,27 @@
 import type { DBContext } from '../duckdb/dbContext';
+import { generateSystemPrompt } from './systemPrompt';
+
+/**
+ * Generate full system prompt with context message and base system prompt
+ *
+ * This function combines the dynamic context message (database state, current tables, etc.)
+ * with the static base system prompt to create a complete system prompt for the AI.
+ *
+ * @param dbContext - Database context for querying current state
+ * @param schemaName - Schema name to use for context
+ * @param selectedTable - Currently selected table name
+ * @returns Combined system prompt string, or just the base prompt if context generation fails
+ */
+export async function generateFullSystemPrompt(
+    dbContext: DBContext | null,
+    schemaName: string | null,
+    selectedTable: string | null
+): Promise<string> {
+    const baseSystemPrompt = generateSystemPrompt();
+    const contextMessage = await generateContextMessage(dbContext, schemaName, selectedTable);
+
+    return contextMessage ? `${contextMessage}\n\n${baseSystemPrompt}` : baseSystemPrompt;
+}
 
 /**
  * Generate a hidden context message with current database state
@@ -54,16 +77,49 @@ export async function generateContextMessage(
                     }
                 }
 
-                // Get sample data (first 5 rows)
-                const sampleQuery = `SELECT * FROM "${schemaName}"."${selectedTable}" LIMIT 5`;
+                // Get sample data (reduced to 3 rows to save tokens)
+                const sampleLimit = 3;
+                const sampleQuery = `SELECT * FROM "${schemaName}"."${selectedTable}" LIMIT ${sampleLimit}`;
                 const result = await dbContext.executeQuery(sampleQuery, schemaName);
 
                 if (result && result.length > 0) {
-                    contextMessage += `\nSample data (first 5 rows only - NOT the complete dataset):\n`;
-                    contextMessage += `Note: This is a small sample. Use duckdb_query to query the full dataset for accurate analysis.\n`;
-                    contextMessage += '```json\n';
-                    contextMessage += JSON.stringify(result, null, 2);
-                    contextMessage += '\n```\n';
+                    const columnCount = Object.keys(result[0]).length;
+                    const shouldSummarize = columnCount > 15;
+
+                    if (shouldSummarize) {
+                        // For tables with many columns, show only key columns to reduce token usage
+                        const summarizedResult = result.map(row => {
+                            const keys = Object.keys(row);
+                            // Show first 5 columns + last 3 columns
+                            const importantKeys = [...keys.slice(0, 5), ...keys.slice(-3)];
+                            const summarized: Record<string, unknown> = {};
+
+                            importantKeys.forEach(key => {
+                                summarized[key] = row[key];
+                            });
+
+                            // Add indicator for omitted columns
+                            if (keys.length > importantKeys.length) {
+                                summarized['_omitted_'] =
+                                    `... ${keys.length - importantKeys.length} more columns (use DESCRIBE to see all)`;
+                            }
+
+                            return summarized;
+                        });
+
+                        contextMessage += `\nSample data (${sampleLimit} rows, showing key columns of ${columnCount} total):\n`;
+                        contextMessage += `Note: Some columns omitted to save space. Use duckdb_query to see full data.\n`;
+                        contextMessage += '```json\n';
+                        contextMessage += JSON.stringify(summarizedResult, null, 2);
+                        contextMessage += '\n```\n';
+                    } else {
+                        // For tables with few columns, show all data
+                        contextMessage += `\nSample data (first ${sampleLimit} rows - NOT the complete dataset):\n`;
+                        contextMessage += `Note: This is a small sample. Use duckdb_query to query the full dataset for accurate analysis.\n`;
+                        contextMessage += '```json\n';
+                        contextMessage += JSON.stringify(result, null, 2);
+                        contextMessage += '\n```\n';
+                    }
                 }
             } catch (error) {
                 // If we can't get schema or sample data, just continue without it

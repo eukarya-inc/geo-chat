@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AIChat from '../../components/chat';
+import { Chat, EmptyChat } from '../../components/chat';
 import ApiKeyInput from '../../components/chat/ApiKeyInput';
+import { useAIChat } from '../../lib/ai/useAIChat';
 import { TablePanel } from '../../components/table/TablePanel';
-import RemoteFile from '../../components/remote-file';
+import { DataSourceSelector } from '../../components/data-source-selector';
 import TableSQLDisplay from '../../components/query';
 import TableSelector from '../../components/table/TableSelector';
 import { useDuckDB } from '../../lib/duckdb/useDuckDB';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { ChartSpecModal, ChartPanel, ChartTypeSelector, type ChartTypeOption } from '../../components/chart';
 import { MapPanel } from '../../components/map';
-import { ChatList } from '../../components/chat/ChatList';
+import { Sidebar } from '../../components/Sidebar';
 import { Dashboard, ChartExportModal } from '../../components/dashboard';
+import type { Dashboard as DashboardType } from '../../store/remoteAtoms';
 import { TableCellsIcon, MapIcon } from '@heroicons/react/24/outline';
 import { generateChartByType } from '../../utils/chartSpecGenerator';
 import type { ChartSpec } from '../../types/chart';
@@ -19,17 +21,18 @@ import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
-import { localStateAtom, viewModeAtom } from '../../store/localAtoms';
+import { localStateAtom, viewModeAtom, chatWidthPercentageAtom } from '../../store/localAtoms';
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
+import { ResizableHandle } from '../../components/ResizableHandle';
+import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
+import { chatIdToSchemaName } from '../../utils/schema';
 import {
-    chatIdToSchemaName,
     useApiKeyManagement,
     useChatManagement,
     useSchemaManagement,
     useTableSelection,
     useMapVisualization,
     useChartVisualization,
-    useMessageHandling,
     useTableHistorySync,
     useDashboardManagement,
 } from './hooks';
@@ -117,6 +120,9 @@ function ChatPage() {
     // View mode management (for history grids)
     const [viewMode, setViewMode] = useAtom(viewModeAtom);
 
+    // Chat width management
+    const [chatWidthPercentage, setChatWidthPercentage] = useAtom(chatWidthPercentageAtom);
+
     // API key management
     const { apiKey, setApiKey, showApiKeyInput, isLoadingApiKey, saveApiKey } = useApiKeyManagement();
 
@@ -168,6 +174,14 @@ function ChatPage() {
         syncImmediately();
     }, [syncImmediately]);
 
+    // Wrapper for updateChatMessages (keep same signature for compatibility)
+    const updateChatMessagesWithAutoSelect = useCallback(
+        (chatId: string, messages: StructuredMessage[]) => {
+            updateChatMessages(chatId, messages);
+        },
+        [updateChatMessages]
+    );
+
     // Check and update chat title when messages change
     const checkAndUpdateChatTitle = useCallback(
         (messages: StructuredMessage[]) => {
@@ -189,21 +203,36 @@ function ChatPage() {
         [selectedChatId, chats, extractCompletionTitle, renameChat]
     );
 
-    // Message handling
-    const {
-        sendMessageRef,
-        handleSendMessageReady,
-        handleMessagesChange: originalHandleMessagesChange,
-    } = useMessageHandling(selectedChatId, updateChatMessages);
-
-    // Wrap handleMessagesChange to check for title updates
+    // Message handling - now handled directly by AIStore
     const handleMessagesChange = useCallback(
         (messages: StructuredMessage[]) => {
-            originalHandleMessagesChange(messages);
+            if (selectedChatId) {
+                updateChatMessagesWithAutoSelect(selectedChatId, messages);
+            }
             checkAndUpdateChatTitle(messages);
         },
-        [originalHandleMessagesChange, checkAndUpdateChatTitle]
+        [selectedChatId, updateChatMessagesWithAutoSelect, checkAndUpdateChatTitle]
     );
+
+    // Use AI Chat hook for Split View
+    const { messages, isLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } = useAIChat({
+        chatId: selectedChatId || 'default',
+        schema: schemaName,
+        dbContext,
+        apiKey,
+        selectedTable,
+        onMessagesChange: handleMessagesChange,
+        onChartUpdate: updateChartFromAI,
+        onChartDelete: deleteChartFromAI,
+        getCurrentChatState,
+        onMapStyleUpdate: async (tableName: string, style: import('./../../components/map').TableStyle) => {
+            updateTableStyle(tableName, style);
+        },
+        onMapStyleDelete: async (tableName: string) => {
+            deleteTableStyle(tableName);
+        },
+        onConversationCompleted: handleConversationCompleted,
+    });
 
     // Sync table creation history to remote state
     useTableHistorySync(dbContext, selectedChatId);
@@ -223,38 +252,41 @@ function ChatPage() {
     } = useDashboardManagement();
 
     // Navigation handler for sidebar buttons
-    const handleNavigate = (view: 'chat-list' | 'dashboard-list') => {
-        setViewMode(view);
-        selectChat('');
-        setSelectedDashboard(null);
-    };
+    const handleNavigate = useCallback(
+        (view: 'chat' | 'dashboard-list') => {
+            setViewMode(view);
+            selectChat('');
+            setSelectedDashboard(null);
+        },
+        [setViewMode, selectChat, setSelectedDashboard]
+    );
 
     // Chat handlers
-    const handleSelectChat = (chatId: string) => {
-        selectChat(chatId);
-        setViewMode('chat');
-        setSelectedDashboard(null);
-    };
-
-    const handleCreateChat = () => {
-        createNewChat();
-        setViewMode('chat');
-        setSelectedDashboard(null);
-    };
+    const handleSelectChat = useCallback(
+        (chatId: string) => {
+            selectChat(chatId);
+            setViewMode('chat');
+            setSelectedDashboard(null);
+        },
+        [selectChat, setViewMode, setSelectedDashboard]
+    );
 
     // Dashboard handlers
-    const handleSelectDashboard = (dashboardId: string) => {
-        setSelectedDashboard(dashboardId);
-        setViewMode('dashboard');
-        selectChat('');
-    };
+    const handleSelectDashboard = useCallback(
+        (dashboardId: string) => {
+            setSelectedDashboard(dashboardId);
+            setViewMode('dashboard');
+            selectChat('');
+        },
+        [setSelectedDashboard, setViewMode, selectChat]
+    );
 
-    const handleCreateDashboard = () => {
+    const handleCreateDashboard = useCallback(() => {
         const newDashboard = createDashboard();
         setSelectedDashboard(newDashboard.id);
         setViewMode('dashboard');
         selectChat('');
-    };
+    }, [createDashboard, setSelectedDashboard, setViewMode, selectChat]);
 
     const handleDeleteDashboard = (dashboardId: string) => {
         if (selectedDashboardId === dashboardId) {
@@ -263,8 +295,189 @@ function ChatPage() {
         deleteDashboard(dashboardId);
     };
 
+    // Get sample data URL
+    const getSampleDataUrl = useCallback(() => {
+        const basePath = import.meta.env.BASE_URL || '/';
+        return `${window.location.origin}${basePath}data/customer.parquet`;
+    }, []);
+
+    // Handle sending message with chat creation (for EmptyChat)
+    // Returns the new chat ID and optional table name without selecting the chat, so caller can control when to switch
+    const handleSendMessageWithChatCreation = useCallback(
+        async (message: string): Promise<{ chatId: string; tableName?: string } | null> => {
+            try {
+                // Wait for DuckDB to be ready
+                let db = dbContext;
+                if (!db) {
+                    if (!waitForDbContext) {
+                        console.error('DuckDB is not initialized');
+                        return null;
+                    }
+                    db = await waitForDbContext();
+                }
+
+                // Check if message is a URL
+                const dataUrl = extractDataUrl(message);
+
+                if (dataUrl) {
+                    // URL case: create table first, then send the result message
+                    const newChatId = await createNewChat(db);
+                    if (!newChatId) {
+                        console.error('Failed to create chat');
+                        return null;
+                    }
+
+                    const newSchemaName = chatIdToSchemaName(newChatId);
+                    const { tableName, message: tableMessage } = await createTableFromUrl(
+                        dataUrl,
+                        db,
+                        newSchemaName || null
+                    );
+
+                    // Create a promise that resolves when messages are added
+                    let resolveMessageAdded: (() => void) | null = null;
+                    const messageAddedPromise = new Promise<void>(resolve => {
+                        resolveMessageAdded = resolve;
+                    });
+
+                    // Create onMessagesChange for this specific chat
+                    const newChatOnMessagesChange = (messages: StructuredMessage[]) => {
+                        updateChatMessagesWithAutoSelect(newChatId, messages);
+                        // Resolve promise when first message is added
+                        if (messages.length > 0 && resolveMessageAdded) {
+                            resolveMessageAdded();
+                            resolveMessageAdded = null;
+                        }
+                    };
+
+                    // Pass db, schema and onMessagesChange as overrides
+                    await sendMessage(tableMessage, newChatId, db, newSchemaName, {
+                        onMessagesChange: newChatOnMessagesChange,
+                    });
+
+                    // Wait for messages to be added
+                    await messageAddedPromise;
+
+                    // Return the chat ID and table name without selecting it
+                    return { chatId: newChatId, tableName };
+                } else {
+                    // Normal message case
+                    const newChatId = await createNewChat(db);
+                    if (!newChatId) {
+                        return null;
+                    }
+
+                    const newSchemaName = chatIdToSchemaName(newChatId);
+
+                    // Create onMessagesChange for this specific chat
+                    const newChatOnMessagesChange = (messages: StructuredMessage[]) => {
+                        updateChatMessagesWithAutoSelect(newChatId, messages);
+                    };
+
+                    // Start sending message in background (don't wait)
+                    sendMessage(message, newChatId, db, newSchemaName, {
+                        onMessagesChange: newChatOnMessagesChange,
+                    });
+
+                    // Return the chat ID immediately without waiting for message to complete
+                    return { chatId: newChatId };
+                }
+            } catch (error) {
+                console.error('Failed to create chat:', error);
+                throw error;
+            }
+        },
+        [dbContext, waitForDbContext, createNewChat, sendMessage, updateChatMessagesWithAutoSelect]
+    );
+
+    // Handle chat created event from EmptyChat
+    const handleChatCreated = useCallback(
+        (chatId: string, tableName?: string) => {
+            selectChat(chatId);
+
+            // If a table was created, notify table change to trigger auto-selection
+            if (tableName && dbContext) {
+                const schemaName = chatIdToSchemaName(chatId);
+                // Use setTimeout to ensure the chat is fully switched before notifying
+                setTimeout(() => {
+                    if (dbContext) {
+                        dbContext.notifyTableChange(tableName, schemaName);
+                    }
+                }, 100);
+            }
+        },
+        [selectChat, dbContext]
+    );
+
+    // Handle sending message with URL - creates table from URL in existing chat
+    const handleSendMessageWithUrl = useCallback(
+        async (url: string) => {
+            if (!selectedChatId || !schemaName || !dbContext) {
+                console.error('Cannot process URL: missing chat ID, schema, or dbContext');
+                return;
+            }
+
+            try {
+                // Extract and validate URL
+                const dataUrl = extractDataUrl(url);
+                if (!dataUrl) {
+                    console.error('Invalid URL:', url);
+                    return;
+                }
+
+                // Create table from URL in the current chat's schema
+                const { message: tableMessage } = await createTableFromUrl(dataUrl, dbContext, schemaName);
+
+                // Send the result message to AI
+                sendMessage(tableMessage);
+            } catch (error) {
+                console.error('Failed to create table from URL:', error);
+            }
+        },
+        [selectedChatId, schemaName, dbContext, sendMessage]
+    );
+
+    // Wrap sendMessage to handle URL processing for existing chat
+    const sendMessageWithUrlProcessing = useCallback(
+        (message: string) => {
+            const dataUrl = extractDataUrl(message);
+
+            if (dataUrl) {
+                // URL case: create table from URL
+                handleSendMessageWithUrl(message);
+            } else {
+                // Normal message case: send directly
+                sendMessage(message);
+            }
+        },
+        [handleSendMessageWithUrl, sendMessage]
+    );
+
+    // Wrap handleSubmit to handle URL processing
+    const handleSubmitWithUrlProcessing = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+
+            if (!input.trim()) return;
+
+            const messageToSend = input.trim();
+            const dataUrl = extractDataUrl(messageToSend);
+
+            if (dataUrl) {
+                // URL case: create table from URL (don't use handleSubmit)
+                // Clear input first
+                handleInputChange({ target: { value: '' } } as React.ChangeEvent<HTMLTextAreaElement>);
+                await handleSendMessageWithUrl(messageToSend);
+            } else {
+                // Normal message case: use original handleSubmit
+                await handleSubmit(e);
+            }
+        },
+        [input, handleInputChange, handleSendMessageWithUrl, handleSubmit]
+    );
+
     // Chart export to dashboard functionality
-    const handleExportChartToDashboard = (dashboardId: string) => {
+    const handleExportChartToDashboard = (dashboardIdOrDashboard: string | DashboardType) => {
         const exportSpec = displayChartSpec; // Use configured chart if available
         if (!selectedChatId || !exportSpec || !selectedTable) {
             console.warn('Cannot export chart: missing selectedChatId, chartSpec, or selectedTable');
@@ -276,50 +489,38 @@ function ChatPage() {
             updateChartFromAI(selectedTable, configuredChartSpec.spec);
         }
 
-        const dashboard = getDashboard(dashboardId);
+        // Get dashboard object
+        const dashboard =
+            typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
 
         if (!dashboard) {
-            console.error('Dashboard not found:', dashboardId);
+            console.error('Dashboard not found:', dashboardIdOrDashboard);
             return;
         }
 
         const chart = exportSpec;
-
-        // Extract SQL from chart spec
-        const chartSql = chart.spec?.data?.sql;
 
         const newVisualization = {
             id: `viz-${Date.now()}`,
             type: 'chart' as const,
             title: chart.title || 'Chart',
             chartSpec: chart,
-            sql: chartSql,
             createdAt: new Date(),
-        };
-
-        const newLayout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 4,
-            minW: 3,
-            minH: 2,
+            chatId: selectedChatId,
         };
 
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout],
         };
         // Remember the selected dashboard for next time
-        setLastSelectedExportDashboard(dashboardId);
+        setLastSelectedExportDashboard(dashboard.id);
 
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
-        // Automatically switch to the dashboard view to show the newly added chart
-        handleSelectDashboard(dashboardId);
+        // Switch to the dashboard view to show available visualizations
+        handleSelectDashboard(dashboard.id);
     };
 
     // Chart configuration handlers
@@ -353,17 +554,19 @@ function ChatPage() {
     const displayChartSpec = configuredChartSpec || chartSpec;
 
     // Map export to dashboard functionality
-    const handleExportMapToDashboard = (dashboardId: string) => {
+    const handleExportMapToDashboard = (dashboardIdOrDashboard: string | DashboardType) => {
         if (!selectedChatId || !selectedTable) {
             console.warn('Cannot export map: missing selectedChatId or selectedTable');
             return;
         }
 
-        const dashboard = getDashboard(dashboardId);
+        // Get dashboard object
+        const dashboard =
+            typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
         const mapSpecs = getCurrentChatState()?.mapSpecs;
 
         if (!dashboard) {
-            console.error('Dashboard not found:', dashboardId);
+            console.error('Dashboard not found:', dashboardIdOrDashboard);
             return;
         }
 
@@ -378,32 +581,22 @@ function ChatPage() {
             geometryColumn: selectedGeometryColumn,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
-        };
-
-        const newLayout = {
-            i: newVisualization.id,
-            x: 0,
-            y: 0,
-            w: 8,
-            h: 6,
-            minW: 4,
-            minH: 3,
+            chatId: selectedChatId,
         };
 
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, newLayout],
         };
 
         // Remember the selected dashboard for next time
-        setLastSelectedExportDashboard(dashboardId);
+        setLastSelectedExportDashboard(dashboard.id);
 
         // Update the dashboard
         updateDashboard(updatedDashboard);
 
-        // Automatically switch to the dashboard view to show the newly added map
-        handleSelectDashboard(dashboardId);
+        // Switch to the dashboard view to show available visualizations
+        handleSelectDashboard(dashboard.id);
     };
 
     // Chart type selection handler
@@ -427,42 +620,21 @@ function ChatPage() {
         }
     };
 
-    // Check if current chat has any messages
-    const currentChatMessages = getCurrentChatState()?.messages || [];
-    const hasMessages = currentChatMessages.length > 0;
-    const isEmptyChat = selectedChatId && !hasMessages;
+    // Show Home Screen when no chat is selected
+    const showHomeScreen = !selectedChatId;
 
-    // Sidebar selection: highlight button only when showing list view
-    const isListView = viewMode.endsWith('-list');
-    const sidebarSelection = isListView ? (viewMode as 'chat-list' | 'dashboard-list') : undefined;
+    // Sidebar selection: highlight button based on current view
+    const sidebarSelection =
+        viewMode === 'dashboard-list' ? 'dashboard-list' : viewMode === 'chat' && !selectedChatId ? 'chat' : undefined;
 
     return (
         <>
             <div className="flex h-full w-full overflow-hidden">
-                {/* Sidebar with Chat List */}
-                <div className="w-64 h-full border-r border-gray-300 bg-gray-50 flex-shrink-0">
-                    <ChatList
-                        onCreateChat={handleCreateChat}
-                        onCreateDashboard={handleCreateDashboard}
-                        isInitialized={!!dbContext}
-                        selectedView={sidebarSelection}
-                        onNavigate={handleNavigate}
-                    />
-                </div>
+                {/* Sidebar */}
+                <Sidebar selectedView={sidebarSelection} onNavigate={handleNavigate} />
 
                 {/* Main Content Area */}
-                {viewMode === 'chat-list' ? (
-                    /* Chat History Grid */
-                    <div className="flex-1 h-full overflow-hidden">
-                        <ChatHistoryGrid
-                            chats={Object.values(chats).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())}
-                            onSelectChat={handleSelectChat}
-                            onDeleteChat={deleteChat}
-                            onRenameChat={renameChat}
-                            onCreateChat={handleCreateChat}
-                        />
-                    </div>
-                ) : viewMode === 'dashboard-list' ? (
+                {viewMode === 'dashboard-list' ? (
                     /* Dashboard History Grid */
                     <div className="flex-1 h-full overflow-hidden">
                         <DashboardHistoryGrid
@@ -515,332 +687,292 @@ function ChatPage() {
                             );
                         })()}
                     </div>
-                ) : isEmptyChat ? (
-                    /* Empty Chat Mode - Centered Input */
-                    <div className="flex-1 h-full flex items-center justify-center p-4">
-                        <div className="w-full max-w-3xl -mt-32">
-                            {!isLoadingApiKey && selectedChatId && (
-                                <AIChat
-                                    dbContext={dbContext}
-                                    apiKey={apiKey}
-                                    chatId={selectedChatId}
-                                    schemaName={schemaName}
-                                    onMessagesChange={handleMessagesChange}
-                                    updateChatMessages={updateChatMessages}
-                                    onSendMessageReady={handleSendMessageReady}
-                                    selectedTable={selectedTable}
-                                    onTableSelect={handleTableSelection}
-                                    onChartUpdate={updateChartFromAI}
-                                    onChartDelete={deleteChartFromAI}
-                                    getCurrentChatState={getCurrentChatState}
-                                    onMapStyleUpdate={async (
-                                        tableName: string,
-                                        style: import('../../components/map').TableStyle
-                                    ) => {
-                                        updateTableStyle(tableName, style);
-                                    }}
-                                    onMapStyleDelete={async (tableName: string) => {
-                                        deleteTableStyle(tableName);
-                                    }}
-                                    onConversationCompleted={handleConversationCompleted}
-                                    remoteFileComponent={onClose => (
-                                        <RemoteFile
+                ) : showHomeScreen ? (
+                    /* Home Screen - Centered Input + History Grid */
+                    <div className="flex-1 h-full overflow-y-auto bg-gray-50">
+                        <div className="min-h-full flex flex-col">
+                            {/* Spacer */}
+                            <div className="h-[35vh]" />
+
+                            {/* Chat input */}
+                            <div className="flex items-center justify-center px-8 pb-24">
+                                <div className="w-full max-w-2xl relative">
+                                    {!isLoadingApiKey && (
+                                        <EmptyChat
                                             dbContext={dbContext}
-                                            schema={schemaName}
-                                            onTableCreated={(tableName: string) => {
-                                                handleTableSelection(tableName);
-                                                if (dbContext) {
-                                                    dbContext.notifyTableChange(tableName, schemaName);
-                                                }
-                                                onClose();
-                                            }}
-                                            onSendMessage={sendMessageRef.current || undefined}
-                                            waitForDbContext={waitForDbContext}
+                                            apiKey={apiKey}
+                                            schemaName={schemaName}
+                                            onApiKeyChange={setApiKey}
+                                            onApiKeySave={saveApiKey}
+                                            showApiKeyInput={showApiKeyInput}
+                                            sendMessage={handleSendMessageWithChatCreation}
+                                            onChatCreated={handleChatCreated}
+                                            renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
+                                                <DataSourceSelector
+                                                    onClose={onClose}
+                                                    onShowUrlGuide={onShowUrlGuide}
+                                                    sampleUrl={getSampleDataUrl()}
+                                                    onLoadSample={url => {
+                                                        if (onLoadSample) {
+                                                            onLoadSample(url);
+                                                        }
+                                                    }}
+                                                />
+                                            )}
                                         />
                                     )}
-                                    emptyMode={true}
-                                    onApiKeyChange={setApiKey}
-                                    onApiKeySave={saveApiKey}
-                                    showApiKeyInput={showApiKeyInput}
-                                    waitForDbContext={waitForDbContext}
+                                </div>
+                            </div>
+
+                            {/* Chat history grid */}
+                            <div className="px-8 pb-8">
+                                <ChatHistoryGrid
+                                    chats={chats}
+                                    onSelectChat={handleSelectChat}
+                                    onDeleteChat={deleteChat}
+                                    onRenameChat={renameChat}
                                 />
-                            )}
+                            </div>
                         </div>
                     </div>
                 ) : (
                     /* Chat Mode - Split View */
                     <>
                         {/* Left Half - AI Chat (Modeling Tools) */}
-                        <div className="w-1/2 h-full border-r border-gray-300 flex flex-col overflow-hidden">
+                        <div
+                            className="h-full flex flex-col overflow-hidden py-4 pl-4 pr-2 bg-gray-50 text-gray-800 text-left"
+                            style={{ width: `${chatWidthPercentage}%` }}
+                            data-chat-width={chatWidthPercentage}
+                        >
                             {showApiKeyInput && !isLoadingApiKey && (
                                 <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} onSave={saveApiKey} />
                             )}
                             {isLoadingApiKey && (
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
                             )}
-                            {!isLoadingApiKey && dbContext && selectedChatId ? (
-                                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                    <AIChat
-                                        dbContext={dbContext}
-                                        apiKey={apiKey}
-                                        chatId={selectedChatId}
-                                        schemaName={schemaName}
-                                        onMessagesChange={handleMessagesChange}
-                                        updateChatMessages={updateChatMessages}
-                                        onSendMessageReady={handleSendMessageReady}
-                                        selectedTable={selectedTable}
-                                        onTableSelect={handleTableSelection}
-                                        onChartUpdate={updateChartFromAI}
-                                        onChartDelete={deleteChartFromAI}
-                                        getCurrentChatState={getCurrentChatState}
-                                        onMapStyleUpdate={async (
-                                            tableName: string,
-                                            style: import('../../components/map').TableStyle
-                                        ) => {
-                                            updateTableStyle(tableName, style);
-                                        }}
-                                        onMapStyleDelete={async (tableName: string) => {
-                                            deleteTableStyle(tableName);
-                                        }}
-                                        onConversationCompleted={handleConversationCompleted}
-                                        remoteFileComponent={onClose => (
-                                            <RemoteFile
-                                                dbContext={dbContext}
-                                                schema={schemaName}
-                                                onTableCreated={(tableName: string) => {
-                                                    handleTableSelection(tableName);
-                                                    if (dbContext) {
-                                                        dbContext.notifyTableChange(tableName, schemaName);
-                                                    }
-                                                    onClose();
-                                                }}
-                                                onSendMessage={sendMessageRef.current || undefined}
-                                                waitForDbContext={waitForDbContext}
-                                            />
-                                        )}
-                                        showApiKeyInput={showApiKeyInput}
-                                        waitForDbContext={waitForDbContext}
-                                    />
-                                </div>
-                            ) : !isLoadingApiKey && dbContext ? (
-                                <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
-                                    <div className="text-center">
-                                        <p className="mb-2">チャットを選択するか、新しいチャットを作成してください</p>
-                                        <button
-                                            onClick={() => createNewChat()}
-                                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                        >
-                                            新しいチャットを作成
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : null}
+                            {!isLoadingApiKey && dbContext && selectedChatId && (
+                                <Chat
+                                    dbContext={dbContext}
+                                    apiKey={apiKey}
+                                    schemaName={schemaName}
+                                    messages={messages}
+                                    isLoading={isLoading}
+                                    input={input}
+                                    handleInputChange={handleInputChange}
+                                    handleSubmit={handleSubmitWithUrlProcessing}
+                                    handleStop={handleStop}
+                                    sendMessage={sendMessageWithUrlProcessing}
+                                    selectedTable={selectedTable}
+                                    onTableSelect={handleTableSelection}
+                                    getCurrentChatState={getCurrentChatState}
+                                    onLoadSample={handleSendMessageWithUrl}
+                                    renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
+                                        <DataSourceSelector
+                                            onClose={onClose}
+                                            onShowUrlGuide={onShowUrlGuide}
+                                            sampleUrl={getSampleDataUrl()}
+                                            onLoadSample={onLoadSample || (() => {})}
+                                        />
+                                    )}
+                                />
+                            )}
                         </div>
 
+                        {/* Resizable Handle */}
+                        <ResizableHandle
+                            onResize={setChatWidthPercentage}
+                            minWidthPercentage={20}
+                            maxWidthPercentage={80}
+                        />
+
                         {/* Right Half - DuckDB and Table */}
-                        <div className="w-1/2 h-full flex flex-col overflow-hidden">
-                            <div className="flex-1 overflow-hidden flex flex-col">
-                                {dbContext && selectedTable && connection && (
-                                    <>
-                                        {/* Table Selector Header */}
-                                        <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200">
-                                            <div className="flex items-center gap-2">
-                                                <TableCellsIcon className="w-4 h-4 text-gray-600" />
-                                                <div className="flex-1">
-                                                    <TableSelector
-                                                        dbContext={dbContext}
-                                                        selectedTable={selectedTable}
-                                                        onTableSelect={handleTableSelection}
-                                                        schema={schemaName}
-                                                    />
-                                                </div>
+                        <div
+                            className="h-full flex flex-col overflow-hidden py-4 pl-2 pr-4 bg-gray-50"
+                            style={{ width: `${100 - chatWidthPercentage}%` }}
+                        >
+                            {dbContext && selectedTable && connection && (
+                                <div className="flex-1 overflow-hidden flex flex-col bg-white border border-gray-300 rounded-md">
+                                    {/* Table Selector Header */}
+                                    <div className="flex-shrink-0 px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-md">
+                                        <div className="flex items-center gap-2">
+                                            <TableCellsIcon className="w-4 h-4 text-gray-600" />
+                                            <div className="flex-1">
+                                                <TableSelector
+                                                    dbContext={dbContext}
+                                                    selectedTable={selectedTable}
+                                                    onTableSelect={handleTableSelection}
+                                                    schema={schemaName}
+                                                />
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {/* Tab Navigation */}
-                                        <div className="flex-shrink-0 border-b border-gray-200 bg-white">
-                                            <div className="flex">
-                                                <button
-                                                    onClick={() => setActiveTab('sql')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'sql'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    クエリ
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('table')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'table'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    テーブル
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('chart')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'chart'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    <span className="flex items-center gap-1.5">
-                                                        グラフ
-                                                        {displayChartSpec && (
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                                        )}
-                                                    </span>
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTab('map')}
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                                        activeTab === 'map'
-                                                            ? 'border-blue-500 text-blue-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    <span className="flex items-center gap-1.5">
-                                                        地図
-                                                        {selectedGeometryColumn && (
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                                        )}
-                                                    </span>
-                                                </button>
-                                            </div>
+                                    {/* Tab Navigation */}
+                                    <div className="flex-shrink-0 border-b border-gray-200 bg-white">
+                                        <div className="flex">
+                                            <button
+                                                onClick={() => setActiveTab('sql')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'sql'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                クエリ
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('table')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'table'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                テーブル
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('chart')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'chart'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-1.5">
+                                                    グラフ
+                                                    {displayChartSpec && (
+                                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                    )}
+                                                </span>
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('map')}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                                    activeTab === 'map'
+                                                        ? 'border-blue-500 text-blue-600'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-1.5">
+                                                    地図
+                                                    {selectedGeometryColumn && (
+                                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                                    )}
+                                                </span>
+                                            </button>
                                         </div>
+                                    </div>
 
-                                        {/* Tab Content */}
-                                        <div className="flex-1 overflow-hidden">
-                                            {/* SQL Tab */}
-                                            {activeTab === 'sql' && (
-                                                <div className="h-full p-4 overflow-auto">
-                                                    <TableSQLDisplay
-                                                        tableName={selectedTable}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName}
-                                                    />
-                                                </div>
-                                            )}
-
-                                            {/* Table Tab */}
-                                            {activeTab === 'table' && (
-                                                <TablePanel
-                                                    key={`${selectedChatId}-${selectedTable}`}
-                                                    connection={connection}
+                                    {/* Tab Content */}
+                                    <div className="flex-1 overflow-hidden">
+                                        {/* SQL Tab */}
+                                        {activeTab === 'sql' && (
+                                            <div className="h-full p-4 overflow-auto">
+                                                <TableSQLDisplay
                                                     tableName={selectedTable}
                                                     dbContext={dbContext}
-                                                    schema={schemaName || null}
+                                                    schema={schemaName}
                                                 />
-                                            )}
+                                            </div>
+                                        )}
 
-                                            {/* Chart Tab */}
-                                            {activeTab === 'chart' &&
-                                                selectedTable &&
-                                                (displayChartSpec && connection && selectedChatId ? (
-                                                    <ChartPanel
-                                                        chartSpec={displayChartSpec}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName || 'main'}
-                                                        configMode="panel"
-                                                        onViewReady={view => {
-                                                            chatPageVegaViewRef.current = view;
-                                                        }}
-                                                        onConfigOpen={() => setShowChartConfig(!showChartConfig)}
-                                                        onJsonSourceOpen={() => setShowChartSpecModal(true)}
-                                                        onRemove={() => {
-                                                            if (selectedTable && deleteChartFromAI) {
-                                                                deleteChartFromAI(selectedTable);
-                                                                setConfiguredChartSpec(null);
-                                                                setShowChartConfig(false);
-                                                            }
-                                                        }}
-                                                        onSpecChange={handleChartSpecChange}
-                                                        showConfigPanel={showChartConfig}
-                                                        onCloseConfigPanel={() => setShowChartConfig(false)}
-                                                        autoApplyChanges={true}
-                                                        showApplyButton={false}
-                                                        showMenuExportButton={true}
-                                                        onExport={() => {
-                                                            if (getAllDashboards().length > 0) {
-                                                                setExportType('chart');
-                                                                setShowExportModal(true);
-                                                            }
-                                                        }}
-                                                        isExportDisabled={getAllDashboards().length === 0}
-                                                        exportTooltip={
-                                                            getAllDashboards().length > 0
-                                                                ? 'このグラフをダッシュボードにエクスポート'
-                                                                : '⚠️ ダッシュボードがありません - グラフをエクスポートするには先にダッシュボードを作成してください'
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <ChartTypeSelector onSelectType={handleChartTypeSelect} />
-                                                    </div>
-                                                ))}
+                                        {/* Table Tab */}
+                                        {activeTab === 'table' && (
+                                            <TablePanel
+                                                key={`${selectedChatId}-${selectedTable}`}
+                                                connection={connection}
+                                                tableName={selectedTable}
+                                                dbContext={dbContext}
+                                                schema={schemaName || null}
+                                            />
+                                        )}
 
-                                            {/* Map Tab */}
-                                            {activeTab === 'map' &&
-                                                connection &&
-                                                selectedTable &&
-                                                (selectedGeometryColumn ? (
-                                                    <MapPanel
-                                                        title={selectedTable}
-                                                        tableName={selectedTable}
-                                                        geometryColumn={selectedGeometryColumn}
-                                                        dbContext={dbContext}
-                                                        schema={schemaName || undefined}
-                                                        mapSpec={{ tableStyles, style: mapStyle }}
-                                                        showRemoveButton={false}
-                                                        onExport={() => {
-                                                            if (getAllDashboards().length > 0) {
-                                                                setExportType('map');
-                                                                setShowExportModal(true);
-                                                            }
-                                                        }}
-                                                        showExportButton={true}
-                                                        isExportDisabled={getAllDashboards().length === 0}
-                                                        exportTooltip={
-                                                            getAllDashboards().length > 0
-                                                                ? 'この地図をダッシュボードにエクスポート'
-                                                                : '⚠️ ダッシュボードがありません - 地図をエクスポートするには先にダッシュボードを作成してください'
+                                        {/* Chart Tab */}
+                                        {activeTab === 'chart' &&
+                                            selectedTable &&
+                                            (displayChartSpec && connection && selectedChatId ? (
+                                                <ChartPanel
+                                                    chartSpec={displayChartSpec}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || 'main'}
+                                                    configMode="panel"
+                                                    onViewReady={view => {
+                                                        chatPageVegaViewRef.current = view;
+                                                    }}
+                                                    onConfigOpen={() => setShowChartConfig(!showChartConfig)}
+                                                    onJsonSourceOpen={() => setShowChartSpecModal(true)}
+                                                    onRemove={() => {
+                                                        if (selectedTable && deleteChartFromAI) {
+                                                            deleteChartFromAI(selectedTable);
+                                                            setConfiguredChartSpec(null);
+                                                            setShowChartConfig(false);
                                                         }
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center bg-gray-50">
-                                                        <div className="text-center text-gray-500 max-w-md">
-                                                            <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                                                            <p className="text-lg mb-4">
-                                                                ジオメトリカラムが存在しません
-                                                            </p>
-                                                            <p className="text-sm mb-2">
-                                                                地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
-                                                            </p>
-                                                            <p className="text-sm mb-4">以下の方法をお試しください：</p>
-                                                            <ul className="text-sm text-left mb-4 space-y-2">
-                                                                <li>• ジオメトリ情報を含むデータを読み込む</li>
-                                                                <li>
-                                                                    •
-                                                                    緯度経度カラムからジオメトリを生成するようAIに依頼する
-                                                                </li>
-                                                                <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
-                                                            </ul>
-                                                        </div>
+                                                    }}
+                                                    onSpecChange={handleChartSpecChange}
+                                                    showConfigPanel={showChartConfig}
+                                                    onCloseConfigPanel={() => setShowChartConfig(false)}
+                                                    autoApplyChanges={true}
+                                                    showApplyButton={false}
+                                                    showMenuExportButton={true}
+                                                    onExport={() => {
+                                                        setExportType('chart');
+                                                        setShowExportModal(true);
+                                                    }}
+                                                    exportTooltip="このグラフをダッシュボードにエクスポート"
+                                                />
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center bg-gray-50">
+                                                    <ChartTypeSelector onSelectType={handleChartTypeSelect} />
+                                                </div>
+                                            ))}
+
+                                        {/* Map Tab */}
+                                        {activeTab === 'map' &&
+                                            connection &&
+                                            selectedTable &&
+                                            (selectedGeometryColumn ? (
+                                                <MapPanel
+                                                    title={selectedTable}
+                                                    tableName={selectedTable}
+                                                    geometryColumn={selectedGeometryColumn}
+                                                    dbContext={dbContext}
+                                                    schema={schemaName || undefined}
+                                                    mapSpec={{ tableStyles, style: mapStyle }}
+                                                    showRemoveButton={false}
+                                                    onExport={() => {
+                                                        setExportType('map');
+                                                        setShowExportModal(true);
+                                                    }}
+                                                    showExportButton={true}
+                                                    exportTooltip="この地図をダッシュボードにエクスポート"
+                                                />
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center bg-gray-50">
+                                                    <div className="text-center text-gray-500 max-w-md">
+                                                        <MapIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                                                        <p className="text-lg mb-4">ジオメトリカラムが存在しません</p>
+                                                        <p className="text-sm mb-2">
+                                                            地図を表示するには、ジオメトリ情報を持つテーブルが必要です。
+                                                        </p>
+                                                        <p className="text-sm mb-4">以下の方法をお試しください：</p>
+                                                        <ul className="text-sm text-left mb-4 space-y-2">
+                                                            <li>• ジオメトリ情報を含むデータを読み込む</li>
+                                                            <li>
+                                                                • 緯度経度カラムからジオメトリを生成するようAIに依頼する
+                                                            </li>
+                                                            <li>• ジオメトリ情報を持つ別のテーブルと結合する</li>
+                                                        </ul>
                                                     </div>
-                                                ))}
-                                        </div>
-                                    </>
-                                )}
-                                {dbContext && !selectedTable && (
-                                    <div className="flex items-center justify-center h-full text-gray-500">
-                                        テーブルを選択してください
+                                                </div>
+                                            ))}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
+                            {dbContext && !selectedTable && (
+                                <div className="flex items-center justify-center h-full text-gray-500">
+                                    テーブルを選択してください
+                                </div>
+                            )}
                         </div>
                         {/* End of Right Half */}
                     </>
@@ -854,6 +986,12 @@ function ChatPage() {
                 onClose={() => setShowExportModal(false)}
                 dashboards={getAllDashboards()}
                 onExport={exportType === 'chart' ? handleExportChartToDashboard : handleExportMapToDashboard}
+                onCreateDashboard={createDashboard}
+                onNavigateToDashboard={dashboardId => {
+                    setSelectedDashboard(dashboardId);
+                    setViewMode('dashboard');
+                    selectChat('');
+                }}
                 title={exportType === 'chart' ? displayChartSpec?.title || 'Chart' : `${selectedTable} Map`}
                 type={exportType}
                 lastSelectedDashboard={lastSelectedExportDashboard}

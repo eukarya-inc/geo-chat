@@ -423,6 +423,7 @@ const MapComponent: React.FC<MapProps> = ({
                 initializedTables: initializedTablesRef.current,
                 styleManager: styleManagerRef.current,
                 tileCache: tileCache.current,
+                schema,
             });
 
             // Zoom to data bounds when a new table is selected (only if geometryColumnName is provided)

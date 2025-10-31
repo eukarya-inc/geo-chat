@@ -35,10 +35,43 @@ interface TableViewProps {
     dbContext?: DBContext;
 }
 
+// Helper function to check if a column type is geometry
+const isGeometryType = (columnType?: string): boolean => {
+    if (!columnType) return false;
+    const typeUpper = columnType.toUpperCase();
+    return (
+        typeUpper.includes('GEOMETRY') ||
+        typeUpper.includes('POINT') ||
+        typeUpper.includes('LINESTRING') ||
+        typeUpper.includes('POLYGON') ||
+        typeUpper.includes('MULTIPOINT') ||
+        typeUpper.includes('MULTILINESTRING') ||
+        typeUpper.includes('MULTIPOLYGON') ||
+        typeUpper.includes('GEOMETRYCOLLECTION')
+    );
+};
+
+// Helper function to get geometry type label from column type (fast path)
+const getGeometryTypeLabel = (columnType: string): string => {
+    const typeUpper = columnType.toUpperCase();
+    if (typeUpper.includes('MULTIPOLYGON')) return '[MultiPolygon]';
+    if (typeUpper.includes('MULTILINESTRING')) return '[MultiLineString]';
+    if (typeUpper.includes('MULTIPOINT')) return '[MultiPoint]';
+    if (typeUpper.includes('POLYGON')) return '[Polygon]';
+    if (typeUpper.includes('LINESTRING')) return '[LineString]';
+    if (typeUpper.includes('POINT')) return '[Point]';
+    return '[Geometry]';
+};
+
 // Helper function to format cell values for display
 const formatCellValue = (value: unknown, columnType?: string): string => {
     if (value === null || value === undefined) {
         return 'NULL';
+    }
+
+    // Fast path: if column type indicates geometry, skip expensive WKB parsing
+    if (isGeometryType(columnType)) {
+        return getGeometryTypeLabel(columnType!);
     }
 
     // Binary data (Uint8Array) is now handled directly from rawData cache
@@ -50,54 +83,6 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
         value instanceof ArrayBuffer ||
         (value && typeof value === 'object' && 'byteLength' in value)
     ) {
-        // Check if this is a geometry column
-        if (
-            columnType &&
-            (columnType.toUpperCase().includes('GEOMETRY') ||
-                columnType.toUpperCase().includes('POINT') ||
-                columnType.toUpperCase().includes('LINESTRING') ||
-                columnType.toUpperCase().includes('POLYGON') ||
-                columnType.toUpperCase().includes('MULTIPOINT') ||
-                columnType.toUpperCase().includes('MULTILINESTRING') ||
-                columnType.toUpperCase().includes('MULTIPOLYGON') ||
-                columnType.toUpperCase().includes('GEOMETRYCOLLECTION'))
-        ) {
-            // Try to extract geometry type from WKB
-            if (value instanceof Uint8Array && value.length > 5) {
-                try {
-                    const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
-                    const byteOrder = value[0];
-                    const typeCode = byteOrder === 1 ? view.getUint32(1, true) : view.getUint32(1, false);
-
-                    const geomTypes: Record<number, string> = {
-                        1: 'Point',
-                        2: 'LineString',
-                        3: 'Polygon',
-                        4: 'MultiPoint',
-                        5: 'MultiLineString',
-                        6: 'MultiPolygon',
-                        7: 'GeometryCollection',
-                    };
-
-                    const baseType = typeCode & 0xff;
-                    const typeName = geomTypes[baseType] || 'Geometry';
-                    return `[${typeName}]`;
-                } catch {
-                    // If parsing fails, use column type
-                }
-            }
-
-            // Fallback: use column type
-            const typeUpper = columnType.toUpperCase();
-            if (typeUpper.includes('MULTIPOLYGON')) return '[MultiPolygon]';
-            if (typeUpper.includes('MULTILINESTRING')) return '[MultiLineString]';
-            if (typeUpper.includes('MULTIPOINT')) return '[MultiPoint]';
-            if (typeUpper.includes('POLYGON')) return '[Polygon]';
-            if (typeUpper.includes('LINESTRING')) return '[LineString]';
-            if (typeUpper.includes('POINT')) return '[Point]';
-            return '[Geometry]';
-        }
-
         // For non-geometry BLOB, show size
         let byteLength = 0;
         if (value instanceof Uint8Array) {
@@ -119,6 +104,16 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
         }
 
         return '[Blob]';
+    }
+
+    // Handle objects (STRUCT, LIST, etc.)
+    if (typeof value === 'object' && value !== null) {
+        try {
+            return JSON.stringify(value);
+        } catch {
+            // If JSON.stringify fails (circular reference, etc.), fallback to String()
+            return String(value);
+        }
     }
 
     return String(value);
@@ -200,6 +195,15 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
                         let title = col.name;
                         if (sortColumn === col.name) {
                             title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
+                        }
+
+                        // For geometry columns, use fixed width and skip expensive text width calculation
+                        if (isGeometryType(col.type)) {
+                            return {
+                                id: col.name,
+                                title,
+                                width: 150, // Fixed width for geometry columns
+                            };
                         }
 
                         // Calculate width based on column name

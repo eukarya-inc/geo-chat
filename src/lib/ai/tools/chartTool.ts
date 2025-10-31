@@ -3,19 +3,35 @@ import { z } from 'zod';
 import type { VegaChartSpec } from '../../../types/chart';
 import type { ChatState } from '../../../store/remoteAtoms';
 
+export type ChartGetResult = {
+    success: boolean;
+    message: string;
+    spec: VegaChartSpec | null;
+};
+
+export type ChartUpdateResult = {
+    success: boolean;
+    message: string;
+};
+
+export type ChartDeleteResult = {
+    success: boolean;
+    message: string;
+};
+
 /**
  * Creates a tool for getting the current Vega-Lite chart specification for a table
  */
-export function createChartGetTool(getCurrentChatState: () => ChatState | null) {
+export function createChartGetTool(getCurrentChatState?: () => ChatState | null) {
     return tool({
         description:
             'Get the current Vega-Lite chart specification for a specific table. Returns null if no chart exists for the table.',
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to get chart for'),
         }),
-        execute: async ({ table_name }) => {
+        execute: async ({ table_name }): Promise<ChartGetResult> => {
             try {
-                const chatState = getCurrentChatState();
+                const chatState = getCurrentChatState?.();
                 if (!chatState) {
                     return {
                         success: false,
@@ -158,36 +174,37 @@ const layeredSpecSchema = z
 const chartSpecSchema = z.union([baseSpecSchema, clusterSpecSchema, layeredSpecSchema]);
 
 // Create the chart update tool for AI
-export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>) {
-    if (!onChartUpdate) return null;
-
+export function createChartUpdateTool(
+    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>,
+    schema?: string | null
+) {
     return tool({
         description: `Update or create a Vega-Lite chart specification for a specific table.
-        
+
         IMPORTANT: USE COLUMN STATISTICS FOR OPTIMAL CHART CONFIGURATION
-        
+
         When columnStatistics is available from duckdb_query:
-        
+
         For NUMERIC columns (with min, max, avg, median, p50, p75, p90, p95):
         - Wide range (max - min > 1000): Consider log scale {"scale": {"type": "log"}}
         - High variance (stddev/avg > 0.5): Use box plot or violin plot to show distribution
         - Skewed data (median << avg): Highlight outliers or use percentile bands
-        
+
         For CATEGORICAL columns (with distinctCount):
         - Few categories (<10): Use bar chart with distinct colors
         - Many categories (>20): Consider top-N filtering or grouping
         - Medium (10-20): Use horizontal bar chart for better label readability
-        
+
         For TEMPORAL columns (with minDate, maxDate):
         - Long range (>1 year): Aggregate by month/quarter
         - Short range (<1 month): Show daily values
         - Multi-year: Consider year-over-year comparison
-        
+
         AXIS CONFIGURATION BASED ON STATISTICS:
         - Set domain based on actual data range: "scale": {"domain": [min, max]}
         - For percentile data, show reference lines at P50, P90
         - Use nice round numbers for axis ticks based on data magnitude
-        
+
         TYPE SPECIFICATION:
         - ALWAYS specify the "type" field explicitly for each encoding channel
         - Common types: "quantitative" (numbers), "nominal" (categories), "temporal" (dates), "ordinal" (ordered categories)
@@ -305,7 +322,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
           ],
           "config": {"view": {"stroke": null}}
         }`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to create/update chart for'),
             vega_spec: z
                 .union([chartSpecSchema, z.string().describe('JSON string representing a Vega-Lite spec')])
@@ -313,7 +330,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
                     'Single-view or layered Vega-Lite specification (object or JSON string, excluding data, width, height)'
                 ),
         }),
-        execute: async ({ table_name, vega_spec }) => {
+        execute: async ({ table_name, vega_spec }): Promise<ChartUpdateResult> => {
             try {
                 let specInput: Partial<VegaChartSpec>;
 
@@ -346,7 +363,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
                     specInput = vega_spec as Partial<VegaChartSpec>;
                 }
 
-                const processedSpec = processAIChartSpec(table_name, specInput);
+                const processedSpec = processAIChartSpec(table_name, specInput, schema);
                 const specRecord = processedSpec as unknown as Record<string, unknown>;
                 const hasTopLevelView = Boolean(specRecord.mark) && Boolean(specRecord.encoding);
                 const layers = Array.isArray(specRecord.layer) ? (specRecord.layer as unknown[]) : [];
@@ -360,7 +377,7 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
                     };
                 }
 
-                await onChartUpdate(table_name, processedSpec);
+                await onChartUpdate?.(table_name, processedSpec);
 
                 return {
                     success: true,
@@ -377,7 +394,11 @@ export function createChartUpdateTool(onChartUpdate?: (tableName: string, spec: 
 }
 
 // Function to process and clean the Vega spec from AI
-export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartSpec>): VegaChartSpec {
+export function processAIChartSpec(
+    tableName: string,
+    aiSpec: Partial<VegaChartSpec>,
+    schema?: string | null
+): VegaChartSpec {
     // Helper function to ensure field type is set and remove unnecessary aggregate
     const ensureFieldType = (field: unknown): unknown => {
         if (!field || typeof field !== 'object') return field;
@@ -497,19 +518,22 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
     const { width: _width, height: _height, ...restAiSpec } = aiSpec as any;
 
+    // Create duckdb URL for data
+    const dataUrl = schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
+
     // Ensure required Vega-Lite schema
     const processedSpec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
         ...restAiSpec,
-        // Add data with SQL query
+        // Add data with duckdb URL
+        // VegaLiteChart component will use custom loader to query DuckDB directly
         data: {
-            sql: `SELECT * FROM ${tableName} LIMIT 100`,
-            values: [],
+            url: dataUrl,
         },
         // Set responsive container sizing
         width: 'container',
         height: 'container',
-    } as VegaChartSpec;
+    } satisfies VegaChartSpec;
 
     // Ensure title exists - prefer user-provided title over generated one
     if (!processedSpec.title) {
@@ -581,7 +605,7 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
         // those can override the unified scale and cause misalignment between layers.
         // This is particularly important for regression charts where scatter plots
         // and regression lines must share the same scale ranges.
-        processedSpec.layer = processedSpec.layer.map(layer => {
+        processedSpec.layer = processedSpec.layer.map((layer: unknown) => {
             if (typeof layer === 'object' && layer !== null && 'encoding' in layer) {
                 const layerEncoding = layer.encoding as Record<string, unknown>;
                 ['x', 'y', 'color', 'size', 'shape', 'opacity'].forEach(channel => {
@@ -605,17 +629,15 @@ export function processAIChartSpec(tableName: string, aiSpec: Partial<VegaChartS
  * Creates a tool for deleting a Vega-Lite chart specification for a table
  */
 export function createChartDeleteTool(onChartDelete?: (tableName: string) => Promise<void>) {
-    if (!onChartDelete) return null;
-
     return tool({
         description:
             'Delete the Vega-Lite chart specification for a specific table. Use this when you want to remove a chart completely.',
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('The name of the table to delete chart for'),
         }),
-        execute: async ({ table_name }) => {
+        execute: async ({ table_name }): Promise<ChartDeleteResult> => {
             try {
-                await onChartDelete(table_name);
+                await onChartDelete?.(table_name);
 
                 return {
                     success: true,

@@ -4,6 +4,55 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { View } from 'vega';
 import type { TopLevelSpec } from 'vega-lite';
+import { loader as vegaLoader, type Loader } from 'vega';
+
+// Create a custom loader that queries DuckDB directly
+function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader {
+    const defaultLoader = vegaLoader();
+
+    return {
+        ...defaultLoader,
+        load: async (uri: string) => {
+            // Check if this is a DuckDB table URL: duckdb://schema/table
+            if (uri.startsWith('duckdb://')) {
+                // Extract table path from URI
+                const path = uri.replace('duckdb://', '');
+                const parts = path.split('/');
+
+                let tableName: string;
+                let schemaName: string | null = schema;
+
+                if (parts.length === 2) {
+                    // Format: duckdb://schema/table
+                    schemaName = parts[0];
+                    tableName = parts[1];
+                } else {
+                    // Format: duckdb://table (use default schema)
+                    tableName = parts[0];
+                }
+
+                // Build SQL query
+                const sql = `SELECT * FROM ${tableName}`;
+
+                // Execute query directly
+                const rows = await dbContext.executeQuery(sql, schemaName);
+
+                // Return data as JSON string (Vega will parse it)
+                return JSON.stringify(rows);
+            }
+            // For other URLs, use default loading
+            return defaultLoader.load(uri);
+        },
+        sanitize: async (uri: string, options) => {
+            // Allow duckdb:// URLs without modification
+            if (uri.startsWith('duckdb://')) {
+                return { href: uri };
+            }
+            // For other URLs, use default sanitization
+            return defaultLoader.sanitize(uri, options);
+        },
+    };
+}
 
 interface VegaLiteChartProps {
     spec: VegaChartSpec;
@@ -22,18 +71,24 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     enableActions = false,
     onViewReady,
 }) => {
-    const [data, setData] = useState<Record<string, unknown>[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
     const [prevSchema, setPrevSchema] = useState(schema);
+    const [dataUrl, setDataUrl] = useState<string | null>(null);
     const vegaViewRef = useRef<View | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // Create loader with current dbContext and schema
+    const duckdbLoader = useMemo(() => {
+        if (!dbContext) return vegaLoader();
+        return createDuckDBLoader(dbContext, schema);
+    }, [dbContext, schema]);
 
     // Clear data when schema changes
     useEffect(() => {
         if (prevSchema !== schema && prevSchema !== null) {
-            setData([]);
+            setDataUrl(null);
             setError(null);
             setLoading(true);
             setPrevSchema(schema);
@@ -82,13 +137,20 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     useEffect(() => {
         if (!containerRef.current) return;
 
-        const resizeObserver = new ResizeObserver(() => {
-            if (vegaViewRef.current) {
-                // Use requestAnimationFrame to avoid resize loop
-                requestAnimationFrame(() => {
-                    vegaViewRef.current?.resize();
-                });
-            }
+        const resizeObserver = new ResizeObserver(entries => {
+            // ResizeObserver may fire before vegaViewRef is set
+            // Use setTimeout to defer the resize call slightly
+            setTimeout(() => {
+                if (vegaViewRef.current) {
+                    const entry = entries[0];
+                    if (entry) {
+                        // Use requestAnimationFrame to avoid resize loop
+                        requestAnimationFrame(() => {
+                            vegaViewRef.current?.resize();
+                        });
+                    }
+                }
+            }, 0);
         });
 
         resizeObserver.observe(containerRef.current);
@@ -115,41 +177,45 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
         };
     }, []);
 
-    // Fetch data when spec changes
+    // Set data URL when spec changes - loader will query DuckDB directly
     useEffect(() => {
-        const fetchData = async () => {
-            if (!dbContext || !currentSpec.data || !('sql' in currentSpec.data) || !currentSpec.data.sql) {
-                setLoading(false);
-                return;
+        if (!dbContext || !currentSpec.data) {
+            setLoading(false);
+            setDataUrl(null);
+            return;
+        }
+
+        try {
+            setLoading(false);
+            setError(null);
+
+            // Check if data.url exists with duckdb:// URL
+            if ('url' in currentSpec.data && currentSpec.data.url) {
+                const url = currentSpec.data.url;
+                if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                    setDataUrl(url);
+                    return;
+                }
             }
 
-            try {
-                setLoading(true);
-                setError(null);
-
-                // Execute SQL query for chart data
-                const rows = await dbContext.executeQuery(currentSpec.data.sql, schema);
-                setData(rows);
-            } catch (err) {
-                console.error('Error fetching data for Vega-Lite chart:', err);
-                setError(err instanceof Error ? err.message : 'Failed to fetch data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
+            // No valid data source found
+            setDataUrl(null);
+        } catch (err) {
+            console.error('Error configuring Vega-Lite chart:', err);
+            setError(err instanceof Error ? err.message : 'Failed to configure chart');
+            setDataUrl(null);
+        }
     }, [dbContext, currentSpec, schema]);
 
-    // Create final spec with data values, ensuring it's valid TopLevelSpec
+    // Create final spec with URL data, ensuring it's valid TopLevelSpec
     // Memoize to prevent unnecessary re-renders in VegaLite component
     // This must be before any conditional returns to follow React Hooks rules
     const finalSpec: TopLevelSpec = useMemo(
         () => ({
             ...currentSpec,
-            data: { values: data },
+            data: dataUrl ? { url: dataUrl, format: { type: 'json' } } : { values: [] },
         }),
-        [currentSpec, data]
+        [currentSpec, dataUrl]
     );
 
     if (loading) {
@@ -231,6 +297,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
                         onViewReady?.(view);
                     }}
                     style={{ width: '100%', height: '100%' }}
+                    loader={duckdbLoader}
                 />
             </div>
         </div>

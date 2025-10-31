@@ -473,7 +473,14 @@ const renderContentBlock = (
 
             if (block.name === 'perform_cluster_analysis') {
                 const result = block.result as ClusterAnalysisResponse;
-                return renderClusterToolResult(result, index);
+                return renderClusterToolResult(
+                    result,
+                    index,
+                    selectedTable,
+                    onTableSelect,
+                    chartSpecs,
+                    tableGeometries
+                );
             }
 
             // Handle get_map_style_for_table tool results
@@ -852,8 +859,7 @@ function renderRegressionToolResult(result: RegressionAnalysisResponse | undefin
                     </div>
                     <div className="leading-relaxed">
                         使用行数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}
-                        {formatInteger(dataInfo.totalRows)}（最大 {formatInteger(dataInfo.samplingLimit)} 行、除外{' '}
-                        {formatInteger(dataInfo.skippedRows)} 行）
+                        {formatInteger(dataInfo.totalRows)}（除外 {formatInteger(dataInfo.skippedRows)} 行）
                     </div>
                     <div className="leading-relaxed">
                         回帰式:{' '}
@@ -982,9 +988,21 @@ function renderRegressionToolResult(result: RegressionAnalysisResponse | undefin
 function formatRegressionNumber(value: number, digits = 4): string {
     if (!Number.isFinite(value)) return '—';
     const absValue = Math.abs(value);
-    if (absValue !== 0 && (absValue >= 10 ** digits || absValue < 10 ** -digits)) {
+
+    // For very large numbers (>= 10000), use comma separators
+    if (absValue >= 10_000) {
+        return value.toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: digits,
+        });
+    }
+
+    // For very small numbers, use exponential notation
+    if (absValue !== 0 && absValue < 10 ** -digits) {
         return value.toExponential(2);
     }
+
+    // For normal range numbers, use fixed decimal places
     return Number(value.toFixed(digits)).toString();
 }
 
@@ -999,7 +1017,14 @@ function formatInteger(value: number): string {
     return Math.round(value).toLocaleString();
 }
 
-function renderClusterToolResult(result: ClusterAnalysisResponse | undefined, key: number): React.ReactNode {
+function renderClusterToolResult(
+    result: ClusterAnalysisResponse | undefined,
+    key: number,
+    selectedTable?: string | null,
+    onTableSelect?: (tableName: string) => void,
+    chartSpecs?: ChartSpecs,
+    tableGeometries?: Record<string, boolean>
+): React.ReactNode {
     if (!result) {
         return (
             <CollapsibleSection key={key} title="❌ **クラスター分析の結果を取得できませんでした**" defaultOpen={false}>
@@ -1025,152 +1050,188 @@ function renderClusterToolResult(result: ClusterAnalysisResponse | undefined, ke
         );
     }
 
-    const { metrics, diagnostics, featureColumns, dataInfo, warnings, suggestions } = result;
+    const { metrics, diagnostics, featureColumns, dataInfo, warnings, labelsTableName } = result;
 
     return (
-        <CollapsibleSection
-            key={key}
-            title={`🎯 **クラスター分析結果: ${metrics.numClusters}グループに分類**`}
-            defaultOpen
-        >
-            <div className="p-2 text-xs space-y-3 text-gray-700">
-                <div className="space-y-1">
-                    <div className="font-semibold text-gray-800">分析概要</div>
-                    <div>
-                        特徴量: <span className="font-medium">{featureColumns.join(', ')}</span>
-                    </div>
-                    <div className="leading-relaxed">
-                        クラスター数: <span className="font-medium">{metrics.numClusters}</span>
-                    </div>
-                    <div className="leading-relaxed">
-                        使用データ数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}
-                        {formatInteger(dataInfo.totalRows)}（最大 {formatInteger(dataInfo.samplingLimit)} 行、除外{' '}
-                        {formatInteger(dataInfo.skippedRows)} 行）
-                    </div>
-                    <div className="leading-relaxed">
-                        収束状態:{' '}
-                        <span
-                            className={metrics.converged ? 'text-green-600 font-medium' : 'text-amber-600 font-medium'}
-                        >
-                            {metrics.converged ? '✓ 収束' : '△ 未収束'}{' '}
-                            <span className="text-gray-600 font-normal">（{diagnostics.iterations}回反復）</span>
-                        </span>
-                    </div>
-                </div>
-
-                <div className="space-y-1">
-                    <div className="font-semibold text-gray-800">品質指標</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <>
+            <CollapsibleSection
+                key={key}
+                title={`🎯 **クラスター分析結果: ${metrics.numClusters}グループに分類**`}
+                defaultOpen
+            >
+                <div className="p-2 text-xs space-y-3 text-gray-700">
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">分析概要</div>
                         <div>
-                            Silhouette Score:{' '}
+                            特徴量: <span className="font-medium">{featureColumns.join(', ')}</span>
+                        </div>
+                        <div className="leading-relaxed">
+                            クラスター数: <span className="font-medium">{metrics.numClusters}</span>
+                        </div>
+                        <div className="leading-relaxed">
+                            使用データ数: <span className="font-medium">{formatInteger(dataInfo.usedRows)}</span> /{' '}
+                            {formatInteger(dataInfo.totalRows)}（除外 {formatInteger(dataInfo.skippedRows)} 行）
+                        </div>
+                        <div className="leading-relaxed">
+                            収束状態:{' '}
                             <span
                                 className={
-                                    metrics.silhouetteScore > 0.7
-                                        ? 'font-medium text-green-600'
-                                        : metrics.silhouetteScore > 0.5
-                                          ? 'font-medium text-blue-600'
-                                          : metrics.silhouetteScore > 0.25
-                                            ? 'font-medium text-amber-600'
-                                            : 'font-medium text-red-600'
+                                    metrics.converged ? 'text-green-600 font-medium' : 'text-amber-600 font-medium'
                                 }
                             >
-                                {formatRegressionNumber(metrics.silhouetteScore, 3)}
+                                {metrics.converged ? '✓ 収束' : '△ 未収束'}{' '}
+                                <span className="text-gray-600 font-normal">（{diagnostics.iterations}回反復）</span>
                             </span>
                         </div>
-                        <div>Inertia (WCSS): {formatRegressionNumber(metrics.inertia, 2)}</div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                        {metrics.silhouetteScore > 0.7
-                            ? '優れたクラスタリング品質です'
-                            : metrics.silhouetteScore > 0.5
-                              ? '良好なクラスタリング品質です'
-                              : metrics.silhouetteScore > 0.25
-                                ? '中程度のクラスタリング品質です'
-                                : 'クラスタリング品質が低いです'}
-                    </div>
-                </div>
 
-                <div className="space-y-1">
-                    <div className="font-semibold text-gray-800">クラスターサイズ</div>
-                    <div className="overflow-x-auto border border-gray-200 rounded">
-                        <table className="min-w-full table-auto border-collapse">
-                            <thead className="bg-gray-100 text-gray-700">
-                                <tr>
-                                    <th className="py-1 px-2 text-left font-semibold">クラスター</th>
-                                    <th className="py-1 px-2 text-right font-semibold">データ数</th>
-                                    <th className="py-1 px-2 text-right font-semibold">割合</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {metrics.clusterSizes.map((size: number, idx: number) => (
-                                    <tr key={idx} className="border-t border-gray-200">
-                                        <td className="py-1 px-2 text-left">クラスター {idx}</td>
-                                        <td className="py-1 px-2 text-right">{formatInteger(size)}</td>
-                                        <td className="py-1 px-2 text-right">
-                                            {formatRegressionNumber((size / metrics.numSamples) * 100, 1)}%
-                                        </td>
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">品質指標</div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <div>
+                                Silhouette Score:{' '}
+                                <span
+                                    className={
+                                        metrics.silhouetteScore > 0.7
+                                            ? 'font-medium text-green-600'
+                                            : metrics.silhouetteScore > 0.5
+                                              ? 'font-medium text-blue-600'
+                                              : metrics.silhouetteScore > 0.25
+                                                ? 'font-medium text-amber-600'
+                                                : 'font-medium text-red-600'
+                                    }
+                                >
+                                    {formatRegressionNumber(metrics.silhouetteScore, 3)}
+                                </span>
+                            </div>
+                            <div>Inertia (WCSS): {formatRegressionNumber(metrics.inertia, 2)}</div>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                            {metrics.silhouetteScore > 0.7
+                                ? '優れたクラスタリング品質です'
+                                : metrics.silhouetteScore > 0.5
+                                  ? '良好なクラスタリング品質です'
+                                  : metrics.silhouetteScore > 0.25
+                                    ? '中程度のクラスタリング品質です'
+                                    : 'クラスタリング品質が低いです'}
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">クラスターサイズ</div>
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-full table-auto border-collapse">
+                                <thead className="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th className="py-1 px-2 text-left font-semibold">クラスター</th>
+                                        <th className="py-1 px-2 text-right font-semibold">データ数</th>
+                                        <th className="py-1 px-2 text-right font-semibold">割合</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div className="space-y-1">
-                    <div className="font-semibold text-gray-800">クラスター中心座標</div>
-                    <div className="overflow-x-auto border border-gray-200 rounded">
-                        <table className="min-w-full table-auto border-collapse">
-                            <thead className="bg-gray-100 text-gray-700">
-                                <tr>
-                                    <th className="py-1 px-2 text-left font-semibold">クラスター</th>
-                                    {metrics.featureNames.map((name: string, idx: number) => (
-                                        <th key={idx} className="py-1 px-2 text-right font-semibold">
-                                            {name}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {diagnostics.centroids.map((centroid: number[], idx: number) => (
-                                    <tr key={idx} className="border-t border-gray-200">
-                                        <td className="py-1 px-2 text-left">クラスター {idx}</td>
-                                        {centroid.map((value: number, valueIdx: number) => (
-                                            <td key={valueIdx} className="py-1 px-2 text-right">
-                                                {formatRegressionNumber(value, 2)}
+                                </thead>
+                                <tbody>
+                                    {metrics.clusterSizes.map((size: number, idx: number) => (
+                                        <tr key={idx} className="border-t border-gray-200">
+                                            <td className="py-1 px-2 text-left">クラスター {idx}</td>
+                                            <td className="py-1 px-2 text-right">{formatInteger(size)}</td>
+                                            <td className="py-1 px-2 text-right">
+                                                {formatRegressionNumber((size / metrics.numSamples) * 100, 1)}%
                                             </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="font-semibold text-gray-800">クラスター中心座標</div>
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-full table-auto border-collapse">
+                                <thead className="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th className="py-1 px-2 text-left font-semibold">クラスター</th>
+                                        {metrics.featureNames.map((name: string, idx: number) => (
+                                            <th key={idx} className="py-1 px-2 text-right font-semibold">
+                                                {name}
+                                            </th>
                                         ))}
                                     </tr>
+                                </thead>
+                                <tbody>
+                                    {diagnostics.centroids.map((centroid: number[], idx: number) => (
+                                        <tr key={idx} className="border-t border-gray-200">
+                                            <td className="py-1 px-2 text-left">クラスター {idx}</td>
+                                            {centroid.map((value: number, valueIdx: number) => (
+                                                <td key={valueIdx} className="py-1 px-2 text-right">
+                                                    {formatRegressionNumber(value, 2)}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {(diagnostics.timing || diagnostics.sampleInfo) && (
+                        <div className="space-y-1">
+                            <div className="font-semibold text-gray-800">処理情報</div>
+                            <div className="space-y-1 text-gray-600">
+                                {diagnostics.sampleInfo && (
+                                    <div>
+                                        学習サンプル数: {formatInteger(diagnostics.sampleInfo.sampleSize)} /{' '}
+                                        {formatInteger(diagnostics.sampleInfo.totalSize)} (
+                                        {formatRegressionNumber(diagnostics.sampleInfo.sampleRatio * 100, 1)}%)
+                                    </div>
+                                )}
+                                {diagnostics.timing && (
+                                    <div className="grid grid-cols-3 gap-x-4">
+                                        {diagnostics.timing.totalMs && (
+                                            <div>
+                                                総処理時間: {formatRegressionNumber(diagnostics.timing.totalMs, 0)}ms
+                                            </div>
+                                        )}
+                                        {diagnostics.timing.initializationMs !== undefined && (
+                                            <div>
+                                                初期化: {formatRegressionNumber(diagnostics.timing.initializationMs, 0)}
+                                                ms
+                                            </div>
+                                        )}
+                                        {diagnostics.timing.reclusteringMs !== undefined && (
+                                            <div>
+                                                再計算: {formatRegressionNumber(diagnostics.timing.reclusteringMs, 0)}ms
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {warnings && warnings.length > 0 ? (
+                        <div className="space-y-1">
+                            <div className="font-semibold text-gray-800">注意事項</div>
+                            <ul className="list-disc list-inside text-amber-600">
+                                {warnings.map((warning, idx) => (
+                                    <li key={idx}>{warning}</li>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            </ul>
+                        </div>
+                    ) : null}
                 </div>
-
-                {warnings && warnings.length > 0 ? (
-                    <div className="space-y-1">
-                        <div className="font-semibold text-gray-800">注意事項</div>
-                        <ul className="list-disc list-inside text-amber-600">
-                            {warnings.map((warning, idx) => (
-                                <li key={idx}>{warning}</li>
-                            ))}
-                        </ul>
-                    </div>
-                ) : null}
-
-                {suggestions && suggestions.length > 0 ? (
-                    <div className="space-y-1">
-                        <div className="font-semibold text-gray-800">次のステップ</div>
-                        <ul className="list-disc list-inside text-blue-600 space-y-0.5">
-                            {suggestions.map((suggestion, idx) => (
-                                <li key={idx} className="leading-relaxed">
-                                    {suggestion}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ) : null}
-            </div>
-        </CollapsibleSection>
+            </CollapsibleSection>
+            {labelsTableName && onTableSelect && (
+                <div className="mt-2">
+                    <TableCreatedMessage
+                        tableName={labelsTableName}
+                        isSelected={selectedTable === labelsTableName}
+                        onClick={() => onTableSelect(labelsTableName)}
+                        hasChartSpec={chartSpecs ? labelsTableName in chartSpecs : false}
+                        hasGeometry={tableGeometries?.[labelsTableName] || false}
+                    />
+                </div>
+            )}
+        </>
     );
 }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { MapStyleManager } from './mapStyleManager';
 
 interface MapStyleModalProps {
@@ -167,7 +168,7 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
 
     if (!isOpen) return null;
 
-    return (
+    const modalContent = (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center">
             <div className="absolute inset-0 bg-black/30" onClick={onClose} />
             <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
@@ -266,4 +267,6 @@ export function MapStyleModal({ isOpen, onClose, styleManager, onStyleChange }: 
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }

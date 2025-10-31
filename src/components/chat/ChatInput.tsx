@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/outline';
 import { extractDataUrl } from '../../utils/tableCreation';
-import SubmitButton from './SubmitButton';
 
 interface ChatInputProps {
     value: string;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-    onSubmit: (e: React.FormEvent) => void;
+    onSubmit: (e: React.FormEvent) => void | Promise<void>;
     onStop: () => void;
     dbContext: DBContext | null;
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -16,14 +15,12 @@ interface ChatInputProps {
     className?: string;
     schemaName?: string | null;
     selectedTable?: string | null;
-    isMultiline: boolean;
-    textareaHeight: number;
-    isLoading: boolean;
-    isCreatingTable: boolean;
-    isAnyLoading: boolean;
-    remoteFileComponent?: (onClose: () => void) => React.ReactNode;
+    isLoading?: boolean;
+    isSubmitting?: boolean;
+    renderMenu?: (onClose: () => void, onShowUrlGuide?: () => void) => React.ReactNode;
     disabled?: boolean;
-    isWaitingForDb?: boolean;
+    showUrlGuide?: boolean;
+    onShowUrlGuide?: () => void;
 }
 
 interface AutocompleteState {
@@ -46,15 +43,15 @@ export default function ChatInput({
     className,
     schemaName,
     selectedTable,
-    isMultiline,
-    textareaHeight,
     isLoading,
-    isCreatingTable,
-    isAnyLoading,
-    remoteFileComponent,
+    isSubmitting: externalIsSubmitting,
+    renderMenu,
     disabled = false,
-    isWaitingForDb = false,
+    showUrlGuide = false,
+    onShowUrlGuide,
 }: ChatInputProps) {
+    const [internalIsSubmitting, setInternalIsSubmitting] = useState(false);
+    const isSubmitting = externalIsSubmitting !== undefined ? externalIsSubmitting : internalIsSubmitting;
     const [tables, setTables] = useState<string[]>([]);
     const [fields, setFields] = useState<Array<{ name: string; type: string }>>([]);
     const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
@@ -64,9 +61,13 @@ export default function ChatInput({
         selectedIndex: 0,
         triggerType: '@',
     });
+    const [isMultiline, setIsMultiline] = useState(false);
+    const [textareaHeight, setTextareaHeight] = useState(44);
+    const [isOverflowing, setIsOverflowing] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [showPopup, setShowPopup] = useState(false);
+    const [popupPosition, setPopupPosition] = useState<'top' | 'bottom'>('bottom');
     const popupRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -107,6 +108,92 @@ export default function ChatInput({
 
         fetchFields();
     }, [dbContext, selectedTable, schemaName]);
+
+    // Calculate textarea height based on content
+    useEffect(() => {
+        const MIN_HEIGHT = 44;
+        const MAX_LINES = 10;
+
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        const trimmed = value.trim();
+
+        if (!trimmed) {
+            setIsMultiline(false);
+            setTextareaHeight(MIN_HEIGHT);
+            return;
+        }
+
+        const computedStyle = window.getComputedStyle(textarea);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const totalPadding = paddingTop + paddingBottom;
+        const singleLineHeight = lineHeight + totalPadding;
+
+        const updateHeight = () => {
+            const currentTextarea = textareaRef.current;
+            if (!currentTextarea) {
+                return;
+            }
+
+            const lines = value.split('\n').length;
+
+            // If multiple lines with newlines, use line count
+            if (lines > 1) {
+                setIsMultiline(true);
+                const effectiveLines = Math.min(lines, MAX_LINES);
+                const newHeight = effectiveLines * lineHeight + totalPadding;
+                setTextareaHeight(newHeight);
+                setIsOverflowing(lines > MAX_LINES);
+
+                // Scroll to bottom if overflowing
+                if (lines > MAX_LINES) {
+                    requestAnimationFrame(() => {
+                        if (currentTextarea) {
+                            currentTextarea.scrollTop = currentTextarea.scrollHeight;
+                        }
+                    });
+                }
+                return;
+            }
+
+            // For single line, temporarily reset height to get accurate scrollHeight
+            const previousHeight = currentTextarea.style.height;
+            currentTextarea.style.height = `${MIN_HEIGHT}px`;
+            const contentHeight = currentTextarea.scrollHeight;
+            currentTextarea.style.height = previousHeight;
+
+            if (contentHeight > singleLineHeight + 1) {
+                const neededLines = Math.min(Math.ceil((contentHeight - totalPadding) / lineHeight), MAX_LINES);
+                const newHeight = neededLines * lineHeight + totalPadding;
+                setIsMultiline(true);
+                setTextareaHeight(newHeight);
+                setIsOverflowing(neededLines >= MAX_LINES);
+
+                // Scroll to bottom if overflowing
+                if (neededLines >= MAX_LINES) {
+                    requestAnimationFrame(() => {
+                        if (currentTextarea) {
+                            currentTextarea.scrollTop = currentTextarea.scrollHeight;
+                        }
+                    });
+                }
+            } else {
+                setIsMultiline(false);
+                setTextareaHeight(MIN_HEIGHT);
+                setIsOverflowing(false);
+            }
+        };
+
+        requestAnimationFrame(updateHeight);
+    }, [value, textareaRef]);
 
     // Track if we're clicking on the dropdown
     const isClickingDropdownRef = useRef(false);
@@ -221,10 +308,23 @@ export default function ChatInput({
         [value, autocomplete, onChange, textareaRef]
     );
 
+    const handleSubmitWithLoading = useCallback(
+        async (e: React.FormEvent) => {
+            setInternalIsSubmitting(true);
+            try {
+                await onSubmit(e);
+            } finally {
+                setInternalIsSubmitting(false);
+            }
+        },
+        [onSubmit]
+    );
+
     // Handle keyboard navigation
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (autocomplete.isOpen && filteredItems.length > 0) {
+            // Handle autocomplete first (but not for Shift+Enter)
+            if (autocomplete.isOpen && filteredItems.length > 0 && !(e.key === 'Enter' && e.shiftKey)) {
                 switch (e.key) {
                     case 'ArrowDown':
                         e.preventDefault();
@@ -263,25 +363,25 @@ export default function ChatInput({
                 }
             }
 
-            // Handle Enter key for single-line URL submission
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading) {
+            // Handle Enter key for single-line URL submission (but don't block Shift+Enter)
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && !isSubmitting) {
                 const trimmedValue = value.trim();
                 const isSingleLine = !trimmedValue.includes('\n');
                 const isUrl = extractDataUrl(trimmedValue) !== null;
 
                 if (isSingleLine && isUrl) {
                     e.preventDefault();
-                    onSubmit(e);
+                    handleSubmitWithLoading(e);
                     return;
                 }
             }
 
-            // Call original onKeyDown if provided and autocomplete didn't handle the event
+            // Always call original onKeyDown to allow parent to handle Shift+Enter and other keys
             if (onKeyDown) {
                 onKeyDown(e);
             }
         },
-        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, onSubmit]
+        [autocomplete, filteredItems, selectItem, onKeyDown, value, isLoading, isSubmitting, handleSubmitWithLoading]
     );
 
     // Scroll selected item into view
@@ -316,64 +416,106 @@ export default function ChatInput({
         }
     }, [showPopup]);
 
-    const handleButtonClick = (e: React.FormEvent) => {
+    const handleButtonClick = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isLoading) {
+        if (isLoading || isSubmitting) {
             onStop();
         } else {
-            onSubmit(e);
+            await handleSubmitWithLoading(e);
         }
+    };
+
+    const handlePopupToggle = () => {
+        if (!showPopup && buttonRef.current) {
+            // Calculate position before showing popup
+            const rect = buttonRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+
+            // Prefer bottom if there's enough space (150px for menu height)
+            const menuHeight = 150;
+            if (spaceBelow >= menuHeight) {
+                setPopupPosition('bottom');
+            } else if (spaceAbove >= menuHeight) {
+                setPopupPosition('top');
+            } else {
+                // Default to bottom if neither has enough space
+                setPopupPosition(spaceBelow >= spaceAbove ? 'bottom' : 'top');
+            }
+        }
+        setShowPopup(!showPopup);
+    };
+
+    const renderMenuButton = () =>
+        renderMenu ? (
+            <div className="relative">
+                <button
+                    ref={buttonRef}
+                    type="button"
+                    onClick={handlePopupToggle}
+                    className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+                    title="データを読み込む"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                </button>
+
+                {showPopup && (
+                    <div
+                        ref={popupRef}
+                        className={`absolute left-0 bg-white rounded-md shadow-lg border border-gray-200 z-50 ${
+                            popupPosition === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1'
+                        }`}
+                    >
+                        {renderMenu(() => setShowPopup(false), onShowUrlGuide)}
+                    </div>
+                )}
+            </div>
+        ) : null;
+
+    const renderSubmitButton = () => {
+        return (
+            <button
+                type="button"
+                onClick={handleButtonClick}
+                disabled={(!isLoading && !value.trim()) || isSubmitting || disabled}
+                className={`p-2 rounded-full transition-colors duration-200 ${
+                    isLoading || isSubmitting
+                        ? 'text-red-600 hover:bg-red-50'
+                        : !value.trim() || disabled
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-blue-600 hover:bg-blue-50'
+                } focus:outline-none`}
+                title={isLoading || isSubmitting ? '停止' : disabled ? 'APIキーを設定してください' : '送信'}
+            >
+                {isLoading ? (
+                    <StopIcon className="w-5 h-5" />
+                ) : isSubmitting ? (
+                    <div className="w-5 h-5 border-[3px] border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                ) : (
+                    <PaperAirplaneIcon className="w-5 h-5" />
+                )}
+            </button>
+        );
     };
 
     return (
         <div className={`flex gap-2 ${isMultiline ? 'flex-col' : 'items-center'} w-full`}>
-            {!isMultiline && remoteFileComponent && (
-                <div className="relative">
-                    <button
-                        ref={buttonRef}
-                        type="button"
-                        onClick={() => setShowPopup(!showPopup)}
-                        className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
-                        title="データを読み込む"
-                    >
-                        <PlusIcon className="w-5 h-5" />
-                    </button>
-
-                    {showPopup && (
-                        <div
-                            ref={popupRef}
-                            className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                            style={{ width: '500px', maxHeight: '400px' }}
-                        >
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowPopup(false)}
-                                    className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M6 18L18 6M6 6l12 12"
-                                        />
-                                    </svg>
-                                </button>
-                                <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                    {remoteFileComponent(() => setShowPopup(false))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
+            {!isMultiline && renderMenuButton()}
 
             <div className={isMultiline ? 'w-full' : 'flex-1'}>
                 <div
                     ref={containerRef}
-                    style={{ height: `${textareaHeight}px`, transition: 'height 0.3s ease' }}
-                    className="relative"
+                    style={{ minHeight: `${textareaHeight}px`, transition: 'min-height 0.3s ease' }}
+                    className="relative flex flex-col justify-end"
                 >
+                    {showUrlGuide && (
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+                            <div className="relative bg-blue-500 text-white px-6 py-3 rounded-lg shadow-xl text-base font-medium">
+                                ここにURLを入力してください
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-500"></div>
+                            </div>
+                        </div>
+                    )}
                     <textarea
                         ref={textareaRef}
                         value={value}
@@ -382,7 +524,12 @@ export default function ChatInput({
                         onBlur={handleBlur}
                         placeholder={placeholder}
                         className={className}
-                        style={{ height: '100%', display: 'block' }}
+                        style={{
+                            height: `${textareaHeight}px`,
+                            width: '100%',
+                            display: 'block',
+                            overflow: isOverflowing ? 'auto' : 'hidden',
+                        }}
                     />
 
                     {autocomplete.isOpen && filteredItems.length > 0 && (
@@ -423,72 +570,12 @@ export default function ChatInput({
             </div>
 
             {isMultiline ? (
-                <div className={`flex items-end gap-2 ${remoteFileComponent ? 'justify-between' : 'justify-end'}`}>
-                    {remoteFileComponent && (
-                        <div className="relative">
-                            <button
-                                ref={buttonRef}
-                                type="button"
-                                onClick={() => setShowPopup(!showPopup)}
-                                className="p-2 text-gray-700 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
-                                title="データを読み込む"
-                            >
-                                <PlusIcon className="w-5 h-5" />
-                            </button>
-
-                            {showPopup && (
-                                <div
-                                    ref={popupRef}
-                                    className="absolute bottom-full mb-2 left-0 bg-white rounded-lg shadow-2xl border border-gray-200 z-50"
-                                    style={{ width: '500px', maxHeight: '400px' }}
-                                >
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowPopup(false)}
-                                            className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded transition-colors z-10"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M6 18L18 6M6 6l12 12"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <div className="p-4 overflow-auto" style={{ maxHeight: '400px' }}>
-                                            {remoteFileComponent(() => setShowPopup(false))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <SubmitButton
-                        isLoading={isLoading}
-                        isCreatingTable={isCreatingTable}
-                        value={value}
-                        isAnyLoading={isAnyLoading}
-                        disabled={disabled}
-                        onClick={handleButtonClick}
-                        isWaitingForDb={isWaitingForDb}
-                    />
+                <div className={`flex items-end gap-2 ${renderMenu ? 'justify-between' : 'justify-end'}`}>
+                    {renderMenuButton()}
+                    {renderSubmitButton()}
                 </div>
             ) : (
-                <SubmitButton
-                    isLoading={isLoading}
-                    isCreatingTable={isCreatingTable}
-                    value={value}
-                    isAnyLoading={isAnyLoading}
-                    disabled={disabled}
-                    onClick={handleButtonClick}
-                    isWaitingForDb={isWaitingForDb}
-                />
+                renderSubmitButton()
             )}
         </div>
     );

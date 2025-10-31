@@ -2,15 +2,14 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
 import { kmeans } from '../../../utils/clustering/kmeans';
+import { scalableKmeans } from '../../../utils/clustering/scalableKmeans';
 import type { ClusterAnalysisResponse } from '../../../types/clustering';
 
-const DEFAULT_MAX_ROWS = 100;
-const MAX_ALLOWED_ROWS = 100; // Force maximum to 100 to prevent token overflow
 const MIN_REQUIRED_ROWS = 10;
-const AUTO_SAMPLING_THRESHOLD = 100; // Auto-sample to 100 rows
 const DEFAULT_K = 3;
 const MIN_K = 2;
 const MAX_K = 10;
+const LARGE_DATA_THRESHOLD = 10000; // Use scalable k-means for datasets > 10k rows
 
 export function createClusterTool(dbContext: DBContext, schema: string | null) {
     return tool({
@@ -42,14 +41,11 @@ EXAMPLES OF WHEN NOT TO USE:
 DEFAULT BEHAVIOR:
 - Automatically uses k=3 clusters (small/medium/large or low/medium/high grouping)
 - User can override by specifying different k value (2-10)
-- Analyzes exactly 100 rows (fixed to prevent token overflow)
+- Analyzes all rows in the table by default
 
-IMPORTANT AUTO-SAMPLING:
-- If the input table has more than 100 rows, the tool automatically creates a sampled table with 100 rows
-- The sampled table is named {original_table}_sampled_for_clustering
-- This prevents AI from stalling when processing large datasets and prevents token overflow
-- The tool analyzes up to max_rows (default: 100, max: 100) from the table
-- 100 points is optimal for both analysis and visualization
+IMPORTANT:
+- The tool analyzes the entire table unless max_rows is specified
+- For large datasets, consider specifying max_rows to limit the number of rows analyzed
 - The tool will automatically suggest creating visualization
 
 IMPORTANT: After using this tool successfully, ALWAYS create visualizations:
@@ -65,7 +61,7 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 - Display cluster summary information as TEXT in your response, not as a new table
 - Only create tables for visualization purposes (scatter plots), not for summary statistics
 - If you need to show cluster statistics, use the clustering result data directly in your text response`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             feature_columns: z
                 .array(z.string())
@@ -83,63 +79,31 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                 .number()
                 .int()
                 .min(MIN_REQUIRED_ROWS)
-                .max(MAX_ALLOWED_ROWS)
                 .optional()
-                .describe('Maximum number of rows to sample for analysis (default: 100, max: 100)'),
+                .describe(
+                    'Maximum number of rows to sample for analysis (optional, analyzes all rows if not specified)'
+                ),
             init_method: z
                 .enum(['random', 'kmeans++'])
                 .optional()
                 .describe('Initialization method (default: kmeans++)'),
         }),
-        execute: async ({ table_name, feature_columns, k = DEFAULT_K, max_rows, init_method }) => {
+        execute: async ({
+            table_name,
+            feature_columns,
+            k = DEFAULT_K,
+            max_rows,
+            init_method,
+        }): Promise<ClusterAnalysisResponse> => {
             try {
-                let tableName = table_name.trim();
+                const tableName = table_name.trim();
                 if (!tableName) {
                     return errorResponse('テーブル名が指定されていません。');
                 }
 
-                let sanitizedTable = quoteIdentifier(tableName);
-                let qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
+                const sanitizedTable = quoteIdentifier(tableName);
+                const qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
 
-                // Check table row count and auto-sample if needed
-                let originalTableName: string | null = null;
-                let originalRowCount: number | null = null;
-                const countQuery = `SELECT COUNT(*) as count FROM ${qualifiedTable};`;
-                const countResult = await dbContext.executeQuery(countQuery, schema);
-
-                if (Array.isArray(countResult) && countResult.length > 0) {
-                    const rowCount = Number(countResult[0]?.count);
-                    if (Number.isFinite(rowCount) && rowCount > AUTO_SAMPLING_THRESHOLD) {
-                        originalTableName = tableName;
-                        originalRowCount = rowCount;
-
-                        // Create sampled table
-                        const sampledTableName = `${tableName}_sampled_for_clustering`;
-                        const sampledSanitized = quoteIdentifier(sampledTableName);
-                        const sampledQualified = schema
-                            ? `${quoteIdentifier(schema)}.${sampledSanitized}`
-                            : sampledSanitized;
-
-                        // Drop existing sampled table if exists
-                        try {
-                            await dbContext.executeQuery(`DROP TABLE IF EXISTS ${sampledQualified};`, schema);
-                        } catch {
-                            // Ignore drop errors
-                        }
-
-                        // Create new sampled table using random sampling
-                        const createSampledQuery = `CREATE TABLE ${sampledQualified} AS
-                            SELECT * FROM ${qualifiedTable}
-                            ORDER BY random()
-                            LIMIT ${AUTO_SAMPLING_THRESHOLD};`;
-                        await dbContext.executeQuery(createSampledQuery, schema);
-
-                        // Update table reference to use sampled table
-                        tableName = sampledTableName;
-                        sanitizedTable = sampledSanitized;
-                        qualifiedTable = sampledQualified;
-                    }
-                }
                 const columns = await dbContext.getTableColumns(tableName, schema);
                 if (!columns || columns.length === 0) {
                     return errorResponse(`テーブル「${tableName}」のカラム情報が取得できませんでした。`);
@@ -170,10 +134,10 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     return errorResponse('クラスター分析には最低2つの特徴量カラムが必要です。');
                 }
 
-                const limit = clamp(max_rows ?? DEFAULT_MAX_ROWS, MIN_REQUIRED_ROWS, MAX_ALLOWED_ROWS);
+                const limitClause = max_rows ? `LIMIT ${Math.max(max_rows, MIN_REQUIRED_ROWS)}` : '';
                 const query = `SELECT ${providedFeatures
                     .map(quoteIdentifier)
-                    .join(', ')} FROM ${qualifiedTable} LIMIT ${limit};`;
+                    .join(', ')} FROM ${qualifiedTable} ${limitClause};`;
                 const rows = await dbContext.executeQuery(query, schema);
 
                 if (!Array.isArray(rows) || rows.length === 0) {
@@ -232,11 +196,25 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 
                 let clustering;
                 try {
-                    clustering = kmeans(matrixX, {
-                        numClusters: k,
-                        featureNames: providedFeatures,
-                        initMethod: init_method ?? 'kmeans++',
-                    });
+                    // Use scalable k-means for large datasets (>10k rows)
+                    if (usedRows > LARGE_DATA_THRESHOLD) {
+                        clustering = await scalableKmeans(matrixX, {
+                            numClusters: k,
+                            featureNames: providedFeatures,
+                            initMethod: init_method ?? 'kmeans++',
+                            maxIterations: 20, // Reduced for sample training
+                            refinementIterations: 2, // 2 refinement passes on full data
+                            sampleRatio: 0.1, // 10% sample
+                            maxSampleSize: 10000,
+                        });
+                    } else {
+                        // Use standard k-means for smaller datasets
+                        clustering = kmeans(matrixX, {
+                            numClusters: k,
+                            featureNames: providedFeatures,
+                            initMethod: init_method ?? 'kmeans++',
+                        });
+                    }
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     return errorResponse(`クラスター分析の計算中にエラーが発生しました: ${message}`);
@@ -252,10 +230,8 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     warnings.push(`NULLまたは非数値値のために${skippedRows}行を除外しました。`);
                 }
 
-                if (usedRows < totalRows) {
-                    warnings.push(
-                        `サンプリング上限${limit}行から有効${usedRows}行を利用しました。100行に制限してトークンオーバーフローを防いでいます。`
-                    );
+                if (max_rows && usedRows < totalRows) {
+                    warnings.push(`サンプリング上限${max_rows}行から有効${usedRows}行を利用しました。`);
                 }
 
                 if (!clustering.converged) {
@@ -351,15 +327,15 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                     // labels array removed - too large for AI context
                     // centroids included for cluster interpretation
                     centroids: clustering.centroids,
+                    sampleInfo: clustering.sampleInfo,
                 };
 
-                // Build message with auto-sampling info
-                let message = '';
-                if (originalTableName && originalRowCount) {
-                    message = `テーブル「${originalTableName}」は${originalRowCount}行あったため、自動的に${AUTO_SAMPLING_THRESHOLD}行にサンプリングしたテーブル「${tableName}」を作成してクラスター分析を実行しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
-                } else {
-                    message = `テーブル「${tableName}」のクラスター分析が完了しました。${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
-                }
+                // Build message with table creation marker for labels table
+                const baseMessage = max_rows
+                    ? `テーブル「${tableName}」のクラスター分析が完了しました。最大${max_rows}行から有効な${usedRows}行を使用して${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`
+                    : `テーブル「${tableName}」のクラスター分析が完了しました。${usedRows}行を使用して${k}個のクラスターに分類しました。特徴量: ${providedFeatures.join(', ')}`;
+
+                const message = `${baseMessage}\n\n<!--TABLE_CREATED:${labelsTableName}-->`;
 
                 const response: ClusterAnalysisResponse = {
                     success: true,
@@ -371,7 +347,6 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
                         totalRows,
                         usedRows,
                         skippedRows,
-                        samplingLimit: limit,
                     },
                     metrics,
                     diagnostics,
@@ -407,10 +382,6 @@ function deduplicateStrings(values: string[]): string[] {
         }
     }
     return result;
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
 }
 
 function quoteIdentifier(identifier: string): string {

@@ -33,13 +33,13 @@ describe('DashboardHistoryGrid', () => {
     it('should render header with title', () => {
         render(<DashboardHistoryGrid {...defaultProps} />);
 
-        expect(screen.getByText('Dashboard List')).toBeInTheDocument();
+        expect(screen.getByText('ダッシュボード')).toBeInTheDocument();
     });
 
     it('should render create dashboard button', () => {
         render(<DashboardHistoryGrid {...defaultProps} />);
 
-        expect(screen.getByText('+ New dashboard')).toBeInTheDocument();
+        expect(screen.getByText('+ 新しいダッシュボード')).toBeInTheDocument();
     });
 
     it('should render all dashboards', () => {
@@ -53,7 +53,7 @@ describe('DashboardHistoryGrid', () => {
         const mockOnCreateDashboard = vi.fn();
         render(<DashboardHistoryGrid {...defaultProps} onCreateDashboard={mockOnCreateDashboard} />);
 
-        const createButton = screen.getByText('+ New dashboard');
+        const createButton = screen.getByText('+ 新しいダッシュボード');
         fireEvent.click(createButton);
 
         expect(mockOnCreateDashboard).toHaveBeenCalledTimes(1);
@@ -74,23 +74,21 @@ describe('DashboardHistoryGrid', () => {
     it('should display empty state when no dashboards exist', () => {
         render(<DashboardHistoryGrid {...defaultProps} dashboards={[]} />);
 
-        expect(screen.getByText('No dashboards found. Create your first dashboard!')).toBeInTheDocument();
+        expect(screen.getByText('ダッシュボードがありません')).toBeInTheDocument();
+        expect(screen.getByText('最初のダッシュボードを作成しましょう！')).toBeInTheDocument();
     });
 
     it('should not display empty state when dashboards exist', () => {
         render(<DashboardHistoryGrid {...defaultProps} />);
 
-        expect(screen.queryByText('No dashboards found. Create your first dashboard!')).not.toBeInTheDocument();
+        expect(screen.queryByText('ダッシュボードがありません')).not.toBeInTheDocument();
     });
 
     it('should render dashboard dates', () => {
         render(<DashboardHistoryGrid {...defaultProps} />);
 
-        const date1 = new Date('2024-01-15T10:30:00').toLocaleString('ja-JP');
-        const date2 = new Date('2024-01-16T14:20:00').toLocaleString('ja-JP');
-
-        expect(screen.getByText(date1)).toBeInTheDocument();
-        expect(screen.getByText(date2)).toBeInTheDocument();
+        const dateElements = screen.getAllByText(/last message/);
+        expect(dateElements.length).toBe(2);
     });
 
     it('should handle delete flow', () => {
@@ -164,7 +162,7 @@ describe('DashboardHistoryGrid', () => {
     it('should have green button color for create button', () => {
         render(<DashboardHistoryGrid {...defaultProps} />);
 
-        const createButton = screen.getByText('+ New dashboard');
+        const createButton = screen.getByText('+ 新しいダッシュボード');
         expect(createButton).toHaveClass('bg-green-500', 'hover:bg-green-600');
     });
 

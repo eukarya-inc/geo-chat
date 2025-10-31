@@ -26,11 +26,38 @@ export type Result =
           suggestions?: string[];
       };
 
+export type BatchGeocodeResult = {
+    success: boolean;
+    data?: { results: unknown[]; errors: unknown[] };
+    error?: string;
+    message: string;
+};
+
+export type AnalyzeTableResult = {
+    success: boolean;
+    data?: unknown;
+    error?: string;
+    message: string;
+};
+
+export type AddGeocodedColumnsResult = {
+    success: boolean;
+    data?: unknown;
+    error?: string;
+    message: string;
+    geometryInfo?: {
+        columnName: string;
+        geometryType: string;
+        message: string;
+    };
+    suggestions?: string[];
+};
+
 export function createGeocodingTools(dbContext: DBContext) {
     return {
         geocode_address: tool({
             description: `Geocode a single address using OpenStreetMap Nominatim API. Returns latitude, longitude and full address.`,
-            parameters: z.object({
+            inputSchema: z.object({
                 address: z
                     .string()
                     .describe('The address to geocode (e.g., "1600 Pennsylvania Avenue, Washington, DC")'),
@@ -55,7 +82,7 @@ export function createGeocodingTools(dbContext: DBContext) {
 
         geocode_multiple_addresses: tool({
             description: `Geocode multiple addresses with rate limiting. Useful for batch processing.`,
-            parameters: z.object({
+            inputSchema: z.object({
                 addresses: z.array(z.string()).describe('Array of addresses to geocode'),
                 rateLimitMs: z
                     .number()
@@ -63,7 +90,7 @@ export function createGeocodingTools(dbContext: DBContext) {
                     .default(1000)
                     .describe('Milliseconds to wait between API calls (default: 1000)'),
             }),
-            execute: async ({ addresses, rateLimitMs = 1000 }) => {
+            execute: async ({ addresses, rateLimitMs = 1000 }): Promise<BatchGeocodeResult> => {
                 try {
                     const { results, errors } = await geocodeMultipleAddresses(addresses, rateLimitMs);
                     return {
@@ -83,10 +110,10 @@ export function createGeocodingTools(dbContext: DBContext) {
 
         analyze_table_for_geocoding: tool({
             description: `Analyze a DuckDB table to find columns that might contain addresses suitable for geocoding.`,
-            parameters: z.object({
+            inputSchema: z.object({
                 tableName: z.string().describe('Name of the table to analyze'),
             }),
-            execute: async ({ tableName }) => {
+            execute: async ({ tableName }): Promise<AnalyzeTableResult> => {
                 try {
                     const analysis = await analyzeTableForGeocoding(dbContext, tableName);
                     return {
@@ -106,13 +133,18 @@ export function createGeocodingTools(dbContext: DBContext) {
 
         add_geocoded_columns_to_table: tool({
             description: `Add latitude, longitude, and display_name columns to a table by geocoding an existing address column. This modifies the table structure.`,
-            parameters: z.object({
+            inputSchema: z.object({
                 tableName: z.string().describe('Name of the table to modify'),
                 addressColumn: z.string().describe('Name of the column containing addresses'),
                 batchSize: z.number().optional().default(10).describe('Number of addresses to process in each batch'),
                 rateLimitMs: z.number().optional().default(1000).describe('Milliseconds to wait between API calls'),
             }),
-            execute: async ({ tableName, addressColumn, batchSize = 10, rateLimitMs = 1000 }) => {
+            execute: async ({
+                tableName,
+                addressColumn,
+                batchSize = 10,
+                rateLimitMs = 1000,
+            }): Promise<AddGeocodedColumnsResult> => {
                 try {
                     const result = await addGeocodedColumnsToTable(
                         dbContext,

@@ -6,6 +6,13 @@ interface ChartGenerationResult {
     title: string;
 }
 
+/**
+ * Generate duckdb:// URL for a table
+ */
+function createDuckDBUrl(tableName: string, schema: string | null): string {
+    return schema ? `duckdb://${schema}/${tableName}` : `duckdb://${tableName}`;
+}
+
 export async function generateDefaultCharts(
     tableName: string,
     dbContext: DBContext,
@@ -22,11 +29,8 @@ export async function generateDefaultCharts(
         const categoricalColumns = columns.filter(col => isCategoricalType(col.type));
         const temporalColumns = columns.filter(col => isTemporalType(col.type));
 
-        // Select all columns for the query
-        const columnNames = columns.map(col => col.name).join(', ');
-
-        // Don't use schema-qualified table name in SQL - let dbContext handle schema context
-        const qualifiedTableName = tableName;
+        // Create duckdb URL for data
+        const dataUrl = createDuckDBUrl(tableName, schema);
 
         // Determine the best chart type based on column types
         let chart: ChartGenerationResult | null = null;
@@ -47,8 +51,7 @@ export async function generateDefaultCharts(
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${valueColumn.name} over time`,
                     data: {
-                        sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
-                        values: [],
+                        url: dataUrl,
                     },
                     mark: {
                         type: 'line',
@@ -82,8 +85,7 @@ export async function generateDefaultCharts(
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${valueColumn.name} by ${categoryColumn.name}`,
                     data: {
-                        sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
-                        values: [],
+                        url: dataUrl,
                     },
                     mark: 'bar',
                     encoding: {
@@ -114,8 +116,7 @@ export async function generateDefaultCharts(
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: `${xColumn.name} vs ${yColumn.name}`,
                     data: {
-                        sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
-                        values: [],
+                        url: dataUrl,
                     },
                     mark: {
                         type: 'circle',
@@ -161,8 +162,7 @@ export async function generateDefaultCharts(
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: column.name,
                     data: {
-                        sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
-                        values: [],
+                        url: dataUrl,
                     },
                     mark: 'bar',
                     encoding: {
@@ -198,8 +198,7 @@ export async function generateDefaultCharts(
                     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
                     title: column.name,
                     data: {
-                        sql: `SELECT ${columnNames} FROM ${qualifiedTableName} LIMIT 1000`,
-                        values: [],
+                        url: dataUrl,
                     },
                     mark: 'bar',
                     encoding: {

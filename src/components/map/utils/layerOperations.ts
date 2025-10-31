@@ -50,7 +50,13 @@ export function removeGeoJSONSource(map: maplibregl.Map): void {
 /**
  * Add source and layers for a table
  */
-export function addTableLayers(map: maplibregl.Map, tableSpec: string, tableStyle: TableStyle, sourceId: string): void {
+export function addTableLayers(
+    map: maplibregl.Map,
+    tableSpec: string,
+    tableStyle: TableStyle,
+    sourceId: string,
+    schema: string | null = null
+): void {
     // Check if source already exists, if so remove it first
     if (map.getSource(sourceId)) {
         // Remove all layers using this source
@@ -73,9 +79,13 @@ export function addTableLayers(map: maplibregl.Map, tableSpec: string, tableStyl
 
     // Add the source
     try {
+        // Include schema in tile URL if provided
+        const tileUrl = schema
+            ? `duckdb://${schema}.${tableSpec}/{z}/{x}/{y}.pbf`
+            : `duckdb://${tableSpec}/{z}/{x}/{y}.pbf`;
         map.addSource(sourceId, {
             type: 'vector',
-            tiles: [`duckdb://${tableSpec}/{z}/{x}/{y}.pbf`],
+            tiles: [tileUrl],
             minzoom: 0,
             maxzoom: 24,
         });
@@ -173,6 +183,7 @@ export function updateMapLayers(params: {
     initializedTables: Set<string>;
     styleManager?: MapStyleManager | null;
     tileCache: Map<string, Uint8Array>;
+    schema?: string | null;
 }): void {
     const {
         map,
@@ -186,6 +197,7 @@ export function updateMapLayers(params: {
         initializedTables,
         styleManager,
         tileCache,
+        schema,
     } = params;
 
     // Always ensure StyleManager has the current map reference before any operations
@@ -233,7 +245,7 @@ export function updateMapLayers(params: {
             }
         }
 
-        addTableLayers(map, tableSpec, tableStyle, sourceId);
+        addTableLayers(map, tableSpec, tableStyle, sourceId, schema);
     });
 
     // Apply extra style if provided

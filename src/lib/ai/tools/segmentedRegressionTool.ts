@@ -1,24 +1,17 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
-import { createRegressionTool } from './regressionTool';
-import type { RegressionAnalysisResponse } from '../../../types/regression';
+import { performRegressionAnalysis } from './regressionTool';
 import type {
     SegmentRegressionResult,
     SegmentedRegressionAnalysisResponse,
     SegmentComparison,
 } from '../../../types/segmentedRegression';
 
-const DEFAULT_MAX_ROWS_PER_SEGMENT = 5000;
-const MAX_ALLOWED_ROWS_PER_SEGMENT = 20000;
-const MIN_REQUIRED_ROWS = 10;
 const MAX_PREDICTORS = 6;
 const MAX_SEGMENTS = 10; // Limit number of segments to prevent excessive computation
 
 export function createSegmentedRegressionTool(dbContext: DBContext, schema: string | null) {
-    // Create a reusable regression tool instance
-    const regressionTool = createRegressionTool(dbContext, schema);
-
     return tool({
         description: `Perform multiple linear regression analysis on DuckDB tables, separately for each segment/cluster.
 This tool allows you to discover how relationships between variables differ across segments.
@@ -42,7 +35,7 @@ OUTPUT:
 - Separate regression results for each segment
 - Comparison of coefficients across segments
 - Identification of segments with strongest/weakest relationships`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z.string().describe('Dependent variable column (required)'),
             explanatory_columns: z
@@ -62,13 +55,6 @@ OUTPUT:
                 .describe(
                     'Cluster labels table name from clusterTool (contains row_id and cluster columns). If provided, automatically joins with the main table.'
                 ),
-            max_rows_per_segment: z
-                .number()
-                .int()
-                .min(MIN_REQUIRED_ROWS)
-                .max(MAX_ALLOWED_ROWS_PER_SEGMENT)
-                .optional()
-                .describe('Maximum number of rows to sample per segment. Default 5000.'),
         }),
         execute: async ({
             table_name,
@@ -76,8 +62,7 @@ OUTPUT:
             explanatory_columns,
             segment_column,
             cluster_labels_table_name,
-            max_rows_per_segment,
-        }) => {
+        }): Promise<SegmentedRegressionAnalysisResponse> => {
             try {
                 const tableName = table_name.trim();
                 if (!tableName) {
@@ -169,12 +154,6 @@ OUTPUT:
                 }
 
                 // Perform regression for each segment
-                const limit = clamp(
-                    max_rows_per_segment ?? DEFAULT_MAX_ROWS_PER_SEGMENT,
-                    MIN_REQUIRED_ROWS,
-                    MAX_ALLOWED_ROWS_PER_SEGMENT
-                );
-
                 const segmentResults: SegmentRegressionResult[] = [];
                 const globalWarnings: string[] = [];
 
@@ -199,23 +178,15 @@ OUTPUT:
                         // Create segment table
                         const createSegmentQuery = `CREATE TABLE ${qualifiedSegmentTable} AS
                             SELECT * FROM ${qualifiedTable}
-                            WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue}
-                            LIMIT ${limit};`;
+                            WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
                         await dbContext.executeQuery(createSegmentQuery, schema);
 
-                        // Call regressionTool for this segment
-                        const regressionResult = (await regressionTool.execute(
-                            {
-                                table_name: segmentTableName,
-                                target_column,
-                                explanatory_columns,
-                                max_rows: limit,
-                            },
-                            {
-                                messages: [],
-                                toolCallId: '',
-                            }
-                        )) as RegressionAnalysisResponse;
+                        // Call performRegressionAnalysis directly for this segment
+                        const regressionResult = await performRegressionAnalysis(dbContext, schema, {
+                            table_name: segmentTableName,
+                            target_column,
+                            explanatory_columns,
+                        });
 
                         if (!regressionResult.success) {
                             globalWarnings.push(`セグメント「${segmentLabel}」: ${regressionResult.message}`);
@@ -372,10 +343,6 @@ function formatNumeric(value: number): string {
         return value.toString();
     }
     return Object.is(precise, -0) ? '0' : precise.toString();
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
 }
 
 function quoteIdentifier(identifier: string): string {

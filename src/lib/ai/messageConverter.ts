@@ -13,15 +13,13 @@ export const messageConverter = {
         const result: CoreMessage[] = [];
 
         for (const msg of messages) {
-            let content = '';
-
             if (typeof msg.content === 'string') {
                 // First check if this is ONLY a TABLE_CREATED message with TABLE_INFO
                 const hasTableCreated = msg.content.includes('<!--TABLE_CREATED:');
                 const hasTableInfo = msg.content.includes('<!--TABLE_INFO_START-->');
 
                 // Remove specific markers while preserving message intent
-                content = msg.content
+                let content = msg.content
                     // Remove TABLE_INFO blocks
                     .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
                     // Remove CONTEXT blocks
@@ -41,6 +39,14 @@ export const messageConverter = {
 
                 // Now remove ALL remaining HTML comments for the AI
                 content = content.replace(/<!--[^>]*-->/g, '').trim();
+
+                // Only add non-empty messages
+                if (content) {
+                    result.push({
+                        role: msg.role as 'user' | 'assistant' | 'system',
+                        content,
+                    });
+                }
             } else if (Array.isArray(msg.content)) {
                 // Convert structured content to text
                 const textParts = msg.content
@@ -49,15 +55,15 @@ export const messageConverter = {
                     .join('');
 
                 // Remove ALL HTML comments including CONTEXT markers
-                content = textParts.replace(/<!--[^>]*-->/g, '').trim();
-            }
+                const content = textParts.replace(/<!--[^>]*-->/g, '').trim();
 
-            // Only add non-empty messages
-            if (content) {
-                result.push({
-                    role: msg.role as 'user' | 'assistant' | 'system',
-                    content,
-                });
+                // Only add non-empty messages
+                if (content) {
+                    result.push({
+                        role: msg.role as 'user' | 'assistant' | 'system',
+                        content,
+                    });
+                }
             }
         }
 

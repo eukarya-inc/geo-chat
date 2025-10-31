@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRegressionTool } from './regressionTool';
 import type { DBContext } from '../../duckdb/dbContext';
 import { SQLHistoryManager } from '../../duckdb/sqlHistoryManager';
+import { executeToolForTest } from './toolTestHelper';
+import type { RegressionAnalysisResponse } from '../../../types/regression';
 
 function createMockDBContext(overrides: Partial<DBContext> = {}): DBContext {
     const base: DBContext = {
@@ -46,7 +48,8 @@ describe('createRegressionTool', () => {
         });
 
         const tool = createRegressionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<RegressionAnalysisResponse>(
+            tool.execute,
             { table_name: 'sales', target_column: 'category', explanatory_columns: ['label'] },
             {
                 messages: [],
@@ -72,7 +75,8 @@ describe('createRegressionTool', () => {
         });
 
         const tool = createRegressionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<RegressionAnalysisResponse>(
+            tool.execute,
             { table_name: 'sales', target_column: 'sales', explanatory_columns: ['missing'] },
             {
                 messages: [],
@@ -112,7 +116,8 @@ describe('createRegressionTool', () => {
         });
 
         const tool = createRegressionTool(dbContext, null);
-        const result = await tool.execute(
+        const result = await executeToolForTest<RegressionAnalysisResponse>(
+            tool.execute,
             {
                 table_name: 'test_table',
                 target_column: 'y',

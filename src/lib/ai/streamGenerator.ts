@@ -1,31 +1,19 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { streamText, type CoreMessage } from 'ai';
-import type { DBContext } from '../duckdb/dbContext';
-import { generateSystemPrompt } from './systemPrompt';
-import { createDuckDBTool } from './tools/duckdbTool';
-import { completionTool } from './tools/completionTool';
-import { createChartUpdateTool, createChartGetTool, createChartDeleteTool } from './tools/chartTool';
-import { createMapStyleTool } from './tools/mapStyleTool';
-import { createMapStyleGetTool } from './tools/mapStyleGetTool';
-import { createGeocodingTools } from './tools/geocodingTool';
-import type { VegaChartSpec } from '../../types/chart';
-import type { ChatState } from '../../store/remoteAtoms';
-import { createRegressionTool } from './tools/regressionTool';
-import { createPredictorSelectionTool } from './tools/predictorSelectionTool';
-import { createClusterTool } from './tools/clusterTool';
-import { createSegmentedRegressionTool } from './tools/segmentedRegressionTool';
+import { streamText, stepCountIs, type CoreMessage } from 'ai';
+import { initTools, type ToolsOptions } from './tools';
+import { generateFullSystemPrompt } from './contextMessage';
 
-export interface StreamGeneratorOptions {
+export interface StreamGeneratorOptions extends Omit<ToolsOptions, 'apiKey'> {
     messages: CoreMessage[];
     apiKey: string;
-    dbContext?: DBContext | null;
-    schema?: string | null;
+    selectedTable?: string | null;
     abortSignal?: AbortSignal;
-    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>;
-    onChartDelete?: (tableName: string) => Promise<void>;
-    getCurrentChatState?: () => ChatState | null;
-    onMapStyleUpdate?: (tableName: string, style: import('../../components/map').TableStyle) => Promise<void>;
-    onMapStyleDelete?: (tableName: string) => Promise<void>;
+}
+
+export interface TokenUsage {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
 }
 
 export type StreamPart =
@@ -33,78 +21,51 @@ export type StreamPart =
     | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
     | { type: 'tool-result'; toolCallId: string; toolName: string; result: unknown }
     | { type: 'error'; error: string }
-    | { type: 'finish' };
+    | { type: 'finish'; usage?: TokenUsage };
 
 /**
  * Create a generator that streams AI responses
  * This is the core streaming logic shared between useAIChat and AIChatAssistantUI
  */
-export async function* createAIStreamGenerator({
-    messages,
-    apiKey,
-    dbContext,
-    schema = null,
-    abortSignal,
-    onChartUpdate,
-    onChartDelete,
-    getCurrentChatState,
-    onMapStyleUpdate,
-    onMapStyleDelete,
-}: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
+export async function* createAIStreamGenerator(options: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
     try {
+        // Build tools with provided options
+        const tools = await initTools({
+            dbContext: options.dbContext,
+            schema: options.schema,
+            apiKey: options.apiKey,
+            onChartUpdate: options.onChartUpdate,
+            onChartDelete: options.onChartDelete,
+            getCurrentChatState: options.getCurrentChatState,
+            onMapStyleUpdate: options.onMapStyleUpdate,
+            onMapStyleDelete: options.onMapStyleDelete,
+        });
+
+        // Generate system prompt with context
+        const systemPrompt = await generateFullSystemPrompt(
+            options.dbContext,
+            options.schema,
+            options.selectedTable || null
+        );
+
         const anthropicClient = createAnthropic({
-            apiKey,
+            apiKey: options.apiKey,
             headers: {
                 'anthropic-dangerous-direct-browser-access': 'true',
             },
         });
-        const result = await streamText({
+
+        const result = streamText({
             model: anthropicClient('claude-sonnet-4-5-20250929'),
-            system: generateSystemPrompt(),
-            messages,
-            tools: {
-                ...(dbContext && {
-                    duckdb_query: createDuckDBTool(dbContext, schema, apiKey, onChartDelete, onMapStyleDelete),
-                    select_predictors_for_regression: createPredictorSelectionTool(dbContext, schema),
-                    perform_regression_analysis: createRegressionTool(dbContext, schema),
-                    perform_cluster_analysis: createClusterTool(dbContext, schema),
-                    perform_segmented_regression_analysis: createSegmentedRegressionTool(dbContext, schema),
-                    ...createGeocodingTools(dbContext),
-                }),
-                ...(onChartUpdate && createChartUpdateTool(onChartUpdate)
-                    ? {
-                          update_vega_chart_spec_for_table: createChartUpdateTool(onChartUpdate)!,
-                      }
-                    : {}),
-                ...(onChartDelete && createChartDeleteTool(onChartDelete)
-                    ? {
-                          delete_vega_chart_spec_for_table: createChartDeleteTool(onChartDelete)!,
-                      }
-                    : {}),
-                ...(getCurrentChatState
-                    ? {
-                          get_vega_chart_spec_for_table: createChartGetTool(getCurrentChatState),
-                          get_map_style_for_table: createMapStyleGetTool(
-                              tableName => getCurrentChatState()?.mapSpecs?.[tableName]
-                          ),
-                      }
-                    : {}),
-                ...(getCurrentChatState && onMapStyleUpdate
-                    ? {
-                          update_map_style_for_table: createMapStyleTool(
-                              tableName => getCurrentChatState()?.mapSpecs?.[tableName],
-                              onMapStyleUpdate,
-                              dbContext,
-                              schema
-                          )!,
-                      }
-                    : {}),
-                completion: completionTool,
-            },
-            maxSteps: 50,
-            maxTokens: 4000,
+            system: systemPrompt,
+            messages: options.messages,
+            tools,
+            maxOutputTokens: 4000,
             maxRetries: 3,
-            abortSignal,
+            abortSignal: options.abortSignal,
+            // Enable multi-step tool execution (default is stepCountIs(1))
+            // Allow up to 100 steps for complex agent workflows
+            stopWhen: stepCountIs(100),
         });
 
         // Stream the full response including text and tool calls
@@ -113,7 +74,7 @@ export async function* createAIStreamGenerator({
                 case 'text-delta':
                     yield {
                         type: 'text-delta',
-                        textDelta: part.textDelta,
+                        textDelta: part.text,
                     };
                     break;
 
@@ -179,7 +140,7 @@ export async function* createAIStreamGenerator({
                             type: 'tool-call',
                             toolCallId: part.toolCallId,
                             toolName: part.toolName,
-                            args: part.args,
+                            args: part.input,
                         };
                     } catch (error) {
                         console.warn('[Stream Generator] Tool call error (continuing):', error);
@@ -189,11 +150,18 @@ export async function* createAIStreamGenerator({
 
                 case 'tool-result':
                     try {
+                        // Type assertion for tool-result properties
+                        // In AI SDK v5, tool results use 'output' instead of 'result'
+                        const toolResult = part as unknown as {
+                            toolCallId: string;
+                            toolName: string;
+                            output: unknown;
+                        };
                         yield {
                             type: 'tool-result',
-                            toolCallId: part.toolCallId,
-                            toolName: part.toolName,
-                            result: part.result,
+                            toolCallId: toolResult.toolCallId,
+                            toolName: toolResult.toolName,
+                            result: toolResult.output, // Map 'output' to 'result' for consistency
                         };
                     } catch (error) {
                         console.warn('[Stream Generator] Tool result error (continuing):', error);
@@ -206,7 +174,24 @@ export async function* createAIStreamGenerator({
             }
         }
 
-        yield { type: 'finish' };
+        // Get token usage from the final result
+        await result.text;
+        const usage = await result.usage;
+
+        yield {
+            type: 'finish',
+            usage:
+                usage &&
+                usage.inputTokens !== undefined &&
+                usage.outputTokens !== undefined &&
+                usage.totalTokens !== undefined
+                    ? {
+                          inputTokens: usage.inputTokens,
+                          outputTokens: usage.outputTokens,
+                          totalTokens: usage.totalTokens,
+                      }
+                    : undefined,
+        };
     } catch (error) {
         // Handle abort error
         if (error instanceof Error && error.name === 'AbortError') {

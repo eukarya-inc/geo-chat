@@ -25,7 +25,7 @@ IMPORTANT: Use this tool BEFORE perform_regression_analysis when explanatory var
 - Identifies highly correlated predictors that may cause multicollinearity
 - Provides transparency in variable selection process
 - Allows exclusion of problematic predictors before regression`,
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z.string().describe('Target variable (dependent variable) for correlation analysis'),
             top_k: z
@@ -49,7 +49,13 @@ IMPORTANT: Use this tool BEFORE perform_regression_analysis when explanatory var
                 .optional()
                 .describe('Maximum number of rows to sample. Default 5000.'),
         }),
-        execute: async ({ table_name, target_column, top_k, exclude_columns, max_rows }) => {
+        execute: async ({
+            table_name,
+            target_column,
+            top_k,
+            exclude_columns,
+            max_rows,
+        }): Promise<PredictorSelectionResponse> => {
             try {
                 const tableName = table_name.trim();
                 if (!tableName) {

@@ -24,7 +24,7 @@ describe('ChartConfigForm Logic', () => {
                 x: { field: 'numeric_col', type: 'quantitative' },
                 y: { field: 'int_col', type: 'quantitative' },
             },
-            data: { values: [], sql: 'SELECT * FROM test_table' },
+            data: { url: 'duckdb://test_table' },
             title: 'Original Title',
         },
         timestamp: new Date(),
@@ -289,30 +289,33 @@ describe('ChartConfigForm Logic', () => {
 
     describe('Database Integration', () => {
         it('should fetch table columns on initialization', async () => {
-            const chartSpecWithSQL = {
+            const chartSpecWithURL = {
                 ...mockChartSpec,
                 spec: {
                     ...mockChartSpec.spec,
-                    data: { sql: 'SELECT * FROM test_table' },
+                    data: { url: 'duckdb://test_table' },
                 },
             };
 
             // Simulate the useEffect logic for fetching columns
-            const sql = chartSpecWithSQL.spec.data.sql;
-            const tableMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
+            const url = chartSpecWithURL.spec.data.url;
+            if (typeof url === 'string' && url.startsWith('duckdb://')) {
+                const path = url.replace('duckdb://', '');
+                const parts = path.split('/');
+                const tableName = parts.length === 2 ? parts[1] : parts[0];
 
-            expect(tableMatch).toBeTruthy();
-            expect(tableMatch![1]).toBe('test_table');
+                expect(tableName).toBe('test_table');
+            }
 
             // Verify the mock would be called correctly
             expect(mockDBContext.getTableColumns).toBeDefined();
         });
 
-        it('should handle SQL parsing errors gracefully', () => {
-            const invalidSQL = 'INVALID SQL QUERY';
-            const tableMatch = invalidSQL.match(/FROM\s+["']?(\w+)["']?/i);
+        it('should handle URL parsing errors gracefully', () => {
+            const invalidURL = 'invalid://url';
+            const isValid = invalidURL.startsWith('duckdb://');
 
-            expect(tableMatch).toBeNull();
+            expect(isValid).toBe(false);
         });
     });
 
@@ -400,7 +403,7 @@ describe('ChartConfigForm Logic', () => {
             };
 
             expect(baseSpec.title).toBe('Original Title');
-            expect(baseSpec.data).toEqual({ values: [], sql: 'SELECT * FROM test_table' });
+            expect(baseSpec.data).toEqual({ url: 'duckdb://test_table' });
         });
 
         it('should initialize title from existing chart spec', () => {

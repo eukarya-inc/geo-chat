@@ -6,13 +6,29 @@ import type { MapSpec } from '../../../store/remoteAtoms';
 import type { DBContext } from '../../duckdb/dbContext';
 import { fixMaplibreExpressionWithWarnings } from '../../../components/map/utils/maplibreExpressionFixer';
 
+export type MapStyleUpdateResult =
+    | {
+          success: false;
+          error: string;
+          warnings?: string[];
+      }
+    | {
+          success: true;
+          message: string;
+          appliedUpdate: {
+              tableName: string;
+              geometryType: 'point' | 'line' | 'polygon';
+              layers: VectorTileLayer[];
+          };
+          warnings?: string[];
+      };
+
 export function createMapStyleTool(
-    getMapSpec: (tableName: string) => MapSpec | undefined,
+    getMapSpec?: (tableName: string) => MapSpec | undefined,
     onMapStyleUpdate?: (tableName: string, style: TableStyle) => Promise<void>,
     dbContext?: DBContext | null,
     schema?: string | null
 ) {
-    if (!onMapStyleUpdate) return null;
     return tool({
         description: `Update map styles for a specific table and geometry type.
 
@@ -113,7 +129,7 @@ USING COLUMN STATISTICS FOR OPTIMAL STYLING:
 
 For numeric columns with statistics (min, max, p50, p75, p90, p95):
 - Use percentile values for balanced color breaks:
-  ["interpolate", ["linear"], ["get", "property_name"], 
+  ["interpolate", ["linear"], ["get", "property_name"],
     min_value, "#fee5d9",    // Light color for minimum
     p50_value, "#fcae91",    // Medium color at median (50% of data below)
     p75_value, "#fc9272",    // Medium-dark at 75th percentile
@@ -131,13 +147,13 @@ For categorical columns (check distinctCount):
 
 Example with statistics:
 If columnStatistics shows: population: {min: 1000, max: 500000, p50: 25000, p75: 50000, p90: 100000, p95: 200000}
-Use: ["interpolate", ["linear"], ["get", "population"], 
+Use: ["interpolate", ["linear"], ["get", "population"],
        1000, "#ffffcc", 25000, "#feb24c", 50000, "#fd8d3c", 100000, "#f03b20", 200000, "#bd0026", 500000, "#7f0000"]
 
 COMMON GEOMETRY TYPE SCENARIOS:
 
 1. Prefecture/state boundaries, administrative regions -> geometry_type: 'polygon'
-2. Store locations, POIs, coordinates -> geometry_type: 'point'  
+2. Store locations, POIs, coordinates -> geometry_type: 'point'
 3. Roads, rivers, railways -> geometry_type: 'line'
 4. Building footprints, land parcels -> geometry_type: 'polygon'
 5. GPS tracks, flight paths -> geometry_type: 'line'
@@ -192,7 +208,7 @@ Common style properties by layer type:
 
 To show/hide layers, include a visibility property in the style.`,
 
-        parameters: z.object({
+        inputSchema: z.object({
             table_name: z.string().describe('Name of the table to update styles for'),
             geometry_type: z
                 .enum(['point', 'line', 'polygon'])
@@ -226,10 +242,15 @@ To show/hide layers, include a visibility property in the style.`,
             description: z.string().describe('Human-readable description of what this style change does'),
         }),
 
-        execute: async ({ table_name, geometry_type, style_properties, description }) => {
+        execute: async ({
+            table_name,
+            geometry_type,
+            style_properties,
+            description,
+        }): Promise<MapStyleUpdateResult> => {
             try {
                 // Get current map spec to check existing styles
-                const mapSpec = getMapSpec(table_name);
+                const mapSpec = getMapSpec?.(table_name);
 
                 // Check if table has geometry column using DESCRIBE
                 if (dbContext) {
@@ -562,7 +583,7 @@ Available columns in '${table_name}': ${columnInfo}`,
                 });
 
                 // Apply the update through callback
-                await onMapStyleUpdate(table_name, updatedLayers);
+                await onMapStyleUpdate?.(table_name, updatedLayers);
 
                 return {
                     success: true,

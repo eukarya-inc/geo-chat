@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { XMarkIcon, PresentationChartBarIcon, MapIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PresentationChartBarIcon, ArrowUpTrayIcon, PlusIcon } from '@heroicons/react/24/outline';
 import type { Dashboard } from '../../store/remoteAtoms';
 
 interface ExportModalProps {
     isOpen: boolean;
     onClose: () => void;
     dashboards: Dashboard[];
-    onExport: (dashboardId: string) => void;
+    onExport: (dashboardIdOrDashboard: string | Dashboard) => void;
+    onCreateDashboard?: (title?: string) => Dashboard;
+    onNavigateToDashboard?: (dashboardId: string) => void;
     title?: string;
     type?: 'chart' | 'map';
     lastSelectedDashboard?: string | null;
@@ -17,8 +19,8 @@ export function ChartExportModal({
     onClose,
     dashboards,
     onExport,
-    title = 'Visualization',
-    type = 'chart',
+    onCreateDashboard,
+    onNavigateToDashboard,
     lastSelectedDashboard,
 }: ExportModalProps) {
     const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(lastSelectedDashboard || null);
@@ -29,6 +31,15 @@ export function ChartExportModal({
             setSelectedDashboardId(lastSelectedDashboard);
         }
     }, [isOpen, lastSelectedDashboard, dashboards]);
+
+    const handleCreateAndExport = () => {
+        if (!onCreateDashboard) return;
+
+        const newDashboard = onCreateDashboard();
+        onExport(newDashboard);
+        onNavigateToDashboard?.(newDashboard.id);
+        onClose();
+    };
 
     const handleExport = () => {
         if (selectedDashboardId) {
@@ -51,12 +62,8 @@ export function ChartExportModal({
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                        {type === 'map' ? (
-                            <MapIcon className="w-5 h-5 text-gray-600" />
-                        ) : (
-                            <ChartBarIcon className="w-5 h-5 text-gray-600" />
-                        )}
-                        <h3 className="text-lg font-medium text-gray-900">Export "{title}" to Dashboard</h3>
+                        <ArrowUpTrayIcon className="w-5 h-5 text-gray-600" />
+                        <h3 className="text-lg font-medium text-gray-900">ダッシュボードにエクスポート</h3>
                     </div>
                     <button onClick={handleClose} className="text-gray-400 hover:text-gray-500 transition-colors">
                         <XMarkIcon className="w-5 h-5" />
@@ -65,15 +72,26 @@ export function ChartExportModal({
 
                 {/* Dashboard List */}
                 <div className="space-y-2 mb-6">
-                    <p className="text-sm text-gray-600 mb-3">Select a dashboard to export this {type} to:</p>
+                    {/* Create New Dashboard Section */}
+                    {onCreateDashboard && (
+                        <div className="mb-3">
+                            <button
+                                onClick={handleCreateAndExport}
+                                className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-colors text-gray-600 hover:text-blue-600"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                                <span className="font-medium">新しいダッシュボードを作成してエクスポート</span>
+                            </button>
+                        </div>
+                    )}
 
-                    {dashboards.length === 0 ? (
+                    {dashboards.length === 0 && !onCreateDashboard ? (
                         <div className="text-center py-8 text-gray-500">
                             <PresentationChartBarIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                            <p>No dashboards available.</p>
-                            <p className="text-sm mt-1">Create a dashboard first to export charts.</p>
+                            <p>ダッシュボードがありません</p>
+                            <p className="text-sm mt-1">先にダッシュボードを作成してください</p>
                         </div>
-                    ) : (
+                    ) : dashboards.length > 0 ? (
                         <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
                             {dashboards.map(dashboard => (
                                 <div
@@ -99,8 +117,8 @@ export function ChartExportModal({
                                     <div className="flex-1">
                                         <h4 className="font-medium">{dashboard.title}</h4>
                                         <p className="text-xs text-gray-500">
-                                            {dashboard.visualizations.length} visualizations • Created{' '}
-                                            {dashboard.createdAt.toLocaleDateString()}
+                                            {dashboard.visualizations.length}個 • 作成日:{' '}
+                                            {dashboard.createdAt.toLocaleDateString('ja-JP')}
                                         </p>
                                     </div>
                                     {selectedDashboardId === dashboard.id && (
@@ -111,7 +129,7 @@ export function ChartExportModal({
                                 </div>
                             ))}
                         </div>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Actions */}
@@ -120,7 +138,7 @@ export function ChartExportModal({
                         onClick={handleClose}
                         className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
                     >
-                        Cancel
+                        キャンセル
                     </button>
                     <button
                         onClick={handleExport}
@@ -129,7 +147,7 @@ export function ChartExportModal({
                             selectedDashboardId ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'
                         }`}
                     >
-                        Export {type === 'map' ? 'Map' : 'Chart'}
+                        エクスポート
                     </button>
                 </div>
             </div>

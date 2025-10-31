@@ -1,48 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import * as duckdb from '@duckdb/duckdb-wasm';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from '../../duckdb/dbContext';
-import { createDuckDBTool } from './duckdbTool';
+import { createDuckDBTool, type Result as DuckDBResult } from './duckdbTool';
+import { suppressConsole } from '../../../test/console';
+import { initializeDuckDB } from '../../../test/duckdb';
 
 describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
     let db: AsyncDuckDB;
     let dbContext: DBContext;
-    let originalConsole: {
-        log: typeof console.log;
-        warn: typeof console.warn;
-        error: typeof console.error;
-    };
+    let restoreConsole: (() => void) | undefined;
 
     beforeAll(async () => {
         // Suppress console output during tests
-        originalConsole = {
-            log: console.log,
-            warn: console.warn,
-            error: console.error,
-        };
-        console.log = vi.fn();
-        console.warn = vi.fn();
-        console.error = vi.fn();
-        // Initialize real DuckDB-WASM instance (browser)
-        const MANUAL_BUNDLES = {
-            mvp: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-            },
-            eh: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-            },
-        } as const;
+        restoreConsole = suppressConsole();
 
-        const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-        const worker = new Worker(bundle.mainWorker!);
-        const logger = new duckdb.VoidLogger();
-        db = new duckdb.AsyncDuckDB(logger, worker);
-        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        // Initialize DuckDB-WASM
+        db = await initializeDuckDB();
 
-        // Open and load spatial extension once
-        await db.open({ path: ':memory:', accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+        // Load spatial extension
         const conn = await db.connect();
         await conn.query(`INSTALL spatial; LOAD spatial;`);
         await conn.close();
@@ -58,62 +33,77 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         }
 
         // Restore original console functions
-        if (originalConsole) {
-            console.log = originalConsole.log;
-            console.warn = originalConsole.warn;
-            console.error = originalConsole.error;
-        }
+        restoreConsole?.();
     });
 
     it('returns error for multiple SQL statements', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
         const result = await tool.execute({ sql: 'SELECT 1; SELECT 2;' }, { messages: [], toolCallId: '' });
-        if (!('error' in result)) {
+
+        // AI SDK v5: execute returns Result | AsyncIterable<Result>
+        // For our tools, it always returns Result directly
+        type DuckDBErrorResult = { error: string; suggestion?: string; sql: string };
+        const typedResult = result as DuckDBErrorResult | AsyncIterable<DuckDBErrorResult>;
+
+        if (Symbol.asyncIterator in typedResult) {
+            throw new Error('Expected direct result, got AsyncIterable');
+        }
+
+        if (!('error' in typedResult)) {
             throw new Error('Expected error result');
         }
-        expect(result.error).toContain('Multiple SQL statements');
-        expect(result.suggestion).toContain('Split your SQL statements');
-        expect(result.sql).toBe('SELECT 1; SELECT 2;');
+        expect(typedResult.error).toContain('Multiple SQL statements');
+        expect(typedResult.suggestion).toContain('Split your SQL statements');
+        expect(typedResult.sql).toBe('SELECT 1; SELECT 2;');
     });
 
     it('returns all rows from SELECT and truncates for AI response', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        // Prepare data via tool (DDL path)
-        const createRes = await tool.execute(
+        const createRes = (await tool.execute(
             { sql: 'CREATE TABLE nums AS SELECT range as id FROM range(0, 150)' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
+
         if ('error' in createRes) {
             throw new Error(`Unexpected error: ${createRes.error}`);
         }
         expect(createRes.createdTable).toBe('nums');
 
         // SELECT without LIMIT - DuckDB returns all 150 rows, AI_RETURN_LIMIT truncates to 100
-        const selectRes = await tool.execute(
+        const selectRes = (await tool.execute(
             { sql: 'SELECT id FROM nums ORDER BY id' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in selectRes) {
             throw new Error(`Unexpected error: ${selectRes.error}`);
         }
         expect(selectRes.dataTruncated).toBe(true); // Truncated by AI_RETURN_LIMIT
         expect(selectRes.totalRowCount).toBe(150); // DuckDB returned 150 rows
-        expect(selectRes.rowCount).toBe(100); // AI sees only 100 rows
+        expect(selectRes.rowCount).toBe(5); // AI sees only 5 rows (AI_RETURN_LIMIT)
         // columns/columnCount are no longer returned; infer locally if needed
-        const inferredColumns = selectRes.data.length > 0 ? Object.keys(selectRes.data[0]) : [];
+        const inferredColumns = selectRes.data && selectRes.data.length > 0 ? Object.keys(selectRes.data[0]) : [];
         expect(inferredColumns).toEqual(['id']);
         expect(Array.isArray(selectRes.data)).toBe(true);
     });
 
     it('creates a table with geometry and detects geometry info', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE TABLE test_points AS SELECT ST_Point(139.7, 35.6) as geom, 1 as id' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -134,8 +124,11 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('creates table with multiple geometry columns and detects types', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             {
                 sql: `CREATE TABLE test_multi_geom AS
               SELECT
@@ -144,11 +137,12 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
                 1 as id`,
             },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
         }
+
         expect(res.createdTable).toBe('test_multi_geom');
         expect(res.hasGeometry).toBe(true);
         expect(res.geometryInfo?.length).toBe(2);
@@ -167,11 +161,14 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('reports no geometry for tables without geometry columns', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: "CREATE TABLE test_no_geom AS SELECT 1 as id, 'Tokyo' as city, 35.6 as lat, 139.7 as lon" },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -187,6 +184,9 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles CREATE OR REPLACE TABLE with geometry', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // First create without geometry
         await tool.execute(
@@ -195,10 +195,10 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         );
 
         // Then replace with geometry
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE OR REPLACE TABLE test_replace AS SELECT ST_Point(139.7, 35.6) as geom' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -211,6 +211,9 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('does not return geometry info for SELECT queries', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // First create a table with geometry
         await tool.execute(
@@ -219,7 +222,10 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         );
 
         // Then SELECT from it
-        const res = await tool.execute({ sql: 'SELECT * FROM select_test_geom' }, { messages: [], toolCallId: '' });
+        const res = (await tool.execute(
+            { sql: 'SELECT * FROM select_test_geom' },
+            { messages: [], toolCallId: '' }
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -233,8 +239,11 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles polygon geometry type detection', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             {
                 sql: `CREATE TABLE test_polygon AS
               SELECT ST_MakePolygon(
@@ -248,7 +257,7 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
               ) as polygon_geom`,
             },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -260,11 +269,14 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles SQL syntax errors gracefully', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREAT TABLE invalid_syntax AS SELECT 1' }, // Typo: CREAT instead of CREATE
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
         if (!('error' in res)) {
             throw new Error('Expected error result');
         }
@@ -274,11 +286,14 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles ST_Read error for non-existent files', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: "CREATE TABLE test_shapefile AS SELECT * FROM ST_Read('/non/existent/file.shp')" },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
         if (!('error' in res)) {
             throw new Error('Expected error result');
         }
@@ -288,6 +303,9 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('truncates large result sets for AI response', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // Create a table with 1500 rows
         await tool.execute(
@@ -296,25 +314,31 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         );
 
         // SELECT without LIMIT - DuckDB returns all 1500 rows, AI_RETURN_LIMIT truncates to 100
-        const res = await tool.execute({ sql: 'SELECT * FROM large_table' }, { messages: [], toolCallId: '' });
+        const res = (await tool.execute(
+            { sql: 'SELECT * FROM large_table' },
+            { messages: [], toolCallId: '' }
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
         }
         expect(res.dataTruncated).toBe(true); // Data was truncated by AI_RETURN_LIMIT
         expect(res.totalRowCount).toBe(1500); // DuckDB returned all 1500 rows
-        expect(res.rowCount).toBe(100); // AI sees only 100 rows
-        expect(res.data?.length).toBe(100); // Data truncated to AI_RETURN_LIMIT
+        expect(res.rowCount).toBe(5); // AI sees only 5 rows (AI_RETURN_LIMIT)
+        expect(res.data?.length).toBe(5); // Data truncated to AI_RETURN_LIMIT
     });
 
     it('generates SQL explanation when API key is provided', async () => {
         // Mock API key (won't actually call the service in tests)
         const tool = createDuckDBTool(dbContext, null, 'mock-api-key');
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE TABLE test_explain AS SELECT 1 as id' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -326,15 +350,18 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles CREATE OR REPLACE TABLE with CJK table names (unquoted)', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // First create a table with Japanese name
         await tool.execute({ sql: 'CREATE TABLE 日本語テーブル AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
 
         // Then replace it
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE OR REPLACE TABLE 日本語テーブル AS SELECT 2 as id, ST_Point(139.7, 35.6) as geom' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -345,15 +372,18 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles CREATE OR REPLACE TABLE with CJK table names (quoted)', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // First create a table with quoted Chinese name
         await tool.execute({ sql: 'CREATE TABLE "中文表名" AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
 
         // Then replace it
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE OR REPLACE TABLE "中文表名" AS SELECT 2 as id, ST_Point(139.7, 35.6) as geom' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
@@ -364,15 +394,18 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
 
     it('handles CREATE OR REPLACE TABLE with Korean table names', async () => {
         const tool = createDuckDBTool(dbContext, null);
+        if (!tool.execute) {
+            throw new Error('Tool execute function is undefined');
+        }
 
         // First create
         await tool.execute({ sql: 'CREATE TABLE 한국어테이블 AS SELECT 1 as id' }, { messages: [], toolCallId: '' });
 
         // Then replace
-        const res = await tool.execute(
+        const res = (await tool.execute(
             { sql: 'CREATE OR REPLACE TABLE 한국어테이블 AS SELECT 2 as id' },
             { messages: [], toolCallId: '' }
-        );
+        )) as DuckDBResult;
 
         if ('error' in res) {
             throw new Error(`Unexpected error: ${res.error}`);
