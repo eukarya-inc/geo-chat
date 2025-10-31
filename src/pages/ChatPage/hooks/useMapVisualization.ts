@@ -5,7 +5,7 @@ import type { TableStyle } from '../../../components/map';
 import { updateChatStateAtom, currentChatStateAtom } from '../../../store/atoms';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 
-export function useMapVisualization(selectedTable: string | null, db: DBContext | null) {
+export function useMapVisualization(selectedTable: string | null, db: DBContext | null, schema: string | null = null) {
     const [mapSelectedColumns, setMapSelectedColumns] = useState<string[]>([]);
     const [selectedGeometryColumn, setSelectedGeometryColumn] = useState<string | undefined>(undefined);
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -31,7 +31,7 @@ export function useMapVisualization(selectedTable: string | null, db: DBContext 
                 return;
             }
 
-            const result = await checkTableGeometry(db, selectedTable);
+            const result = await checkTableGeometry(db, selectedTable, schema);
 
             if (result.geometryColumns.length > 0) {
                 setSelectedGeometryColumn(result.geometryColumns[0]);
@@ -42,7 +42,7 @@ export function useMapVisualization(selectedTable: string | null, db: DBContext 
         };
 
         checkGeomColumn();
-    }, [selectedTable, db]);
+    }, [selectedTable, db, schema]);
 
     // Update table styles for current table
     const updateTableStyle = useCallback(
