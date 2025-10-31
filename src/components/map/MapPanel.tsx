@@ -23,6 +23,8 @@ interface MapPanelProps {
     isExportDisabled?: boolean;
     exportTooltip?: string;
     vizId?: string;
+    editable?: boolean;
+    onTitleChange?: (newTitle: string) => void;
 }
 
 export function MapPanel({
@@ -39,6 +41,8 @@ export function MapPanel({
     isExportDisabled = false,
     exportTooltip,
     vizId,
+    editable = false,
+    onTitleChange,
 }: MapPanelProps) {
     const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
@@ -125,6 +129,8 @@ export function MapPanel({
             <VisualizationHeader
                 title={title || tableName || 'Map'}
                 toolButtons={toolButtons}
+                editable={editable}
+                onTitleChange={onTitleChange}
                 menu={
                     <MapDropdownMenu
                         vizId={vizId}

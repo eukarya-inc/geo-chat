@@ -66,6 +66,7 @@ export const currentChatStateAtom = atom<ChatState | null>(get => {
         tables: chat.tables,
         chartSpecs: chat.chartSpecs,
         mapSpecs: chat.mapSpecs,
+        tableSpecs: chat.tableSpecs,
     };
 });
 

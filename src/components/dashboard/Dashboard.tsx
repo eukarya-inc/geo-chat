@@ -112,6 +112,19 @@ export function Dashboard({
         [dashboard, onUpdateDashboard]
     );
 
+    const handleUpdateTitle = useCallback(
+        (vizId: string, newTitle: string) => {
+            const updatedDashboard = {
+                ...dashboard,
+                visualizations: dashboard.visualizations.map(viz =>
+                    viz.id === vizId ? { ...viz, title: newTitle } : viz
+                ),
+            };
+            onUpdateDashboard(updatedDashboard);
+        },
+        [dashboard, onUpdateDashboard]
+    );
+
     const handleDeleteVisualization = useCallback((vizId: string) => {
         // Close dropdown and show confirmation
         setOpenDropdownId(null);
@@ -405,6 +418,8 @@ export function Dashboard({
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
                                                 showDataSourceButton={true}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : viz.type === 'map' && viz.tableName ? (
                                             <MapPanel
@@ -416,14 +431,19 @@ export function Dashboard({
                                                 mapSpec={viz.mapSpec}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : viz.type === 'table' && viz.tableName ? (
                                             <TablePanel
+                                                title={viz.title}
                                                 tableName={viz.tableName}
                                                 dbContext={dbContext}
                                                 schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 showRemoveButton={true}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : (
                                             <div className="h-full flex flex-col">
@@ -493,6 +513,8 @@ export function Dashboard({
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
                                                 showDataSourceButton={true}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : viz.type === 'map' && viz.tableName ? (
                                             <MapPanel
@@ -504,14 +526,19 @@ export function Dashboard({
                                                 mapSpec={viz.mapSpec}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 vizId={viz.id}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : viz.type === 'table' && viz.tableName ? (
                                             <TablePanel
+                                                title={viz.title}
                                                 tableName={viz.tableName}
                                                 dbContext={dbContext}
                                                 schema={chatIdToSchemaName(viz.chatId) || schemaName}
                                                 onRemove={() => handleRemoveVisualization(viz.id)}
                                                 showRemoveButton={true}
+                                                editable={true}
+                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
                                             />
                                         ) : (
                                             <div className="h-full flex flex-col">

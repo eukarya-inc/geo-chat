@@ -20,7 +20,7 @@ import type { View } from 'vega';
 import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { currentDashboardAtom, selectDashboardAtom } from '../../store/derivedAtoms';
+import { currentDashboardAtom, selectDashboardAtom, currentChatStateAtom } from '../../store/derivedAtoms';
 import { localStateAtom, viewModeAtom, chatWidthPercentageAtom } from '../../store/localAtoms';
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
 import { ResizableHandle } from '../../components/ResizableHandle';
@@ -139,6 +139,9 @@ function ChatPage() {
         getCurrentChatState,
     } = useChatManagement(dbContext);
 
+    // Get current chat state reactively
+    const currentChatState = useAtomValue(currentChatStateAtom);
+
     // Convert chatId to schemaName at the top level
     const schemaName = chatIdToSchemaName(selectedChatId);
 
@@ -151,6 +154,23 @@ function ChatPage() {
     // Table selection
     const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName);
 
+    // Icon click handlers for TableCreatedMessage
+    const handleChartIconClick = useCallback(
+        (tableName: string) => {
+            handleTableSelection(tableName);
+            setActiveTab('chart');
+        },
+        [handleTableSelection]
+    );
+
+    const handleMapIconClick = useCallback(
+        (tableName: string) => {
+            handleTableSelection(tableName);
+            setActiveTab('map');
+        },
+        [handleTableSelection]
+    );
+
     // Map visualization
     const {
         // mapSelectedColumns, // Unused but kept for API compatibility
@@ -159,7 +179,7 @@ function ChatPage() {
         mapStyle,
         updateTableStyle,
         deleteTableStyle,
-    } = useMapVisualization(selectedTable, dbContext);
+    } = useMapVisualization(selectedTable, dbContext, schemaName);
 
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(
@@ -530,6 +550,69 @@ function ChatPage() {
         // Remote state will be updated when chart is saved/exported or tab is switched
     };
 
+    // Title update handlers for Table/Map panels
+    const handleTableTitleChange = useCallback(
+        (newTitle: string) => {
+            if (!selectedTable) return;
+
+            const currentTableSpecs = currentChatState?.tableSpecs || {};
+            const currentTableSpec = currentTableSpecs[selectedTable];
+
+            updateChatState({
+                tableSpecs: {
+                    [selectedTable]: {
+                        id: currentTableSpec?.id || `table-spec-${Date.now()}`,
+                        tableName: selectedTable,
+                        timestamp: currentTableSpec?.timestamp || new Date(),
+                        title: newTitle,
+                        columns: currentTableSpec?.columns,
+                    },
+                },
+            });
+        },
+        [selectedTable, currentChatState, updateChatState]
+    );
+
+    const handleMapTitleChange = useCallback(
+        (newTitle: string) => {
+            if (!selectedTable) return;
+
+            const currentMapSpecs = currentChatState?.mapSpecs || {};
+            const currentMapSpec = currentMapSpecs[selectedTable];
+
+            updateChatState({
+                mapSpecs: {
+                    [selectedTable]: {
+                        ...currentMapSpec,
+                        title: newTitle,
+                    },
+                },
+            });
+        },
+        [selectedTable, currentChatState, updateChatState]
+    );
+
+    const handleChartTitleChange = useCallback(
+        (newTitle: string) => {
+            if (!selectedTable) return;
+
+            const currentChartSpecs = currentChatState?.chartSpecs || {};
+            const currentChartSpec = currentChartSpecs[selectedTable];
+
+            if (!currentChartSpec) return;
+
+            updateChatState({
+                chartSpecs: {
+                    [selectedTable]: {
+                        ...currentChartSpec,
+                        title: newTitle,
+                    },
+                },
+            });
+        },
+        [selectedTable, currentChatState, updateChatState]
+    );
+
     // Persist configured chart changes when switching away from chart tab
     useEffect(() => {
         // When leaving chart tab, save configured changes to remote state
@@ -563,7 +646,7 @@ function ChatPage() {
         // Get dashboard object
         const dashboard =
             typeof dashboardIdOrDashboard === 'string' ? getDashboard(dashboardIdOrDashboard) : dashboardIdOrDashboard;
-        const mapSpecs = getCurrentChatState()?.mapSpecs;
+        const mapSpecs = currentChatState?.mapSpecs;
 
         if (!dashboard) {
             console.error('Dashboard not found:', dashboardIdOrDashboard);
@@ -572,10 +655,11 @@ function ChatPage() {
 
         // Create map visualization with current map state
         const mapSpec = mapSpecs?.[selectedTable];
+        const mapTitle = mapSpec?.title || `${selectedTable} Map`;
         const newVisualization = {
             id: `viz-${Date.now()}`,
             type: 'map' as const,
-            title: `${selectedTable} Map`,
+            title: mapTitle,
             mapSpec: mapSpec,
             tableName: selectedTable,
             geometryColumn: selectedGeometryColumn,
@@ -615,11 +699,16 @@ function ChatPage() {
             return;
         }
 
+        // Get table title from tableSpecs
+        const tableSpecs = currentChatState?.tableSpecs || {};
+        const tableSpec = tableSpecs[selectedTable];
+        const tableTitle = tableSpec?.title || `Table: ${selectedTable}`;
+
         // Create table visualization
         const newVisualization = {
             id: `viz-${Date.now()}`,
             type: 'table' as const,
-            title: `Table: ${selectedTable}`,
+            title: tableTitle,
             tableName: selectedTable,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
@@ -816,6 +905,8 @@ function ChatPage() {
                                             onLoadSample={onLoadSample || (() => {})}
                                         />
                                     )}
+                                    onChartIconClick={handleChartIconClick}
+                                    onMapIconClick={handleMapIconClick}
                                 />
                             )}
                         </div>
@@ -919,20 +1010,30 @@ function ChatPage() {
                                         )}
 
                                         {/* Table Tab */}
-                                        {activeTab === 'table' && (
-                                            <TablePanel
-                                                key={`${selectedChatId}-${selectedTable}`}
-                                                tableName={selectedTable}
-                                                dbContext={dbContext}
-                                                schema={schemaName || null}
-                                                showExportButton={true}
-                                                onExport={() => {
-                                                    setExportType('table');
-                                                    setShowExportModal(true);
-                                                }}
-                                                exportTooltip="このテーブルをダッシュボードにエクスポート"
-                                            />
-                                        )}
+                                        {activeTab === 'table' &&
+                                            (() => {
+                                                const tableSpecs = currentChatState?.tableSpecs || {};
+                                                const tableSpec = tableSpecs[selectedTable];
+                                                const displayTitle = tableSpec?.title;
+
+                                                return (
+                                                    <TablePanel
+                                                        key={`${selectedChatId}-${selectedTable}`}
+                                                        title={displayTitle}
+                                                        tableName={selectedTable}
+                                                        dbContext={dbContext}
+                                                        schema={schemaName || null}
+                                                        showExportButton={true}
+                                                        onExport={() => {
+                                                            setExportType('table');
+                                                            setShowExportModal(true);
+                                                        }}
+                                                        exportTooltip="このテーブルをダッシュボードにエクスポート"
+                                                        editable={true}
+                                                        onTitleChange={handleTableTitleChange}
+                                                    />
+                                                );
+                                            })()}
 
                                         {/* Chart Tab */}
                                         {activeTab === 'chart' &&
@@ -966,6 +1067,8 @@ function ChatPage() {
                                                         setShowExportModal(true);
                                                     }}
                                                     exportTooltip="このグラフをダッシュボードにエクスポート"
+                                                    editable={true}
+                                                    onTitleChange={handleChartTitleChange}
                                                 />
                                             ) : (
                                                 <div className="h-full flex items-center justify-center bg-gray-50">
@@ -977,21 +1080,31 @@ function ChatPage() {
                                         {activeTab === 'map' &&
                                             selectedTable &&
                                             (selectedGeometryColumn ? (
-                                                <MapPanel
-                                                    title={selectedTable}
-                                                    tableName={selectedTable}
-                                                    geometryColumn={selectedGeometryColumn}
-                                                    dbContext={dbContext}
-                                                    schema={schemaName || undefined}
-                                                    mapSpec={{ tableStyles, style: mapStyle }}
-                                                    showRemoveButton={false}
-                                                    onExport={() => {
-                                                        setExportType('map');
-                                                        setShowExportModal(true);
-                                                    }}
-                                                    showExportButton={true}
-                                                    exportTooltip="この地図をダッシュボードにエクスポート"
-                                                />
+                                                (() => {
+                                                    const mapSpecs = currentChatState?.mapSpecs || {};
+                                                    const mapSpec = mapSpecs[selectedTable];
+                                                    const displayTitle = mapSpec?.title || selectedTable;
+
+                                                    return (
+                                                        <MapPanel
+                                                            title={displayTitle}
+                                                            tableName={selectedTable}
+                                                            geometryColumn={selectedGeometryColumn}
+                                                            dbContext={dbContext}
+                                                            schema={schemaName || undefined}
+                                                            mapSpec={{ tableStyles, style: mapStyle }}
+                                                            showRemoveButton={false}
+                                                            onExport={() => {
+                                                                setExportType('map');
+                                                                setShowExportModal(true);
+                                                            }}
+                                                            showExportButton={true}
+                                                            exportTooltip="この地図をダッシュボードにエクスポート"
+                                                            editable={true}
+                                                            onTitleChange={handleMapTitleChange}
+                                                        />
+                                                    );
+                                                })()
                                             ) : (
                                                 <div className="h-full flex items-center justify-center bg-gray-50">
                                                     <div className="text-center text-gray-500 max-w-md">
@@ -1044,7 +1157,15 @@ function ChatPage() {
                     setViewMode('dashboard');
                     selectChat('');
                 }}
-                title={exportType === 'chart' ? displayChartSpec?.title || 'Chart' : `${selectedTable} Map`}
+                title={
+                    exportType === 'chart'
+                        ? displayChartSpec?.title || 'Chart'
+                        : exportType === 'map'
+                          ? (selectedTable && currentChatState?.mapSpecs?.[selectedTable]?.title) ||
+                            `${selectedTable} Map`
+                          : (selectedTable && currentChatState?.tableSpecs?.[selectedTable]?.title) ||
+                            `Table: ${selectedTable}`
+                }
                 type={exportType}
                 lastSelectedDashboard={lastSelectedExportDashboard}
             />
