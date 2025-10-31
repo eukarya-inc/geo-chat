@@ -51,6 +51,7 @@ const MapComponent: React.FC<MapProps> = ({
     const tileCacheManager = useRef(new TileCacheManager()).current;
     const selectedTableRef = useRef<string | null>(selectedTable);
     const selectedColumnsRef = useRef<string[] | undefined>(selectedColumns);
+    const geometryColumnNameRef = useRef<string | undefined>(geometryColumnName);
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
     const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
@@ -160,12 +161,11 @@ const MapComponent: React.FC<MapProps> = ({
     const customStyleRef = useRef<maplibregl.StyleSpecification | null>(null);
     const initialStyleRef = useRef<maplibregl.StyleSpecification | undefined>(initialStyle);
 
-    // Keep refs updated
-    useEffect(() => {
-        selectedTableRef.current = selectedTable;
-        selectedColumnsRef.current = effectiveColumns;
-        initialStyleRef.current = initialStyle;
-    }, [selectedTable, effectiveColumns, initialStyle]);
+    // Keep refs updated during render (not in useEffect) to ensure they're always current
+    selectedTableRef.current = selectedTable;
+    selectedColumnsRef.current = effectiveColumns;
+    geometryColumnNameRef.current = geometryColumnName;
+    initialStyleRef.current = initialStyle;
 
     // Update layers when effectiveColumns change AND map is initialized
     useEffect(() => {
@@ -340,10 +340,13 @@ const MapComponent: React.FC<MapProps> = ({
                 );
             }
         } catch (error) {
-            const errorMsg = `地図の表示範囲の調整中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`;
-            console.error(errorMsg);
-            setMvtError(errorMsg);
-            mvtErrorRef.current = errorMsg;
+            // Silently ignore errors from fitMapToData
+            // These can occur during table transitions when geometry column names haven't synced yet
+            // The map will still work fine without auto-fitting bounds
+            console.warn(
+                'Failed to fit map to data bounds (non-critical):',
+                error instanceof Error ? error.message : String(error)
+            );
         }
     }, []);
 
@@ -439,20 +442,30 @@ const MapComponent: React.FC<MapProps> = ({
     // Re-fit bounds when geometry column changes
     useEffect(() => {
         // Only fit to data if geometryColumnName is explicitly provided
-        if (
-            selectedTable &&
-            geometryColumnName !== undefined &&
-            mapRef.current &&
-            connectionRef.current &&
-            isInitialized
-        ) {
-            fitMapToData(selectedTable, geometryColumnName);
+        const currentGeometryColumn = geometryColumnNameRef.current;
+        const currentTable = selectedTableRef.current;
+
+        // Skip if table or geometry column is not set
+        if (!currentTable || !currentGeometryColumn || !mapRef.current || !connectionRef.current || !isInitialized) {
+            return;
         }
+
+        // IMPORTANT: Verify that the geometry column actually belongs to the current table
+        // by checking if both values have been updated in sync
+        // If selectedTable changed but geometryColumnName hasn't updated yet, skip
+        if (currentTable !== selectedTable || currentGeometryColumn !== geometryColumnName) {
+            return;
+        }
+
+        // Schedule fit bounds to happen on next idle event (after tiles are loaded)
+        needsFitBoundsRef.current = { table: currentTable, geomColumn: currentGeometryColumn };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [geometryColumnName, selectedTable, dbContext]);
 
     // Track which tables have been initialized with default styles
     const initializedTablesRef = useRef<Set<string>>(new Set());
+    // Track if we need to fit bounds on next idle event
+    const needsFitBoundsRef = useRef<{ table: string; geomColumn: string } | null>(null);
 
     // Get connection from map-specific pool (DatabaseContext handles round-robin internally)
     const getMapConnection = useCallback(async (): Promise<AsyncDuckDBConnection> => {
@@ -476,11 +489,18 @@ const MapComponent: React.FC<MapProps> = ({
                 schema,
             });
 
-            // Zoom to data bounds when a new table is selected (only if geometryColumnName is provided)
-            if (selectedTable && geometryColumnName !== undefined && connectionRef.current) {
-                setTimeout(() => {
-                    fitMapToData(selectedTable, geometryColumnName);
-                }, 500); // Wait a bit for tiles to load
+            // Schedule fit bounds for when tiles are loaded
+            const currentGeometryColumn = geometryColumnNameRef.current;
+            const currentTable = selectedTableRef.current;
+
+            // Skip if table or geometry column is not set
+            if (!currentTable || !currentGeometryColumn || !connectionRef.current) {
+                return;
+            }
+
+            // IMPORTANT: Verify that the geometry column actually belongs to the current table
+            if (currentTable === selectedTable && currentGeometryColumn === geometryColumnName) {
+                needsFitBoundsRef.current = { table: currentTable, geomColumn: currentGeometryColumn };
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -548,13 +568,14 @@ const MapComponent: React.FC<MapProps> = ({
                     signal: AbortSignal
                 ): Promise<Uint8Array> => {
                     const currentColumns = selectedColumnsRef.current || [];
+                    const currentGeometryColumn = geometryColumnNameRef.current;
 
                     if (!tableName) {
                         return new Uint8Array();
                     }
 
                     // Return empty tile if no geometry column is specified
-                    if (!geometryColumnName) {
+                    if (!currentGeometryColumn) {
                         return new Uint8Array();
                     }
 
@@ -611,7 +632,7 @@ const MapComponent: React.FC<MapProps> = ({
                         zxy,
                         selectedTable: tableName,
                         selectedColumns: currentColumns,
-                        geometryColumnName,
+                        geometryColumnName: currentGeometryColumn,
                         schema: null, // Don't use URL-extracted schema
                         columnTypes: columnTypeMap,
                     });
@@ -961,6 +982,15 @@ const MapComponent: React.FC<MapProps> = ({
 
                         // Check layer detection after a delay to allow tiles to load
                         setTimeout(() => {}, 1000);
+                    }
+                });
+
+                // Fit bounds on idle event (after tiles are loaded)
+                mapInstance.on('idle', () => {
+                    if (needsFitBoundsRef.current) {
+                        const { table, geomColumn } = needsFitBoundsRef.current;
+                        needsFitBoundsRef.current = null; // Clear the flag
+                        fitMapToData(table, geomColumn);
                     }
                 });
 
