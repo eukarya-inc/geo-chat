@@ -16,19 +16,19 @@ describe('ChatList', () => {
     it('should highlight selected view', () => {
         const { rerender } = render(<ChatList {...defaultProps} selectedView="chat" />);
 
-        const chatButton = screen.getByText('チャット');
+        const chatButton = screen.getByText('チャット').closest('button');
         expect(chatButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');
 
         rerender(<ChatList {...defaultProps} selectedView="dashboard-list" />);
-        const dashboardButton = screen.getByText('ダッシュボード');
+        const dashboardButton = screen.getByText('ダッシュボード').closest('button');
         expect(dashboardButton).toHaveClass('bg-blue-50', 'border', 'border-blue-200');
     });
 
     it('should not highlight any view when selectedView is undefined', () => {
         render(<ChatList {...defaultProps} selectedView={undefined} />);
 
-        const chatButton = screen.getByText('チャット');
-        const dashboardButton = screen.getByText('ダッシュボード');
+        const chatButton = screen.getByText('チャット').closest('button');
+        const dashboardButton = screen.getByText('ダッシュボード').closest('button');
 
         expect(chatButton).not.toHaveClass('bg-blue-50');
         expect(dashboardButton).not.toHaveClass('bg-blue-50');
@@ -58,15 +58,15 @@ describe('ChatList', () => {
     it('should show hover effect on navigation buttons', () => {
         render(<ChatList {...defaultProps} />);
 
-        const chatButton = screen.getByText('チャット');
+        const chatButton = screen.getByText('チャット').closest('button');
         expect(chatButton).toHaveClass('hover:bg-gray-100');
     });
 
     it('should have correct button structure', () => {
         render(<ChatList {...defaultProps} />);
 
-        const chatButton = screen.getByText('チャット');
-        expect(chatButton.tagName).toBe('BUTTON');
+        const chatButton = screen.getByText('チャット').closest('button');
+        expect(chatButton?.tagName).toBe('BUTTON');
         expect(chatButton).toHaveClass('w-full', 'px-4', 'py-3', 'text-left');
     });
 });
