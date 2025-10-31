@@ -50,8 +50,16 @@ export class TileCacheManager {
         entry.lastAccessTime = Date.now();
 
         // Return a fresh copy to avoid ArrayBuffer detachment issues
-        // Create a new Uint8Array with a new underlying buffer
-        return new Uint8Array(entry.data);
+        // Create a new Uint8Array with a new underlying ArrayBuffer
+        const copy = new Uint8Array(entry.data.length);
+        try {
+            copy.set(entry.data);
+            return copy;
+        } catch {
+            // ArrayBuffer was detached, remove from cache and return null
+            this.cache.delete(key);
+            return null;
+        }
     }
 
     /**
@@ -65,8 +73,13 @@ export class TileCacheManager {
         }
 
         const now = Date.now();
+        // Create a true deep copy by creating a new ArrayBuffer and copying bytes
+        // This prevents ArrayBuffer detachment issues when MapLibre transfers buffers to workers
+        const bufferCopy = new Uint8Array(data.length);
+        bufferCopy.set(data);
+
         this.cache.set(key, {
-            data: new Uint8Array(data), // Store a copy with new buffer
+            data: bufferCopy,
             timestamp: now,
             renderingCost,
             accessCount: 1,
