@@ -31,6 +31,8 @@ const MapComponent: React.FC<MapProps> = ({
     onTableStyleChanged,
     onExtraStyleChange,
 }) => {
+    // Generate unique map ID for each instance
+    const mapId = useRef(`map-${Math.random().toString(36).slice(2, 11)}`).current;
     const [mapError, setMapError] = useState<string | null>(null);
     const [mvtError, setMvtError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -145,8 +147,18 @@ const MapComponent: React.FC<MapProps> = ({
         registerDuckDBProtocol();
 
         // Remove all DuckDB sources and their layers to force complete refresh
-        const allLayers = mapRef.current.getStyle().layers || [];
-        const allSources = mapRef.current.getStyle().sources || {};
+        const currentStyle = mapRef.current.getStyle();
+        if (!currentStyle) {
+            // Style not loaded yet, skip cleanup
+            setTimeout(() => {
+                if (mapRef.current && isInitialized) {
+                    updateMapLayers(mapRef.current);
+                }
+            }, 100);
+            return;
+        }
+        const allLayers = currentStyle.layers || [];
+        const allSources = currentStyle.sources || {};
 
         // Clear handler tracking when removing layers
         // No need to clear handlers as they're now global
@@ -330,10 +342,10 @@ const MapComponent: React.FC<MapProps> = ({
                         const sourceId = `duckdb-${selectedTable}`;
                         if (mapRef.current.getSource(sourceId)) {
                             // Get existing layers that use this source
+                            const currentStyle = mapRef.current.getStyle();
                             const layers =
-                                mapRef.current
-                                    .getStyle()
-                                    .layers?.filter(layer => 'source' in layer && layer.source === sourceId) || [];
+                                currentStyle?.layers?.filter(layer => 'source' in layer && layer.source === sourceId) ||
+                                [];
 
                             // Remove layers
                             layers.forEach(layer => {
@@ -815,7 +827,7 @@ const MapComponent: React.FC<MapProps> = ({
                 const styleToUse = customStyleRef.current ? processMapStyle(customStyleRef.current) : defaultStyle;
 
                 const mapInstance = new maplibregl.Map({
-                    container: 'map',
+                    container: mapId,
                     zoom: initialViewState?.zoom ?? 5, // Initial zoom level
                     center: initialViewState?.center ?? [139.7482, 35.6591], // Coordinates near Tokyo
                     bearing: initialViewState?.bearing ?? 0,
@@ -949,7 +961,7 @@ const MapComponent: React.FC<MapProps> = ({
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <div
-                id="map"
+                id={mapId}
                 style={{
                     width: '100%',
                     height: '100%',
