@@ -1,4 +1,27 @@
 import type { DBContext } from '../duckdb/dbContext';
+import { generateSystemPrompt } from './systemPrompt';
+
+/**
+ * Generate full system prompt with context message and base system prompt
+ *
+ * This function combines the dynamic context message (database state, current tables, etc.)
+ * with the static base system prompt to create a complete system prompt for the AI.
+ *
+ * @param dbContext - Database context for querying current state
+ * @param schemaName - Schema name to use for context
+ * @param selectedTable - Currently selected table name
+ * @returns Combined system prompt string, or just the base prompt if context generation fails
+ */
+export async function generateFullSystemPrompt(
+    dbContext: DBContext | null,
+    schemaName: string | null,
+    selectedTable: string | null
+): Promise<string> {
+    const baseSystemPrompt = generateSystemPrompt();
+    const contextMessage = await generateContextMessage(dbContext, schemaName, selectedTable);
+
+    return contextMessage ? `${contextMessage}\n\n${baseSystemPrompt}` : baseSystemPrompt;
+}
 
 /**
  * Generate a hidden context message with current database state

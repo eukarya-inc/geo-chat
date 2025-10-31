@@ -1,12 +1,12 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { streamText, stepCountIs, type CoreMessage } from 'ai';
-import type { Tools } from './tools';
+import { initTools, type ToolsOptions } from './tools';
+import { generateFullSystemPrompt } from './contextMessage';
 
-export interface StreamGeneratorOptions {
+export interface StreamGeneratorOptions extends Omit<ToolsOptions, 'apiKey'> {
     messages: CoreMessage[];
     apiKey: string;
-    systemPrompt: string;
-    tools: Tools;
+    selectedTable?: string | null;
     abortSignal?: AbortSignal;
 }
 
@@ -27,16 +27,29 @@ export type StreamPart =
  * Create a generator that streams AI responses
  * This is the core streaming logic shared between useAIChat and AIChatAssistantUI
  */
-export async function* createAIStreamGenerator({
-    messages,
-    apiKey,
-    systemPrompt,
-    tools,
-    abortSignal,
-}: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
+export async function* createAIStreamGenerator(options: StreamGeneratorOptions): AsyncGenerator<StreamPart> {
     try {
+        // Build tools with provided options
+        const tools = await initTools({
+            dbContext: options.dbContext,
+            schema: options.schema,
+            apiKey: options.apiKey,
+            onChartUpdate: options.onChartUpdate,
+            onChartDelete: options.onChartDelete,
+            getCurrentChatState: options.getCurrentChatState,
+            onMapStyleUpdate: options.onMapStyleUpdate,
+            onMapStyleDelete: options.onMapStyleDelete,
+        });
+
+        // Generate system prompt with context
+        const systemPrompt = await generateFullSystemPrompt(
+            options.dbContext,
+            options.schema,
+            options.selectedTable || null
+        );
+
         const anthropicClient = createAnthropic({
-            apiKey,
+            apiKey: options.apiKey,
             headers: {
                 'anthropic-dangerous-direct-browser-access': 'true',
             },
@@ -45,11 +58,11 @@ export async function* createAIStreamGenerator({
         const result = streamText({
             model: anthropicClient('claude-sonnet-4-5-20250929'),
             system: systemPrompt,
-            messages,
+            messages: options.messages,
             tools,
             maxOutputTokens: 4000,
             maxRetries: 3,
-            abortSignal,
+            abortSignal: options.abortSignal,
             // Enable multi-step tool execution (default is stepCountIs(1))
             // Allow up to 100 steps for complex agent workflows
             stopWhen: stepCountIs(100),

@@ -5,9 +5,6 @@ import type { ChatState } from '../../store/remoteAtoms';
 import type { TableStyle } from '../../components/map';
 import { createAIStreamGenerator, type StreamPart } from './streamGenerator';
 import { messageConverter } from './messageConverter';
-import { generateContextMessage } from './contextMessage';
-import { generateSystemPrompt } from './systemPrompt';
-import { initTools } from './tools';
 import { generatePromptSuggestions } from './promptSuggestionService';
 
 interface ChatContext {
@@ -232,7 +229,7 @@ export class AIStore {
         this.setLoading(chatId, true, controller);
 
         try {
-            // Validate required parameters for tool initialization
+            // Validate required parameters for stream generator
             const missingParams: string[] = [];
             if (!options.dbContext) missingParams.push('dbContext');
             if (!options.onChartUpdate) missingParams.push('onChartUpdate');
@@ -242,35 +239,20 @@ export class AIStore {
             if (!options.onMapStyleDelete) missingParams.push('onMapStyleDelete');
 
             if (missingParams.length > 0) {
-                throw new Error(`Required tool initialization parameters are missing: ${missingParams.join(', ')}`);
+                throw new Error(`Required parameters are missing: ${missingParams.join(', ')}`);
             }
 
-            // Build tools (TypeScript knows these are defined after validation)
-            const tools = await initTools({
+            const generator = createAIStreamGenerator({
+                messages: coreMessages,
+                apiKey: options.apiKey,
                 dbContext: options.dbContext!,
                 schema: options.schema || null,
-                apiKey: options.apiKey,
+                selectedTable: options.selectedTable || null,
                 onChartUpdate: options.onChartUpdate!,
                 onChartDelete: options.onChartDelete!,
                 getCurrentChatState: options.getCurrentChatState!,
                 onMapStyleUpdate: options.onMapStyleUpdate!,
                 onMapStyleDelete: options.onMapStyleDelete!,
-            });
-
-            // Generate system prompt with context
-            const baseSystemPrompt = generateSystemPrompt();
-            const contextMessage = await generateContextMessage(
-                options.dbContext!,
-                options.schema || null,
-                options.selectedTable || null
-            );
-            const systemPrompt = contextMessage ? `${contextMessage}\n\n${baseSystemPrompt}` : baseSystemPrompt;
-
-            const generator = createAIStreamGenerator({
-                messages: coreMessages,
-                apiKey: options.apiKey,
-                systemPrompt,
-                tools,
                 abortSignal: controller.signal,
             });
 
