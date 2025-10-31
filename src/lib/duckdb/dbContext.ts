@@ -59,10 +59,15 @@ class DatabaseContext implements DBContext {
     private maxIdleTime = 60000; // 60 seconds
     private connectionMutex: Promise<void> = Promise.resolve();
     private cleanupTimer: NodeJS.Timeout | null = null;
+    // Round-robin index for each schema
+    private roundRobinIndex: Map<string | null, number> = new Map();
+    // Event-driven connection wait queue: Map<schema, Array<resolve function>>
+    private connectionWaitQueue: Map<string | null, Array<(conn: AsyncDuckDBConnection) => void>> = new Map();
 
-    constructor(db: AsyncDuckDB, isInMemory = true) {
+    constructor(db: AsyncDuckDB, isInMemory = true, maxConnectionsPerSchema = 10) {
         this.db = db;
         this.isInMemory = isInMemory;
+        this.maxConnectionsPerSchema = maxConnectionsPerSchema;
         this.sqlHistory = new SQLHistoryManager();
 
         // Start cleanup timer for idle connections
@@ -176,38 +181,49 @@ class DatabaseContext implements DBContext {
 
                 const schemaConnections = this.connectionPool.get(sanitizedSchema)!;
 
-                // Try to find an available connection in the pool
-                for (const pooledConn of schemaConnections) {
-                    if (!pooledConn.inUse && pooledConn.schema === sanitizedSchema) {
-                        pooledConn.inUse = true;
-                        pooledConn.lastUsed = Date.now();
+                // Try to find an available connection using round-robin
+                // This ensures better load distribution across connections
+                const availableConnections = schemaConnections.filter(
+                    conn => !conn.inUse && conn.schema === sanitizedSchema
+                );
 
-                        if (this.debugLogging) {
-                            console.log(
-                                `[connect] Reusing existing connection from pool after ${Date.now() - connectStartTime}ms`
-                            );
-                        }
+                if (availableConnections.length > 0) {
+                    // Get or initialize round-robin index for this schema
+                    const currentIndex = this.roundRobinIndex.get(sanitizedSchema) || 0;
+                    const selectedIndex = currentIndex % availableConnections.length;
+                    const pooledConn = availableConnections[selectedIndex];
 
-                        // Ensure schema is set correctly for reused connection
-                        if (sanitizedSchema && !pooledConn.schemaInitialized) {
-                            try {
-                                if (this.debugLogging) {
-                                    console.log(`[connect] Initializing schema for reused connection`);
-                                }
-                                // Ensure schema exists and is set (with proper escaping)
-                                await pooledConn.connection.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
-                                await pooledConn.connection.query(`SET search_path = "${sanitizedSchema}"`);
-                                pooledConn.schemaInitialized = true;
-                            } catch (error) {
-                                console.warn(`Failed to set schema for reused connection: ${error}`);
-                                // Continue anyway - connection might still be usable
-                            }
-                        }
+                    // Update round-robin index for next call
+                    this.roundRobinIndex.set(sanitizedSchema, (currentIndex + 1) % availableConnections.length);
 
-                        // Create a wrapper that returns the connection to the pool
-                        const wrappedConnection = this.createWrappedConnection(pooledConn);
-                        return wrappedConnection;
+                    pooledConn.inUse = true;
+                    pooledConn.lastUsed = Date.now();
+
+                    if (this.debugLogging) {
+                        console.log(
+                            `[connect] Reusing connection ${selectedIndex + 1}/${availableConnections.length} (round-robin) after ${Date.now() - connectStartTime}ms`
+                        );
                     }
+
+                    // Ensure schema is set correctly for reused connection
+                    if (sanitizedSchema && !pooledConn.schemaInitialized) {
+                        try {
+                            if (this.debugLogging) {
+                                console.log(`[connect] Initializing schema for reused connection`);
+                            }
+                            // Ensure schema exists and is set (with proper escaping)
+                            await pooledConn.connection.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
+                            await pooledConn.connection.query(`SET search_path = "${sanitizedSchema}"`);
+                            pooledConn.schemaInitialized = true;
+                        } catch (error) {
+                            console.warn(`Failed to set schema for reused connection: ${error}`);
+                            // Continue anyway - connection might still be usable
+                        }
+                    }
+
+                    // Create a wrapper that returns the connection to the pool
+                    const wrappedConnection = this.createWrappedConnection(pooledConn);
+                    return wrappedConnection;
                 }
 
                 // No available connection, create a new one if under limit
@@ -259,56 +275,45 @@ class DatabaseContext implements DBContext {
                     return wrappedConnection;
                 }
 
-                // Pool is full, wait for an available connection
-                console.log(
-                    `[connect] Pool is full for schema ${sanitizedSchema}, waiting for available connection...`
-                );
+                // Pool is full, wait for an available connection using event-driven approach
+                if (this.debugLogging) {
+                    const poolStats = schemaConnections.map((c, i) => `#${i}:${c.inUse ? 'busy' : 'free'}`).join(', ');
+                    console.log(
+                        `[connect] Pool is full for schema ${sanitizedSchema} (${schemaConnections.length}/${this.maxConnectionsPerSchema}), waiting for available connection... Pool state: [${poolStats}]`
+                    );
+                }
 
-                // Wait for a connection to become available (max 5 seconds)
-                const maxWaitTime = 5000;
-                const startWaitTime = Date.now();
+                // Create a promise that will be resolved when a connection becomes available
+                const waitStartTime = Date.now();
+                const connectionPromise = new Promise<AsyncDuckDBConnection>((resolve, reject) => {
+                    // Add to wait queue
+                    if (!this.connectionWaitQueue.has(sanitizedSchema)) {
+                        this.connectionWaitQueue.set(sanitizedSchema, []);
+                    }
+                    this.connectionWaitQueue.get(sanitizedSchema)!.push(resolve);
 
-                while (Date.now() - startWaitTime < maxWaitTime) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-
-                    // Check if any connection is now available
-                    for (const pooledConn of schemaConnections) {
-                        if (!pooledConn.inUse && pooledConn.schema === sanitizedSchema) {
-                            pooledConn.inUse = true;
-                            pooledConn.lastUsed = Date.now();
-                            console.log(`[connect] Got connection after waiting ${Date.now() - startWaitTime}ms`);
-                            const wrappedConnection = this.createWrappedConnection(pooledConn);
-                            return wrappedConnection;
+                    // Set timeout (30 seconds)
+                    setTimeout(() => {
+                        // Remove from queue if still waiting
+                        const queue = this.connectionWaitQueue.get(sanitizedSchema);
+                        if (queue) {
+                            const index = queue.indexOf(resolve);
+                            if (index !== -1) {
+                                queue.splice(index, 1);
+                                reject(
+                                    new Error(`Connection wait timeout after 30 seconds for schema ${sanitizedSchema}`)
+                                );
+                            }
                         }
-                    }
+                    }, 30000);
+                });
+
+                // Wait for connection to be released
+                const conn = await connectionPromise;
+                if (this.debugLogging) {
+                    console.log(`[connect] Got connection after waiting ${Date.now() - waitStartTime}ms`);
                 }
-
-                // Timeout - force create a new connection even if over limit
-                console.warn(`[connect] Timeout waiting for connection, forcing new connection`);
-                const conn = await this.db.connect();
-
-                if (sanitizedSchema) {
-                    try {
-                        await conn.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
-                        await conn.query(`SET search_path = "${sanitizedSchema}"`);
-                    } catch (error) {
-                        await conn.close();
-                        throw new Error(`Failed to set schema ${sanitizedSchema}: ${error}`);
-                    }
-                }
-
-                const pooledConn: PooledConnection = {
-                    connection: conn,
-                    schema: sanitizedSchema,
-                    inUse: true,
-                    lastUsed: Date.now(),
-                    schemaInitialized: !!sanitizedSchema,
-                };
-
-                schemaConnections.push(pooledConn);
-                const wrappedConnection = this.createWrappedConnection(pooledConn);
-                console.log(`[connect] Forced connection creation after timeout`);
-                return wrappedConnection;
+                return conn;
             } catch (error) {
                 console.error('DBContext: Failed to get connection from pool:', error);
                 throw error;
@@ -329,12 +334,40 @@ class DatabaseContext implements DBContext {
 
         // Create a proxy to intercept the close method
         return new Proxy(conn, {
-            get(target, prop) {
+            get: (target, prop) => {
                 if (prop === 'close') {
                     return async () => {
+                        if (this.debugLogging) {
+                            console.log(`[connection close] Releasing connection for schema ${pooledConn.schema}`);
+                        }
+
                         // Return connection to pool instead of closing
                         pooledConn.inUse = false;
                         pooledConn.lastUsed = Date.now();
+
+                        // Notify waiting requests (event-driven)
+                        const queue = this.connectionWaitQueue.get(pooledConn.schema);
+                        if (queue && queue.length > 0) {
+                            // Get first waiting request (FIFO)
+                            const resolve = queue.shift()!;
+                            // Mark connection as in use again
+                            pooledConn.inUse = true;
+                            // Create wrapped connection and resolve the waiting promise
+                            const wrappedConn = this.createWrappedConnection(pooledConn);
+                            if (this.debugLogging) {
+                                console.log(
+                                    `[connection release] Notified waiting request for schema ${pooledConn.schema}, ${queue.length} remaining in queue`
+                                );
+                            }
+                            resolve(wrappedConn);
+                        } else {
+                            if (this.debugLogging) {
+                                console.log(
+                                    `[connection release] No waiting requests for schema ${pooledConn.schema}, connection returned to pool`
+                                );
+                            }
+                        }
+
                         // Don't actually close the connection
                         return Promise.resolve();
                     };
@@ -865,6 +898,6 @@ class DatabaseContext implements DBContext {
     }
 }
 
-export function createDBContext(db: AsyncDuckDB, isInMemory = true): DBContext {
-    return new DatabaseContext(db, isInMemory);
+export function createDBContext(db: AsyncDuckDB, isInMemory = true, maxConnectionsPerSchema = 10): DBContext {
+    return new DatabaseContext(db, isInMemory, maxConnectionsPerSchema);
 }
