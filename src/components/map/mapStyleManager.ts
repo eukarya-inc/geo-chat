@@ -122,7 +122,7 @@ export class MapStyleManager {
         }
     }
 
-    getCurrentStyle(): maplibregl.StyleSpecification {
+    getCurrentStyle(): maplibregl.StyleSpecification | undefined {
         return this.map.getStyle();
     }
 
@@ -142,7 +142,11 @@ export class MapStyleManager {
     }
 
     getSourceIds(): string[] {
-        return Object.keys(this.map.getStyle().sources || {});
+        const currentStyle = this.map.getStyle();
+        if (!currentStyle) {
+            return [];
+        }
+        return Object.keys(currentStyle.sources || {});
     }
 
     getLayerPaint(layerId: string): Record<string, unknown> | null {
