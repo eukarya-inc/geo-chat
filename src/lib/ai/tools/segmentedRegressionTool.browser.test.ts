@@ -1,59 +1,30 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import * as duckdb from '@duckdb/duckdb-wasm';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from '../../duckdb/dbContext';
 import { createSegmentedRegressionTool } from './segmentedRegressionTool';
 import { executeToolForTest } from './toolTestHelper';
 import type { SegmentedRegressionAnalysisResponse } from '../../../types/segmentedRegression';
+import { suppressConsole } from '../../../test/console';
+import { initializeDuckDB } from '../../../test/duckdb';
 
 describe('segmentedRegressionTool (browser, real DuckDB-WASM)', () => {
     let db: AsyncDuckDB;
     let dbContext: DBContext;
-    let originalConsole: {
-        log: typeof console.log;
-        warn: typeof console.warn;
-        error: typeof console.error;
-    };
+    let restoreConsole: (() => void) | undefined;
 
     beforeAll(async () => {
         // Suppress console output during tests
-        originalConsole = {
-            log: console.log,
-            warn: console.warn,
-            error: console.error,
-        };
-        console.log = vi.fn();
-        console.warn = vi.fn();
-        console.error = vi.fn();
+        restoreConsole = suppressConsole();
 
-        // Initialize real DuckDB-WASM instance (browser)
-        const MANUAL_BUNDLES = {
-            mvp: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-            },
-            eh: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-            },
-        } as const;
-
-        const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-        const worker = new Worker(bundle.mainWorker!);
-        const logger = new duckdb.VoidLogger();
-        db = new duckdb.AsyncDuckDB(logger, worker);
-        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-
-        await db.open({ path: ':memory:', accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+        // Initialize DuckDB-WASM
+        db = await initializeDuckDB();
 
         dbContext = createDBContext(db);
     }, 30000);
 
     afterAll(async () => {
         // Restore console
-        console.log = originalConsole.log;
-        console.warn = originalConsole.warn;
-        console.error = originalConsole.error;
+        restoreConsole?.();
 
         if (db) {
             await db.terminate();

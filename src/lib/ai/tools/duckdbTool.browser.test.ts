@@ -1,48 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import * as duckdb from '@duckdb/duckdb-wasm';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from '../../duckdb/dbContext';
 import { createDuckDBTool, type Result as DuckDBResult } from './duckdbTool';
+import { suppressConsole } from '../../../test/console';
+import { initializeDuckDB } from '../../../test/duckdb';
 
 describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
     let db: AsyncDuckDB;
     let dbContext: DBContext;
-    let originalConsole: {
-        log: typeof console.log;
-        warn: typeof console.warn;
-        error: typeof console.error;
-    };
+    let restoreConsole: (() => void) | undefined;
 
     beforeAll(async () => {
         // Suppress console output during tests
-        originalConsole = {
-            log: console.log,
-            warn: console.warn,
-            error: console.error,
-        };
-        console.log = vi.fn();
-        console.warn = vi.fn();
-        console.error = vi.fn();
-        // Initialize real DuckDB-WASM instance (browser)
-        const MANUAL_BUNDLES = {
-            mvp: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-            },
-            eh: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-            },
-        } as const;
+        restoreConsole = suppressConsole();
 
-        const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-        const worker = new Worker(bundle.mainWorker!);
-        const logger = new duckdb.VoidLogger();
-        db = new duckdb.AsyncDuckDB(logger, worker);
-        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        // Initialize DuckDB-WASM
+        db = await initializeDuckDB();
 
-        // Open and load spatial extension once
-        await db.open({ path: ':memory:', accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+        // Load spatial extension
         const conn = await db.connect();
         await conn.query(`INSTALL spatial; LOAD spatial;`);
         await conn.close();
@@ -58,11 +33,7 @@ describe('duckdbTool AI invocation (browser, real DuckDB-WASM)', () => {
         }
 
         // Restore original console functions
-        if (originalConsole) {
-            console.log = originalConsole.log;
-            console.warn = originalConsole.warn;
-            console.error = originalConsole.error;
-        }
+        restoreConsole?.();
     });
 
     it('returns error for multiple SQL statements', async () => {

@@ -1,46 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import * as duckdb from '@duckdb/duckdb-wasm';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import { createDBContext, type DBContext } from './dbContext';
+import { suppressConsole } from '../../test/console';
+import { initializeDuckDB } from '../../test/duckdb';
 
 // Browser integration tests - these run with actual DuckDB-WASM
 describe('DBContext Browser Integration', () => {
     let db: AsyncDuckDB;
     let dbContext: DBContext;
-    let originalConsole: {
-        log: typeof console.log;
-        warn: typeof console.warn;
-        error: typeof console.error;
-    };
+    let restoreConsole: (() => void) | undefined;
 
     beforeAll(async () => {
         // Suppress console output during tests
-        originalConsole = {
-            log: console.log,
-            warn: console.warn,
-            error: console.error,
-        };
-        console.log = vi.fn();
-        console.warn = vi.fn();
-        console.error = vi.fn();
-        // Initialize real DuckDB-WASM instance
-        const MANUAL_BUNDLES = {
-            mvp: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-            },
-            eh: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-            },
-        };
+        restoreConsole = suppressConsole();
 
-        const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-        const worker = new Worker(bundle.mainWorker!);
-        const logger = new duckdb.VoidLogger();
-
-        db = new duckdb.AsyncDuckDB(logger, worker);
-        await db.instantiate(bundle.mainModule);
+        // Initialize DuckDB-WASM
+        db = await initializeDuckDB();
 
         // Install spatial extension
         const conn = await db.connect();
@@ -61,11 +36,7 @@ describe('DBContext Browser Integration', () => {
         }
 
         // Restore original console functions
-        if (originalConsole) {
-            console.log = originalConsole.log;
-            console.warn = originalConsole.warn;
-            console.error = originalConsole.error;
-        }
+        restoreConsole?.();
     });
 
     describe.concurrent('executeQuery', () => {
