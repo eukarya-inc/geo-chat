@@ -44,7 +44,7 @@ export function ChartConfigModal({
 
     const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
         // Generate new spec from config
-        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec);
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, schema);
         const updatedSpec: ChartSpec = {
             ...chartSpec,
             title: config.title as string,

@@ -200,13 +200,16 @@ maplibregl.addProtocol('duckdb-vector', async params => {
 ### Chart Generation
 
 ```typescript
-// Vega-Lite spec generation
-export function createChartTool(dbContext: DBContext) {
+// Vega-Lite spec generation with DuckDB URL
+export function createChartUpdateTool(
+    onChartUpdate?: (tableName: string, spec: VegaChartSpec) => Promise<void>,
+    schema?: string | null
+) {
     return tool({
-        description: 'Create data visualizations',
+        description: 'Create or update data visualizations',
         parameters: z.object({
-            spec: z.object({
-                data: z.object({ sql: z.string() }),
+            table_name: z.string(),
+            vega_spec: z.object({
                 mark: z.string(),
                 encoding: z.object({
                     x: z.object({ field: z.string(), type: z.string() }),
@@ -214,10 +217,17 @@ export function createChartTool(dbContext: DBContext) {
                 }),
             }),
         }),
-        execute: async ({ spec }) => {
-            // Execute SQL and embed results in Vega spec
-            const data = await dbContext.executeQuery(spec.data.sql);
-            return { success: true, spec: { ...spec, data: { values: data } } };
+        execute: async ({ table_name, vega_spec }) => {
+            // Create DuckDB URL for data source
+            const dataUrl = createDuckDBUrl(table_name, schema);
+            const processedSpec = {
+                ...vega_spec,
+                data: { url: dataUrl }, // Use duckdb:// URL instead of SQL
+                width: 'container',
+                height: 'container',
+            };
+            await onChartUpdate?.(table_name, processedSpec);
+            return { success: true, message: `Chart updated for ${table_name}` };
         },
     });
 }
