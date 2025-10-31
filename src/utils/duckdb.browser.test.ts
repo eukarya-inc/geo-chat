@@ -1,29 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as duckdb from '@duckdb/duckdb-wasm';
+import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { detectDisplayColumns, isGeometryColumn, isBlobColumn, type ColumnInfo } from './duckdb';
+import { initializeDuckDB } from '../test/duckdb';
 
 describe('Column Detection Utilities', () => {
-    let db: duckdb.AsyncDuckDB;
-    let conn: duckdb.AsyncDuckDBConnection;
+    let db: AsyncDuckDB;
+    let conn: AsyncDuckDBConnection;
 
     beforeAll(async () => {
-        // Initialize DuckDB with spatial extension
-        const DUCKDB_BUNDLES = {
-            mvp: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-            },
-            eh: {
-                mainModule: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-                mainWorker: '/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-            },
-        };
-
-        const bundle = await duckdb.selectBundle(DUCKDB_BUNDLES);
-        const worker = new Worker(bundle.mainWorker!);
-        const logger = new duckdb.VoidLogger();
-        db = new duckdb.AsyncDuckDB(logger, worker);
-        await db.instantiate(bundle.mainModule);
+        // Initialize DuckDB-WASM
+        db = await initializeDuckDB();
 
         conn = await db.connect();
 
