@@ -33,3 +33,34 @@ export function useDuckDB() {
 
     return { dbContext, error, isInitializing };
 }
+
+/**
+ * Custom hook to create a dedicated DBContext for Map component with higher connection pool
+ */
+export function useMapDuckDB(maxConnections = 20) {
+    const [mapDbContext, setMapDbContext] = useState<DBContext | null>(null);
+    const [error, setError] = useState<Error | null>(null);
+    const isInitialized = useRef(false);
+
+    useEffect(() => {
+        async function initMapDB() {
+            try {
+                console.log(`[useMapDuckDB] Creating dedicated context with ${maxConnections} connections`);
+                const db = await getGlobalDB();
+                // Create separate DBContext with larger connection pool for Map
+                const ctx = createDBContext(db, true, maxConnections);
+                setMapDbContext(ctx);
+                console.log('[useMapDuckDB] Map-specific database context created');
+            } catch (err) {
+                setError(err instanceof Error ? err : new Error('Failed to initialize Map DuckDB context'));
+            }
+        }
+
+        if (!isInitialized.current) {
+            initMapDB();
+            isInitialized.current = true;
+        }
+    }, [maxConnections]);
+
+    return { mapDbContext, error };
+}

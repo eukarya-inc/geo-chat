@@ -182,7 +182,6 @@ export function updateMapLayers(params: {
     onExtraStyleChange?: (style: ExtraStyle) => void;
     initializedTables: Set<string>;
     styleManager?: MapStyleManager | null;
-    tileCache: Map<string, Uint8Array>;
     schema?: string | null;
 }): void {
     const {
@@ -196,7 +195,6 @@ export function updateMapLayers(params: {
         onExtraStyleChange,
         initializedTables,
         styleManager,
-        tileCache,
         schema,
     } = params;
 
@@ -208,9 +206,6 @@ export function updateMapLayers(params: {
 
     // Remove all existing DuckDB layers and sources
     removeAllDuckDBLayers(map);
-
-    // Clear tile cache
-    tileCache.clear();
 
     // Remove old GeoJSON source if it exists
     removeGeoJSONSource(map);

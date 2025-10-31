@@ -9,6 +9,8 @@ import { processMapStyle } from './utils/style';
 import { updateMapLayers as updateMapLayersHelper } from './utils/layerOperations';
 import type { MapProps } from './types';
 import { generatePopupContent, createDefaultStyle } from './utils/mapHelpers';
+import { TileCacheManager } from './utils/tileCache';
+import { useMapDuckDB } from '../../lib/duckdb/useDuckDB';
 
 // Re-export types for convenience
 export type { ViewState, VectorTileLayer, TableStyle, ExtraStyle, MapProps } from './types';
@@ -33,6 +35,11 @@ const MapComponent: React.FC<MapProps> = ({
 }) => {
     // Generate unique map ID for each instance
     const mapId = useRef(`map-${Math.random().toString(36).slice(2, 11)}`).current;
+    // Use dedicated DBContext for Map with 20 connections for parallel tile rendering
+    const { mapDbContext } = useMapDuckDB(20);
+    // Use mapDbContext for tile rendering, dbContext for other operations
+    const tileDbContext = mapDbContext || dbContext;
+
     const [mapError, setMapError] = useState<string | null>(null);
     const [mvtError, setMvtError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -41,18 +48,52 @@ const MapComponent: React.FC<MapProps> = ({
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
     const connectionRef = useRef<AsyncDuckDBConnection>(null);
-    const tileCache = useRef<Map<string, Uint8Array>>(new Map());
+    const tileCacheManager = useRef<TileCacheManager>(new TileCacheManager());
     const selectedTableRef = useRef<string | null>(selectedTable);
     const selectedColumnsRef = useRef<string[] | undefined>(selectedColumns);
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
     const columnTypesRef = useRef<Record<string, Record<string, string>>>({});
     const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
-    // AbortController to cancel in-flight tile requests when table changes
-    const tileAbortControllerRef = useRef<AbortController | null>(null);
     // Track MVT errors with a ref to allow protocol handler to report errors
     const mvtErrorRef = useRef<string | null>(null);
-    // Track number of in-flight tile requests
+    // Track number of in-flight tile requests (DuckDB tile generation)
     const pendingTileRequestsRef = useRef<number>(0);
+    // Track MapLibre rendering state
+    const isMapRenderingRef = useRef<boolean>(false);
+    // Track tile queue visibility
+    const [showTileQueue, setShowTileQueue] = useState<boolean>(false);
+    const tileQueueRef = useRef<HTMLDivElement>(null);
+    // Force re-render to update elapsed times
+    const [, forceUpdate] = useState({});
+
+    // Close tile queue when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (tileQueueRef.current && !tileQueueRef.current.contains(event.target as Node)) {
+                setShowTileQueue(false);
+            }
+        };
+
+        if (showTileQueue) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => {
+                document.removeEventListener('mousedown', handleClickOutside);
+            };
+        }
+    }, [showTileQueue]);
+
+    // Update elapsed times every second when tile queue is visible
+    useEffect(() => {
+        if (showTileQueue) {
+            const interval = setInterval(() => {
+                forceUpdate({});
+            }, 1000);
+
+            return () => {
+                clearInterval(interval);
+            };
+        }
+    }, [showTileQueue]);
 
     // Store resolved column types under all identifier variants (schema.table, table)
     const cacheColumnTypes = useCallback(
@@ -140,15 +181,8 @@ const MapComponent: React.FC<MapProps> = ({
         pendingTileRequestsRef.current = 0;
         setIsLoadingTiles(false);
 
-        // Abort any in-flight tile requests from the previous table/columns
-        if (tileAbortControllerRef.current) {
-            tileAbortControllerRef.current.abort();
-        }
-        // Create new AbortController for the new table/columns
-        tileAbortControllerRef.current = new AbortController();
-
         // Clear tile cache to force refresh with new columns
-        tileCache.current.clear();
+        tileCacheManager.current.clear();
 
         // Re-register the protocol to ensure it uses the latest columns
         registerDuckDBProtocol();
@@ -187,6 +221,9 @@ const MapComponent: React.FC<MapProps> = ({
                 }
             }
         });
+
+        // Clear tile cache to force refresh
+        tileCacheManager.current.clear();
 
         // Re-add source and layers after a brief delay
         setTimeout(() => {
@@ -341,7 +378,7 @@ const MapComponent: React.FC<MapProps> = ({
                     selectedColumnsRef.current = filteredColumns;
 
                     // Clear tile cache to force refresh with new columns
-                    tileCache.current.clear();
+                    tileCacheManager.current.clear();
 
                     // Force map to re-render tiles if map is ready
                     if (mapRef.current && isInitialized) {
@@ -415,6 +452,11 @@ const MapComponent: React.FC<MapProps> = ({
     // Track which tables have been initialized with default styles
     const initializedTablesRef = useRef<Set<string>>(new Set());
 
+    // Get connection from map-specific pool (DatabaseContext handles round-robin internally)
+    const getMapConnection = useCallback(async (): Promise<AsyncDuckDBConnection> => {
+        return await tileDbContext.createManagedConnection(schema);
+    }, [tileDbContext, schema]);
+
     // Function to update map layers dynamically
     const updateMapLayers = useCallback(
         (map: maplibregl.Map) => {
@@ -429,7 +471,6 @@ const MapComponent: React.FC<MapProps> = ({
                 onExtraStyleChange,
                 initializedTables: initializedTablesRef.current,
                 styleManager: styleManagerRef.current,
-                tileCache: tileCache.current,
                 schema,
             });
 
@@ -461,8 +502,10 @@ const MapComponent: React.FC<MapProps> = ({
             maplibregl.addProtocol('duckdb', async (params, abortController) => {
                 // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
                 const url = params.url.replace(/\.pbf$/, '.mvt'); // Convert extension for parsing
+
                 const parseResult = parseDuckDBTileUrl(url);
                 if (!parseResult) {
+                    console.warn(`[Protocol Handler] Failed to parse URL: ${url}`);
                     return { data: new Uint8Array() };
                 }
 
@@ -470,48 +513,46 @@ const MapComponent: React.FC<MapProps> = ({
 
                 const cacheKey = `${tableSpec}/${zxy.z}/${zxy.x}/${zxy.y}`;
 
-                // Capture the current abort controller at the start of this request
-                // This ensures we check the correct controller even if tileAbortControllerRef.current changes
-                const currentAbortController = tileAbortControllerRef.current;
-
-                // Check if request should be aborted
-                if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
-                    return { data: new Uint8Array() };
-                }
-
-                // Check cache
-                if (tileCache.current.has(cacheKey)) {
-                    const cachedData = tileCache.current.get(cacheKey);
-                    // Create a fresh copy to avoid ArrayBuffer detachment
-                    const freshCopy = cachedData ? new Uint8Array(cachedData.buffer.slice(0)) : new Uint8Array();
-                    return { data: freshCopy };
-                }
-
                 // Track tile loading start
                 pendingTileRequestsRef.current += 1;
-                if (pendingTileRequestsRef.current === 1) {
-                    setIsLoadingTiles(true);
-                }
+                updateLoadingState();
 
-                try {
-                    if (!connectionRef.current) {
-                        throw new Error('Database connection is not available');
+                // Render function for tile generation
+                const renderTile = async (signal: AbortSignal): Promise<Uint8Array> => {
+                    // Check for abort (from TileCacheManager)
+                    if (signal.aborted) {
+                        throw new Error('Aborted');
                     }
 
+                    // Get connection from map-specific pool
+                    const connection = await getMapConnection();
+
+                    try {
+                        return await renderTileWithConnection(connection, signal);
+                    } finally {
+                        // Always release connection back to pool
+                        await connection.close();
+                    }
+                };
+
+                const renderTileWithConnection = async (
+                    connection: AsyncDuckDBConnection,
+                    signal: AbortSignal
+                ): Promise<Uint8Array> => {
                     const currentColumns = selectedColumnsRef.current || [];
 
                     if (!tableName) {
-                        return { data: new Uint8Array() };
+                        return new Uint8Array();
                     }
 
                     // Return empty tile if no geometry column is specified
                     if (!geometryColumnName) {
-                        return { data: new Uint8Array() };
+                        return new Uint8Array();
                     }
 
                     // Check abort signal again before expensive operations
-                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
-                        return { data: new Uint8Array() };
+                    if (signal.aborted) {
+                        throw new Error('Aborted');
                     }
 
                     let columnTypeMap = columnTypesRef.current[tableName] || columnTypesRef.current[tableSpec];
@@ -532,7 +573,7 @@ const MapComponent: React.FC<MapProps> = ({
                             }
 
                             try {
-                                const describeResult = await connectionRef.current.query(`DESCRIBE ${target}`);
+                                const describeResult = await connection.query(`DESCRIBE ${target}`);
                                 const schemaRows = describeResult.toArray() as unknown as ColumnInfo[];
                                 const typeMap = schemaRows.reduce<Record<string, string>>((acc, column) => {
                                     if (column?.column_name) {
@@ -568,16 +609,13 @@ const MapComponent: React.FC<MapProps> = ({
                     });
 
                     // Final abort check before executing the query
-                    if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
-                        return { data: new Uint8Array() };
+                    if (signal.aborted) {
+                        throw new Error('Aborted');
                     }
 
                     let result: Awaited<ReturnType<AsyncDuckDBConnection['query']>>;
 
                     try {
-                        // Save connection reference for use in abort handler
-                        const connection = connectionRef.current;
-
                         // Execute query and set up cancellation
                         const queryPromise = connection.query(query);
 
@@ -591,27 +629,20 @@ const MapComponent: React.FC<MapProps> = ({
                             }
                         };
 
-                        // Add abort listeners
-                        if (currentAbortController?.signal) {
-                            currentAbortController.signal.addEventListener('abort', abortHandler, {
-                                once: true,
-                            });
-                        }
-                        if (abortController?.signal) {
-                            abortController.signal.addEventListener('abort', abortHandler, { once: true });
-                        }
+                        // Add abort listener from TileCacheManager
+                        signal.addEventListener('abort', abortHandler, { once: true });
 
                         // Wait for query to complete
                         result = await queryPromise;
 
                         // Check if aborted after query completes
-                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
-                            return { data: new Uint8Array() };
+                        if (signal.aborted) {
+                            throw new Error('Aborted');
                         }
                     } catch (error) {
                         // Silently ignore errors if we've been aborted
-                        if (currentAbortController?.signal.aborted || abortController?.signal.aborted) {
-                            return { data: new Uint8Array() };
+                        if (signal.aborted) {
+                            throw new Error('Aborted');
                         }
                         console.error('Vector tile query error:', error);
                         console.error('Query:', query);
@@ -627,12 +658,11 @@ const MapComponent: React.FC<MapProps> = ({
                             }
                         }, 0);
 
-                        return { data: new Uint8Array() };
+                        return new Uint8Array();
                     }
 
                     if (result.numRows === 0) {
-                        tileCache.current.set(cacheKey, new Uint8Array());
-                        return { data: new Uint8Array() };
+                        return new Uint8Array();
                     }
 
                     // Get the MVT data directly from the query result
@@ -648,41 +678,77 @@ const MapComponent: React.FC<MapProps> = ({
                             rows = [firstRow];
                         } catch (fallbackError) {
                             console.error('Failed to retrieve MVT data:', fallbackError);
-                            tileCache.current.set(cacheKey, new Uint8Array());
-                            return { data: new Uint8Array() };
+                            return new Uint8Array();
                         }
                     }
 
                     if (!rows || rows.length === 0 || !rows[0]) {
-                        tileCache.current.set(cacheKey, new Uint8Array());
-                        return { data: new Uint8Array() };
+                        return new Uint8Array();
                     }
 
                     // The result should contain a single row with the MVT binary data
                     const mvtRow = rows[0] as { mvt: unknown };
 
                     // Process MVT data
-                    const { cacheData, returnData } = processMVTResult(mvtRow.mvt);
+                    const { returnData } = processMVTResult(mvtRow.mvt);
 
-                    // Cache the data
-                    tileCache.current.set(cacheKey, cacheData);
+                    return returnData;
+                };
 
-                    return { data: returnData };
-                } catch {
+                // Use TileCacheManager for caching and mutex control
+                try {
+                    const tileData = await tileCacheManager.current.getOrRender(cacheKey, renderTile);
+                    // Return a fresh copy to prevent ArrayBuffer detachment issues
+                    // MapLibre transfers the buffer to workers, which detaches it
+                    return { data: new Uint8Array(tileData) };
+                } catch (error) {
+                    // Handle abort or other errors
                     return { data: new Uint8Array() };
                 } finally {
                     // Track tile loading end
                     pendingTileRequestsRef.current -= 1;
                     if (pendingTileRequestsRef.current <= 0) {
                         pendingTileRequestsRef.current = 0;
-                        setIsLoadingTiles(false);
                     }
+                    // Update loading state considering both tile generation and MapLibre rendering
+                    updateLoadingState();
                 }
             });
         } catch {
             // Failed to register protocol
         }
     }, [geometryColumnName, schema, cacheColumnTypes]);
+
+    // Update loading state based on tile generation and MapLibre rendering
+    const updateLoadingState = useCallback(() => {
+        const isLoading = pendingTileRequestsRef.current > 0 || isMapRenderingRef.current;
+        setIsLoadingTiles(isLoading);
+    }, []);
+
+    // Setup MapLibre event handlers to track rendering state
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+
+        const handleDataLoading = () => {
+            isMapRenderingRef.current = true;
+            updateLoadingState();
+        };
+
+        const handleIdle = () => {
+            isMapRenderingRef.current = false;
+            updateLoadingState();
+        };
+
+        // Listen to MapLibre events
+        map.on('dataloading', handleDataLoading);
+        map.on('idle', handleIdle);
+
+        return () => {
+            map.off('dataloading', handleDataLoading);
+            map.off('idle', handleIdle);
+        };
+    }, [updateLoadingState]);
 
     // Function to handle style changes
     const handleStyleChange = useCallback(
@@ -731,6 +797,9 @@ const MapComponent: React.FC<MapProps> = ({
                         (styleManagerRef.current as any).map = mapRef.current;
                     }
 
+                    // Clear tile cache to force refresh
+                    tileCacheManager.current.clear();
+
                     // Re-add data layers after style loads
                     updateMapLayers(mapRef.current!);
 
@@ -760,6 +829,9 @@ const MapComponent: React.FC<MapProps> = ({
         if (isInitialized && mapRef.current) {
             // Re-register DuckDB protocol to pick up new geometryColumnName
             registerDuckDBProtocol();
+
+            // Clear tile cache to force refresh
+            tileCacheManager.current.clear();
 
             updateMapLayers(mapRef.current);
 
@@ -825,7 +897,7 @@ const MapComponent: React.FC<MapProps> = ({
                             selectedColumnsRef.current = filteredColumns;
 
                             // Clear tile cache to force refresh with new columns
-                            tileCache.current.clear();
+                            tileCacheManager.current.clear();
                         }
                     } catch (error) {
                         console.error('[Map] Failed to auto-detect columns:', error);
@@ -966,6 +1038,8 @@ const MapComponent: React.FC<MapProps> = ({
     // Update layers when tables or selectedTable changes
     useEffect(() => {
         if (mapRef.current && isInitialized) {
+            // Clear tile cache to force refresh
+            tileCacheManager.current.clear();
             updateMapLayers(mapRef.current);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1011,9 +1085,39 @@ const MapComponent: React.FC<MapProps> = ({
                 </div>
             )}
             {isLoadingTiles && !mvtError && (
-                <div className="absolute top-2.5 right-2.5 bg-white/95 px-3 py-2 rounded-md shadow-sm flex items-center gap-2 text-sm text-gray-600 z-10">
-                    <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                    <span>読み込み中...</span>
+                <div ref={tileQueueRef} className="absolute top-2.5 right-2.5 z-10">
+                    <button
+                        onClick={() => setShowTileQueue(!showTileQueue)}
+                        className="bg-white/95 px-3 py-2 rounded-md shadow-sm flex items-center gap-2 text-sm text-gray-600 hover:bg-white transition-colors cursor-pointer"
+                    >
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                        <span>読み込み中...</span>
+                    </button>
+                    {showTileQueue && (
+                        <div className="absolute top-full right-0 mt-2 bg-white rounded-md shadow-lg border border-gray-200 p-3 min-w-[300px] max-h-[400px] overflow-y-auto">
+                            <div className="text-xs font-semibold text-gray-700 mb-2">
+                                レンダリング中のタイル ({tileCacheManager.current.getRenderingTiles().length}件)
+                            </div>
+                            <div className="space-y-1">
+                                {tileCacheManager.current.getRenderingTiles().map(({ key, elapsedTime }) => {
+                                    // Parse tile key to extract z/x/y
+                                    const match = key.match(/\/(\d+)\/(\d+)\/(\d+)\.mvt$/);
+                                    const coords = match ? `${match[1]}/${match[2]}/${match[3]}` : key;
+                                    return (
+                                        <div
+                                            key={key}
+                                            className="text-xs text-gray-600 font-mono flex justify-between items-center py-1 px-2 bg-gray-50 rounded"
+                                        >
+                                            <span className="truncate flex-1">{coords}</span>
+                                            <span className="text-gray-400 ml-2">
+                                                {(elapsedTime / 1000).toFixed(1)}s
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
