@@ -21,7 +21,7 @@ interface ChatProps {
     sendMessage: (message: string) => void;
     selectedTable?: string | null;
     onTableSelect?: (tableName: string) => void;
-    getCurrentChatState?: () => ChatState | null;
+    currentChatState?: ChatState | null;
     onLoadSample?: (url: string) => void | Promise<void>;
     renderMenu?: (
         onClose: () => void,
@@ -45,7 +45,7 @@ export default function Chat({
     sendMessage,
     selectedTable,
     onTableSelect,
-    getCurrentChatState,
+    currentChatState,
     onLoadSample,
     renderMenu,
     onChartIconClick,
@@ -151,19 +151,24 @@ export default function Chat({
     }, [messages]);
 
     const chartSpecs = useMemo(() => {
-        return getCurrentChatState?.()?.chartSpecs || {};
-    }, [getCurrentChatState]);
+        return currentChatState?.chartSpecs || {};
+    }, [currentChatState]);
 
     // Analyze geometry columns for all tables
+    // This effect runs whenever currentChatState or dbContext changes
     useEffect(() => {
         const checkTableGeometry = async () => {
-            const chatState = getCurrentChatState?.();
-            if (!chatState?.tables || !dbContext) return;
+            if (!currentChatState?.tables || !dbContext) {
+                return;
+            }
 
-            const tables = Object.values(chatState.tables);
+            const tables = Object.values(currentChatState.tables);
+
             for (const table of tables) {
                 // Skip if we already checked this table
-                if (checkedTablesRef.current.has(table.tableName)) continue;
+                if (checkedTablesRef.current.has(table.tableName)) {
+                    continue;
+                }
 
                 // Mark as checked to prevent duplicate checks
                 checkedTablesRef.current.add(table.tableName);
@@ -186,7 +191,7 @@ export default function Chat({
         };
 
         checkTableGeometry();
-    }, [getCurrentChatState, dbContext]);
+    }, [currentChatState, dbContext]);
 
     const toggleGroupCollapse = (groupIndex: number) => {
         setManuallyToggledGroups(prev => {

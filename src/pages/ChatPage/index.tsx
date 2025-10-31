@@ -895,7 +895,7 @@ function ChatPage() {
                                     sendMessage={sendMessageWithUrlProcessing}
                                     selectedTable={selectedTable}
                                     onTableSelect={handleTableSelection}
-                                    getCurrentChatState={getCurrentChatState}
+                                    currentChatState={currentChatState}
                                     onLoadSample={handleSendMessageWithUrl}
                                     renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
                                         <DataSourceSelector

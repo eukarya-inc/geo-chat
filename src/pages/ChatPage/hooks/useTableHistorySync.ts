@@ -20,10 +20,12 @@ export function useTableHistorySync(dbContext: DBContext | null, selectedChatId:
     const lastProcessedRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
-        if (!dbContext || !selectedChatId) return;
+        if (!dbContext || !selectedChatId) {
+            return;
+        }
 
-        // Subscribe to SQL history changes
-        const unsubscribe = dbContext.getSQLHistory().subscribe(() => {
+        // Process existing history on mount
+        const processHistory = () => {
             const history = dbContext.getSQLHistory().getAllHistory();
 
             // Process only CREATE TABLE entries
@@ -98,7 +100,15 @@ export function useTableHistorySync(dbContext: DBContext | null, selectedChatId:
                     });
                 }
             });
+        };
+
+        // Subscribe to SQL history changes
+        const unsubscribe = dbContext.getSQLHistory().subscribe(() => {
+            processHistory();
         });
+
+        // Process existing history immediately on mount
+        processHistory();
 
         // Clear processed entries when chat changes
         // Copy the ref to a local variable to avoid the warning
