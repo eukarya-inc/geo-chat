@@ -11,13 +11,8 @@ export function useDuckDB() {
     useEffect(() => {
         async function initDB() {
             try {
-                console.log('useDuckDB: Requesting global database instance');
                 const db = await getGlobalDB();
-                console.log('useDuckDB: Got global database instance');
-
-                console.log('useDuckDB: Setting database context');
                 setDbContext(createDBContext(db));
-                console.log('useDuckDB: Database context set successfully');
             } catch (err) {
                 setError(err instanceof Error ? err : new Error('Failed to initialize DuckDB'));
             } finally {
@@ -45,12 +40,10 @@ export function useMapDuckDB(maxConnections = 20) {
     useEffect(() => {
         async function initMapDB() {
             try {
-                console.log(`[useMapDuckDB] Creating dedicated context with ${maxConnections} connections`);
                 const db = await getGlobalDB();
                 // Create separate DBContext with larger connection pool for Map
                 const ctx = createDBContext(db, true, maxConnections);
                 setMapDbContext(ctx);
-                console.log('[useMapDuckDB] Map-specific database context created');
             } catch (err) {
                 setError(err instanceof Error ? err : new Error('Failed to initialize Map DuckDB context'));
             }

@@ -1,7 +1,7 @@
 import { type AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapStyleManager } from './mapStyleManager';
 import { detectDisplayColumns, type ColumnInfo } from '../../utils/duckdb';
 import { parseDuckDBTileUrl, generateVectorTileQuery, processMVTResult } from './utils/mvt';
@@ -48,7 +48,7 @@ const MapComponent: React.FC<MapProps> = ({
     const mapRef = useRef<maplibregl.Map | null>(null);
     const styleManagerRef = useRef<MapStyleManager | null>(null);
     const connectionRef = useRef<AsyncDuckDBConnection>(null);
-    const tileCacheManager = useRef<TileCacheManager>(new TileCacheManager());
+    const tileCacheManager = useRef(new TileCacheManager()).current;
     const selectedTableRef = useRef<string | null>(selectedTable);
     const selectedColumnsRef = useRef<string[] | undefined>(selectedColumns);
     // Cache column types per table to avoid repeated DESCRIBE queries while tiles load
@@ -58,13 +58,20 @@ const MapComponent: React.FC<MapProps> = ({
     const mvtErrorRef = useRef<string | null>(null);
     // Track number of in-flight tile requests (DuckDB tile generation)
     const pendingTileRequestsRef = useRef<number>(0);
-    // Track MapLibre rendering state
-    const isMapRenderingRef = useRef<boolean>(false);
     // Track tile queue visibility
     const [showTileQueue, setShowTileQueue] = useState<boolean>(false);
     const tileQueueRef = useRef<HTMLDivElement>(null);
     // Force re-render to update elapsed times
     const [, forceUpdate] = useState({});
+
+    // Memoize tableStyles to prevent unnecessary cache clearing on every re-render
+    // Only create new reference when tableStyles content actually changes
+    const memoizedTableStyles = useMemo(() => {
+        // Return empty object if tableStyles is undefined or null
+        if (!tableStyles) return {};
+        // Return the same reference if content is unchanged (deep comparison via JSON)
+        return tableStyles;
+    }, [JSON.stringify(tableStyles)]);
 
     // Close tile queue when clicking outside
     useEffect(() => {
@@ -182,7 +189,7 @@ const MapComponent: React.FC<MapProps> = ({
         setIsLoadingTiles(false);
 
         // Clear tile cache to force refresh with new columns
-        tileCacheManager.current.clear();
+        tileCacheManager.clear();
 
         // Re-register the protocol to ensure it uses the latest columns
         registerDuckDBProtocol();
@@ -223,7 +230,7 @@ const MapComponent: React.FC<MapProps> = ({
         });
 
         // Clear tile cache to force refresh
-        tileCacheManager.current.clear();
+        tileCacheManager.clear();
 
         // Re-add source and layers after a brief delay
         setTimeout(() => {
@@ -373,7 +380,7 @@ const MapComponent: React.FC<MapProps> = ({
                     selectedColumnsRef.current = filteredColumns;
 
                     // Clear tile cache to force refresh with new columns
-                    tileCacheManager.current.clear();
+                    tileCacheManager.clear();
 
                     // Force map to re-render tiles if map is ready
                     if (mapRef.current && isInitialized) {
@@ -459,7 +466,7 @@ const MapComponent: React.FC<MapProps> = ({
                 map,
                 tables: tables || [],
                 selectedTable,
-                tableStyles,
+                tableStyles: memoizedTableStyles,
                 extraStyle,
                 isApplyingCustomStyle: isApplyingCustomStyleRef.current,
                 onTableStyleChanged,
@@ -482,7 +489,7 @@ const MapComponent: React.FC<MapProps> = ({
             tables,
             geometryColumnName,
             dbContext,
-            tableStyles,
+            memoizedTableStyles,
             onTableStyleChanged,
             extraStyle,
             onExtraStyleChange,
@@ -508,12 +515,12 @@ const MapComponent: React.FC<MapProps> = ({
 
                 const cacheKey = `${tableSpec}/${zxy.z}/${zxy.x}/${zxy.y}`;
 
-                // Track tile loading start
-                pendingTileRequestsRef.current += 1;
-                updateLoadingState();
-
                 // Render function for tile generation
                 const renderTile = async (signal: AbortSignal): Promise<Uint8Array> => {
+                    // Track tile loading start only when actually rendering (not from cache)
+                    pendingTileRequestsRef.current += 1;
+                    updateLoadingState();
+
                     // Check for abort (from TileCacheManager)
                     if (signal.aborted) {
                         throw new Error('Aborted');
@@ -527,6 +534,12 @@ const MapComponent: React.FC<MapProps> = ({
                     } finally {
                         // Always release connection back to pool
                         await connection.close();
+                        // Track tile rendering end
+                        pendingTileRequestsRef.current -= 1;
+                        if (pendingTileRequestsRef.current <= 0) {
+                            pendingTileRequestsRef.current = 0;
+                        }
+                        updateLoadingState();
                     }
                 };
 
@@ -692,21 +705,13 @@ const MapComponent: React.FC<MapProps> = ({
 
                 // Use TileCacheManager for caching and mutex control
                 try {
-                    const tileData = await tileCacheManager.current.getOrRender(cacheKey, renderTile);
+                    const tileData = await tileCacheManager.getOrRender(cacheKey, renderTile);
                     // Return a fresh copy to prevent ArrayBuffer detachment issues
                     // MapLibre transfers the buffer to workers, which detaches it
                     return { data: new Uint8Array(tileData) };
                 } catch {
                     // Handle abort or other errors
                     return { data: new Uint8Array() };
-                } finally {
-                    // Track tile loading end
-                    pendingTileRequestsRef.current -= 1;
-                    if (pendingTileRequestsRef.current <= 0) {
-                        pendingTileRequestsRef.current = 0;
-                    }
-                    // Update loading state considering both tile generation and MapLibre rendering
-                    updateLoadingState();
                 }
             });
         } catch {
@@ -714,36 +719,17 @@ const MapComponent: React.FC<MapProps> = ({
         }
     }, [geometryColumnName, schema, cacheColumnTypes]);
 
-    // Update loading state based on tile generation and MapLibre rendering
+    // Update loading state based on tile generation only (protocol-based control)
+    // Use a ref to track if we're already in a loading state to prevent unnecessary updates
+    const isLoadingTilesRef = useRef(false);
     const updateLoadingState = useCallback(() => {
-        const isLoading = pendingTileRequestsRef.current > 0 || isMapRenderingRef.current;
-        setIsLoadingTiles(isLoading);
+        const isLoading = pendingTileRequestsRef.current > 0;
+        // Only update state if loading status actually changed
+        if (isLoadingTilesRef.current !== isLoading) {
+            isLoadingTilesRef.current = isLoading;
+            setIsLoadingTiles(isLoading);
+        }
     }, []);
-
-    // Setup MapLibre event handlers to track rendering state
-    useEffect(() => {
-        const map = mapRef.current;
-        if (!map) return;
-
-        const handleDataLoading = () => {
-            isMapRenderingRef.current = true;
-            updateLoadingState();
-        };
-
-        const handleIdle = () => {
-            isMapRenderingRef.current = false;
-            updateLoadingState();
-        };
-
-        // Listen to MapLibre events
-        map.on('dataloading', handleDataLoading);
-        map.on('idle', handleIdle);
-
-        return () => {
-            map.off('dataloading', handleDataLoading);
-            map.off('idle', handleIdle);
-        };
-    }, [updateLoadingState]);
 
     // Function to handle style changes
     const handleStyleChange = useCallback(
@@ -793,7 +779,7 @@ const MapComponent: React.FC<MapProps> = ({
                     }
 
                     // Clear tile cache to force refresh
-                    tileCacheManager.current.clear();
+                    tileCacheManager.clear();
 
                     // Re-add data layers after style loads
                     updateMapLayers(mapRef.current!);
@@ -826,7 +812,7 @@ const MapComponent: React.FC<MapProps> = ({
             registerDuckDBProtocol();
 
             // Clear tile cache to force refresh
-            tileCacheManager.current.clear();
+            tileCacheManager.clear();
 
             updateMapLayers(mapRef.current);
 
@@ -892,7 +878,7 @@ const MapComponent: React.FC<MapProps> = ({
                             selectedColumnsRef.current = filteredColumns;
 
                             // Clear tile cache to force refresh with new columns
-                            tileCacheManager.current.clear();
+                            tileCacheManager.clear();
                         }
                     } catch (error) {
                         console.error('[Map] Failed to auto-detect columns:', error);
@@ -1029,11 +1015,11 @@ const MapComponent: React.FC<MapProps> = ({
     useEffect(() => {
         if (mapRef.current && isInitialized) {
             // Clear tile cache to force refresh
-            tileCacheManager.current.clear();
+            tileCacheManager.clear();
             updateMapLayers(mapRef.current);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTable, tables, effectiveColumns, tableStyles, extraStyle]);
+    }, [selectedTable, tables, effectiveColumns, memoizedTableStyles, extraStyle]);
 
     // Separate effect for onMapReady to avoid triggering re-initialization
     useEffect(() => {
@@ -1086,10 +1072,10 @@ const MapComponent: React.FC<MapProps> = ({
                     {showTileQueue && (
                         <div className="absolute top-full right-0 mt-2 bg-white rounded-md shadow-lg border border-gray-200 p-3 min-w-[300px] max-h-[400px] overflow-y-auto">
                             <div className="text-xs font-semibold text-gray-700 mb-2">
-                                レンダリング中のタイル ({tileCacheManager.current.getRenderingTiles().length}件)
+                                レンダリング中のタイル ({tileCacheManager.getRenderingTiles().length}件)
                             </div>
                             <div className="space-y-1">
-                                {tileCacheManager.current.getRenderingTiles().map(({ key, elapsedTime }) => {
+                                {tileCacheManager.getRenderingTiles().map(({ key, elapsedTime }) => {
                                     // Parse tile key to extract z/x/y
                                     const match = key.match(/\/(\d+)\/(\d+)\/(\d+)\.mvt$/);
                                     const coords = match ? `${match[1]}/${match[2]}/${match[3]}` : key;
