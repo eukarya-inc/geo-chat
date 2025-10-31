@@ -506,17 +506,21 @@ export function isBlobColumn(columnType: string): boolean {
 /**
  * Check if a table has a geometry column and return column information
  */
-export async function checkTableGeometry(db: DBContext, tableName: string): Promise<GeometryCheckResult> {
+export async function checkTableGeometry(
+    db: DBContext,
+    tableName: string,
+    schema: string | null = null
+): Promise<GeometryCheckResult> {
     try {
-        // Query table schema using PRAGMA table_info
-        const result = await db.executeQuery(`PRAGMA table_info('${tableName}')`);
+        // Use DESCRIBE instead of PRAGMA table_info to support schema-qualified table names
+        const result = await db.executeQuery(`DESCRIBE ${tableName}`, schema);
 
         // Extract column information
         const columnInfo: ColumnInfo[] = result.map(row => {
             const rowData = row as Record<string, unknown>;
             return {
-                column_name: String(rowData.name || ''),
-                column_type: String(rowData.type || ''),
+                column_name: String(rowData.column_name || ''),
+                column_type: String(rowData.column_type || ''),
             };
         });
 
