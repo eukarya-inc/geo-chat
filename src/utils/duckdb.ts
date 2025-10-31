@@ -329,11 +329,12 @@ export async function getTableData(
         return new Map(Object.entries(converted));
     });
 
-    const arrowTable = convertToArrowTable(data, columns);
-
+    // NOTE: Arrow table conversion is extremely expensive for polygon data (30+ seconds)
+    // and is not actually used by TableView (only rawData is used).
+    // Return empty Arrow table to maintain type compatibility.
     return {
         columns,
-        arrowTable,
+        arrowTable: new ArrowTable(), // Empty table - not used by TableView
         totalRows,
         rawData: convertedData, // Store raw data for efficient access
     };
@@ -382,8 +383,9 @@ export async function getTableDataByWindow(
         return new Map(Object.entries(converted));
     });
 
+    // NOTE: Arrow table conversion is expensive and not used by TableView
     return {
-        arrowTable: convertToArrowTable(data, columns),
+        arrowTable: new ArrowTable(), // Empty table - not used by TableView
         rawData: convertedData,
     };
 }
