@@ -345,11 +345,6 @@ const MapComponent: React.FC<MapProps> = ({
         const updateSchemaInfo = async () => {
             if (!connectionRef.current || !selectedTable) {
                 columnTypesRef.current = {};
-                // Abort any in-flight tile requests when table is cleared
-                if (tileAbortControllerRef.current) {
-                    tileAbortControllerRef.current.abort();
-                    tileAbortControllerRef.current = null;
-                }
                 return;
             }
 
@@ -499,7 +494,7 @@ const MapComponent: React.FC<MapProps> = ({
         // Note: MapLibre doesn't provide a way to check if protocol exists, so we'll try to add it
         // If it already exists, it will be overwritten which is fine for our use case
         try {
-            maplibregl.addProtocol('duckdb', async (params, abortController) => {
+            maplibregl.addProtocol('duckdb', async params => {
                 // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
                 const url = params.url.replace(/\.pbf$/, '.mvt'); // Convert extension for parsing
 
@@ -701,7 +696,7 @@ const MapComponent: React.FC<MapProps> = ({
                     // Return a fresh copy to prevent ArrayBuffer detachment issues
                     // MapLibre transfers the buffer to workers, which detaches it
                     return { data: new Uint8Array(tileData) };
-                } catch (error) {
+                } catch {
                     // Handle abort or other errors
                     return { data: new Uint8Array() };
                 } finally {
@@ -1012,11 +1007,6 @@ const MapComponent: React.FC<MapProps> = ({
 
                 // Cleanup function
                 return () => {
-                    // Abort any in-flight tile requests
-                    if (tileAbortControllerRef.current) {
-                        tileAbortControllerRef.current.abort();
-                        tileAbortControllerRef.current = null;
-                    }
                     if (mapInstance) {
                         mapInstance.remove();
                     }
