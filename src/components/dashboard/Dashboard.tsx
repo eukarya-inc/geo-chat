@@ -1,16 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactGridLayout, { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import {
-    ChartBarIcon,
-    CogIcon,
-    MapIcon,
-    EllipsisVerticalIcon,
-    TrashIcon,
-    PencilIcon,
-} from '@heroicons/react/24/outline';
-import { ChartPanel } from '../chart';
-import { MapPanel } from '../map';
-import { TablePanel } from '../table/TablePanel';
+import { ChartBarIcon, CogIcon, EllipsisVerticalIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { VisualizationGridItem } from './VisualizationGridItem';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
@@ -408,78 +399,14 @@ export function Dashboard({
                                         data-viz-id={viz.id}
                                         style={{ height: '100%' }}
                                     >
-                                        {viz.type === 'chart' && viz.chartSpec ? (
-                                            <ChartPanel
-                                                chartSpec={viz.chartSpec}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                configMode="modal"
-                                                vizId={viz.id}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
-                                                showDataSourceButton={true}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : viz.type === 'map' && viz.tableName ? (
-                                            <MapPanel
-                                                title={viz.title}
-                                                tableName={viz.tableName}
-                                                geometryColumn={viz.geometryColumn}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                mapSpec={viz.mapSpec}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                vizId={viz.id}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : viz.type === 'table' && viz.tableName ? (
-                                            <TablePanel
-                                                title={viz.title}
-                                                tableName={viz.tableName}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                showRemoveButton={true}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : (
-                                            <div className="h-full flex flex-col">
-                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                        {viz.title}
-                                                    </h4>
-                                                </div>
-                                                <div className="flex-1 p-2 overflow-hidden">
-                                                    <div className="h-full flex items-center justify-center text-gray-500">
-                                                        <div className="text-center">
-                                                            <div className="mb-2">
-                                                                {viz.type === 'chart' && (
-                                                                    <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                                )}
-                                                                {viz.type === 'map' && (
-                                                                    <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                                )}
-                                                            </div>
-                                                            <p className="text-sm">
-                                                                {viz.type === 'chart'
-                                                                    ? 'Chart spec missing'
-                                                                    : viz.type === 'map'
-                                                                      ? 'Map table missing'
-                                                                      : `${viz.type} visualization`}
-                                                            </p>
-                                                            {viz.sql && (
-                                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
-                                                                    {viz.sql}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <VisualizationGridItem
+                                            viz={viz}
+                                            dbContext={dbContext}
+                                            schemaName={chatIdToSchemaName(viz.chatId) || schemaName}
+                                            onRemove={handleRemoveVisualization}
+                                            onUpdateChart={handleUpdateChart}
+                                            onUpdateTitle={handleUpdateTitle}
+                                        />
                                     </div>
                                 ))}
                             </ResponsiveGridLayout>
@@ -503,78 +430,14 @@ export function Dashboard({
                                         data-viz-id={viz.id}
                                         style={{ height: '100%' }}
                                     >
-                                        {viz.type === 'chart' && viz.chartSpec ? (
-                                            <ChartPanel
-                                                chartSpec={viz.chartSpec}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                configMode="modal"
-                                                vizId={viz.id}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                onSpecChange={newSpec => handleUpdateChart(viz.id, newSpec)}
-                                                showDataSourceButton={true}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : viz.type === 'map' && viz.tableName ? (
-                                            <MapPanel
-                                                title={viz.title}
-                                                tableName={viz.tableName}
-                                                geometryColumn={viz.geometryColumn}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                mapSpec={viz.mapSpec}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                vizId={viz.id}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : viz.type === 'table' && viz.tableName ? (
-                                            <TablePanel
-                                                title={viz.title}
-                                                tableName={viz.tableName}
-                                                dbContext={dbContext}
-                                                schema={chatIdToSchemaName(viz.chatId) || schemaName}
-                                                onRemove={() => handleRemoveVisualization(viz.id)}
-                                                showRemoveButton={true}
-                                                editable={true}
-                                                onTitleChange={newTitle => handleUpdateTitle(viz.id, newTitle)}
-                                            />
-                                        ) : (
-                                            <div className="h-full flex flex-col">
-                                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 cursor-move">
-                                                    <h4 className="text-sm font-medium text-gray-900 truncate">
-                                                        {viz.title}
-                                                    </h4>
-                                                </div>
-                                                <div className="flex-1 p-2 overflow-hidden">
-                                                    <div className="h-full flex items-center justify-center text-gray-500">
-                                                        <div className="text-center">
-                                                            <div className="mb-2">
-                                                                {viz.type === 'chart' && (
-                                                                    <ChartBarIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                                )}
-                                                                {viz.type === 'map' && (
-                                                                    <MapIcon className="w-8 h-8 mx-auto text-gray-300" />
-                                                                )}
-                                                            </div>
-                                                            <p className="text-sm">
-                                                                {viz.type === 'chart'
-                                                                    ? 'Chart spec missing'
-                                                                    : viz.type === 'map'
-                                                                      ? 'Map table missing'
-                                                                      : `${viz.type} visualization`}
-                                                            </p>
-                                                            {viz.sql && (
-                                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-2 rounded">
-                                                                    {viz.sql}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <VisualizationGridItem
+                                            viz={viz}
+                                            dbContext={dbContext}
+                                            schemaName={chatIdToSchemaName(viz.chatId) || schemaName}
+                                            onRemove={handleRemoveVisualization}
+                                            onUpdateChart={handleUpdateChart}
+                                            onUpdateTitle={handleUpdateTitle}
+                                        />
                                     </div>
                                 ))}
                             </GridLayout>
