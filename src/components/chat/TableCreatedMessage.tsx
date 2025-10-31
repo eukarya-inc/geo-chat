@@ -8,10 +8,20 @@ interface TableCreatedMessageProps {
     onClick: () => void;
     hasChartSpec?: boolean;
     hasGeometry?: boolean;
+    onChartIconClick?: () => void;
+    onMapIconClick?: () => void;
 }
 
 export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.memo(
-    ({ tableName, isSelected, onClick, hasChartSpec = false, hasGeometry = false }) => {
+    ({
+        tableName,
+        isSelected,
+        onClick,
+        hasChartSpec = false,
+        hasGeometry = false,
+        onChartIconClick,
+        onMapIconClick,
+    }) => {
         return (
             <div
                 className={`
@@ -34,8 +44,26 @@ export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.mem
                 <span className="font-medium flex-1">
                     テーブルを作成しました: <strong>{tableName}</strong>
                 </span>
-                {hasChartSpec && <ChartBarIcon className="w-5 h-5 flex-shrink-0 text-green-600" title="チャートあり" />}
-                {hasGeometry && <MapIcon className="w-5 h-5 flex-shrink-0 text-blue-600" title="地図あり" />}
+                {hasChartSpec && (
+                    <ChartBarIcon
+                        className="w-5 h-5 flex-shrink-0 text-green-600 hover:text-green-700 transition-colors"
+                        title="クリックしてチャートを表示"
+                        onClick={e => {
+                            e.stopPropagation();
+                            onChartIconClick?.();
+                        }}
+                    />
+                )}
+                {hasGeometry && (
+                    <MapIcon
+                        className="w-5 h-5 flex-shrink-0 text-blue-600 hover:text-blue-700 transition-colors"
+                        title="クリックして地図を表示"
+                        onClick={e => {
+                            e.stopPropagation();
+                            onMapIconClick?.();
+                        }}
+                    />
+                )}
             </div>
         );
     }

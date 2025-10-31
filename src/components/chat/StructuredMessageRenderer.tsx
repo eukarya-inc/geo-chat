@@ -26,6 +26,8 @@ interface StructuredMessageRendererProps {
     isLoadingMessage?: boolean;
     chartSpecs?: ChartSpecs;
     tableGeometries?: Record<string, boolean>;
+    onChartIconClick?: (tableName: string) => void;
+    onMapIconClick?: (tableName: string) => void;
 }
 
 interface CollapsibleSectionProps {
@@ -88,7 +90,9 @@ const renderContentBlock = (
     onPromptClick?: (promptText: string) => void,
     isLoadingMessage?: boolean,
     chartSpecs?: ChartSpecs,
-    tableGeometries?: Record<string, boolean>
+    tableGeometries?: Record<string, boolean>,
+    onChartIconClick?: (tableName: string) => void,
+    onMapIconClick?: (tableName: string) => void
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -138,6 +142,8 @@ const renderContentBlock = (
                             onClick={() => onTableSelect?.(tableName)}
                             hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
                             hasGeometry={tableGeometries?.[tableName] || false}
+                            onChartIconClick={() => onChartIconClick?.(tableName)}
+                            onMapIconClick={() => onMapIconClick?.(tableName)}
                         />
                     );
 
@@ -479,7 +485,9 @@ const renderContentBlock = (
                     selectedTable,
                     onTableSelect,
                     chartSpecs,
-                    tableGeometries
+                    tableGeometries,
+                    onChartIconClick,
+                    onMapIconClick
                 );
             }
 
@@ -562,6 +570,8 @@ const renderContentBlock = (
                                 onClick={() => onTableSelect?.(tableCreated)}
                                 hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
                                 hasGeometry={tableGeometries?.[tableCreated] || false}
+                                onChartIconClick={() => onChartIconClick?.(tableCreated)}
+                                onMapIconClick={() => onMapIconClick?.(tableCreated)}
                             />
                         );
                     }
@@ -582,6 +592,8 @@ const renderContentBlock = (
                                 onClick={() => onTableSelect?.(tableCreated)}
                                 hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
                                 hasGeometry={tableGeometries?.[tableCreated] || false}
+                                onChartIconClick={() => onChartIconClick?.(tableCreated)}
+                                onMapIconClick={() => onMapIconClick?.(tableCreated)}
                             />
                         );
                     }
@@ -652,6 +664,8 @@ const renderContentBlock = (
                                     onClick={() => onTableSelect?.(tableCreated)}
                                     hasChartSpec={chartSpecs ? tableCreated in chartSpecs : false}
                                     hasGeometry={tableGeometries?.[tableCreated] || false}
+                                    onChartIconClick={() => onChartIconClick?.(tableCreated)}
+                                    onMapIconClick={() => onMapIconClick?.(tableCreated)}
                                 />
                             )}
                         </CollapsibleSection>
@@ -1023,7 +1037,9 @@ function renderClusterToolResult(
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
     chartSpecs?: ChartSpecs,
-    tableGeometries?: Record<string, boolean>
+    tableGeometries?: Record<string, boolean>,
+    onChartIconClick?: (tableName: string) => void,
+    onMapIconClick?: (tableName: string) => void
 ): React.ReactNode {
     if (!result) {
         return (
@@ -1228,6 +1244,8 @@ function renderClusterToolResult(
                         onClick={() => onTableSelect(labelsTableName)}
                         hasChartSpec={chartSpecs ? labelsTableName in chartSpecs : false}
                         hasGeometry={tableGeometries?.[labelsTableName] || false}
+                        onChartIconClick={() => onChartIconClick?.(labelsTableName)}
+                        onMapIconClick={() => onMapIconClick?.(labelsTableName)}
                     />
                 </div>
             )}
@@ -1246,6 +1264,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     isLoadingMessage = false,
     chartSpecs,
     tableGeometries,
+    onChartIconClick,
+    onMapIconClick,
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -1320,7 +1340,9 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                         onPromptClick,
                         isLoadingMessage,
                         chartSpecs,
-                        tableGeometries
+                        tableGeometries,
+                        onChartIconClick,
+                        onMapIconClick
                     )
                 )}
 
@@ -1386,6 +1408,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     onClick={() => onTableSelect?.(tableName)}
                     hasChartSpec={chartSpecs ? tableName in chartSpecs : false}
                     hasGeometry={tableGeometries?.[tableName] || false}
+                    onChartIconClick={() => onChartIconClick?.(tableName)}
+                    onMapIconClick={() => onMapIconClick?.(tableName)}
                 />
             );
 
