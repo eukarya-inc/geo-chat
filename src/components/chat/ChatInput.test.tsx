@@ -52,6 +52,7 @@ describe('ChatInput', () => {
         vi.useRealTimers();
     });
 
+    // 1. Basic rendering - Verify component structure
     it('renders textarea with correct props', () => {
         render(<ChatInput {...defaultProps} />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -59,6 +60,7 @@ describe('ChatInput', () => {
         expect(textarea).toHaveClass('test-class');
     });
 
+    // 2. User input - onChange handler
     it('calls onChange when textarea value changes', () => {
         render(<ChatInput {...defaultProps} />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -66,42 +68,49 @@ describe('ChatInput', () => {
         expect(mockOnChange).toHaveBeenCalled();
     });
 
+    // 3. Disabled state - Button behavior
     it('disables textarea when disabled prop is true', () => {
         render(<ChatInput {...defaultProps} disabled={true} />);
         const textarea = screen.getByPlaceholderText('Enter message...');
-        expect(textarea).not.toBeDisabled(); // Textarea itself is not disabled, but buttons are
+        expect(textarea).not.toBeDisabled();
     });
 
+    // 4. Custom styling - className
     it('applies custom className to textarea', () => {
         render(<ChatInput {...defaultProps} className="custom-class" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
         expect(textarea).toHaveClass('custom-class');
     });
 
+    // 5. Ref forwarding - Access to DOM element
     it('forwards ref to textarea element', () => {
         const ref = createRef<HTMLTextAreaElement>();
         render(<ChatInput {...defaultProps} textareaRef={ref} />);
         expect(ref.current).toBeInstanceOf(HTMLTextAreaElement);
     });
 
+    // 6. Submit button - Initial state
     it('renders submit button', () => {
         render(<ChatInput {...defaultProps} />);
         const submitButton = screen.getByTitle('送信');
         expect(submitButton).toBeInTheDocument();
     });
 
+    // 7. Submit button - Empty value state
     it('disables submit button when value is empty', () => {
         render(<ChatInput {...defaultProps} value="" />);
         const submitButton = screen.getByTitle('送信');
         expect(submitButton).toBeDisabled();
     });
 
+    // 8. Submit button - With value state
     it('enables submit button when value is not empty', () => {
         render(<ChatInput {...defaultProps} value="test" />);
         const submitButton = screen.getByTitle('送信');
         expect(submitButton).not.toBeDisabled();
     });
 
+    // 9. Menu button - Conditional rendering
     it('renders menu button when renderMenu is provided', () => {
         const renderMenu = vi.fn(() => <div>Menu content</div>);
         render(<ChatInput {...defaultProps} renderMenu={renderMenu} />);
@@ -109,12 +118,14 @@ describe('ChatInput', () => {
         expect(menuButton).toBeInTheDocument();
     });
 
+    // 10. Menu button - No render when not provided
     it('does not render menu button when renderMenu is not provided', () => {
         render(<ChatInput {...defaultProps} />);
         const menuButton = screen.queryByTitle('データを読み込む');
         expect(menuButton).not.toBeInTheDocument();
     });
 
+    // 11. Autocomplete - Tables trigger with @
     it('opens autocomplete when @ is typed', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -128,6 +139,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 12. Autocomplete - Columns trigger with #
     it('opens autocomplete when # is typed', async () => {
         render(<ChatInput {...defaultProps} value="" selectedTable="table1" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -141,6 +153,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 13. Autocomplete filtering - Tables
     it('filters tables based on search text with @', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -155,6 +168,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 14. Autocomplete filtering - Columns
     it('filters columns based on search text with #', async () => {
         render(<ChatInput {...defaultProps} value="" selectedTable="table1" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -169,6 +183,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 15. Keyboard navigation - ArrowDown
     it('navigates autocomplete with ArrowDown', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -189,6 +204,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 16. Keyboard navigation - ArrowUp
     it('navigates autocomplete with ArrowUp', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -211,6 +227,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 17. Keyboard selection - Enter key
     it('selects autocomplete item with Enter', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -236,6 +253,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 18. Keyboard close - Escape key
     it('closes autocomplete with Escape', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -255,6 +273,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 19. Form submission - Button click
     it('calls onSubmit when submit button is clicked', async () => {
         render(<ChatInput {...defaultProps} value="test message" />);
         const submitButton = screen.getByTitle('送信');
@@ -266,6 +285,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 20. Form submission - Enter with URL
     it('calls onSubmit when Enter is pressed with URL', async () => {
         vi.mocked(extractDataUrl).mockReturnValue('https://example.com/data.csv');
         render(<ChatInput {...defaultProps} value="https://example.com/data.csv" />);
@@ -278,6 +298,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 21. Form submission - Enter without URL
     it('does not submit when Enter is pressed with non-URL', async () => {
         vi.mocked(extractDataUrl).mockReturnValue(null);
         render(<ChatInput {...defaultProps} value="regular text" onKeyDown={mockOnKeyDown} />);
@@ -289,6 +310,7 @@ describe('ChatInput', () => {
         expect(mockOnKeyDown).toHaveBeenCalled();
     });
 
+    // 22. Keyboard delegation - Shift+Enter
     it('delegates Shift+Enter to onKeyDown without submitting', async () => {
         vi.mocked(extractDataUrl).mockReturnValue('https://example.com/data.csv');
         render(<ChatInput {...defaultProps} value="https://example.com/data.csv" onKeyDown={mockOnKeyDown} />);
@@ -300,6 +322,7 @@ describe('ChatInput', () => {
         expect(mockOnKeyDown).toHaveBeenCalled();
     });
 
+    // 23. IME composition - isComposing flag
     it('does not submit during composition (isComposing)', async () => {
         vi.mocked(extractDataUrl).mockReturnValue('https://example.com/data.csv');
         render(<ChatInput {...defaultProps} value="https://example.com/data.csv" />);
@@ -317,18 +340,21 @@ describe('ChatInput', () => {
         expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
+    // 24. Button states - Loading (StopIcon)
     it('shows StopIcon when isLoading is true', () => {
         render(<ChatInput {...defaultProps} value="test" isLoading={true} />);
         const stopButton = screen.getByTitle('停止');
         expect(stopButton).toBeInTheDocument();
     });
 
+    // 25. Button states - Submitting (Spinner)
     it('shows spinner when isSubmitting is true', () => {
         render(<ChatInput {...defaultProps} value="test" isSubmitting={true} />);
         const spinner = document.querySelector('.animate-spin');
         expect(spinner).toBeInTheDocument();
     });
 
+    // 26. Auto-height - Minimum height
     it('sets minimum height of 44px for empty value', () => {
         const ref = createRef<HTMLTextAreaElement>();
         render(<ChatInput {...defaultProps} textareaRef={ref} value="" />);
@@ -336,6 +362,7 @@ describe('ChatInput', () => {
         expect(ref.current?.style.height).toBe('44px');
     });
 
+    // 27. Auto-height - Multiline value
     it('renders textarea with multiline value', () => {
         const ref = createRef<HTMLTextAreaElement>();
         const multilineValue = 'line1\nline2';
@@ -345,6 +372,7 @@ describe('ChatInput', () => {
         expect(ref.current).toBeInstanceOf(HTMLTextAreaElement);
     });
 
+    // 28. Layout - Flex container
     it('renders textarea in flex container', () => {
         const { container } = render(<ChatInput {...defaultProps} value="test" />);
         const wrapper = container.querySelector('.flex');
@@ -352,6 +380,7 @@ describe('ChatInput', () => {
         expect(wrapper).toHaveClass('w-full');
     });
 
+    // 29. Data fetching - Tables from dbContext
     it('fetches tables from dbContext on mount', async () => {
         render(<ChatInput {...defaultProps} />);
 
@@ -360,6 +389,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 30. Data fetching - Columns from selectedTable
     it('fetches columns when selectedTable is provided', async () => {
         render(<ChatInput {...defaultProps} selectedTable="table1" />);
 
@@ -368,6 +398,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 31. Edge case - Space after trigger
     it('closes autocomplete when space is typed after trigger', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -389,6 +420,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 32. Edge case - Blur event
     it('closes autocomplete on blur', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -408,6 +440,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 33. Edge case - isComposing respect
     it('respects isComposing flag during keyboard input', () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -426,6 +459,7 @@ describe('ChatInput', () => {
         expect(textarea).toBeInTheDocument();
     });
 
+    // 34. Priority - Autocomplete over URL submission
     it('prioritizes autocomplete over URL submission', async () => {
         vi.mocked(extractDataUrl).mockReturnValue('https://example.com/data.csv');
         render(<ChatInput {...defaultProps} value="" />);
@@ -452,6 +486,7 @@ describe('ChatInput', () => {
         expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
+    // 35. Priority - Most recent trigger
     it('uses most recent trigger when both @ and # are present', async () => {
         render(<ChatInput {...defaultProps} value="" selectedTable="table1" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -466,6 +501,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 36. Button routing - onStop during loading
     it('calls onStop when button is clicked during loading', async () => {
         render(<ChatInput {...defaultProps} value="test" isLoading={true} />);
         const stopButton = screen.getByTitle('停止');
@@ -476,6 +512,7 @@ describe('ChatInput', () => {
         expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
+    // 37. Button routing - onSubmit normally
     it('calls onSubmit when button is clicked during normal state', async () => {
         render(<ChatInput {...defaultProps} value="test" />);
         const submitButton = screen.getByTitle('送信');
@@ -487,6 +524,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 38. Mouse interaction - Hover highlighting
     it('highlights item on mouse hover', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -509,6 +547,7 @@ describe('ChatInput', () => {
         }
     });
 
+    // 39. Mouse interaction - Click selection
     it('selects item on mouse click', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -537,6 +576,7 @@ describe('ChatInput', () => {
         }
     });
 
+    // 40. Keyboard selection - Tab key
     it('selects autocomplete item with Tab', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -562,6 +602,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 41. Autocomplete filtering - Empty results
     it('does not show autocomplete when filter results are empty', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -575,6 +616,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 42. Item insertion - Format with trigger and space
     it('inserts selected item with trigger symbol and space', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -600,6 +642,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 43. Item selection - Closes autocomplete
     it('closes autocomplete after item selection', async () => {
         render(<ChatInput {...defaultProps} value="" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -619,6 +662,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 44. Trigger priority - Hash after at
     it('uses hash trigger when # appears after @', async () => {
         render(<ChatInput {...defaultProps} value="" selectedTable="table1" />);
         const textarea = screen.getByPlaceholderText('Enter message...');
@@ -632,6 +676,7 @@ describe('ChatInput', () => {
         });
     });
 
+    // 45. URL detection - extractDataUrl called
     it('calls extractDataUrl when Enter is pressed', async () => {
         vi.mocked(extractDataUrl).mockReturnValue('https://example.com/data.csv');
         render(<ChatInput {...defaultProps} value="https://example.com/data.csv" />);
@@ -642,6 +687,7 @@ describe('ChatInput', () => {
         expect(extractDataUrl).toHaveBeenCalledWith('https://example.com/data.csv');
     });
 
+    // 46. URL detection - No submit on null
     it('does not submit when extractDataUrl returns null', async () => {
         vi.mocked(extractDataUrl).mockReturnValue(null);
         render(<ChatInput {...defaultProps} value="not a url" onKeyDown={mockOnKeyDown} />);
@@ -653,6 +699,7 @@ describe('ChatInput', () => {
         expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
+    // 47. Popup menu - Toggle behavior
     it('toggles popup menu when plus button is clicked', () => {
         const renderMenu = vi.fn(() => <div>Menu content</div>);
         render(<ChatInput {...defaultProps} renderMenu={renderMenu} />);
@@ -667,6 +714,7 @@ describe('ChatInput', () => {
         expect(screen.queryByText('Menu content')).not.toBeInTheDocument();
     });
 
+    // 48. Popup menu - Position calculation
     it('calculates popup position based on available space', () => {
         const renderMenu = vi.fn(() => <div>Menu content</div>);
         render(<ChatInput {...defaultProps} renderMenu={renderMenu} />);
@@ -692,12 +740,14 @@ describe('ChatInput', () => {
         expect(popup).toHaveClass('top-full');
     });
 
+    // 49. URL guide - Display when enabled
     it('shows URL guide when showUrlGuide is true', () => {
         render(<ChatInput {...defaultProps} showUrlGuide={true} onShowUrlGuide={mockOnShowUrlGuide} />);
 
         expect(screen.getByText('ここにURLを入力してください')).toBeInTheDocument();
     });
 
+    // 50. External state - isSubmitting priority
     it('uses externalIsSubmitting when provided', () => {
         render(<ChatInput {...defaultProps} value="test" isSubmitting={true} />);
 
