@@ -20,26 +20,20 @@ describe('ApiKeyInput', () => {
 
     // 1. Basic rendering
     it('should render title "Anthropic API Key Settings"', () => {
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         expect(screen.getByText('Anthropic API Key Settings')).toBeInTheDocument();
     });
 
     it('should render input field with type password', () => {
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const input = screen.getByPlaceholderText('Enter your Anthropic API key...');
         expect(input).toHaveAttribute('type', 'password');
     });
 
     it('should render security message', () => {
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         expect(
             screen.getByText(
@@ -50,9 +44,7 @@ describe('ApiKeyInput', () => {
 
     // 2. Input handling
     it('should call onApiKeyChange when input value changes', () => {
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const input = screen.getByPlaceholderText('Enter your Anthropic API key...');
         fireEvent.change(input, { target: { value: 'test-api-key' } });
@@ -62,67 +54,41 @@ describe('ApiKeyInput', () => {
     });
 
     it('should display the current apiKey value', () => {
-        render(
-            <ApiKeyInput
-                apiKey="existing-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="existing-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
-        const input = screen.getByPlaceholderText(
-            'Enter your Anthropic API key...'
-        ) as HTMLInputElement;
+        const input = screen.getByPlaceholderText('Enter your Anthropic API key...') as HTMLInputElement;
         expect(input.value).toBe('existing-key');
     });
 
     // 3. Save button state
     it('should disable save button when apiKey is empty', () => {
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         expect(saveButton).toBeDisabled();
     });
 
     it('should disable save button when apiKey is only whitespace', () => {
-        render(
-            <ApiKeyInput apiKey="   " onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="   " onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         expect(saveButton).toBeDisabled();
     });
 
     it('should enable save button when apiKey has value', () => {
-        render(
-            <ApiKeyInput
-                apiKey="valid-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="valid-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         expect(saveButton).not.toBeDisabled();
     });
 
     it('should apply different styles when button is disabled vs enabled', () => {
-        const { rerender } = render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        const { rerender } = render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         let saveButton = screen.getByRole('button', { name: 'Save' });
         expect(saveButton).toHaveClass('bg-gray-400', 'cursor-not-allowed');
 
-        rerender(
-            <ApiKeyInput
-                apiKey="valid-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        rerender(<ApiKeyInput apiKey="valid-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         saveButton = screen.getByRole('button', { name: 'Save' });
         expect(saveButton).toHaveClass('bg-blue-500', 'cursor-pointer');
@@ -132,13 +98,7 @@ describe('ApiKeyInput', () => {
     it('should call onSave with apiKey when save button is clicked', async () => {
         mockOnSave.mockResolvedValue(true);
 
-        render(
-            <ApiKeyInput
-                apiKey="test-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="test-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         fireEvent.click(saveButton);
@@ -152,13 +112,7 @@ describe('ApiKeyInput', () => {
     it('should not show alert when save succeeds', async () => {
         mockOnSave.mockResolvedValue(true);
 
-        render(
-            <ApiKeyInput
-                apiKey="test-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="test-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         fireEvent.click(saveButton);
@@ -173,13 +127,7 @@ describe('ApiKeyInput', () => {
     it('should show alert when save fails and apiKey is not empty', async () => {
         mockOnSave.mockResolvedValue(false);
 
-        render(
-            <ApiKeyInput
-                apiKey="test-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="test-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         fireEvent.click(saveButton);
@@ -192,9 +140,7 @@ describe('ApiKeyInput', () => {
     it('should not show alert when save fails but apiKey is empty', async () => {
         mockOnSave.mockResolvedValue(false);
 
-        render(
-            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />
-        );
+        render(<ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         // Note: button is disabled when apiKey is empty, but we can test the logic
         // by checking that the handleSave function itself doesn't show alert
@@ -205,13 +151,7 @@ describe('ApiKeyInput', () => {
     it('should handle multiple consecutive save button clicks', async () => {
         mockOnSave.mockResolvedValue(true);
 
-        render(
-            <ApiKeyInput
-                apiKey="test-key"
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-            />
-        );
+        render(<ApiKeyInput apiKey="test-key" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} />);
 
         const saveButton = screen.getByRole('button', { name: 'Save' });
         fireEvent.click(saveButton);
@@ -225,12 +165,7 @@ describe('ApiKeyInput', () => {
     // 5. Display mode
     it('should apply floating mode styles when floatingMode is true', () => {
         const { container } = render(
-            <ApiKeyInput
-                apiKey=""
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-                floatingMode={true}
-            />
+            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} floatingMode={true} />
         );
 
         const wrapper = container.firstChild as HTMLElement;
@@ -239,12 +174,7 @@ describe('ApiKeyInput', () => {
 
     it('should apply inline mode styles when floatingMode is false', () => {
         const { container } = render(
-            <ApiKeyInput
-                apiKey=""
-                onApiKeyChange={mockOnApiKeyChange}
-                onSave={mockOnSave}
-                floatingMode={false}
-            />
+            <ApiKeyInput apiKey="" onApiKeyChange={mockOnApiKeyChange} onSave={mockOnSave} floatingMode={false} />
         );
 
         const wrapper = container.firstChild as HTMLElement;
