@@ -94,13 +94,7 @@ describe('TableCreatedMessage', () => {
 
     it('should call onChartIconClick when chart icon is clicked', () => {
         const mockOnChartIconClick = vi.fn();
-        render(
-            <TableCreatedMessage
-                {...defaultProps}
-                hasChartSpec={true}
-                onChartIconClick={mockOnChartIconClick}
-            />
-        );
+        render(<TableCreatedMessage {...defaultProps} hasChartSpec={true} onChartIconClick={mockOnChartIconClick} />);
 
         const chartIcon = screen.getByTitle('クリックしてチャートを表示');
         fireEvent.click(chartIcon);
@@ -110,9 +104,7 @@ describe('TableCreatedMessage', () => {
 
     it('should call onMapIconClick when map icon is clicked', () => {
         const mockOnMapIconClick = vi.fn();
-        render(
-            <TableCreatedMessage {...defaultProps} hasGeometry={true} onMapIconClick={mockOnMapIconClick} />
-        );
+        render(<TableCreatedMessage {...defaultProps} hasGeometry={true} onMapIconClick={mockOnMapIconClick} />);
 
         const mapIcon = screen.getByTitle('クリックして地図を表示');
         fireEvent.click(mapIcon);
