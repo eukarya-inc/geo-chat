@@ -48,7 +48,7 @@ describe('ChartConfigModal', () => {
         onClose: vi.fn(),
         chartSpec: mockChartSpec,
         dbContext: mockDBContext as DBContext,
-        schema: 'test_schema',
+        chatId: 'test_schema',
         onUpdateChart: vi.fn(),
         vizId: 'test-viz-id',
     };

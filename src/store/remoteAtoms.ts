@@ -51,11 +51,14 @@ export interface DashboardVisualization {
     title: string;
     chartSpec?: ChartSpec;
     mapSpec?: MapSpec;
-    tableName?: string; // Table name for map/table visualizations
+    // Note: Currently tableId serves the same purpose as tableName (e.g., "table_36dd7").
+    // It is named "tableId" to allow for future extensibility where a separate displayName
+    // or user-friendly table name might be introduced, while tableId remains the internal identifier.
+    tableId?: string; // Table identifier for map/table visualizations
     geometryColumn?: string; // Geometry column for map visualizations
     sql?: string; // SQL query used to generate the visualization
     createdAt: Date;
-    chatId?: string; // Chat ID that this visualization belongs to (for schema resolution)
+    chatId: string; // Chat ID (format: "chat_{timestamp}") which also serves as the DuckDB schema name
 }
 
 // Dashboard

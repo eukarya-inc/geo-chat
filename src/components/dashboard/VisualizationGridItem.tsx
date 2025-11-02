@@ -9,7 +9,7 @@ import type { DashboardVisualization } from '../../store/remoteAtoms';
 interface VisualizationGridItemProps {
     viz: DashboardVisualization;
     dbContext: DBContext;
-    schemaName: string;
+    chatId: string;
     onRemove: (vizId: string) => void;
     onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
     onUpdateTitle: (vizId: string, newTitle: string) => void;
@@ -18,7 +18,7 @@ interface VisualizationGridItemProps {
 export function VisualizationGridItem({
     viz,
     dbContext,
-    schemaName,
+    chatId,
     onRemove,
     onUpdateChart,
     onUpdateTitle,
@@ -28,7 +28,7 @@ export function VisualizationGridItem({
             <ChartPanel
                 chartSpec={viz.chartSpec}
                 dbContext={dbContext}
-                schema={schemaName}
+                chatId={chatId}
                 configMode="modal"
                 vizId={viz.id}
                 onRemove={() => onRemove(viz.id)}
@@ -40,14 +40,14 @@ export function VisualizationGridItem({
         );
     }
 
-    if (viz.type === 'map' && viz.tableName) {
+    if (viz.type === 'map' && viz.tableId) {
         return (
             <MapPanel
                 title={viz.title}
-                tableName={viz.tableName}
+                tableName={viz.tableId}
                 geometryColumn={viz.geometryColumn}
                 dbContext={dbContext}
-                schema={schemaName}
+                chatId={chatId}
                 mapSpec={viz.mapSpec}
                 onRemove={() => onRemove(viz.id)}
                 vizId={viz.id}
@@ -57,13 +57,13 @@ export function VisualizationGridItem({
         );
     }
 
-    if (viz.type === 'table' && viz.tableName) {
+    if (viz.type === 'table' && viz.tableId) {
         return (
             <TablePanel
                 title={viz.title}
-                tableName={viz.tableName}
+                tableName={viz.tableId}
                 dbContext={dbContext}
-                schema={schemaName}
+                chatId={chatId}
                 onRemove={() => onRemove(viz.id)}
                 showRemoveButton={true}
                 editable={true}

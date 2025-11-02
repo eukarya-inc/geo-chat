@@ -1,43 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chatIdToSchemaName, createDuckDBUrl, parseDuckDBUrl } from './schema';
-
-describe('chatIdToSchemaName', () => {
-    it('should return null for null input', () => {
-        expect(chatIdToSchemaName(null)).toBe(null);
-    });
-
-    it('should return null for undefined input', () => {
-        expect(chatIdToSchemaName(undefined)).toBe(null);
-    });
-
-    it('should return null for empty string', () => {
-        expect(chatIdToSchemaName('')).toBe(null);
-    });
-
-    it('should convert chat-{timestamp} format correctly', () => {
-        expect(chatIdToSchemaName('chat-1761909834526')).toBe('chat_1761909834526');
-    });
-
-    it('should not duplicate chat_ prefix when already present', () => {
-        expect(chatIdToSchemaName('chat_1761909834526')).toBe('chat_1761909834526');
-    });
-
-    it('should add chat_ prefix when not present', () => {
-        expect(chatIdToSchemaName('1761909834526')).toBe('chat_1761909834526');
-    });
-
-    it('should replace special characters with underscores', () => {
-        expect(chatIdToSchemaName('my-chat-123')).toBe('chat_my_chat_123');
-    });
-
-    it('should handle mixed special characters', () => {
-        expect(chatIdToSchemaName('test@chat#123')).toBe('chat_test_chat_123');
-    });
-
-    it('should preserve alphanumeric characters', () => {
-        expect(chatIdToSchemaName('chatABC123')).toBe('chat_chatABC123');
-    });
-});
+import { createDuckDBUrl, parseDuckDBUrl } from './schema';
 
 describe('createDuckDBUrl', () => {
     it('should create URL with schema', () => {

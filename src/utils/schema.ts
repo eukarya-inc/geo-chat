@@ -1,19 +1,3 @@
-// Utility function to convert chatId to schema name
-// This maintains the naming convention for chat-based schemas
-export function chatIdToSchemaName(chatId: string | null | undefined): string | null {
-    if (!chatId) return null;
-
-    // Sanitize chatId by replacing non-alphanumeric characters with underscores
-    const sanitized = chatId.replace(/[^a-zA-Z0-9]/g, '_');
-
-    // If already starts with 'chat_', return as-is to avoid duplication
-    if (sanitized.startsWith('chat_')) {
-        return sanitized;
-    }
-
-    return `chat_${sanitized}`;
-}
-
 /**
  * Generate duckdb:// URL for a table
  * Format: duckdb://schema.table or duckdb://table

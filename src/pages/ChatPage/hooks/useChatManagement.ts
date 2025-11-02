@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { chatIdToSchemaName } from '../../../utils/schema';
 import {
     chatsAtom,
     localStateAtom,
@@ -62,11 +61,11 @@ export function useChatManagement(dbContext: DBContext | null) {
 
         const createSchemaForChat = async () => {
             try {
-                const schemaName = chatIdToSchemaName(selectedChatId);
-                if (schemaName) {
-                    await dbContext.createSchema(schemaName);
+                // chatId is also used as the DuckDB schema name
+                if (selectedChatId) {
+                    await dbContext.createSchema(selectedChatId);
                     setTimeout(() => {
-                        dbContext.notifyTableChange(undefined, schemaName);
+                        dbContext.notifyTableChange(undefined, selectedChatId);
                     }, 0);
                 }
             } catch (error) {
@@ -99,13 +98,11 @@ export function useChatManagement(dbContext: DBContext | null) {
             const newChat = await createChat();
 
             // Create schema for the new chat
-            const schemaName = chatIdToSchemaName(newChat.id);
-            if (schemaName) {
-                await effectiveDb.createSchema(schemaName);
-            }
+            // Note: newChat.id is also used as the DuckDB schema name
+            await effectiveDb.createSchema(newChat.id);
 
             // Notify table change to refresh table list
-            effectiveDb.notifyTableChange(undefined, schemaName);
+            effectiveDb.notifyTableChange(undefined, newChat.id);
 
             // Return the new chat ID
             return newChat.id;
@@ -119,10 +116,8 @@ export function useChatManagement(dbContext: DBContext | null) {
         if (!dbContext) return;
 
         // Delete the schema associated with the chat
-        const schemaName = chatIdToSchemaName(chatId);
-        if (schemaName) {
-            await dbContext.deleteSchema(schemaName);
-        }
+        // Note: chatId is also used as the DuckDB schema name
+        await dbContext.deleteSchema(chatId);
 
         // If this was the selected chat, handle selection before deletion
         if (selectedChatId === chatId) {
@@ -131,9 +126,8 @@ export function useChatManagement(dbContext: DBContext | null) {
                 // Select the first remaining chat
                 const nextChatId = remainingChatIds[0];
                 selectChat(nextChatId);
-                const nextSchemaName = chatIdToSchemaName(nextChatId);
                 // Notify table change
-                dbContext.notifyTableChange(undefined, nextSchemaName);
+                dbContext.notifyTableChange(undefined, nextChatId);
             } else {
                 // No remaining chats - clear selection
                 selectChat('');

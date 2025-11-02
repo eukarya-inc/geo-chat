@@ -11,7 +11,7 @@ import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
 interface ChatProps {
     dbContext: DBContext | null;
     apiKey?: string;
-    schemaName?: string | null;
+    chatId?: string | null;
     messages: StructuredMessage[];
     isLoading: boolean;
     input: string;
@@ -35,7 +35,7 @@ interface ChatProps {
 export default function Chat({
     dbContext,
     apiKey,
-    schemaName,
+    chatId,
     messages,
     isLoading,
     input,
@@ -422,7 +422,7 @@ export default function Chat({
                     return;
                 }
 
-                const prompts = await generatePromptSuggestions(tableName, dbContext, schemaName || null, apiKey || '');
+                const prompts = await generatePromptSuggestions(tableName, dbContext, chatId || null, apiKey || '');
 
                 if (abortSignal.aborted) {
                     return;
@@ -513,7 +513,7 @@ export default function Chat({
                 promptSuggestionAbortRef.current = null;
             }
         };
-    }, [messages, selectedTable, dbContext, schemaName, chatId, apiKey, handleMessagesChange]);
+    }, [messages, selectedTable, dbContext, chatId, chatId, apiKey, handleMessagesChange]);
     */
 
     const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -759,7 +759,7 @@ export default function Chat({
                         textareaRef={textareaRef}
                         placeholder="質問してみましょう"
                         className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                        schemaName={schemaName}
+                        chatId={chatId}
                         selectedTable={selectedTable}
                         isLoading={isLoading}
                         isSubmitting={isSubmitting}

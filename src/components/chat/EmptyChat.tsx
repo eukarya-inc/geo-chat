@@ -6,7 +6,7 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 interface EmptyChatProps {
     dbContext: DBContext | null;
     apiKey?: string;
-    schemaName?: string | null;
+    chatId?: string | null;
     onApiKeyChange?: (value: string) => void;
     onApiKeySave?: (apiKey: string) => Promise<boolean>;
     showApiKeyInput?: boolean;
@@ -22,7 +22,7 @@ interface EmptyChatProps {
 export default function EmptyChat({
     dbContext,
     apiKey,
-    schemaName,
+    chatId,
     onApiKeyChange,
     onApiKeySave,
     showApiKeyInput,
@@ -172,7 +172,7 @@ export default function EmptyChat({
                         textareaRef={textareaRef}
                         placeholder="質問するか、データのURLを貼り付けてみましょう"
                         className="w-full h-full p-2.5 resize-none text-gray-800 focus:outline-none overflow-y-auto"
-                        schemaName={schemaName}
+                        chatId={chatId}
                         selectedTable={null}
                         isSubmitting={isLoadingSample || isSubmitting}
                         renderMenu={

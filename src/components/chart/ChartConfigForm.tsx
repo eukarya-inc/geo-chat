@@ -8,7 +8,7 @@ import type { ChartConfig, ColumnInfo } from '../../lib/chart/chartSpecGenerator
 interface ChartConfigFormProps {
     chartSpec: ChartSpec;
     dbContext: DBContext;
-    schema: string;
+    chatId: string;
     onConfigChange: (config: ChartConfig, columns: ColumnInfo[]) => void;
     showApplyButton?: boolean; // Optional prop to control apply button visibility
     autoApplyChanges?: boolean; // Optional prop to control automatic config updates
@@ -17,7 +17,7 @@ interface ChartConfigFormProps {
 export function ChartConfigForm({
     chartSpec,
     dbContext,
-    schema,
+    chatId,
     onConfigChange,
     showApplyButton = true,
     autoApplyChanges = false,
@@ -132,7 +132,7 @@ export function ChartConfigForm({
                     const tableName = parsed.tableName;
 
                     try {
-                        const cols = await dbContext.getTableColumns(tableName, schema);
+                        const cols = await dbContext.getTableColumns(tableName, chatId);
                         setColumns(cols);
                         // Mark that columns have finished loading
                         columnsLoadedRef.current = true;
@@ -143,7 +143,7 @@ export function ChartConfigForm({
             }
         };
         fetchColumns();
-    }, [chartSpec, dbContext, schema]);
+    }, [chartSpec, dbContext, chatId]);
 
     const getNumericColumns = () =>
         columns.filter(
