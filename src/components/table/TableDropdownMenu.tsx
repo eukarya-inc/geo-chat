@@ -5,7 +5,7 @@ import { DropdownMenu, type DropdownMenuItem } from '../common/DropdownMenu';
 interface TableDropdownMenuProps {
     tableName: string;
     dbContext: DBContext;
-    schema?: string | null;
+    chatId?: string | null;
     onExport?: () => void;
     showExportButton?: boolean;
     isExportDisabled?: boolean;
@@ -16,7 +16,7 @@ interface TableDropdownMenuProps {
 export function TableDropdownMenu({
     tableName,
     dbContext,
-    schema,
+    chatId,
     onExport,
     showExportButton = false,
     isExportDisabled = false,
@@ -26,7 +26,7 @@ export function TableDropdownMenu({
     const handleDownload = async (format: 'parquet' | 'csv' | 'json') => {
         try {
             // Use the downloadTable method from DBContext
-            const blob = await dbContext.downloadTable(tableName, format, schema);
+            const blob = await dbContext.downloadTable(tableName, format, chatId);
 
             // Determine file extension
             const extension = format === 'parquet' ? 'parquet' : format === 'csv' ? 'csv' : 'json';

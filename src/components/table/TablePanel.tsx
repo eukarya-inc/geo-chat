@@ -10,7 +10,7 @@ interface TablePanelProps {
     title?: string; // Display title (can be customized)
     tableName: string; // Actual table name in DuckDB (immutable)
     dbContext: DBContext;
-    schema?: string | null;
+    chatId?: string | null;
     onExport?: () => void;
     showExportButton?: boolean;
     isExportDisabled?: boolean;
@@ -25,7 +25,7 @@ export function TablePanel({
     title,
     tableName,
     dbContext,
-    schema,
+    chatId,
     onExport,
     showExportButton = false,
     isExportDisabled = false,
@@ -42,7 +42,7 @@ export function TablePanel({
         let isMounted = true;
 
         const initConnection = async () => {
-            const conn = await dbContext.createManagedConnection(schema || null);
+            const conn = await dbContext.createManagedConnection(chatId || null);
             connectionRef.current = conn;
             if (isMounted) {
                 setConnection(conn);
@@ -65,7 +65,7 @@ export function TablePanel({
                 connectionRef.current = null;
             }
         };
-    }, [dbContext, schema]);
+    }, [dbContext, chatId]);
 
     const toolButtons = [];
 
@@ -100,7 +100,7 @@ export function TablePanel({
                     <TableDropdownMenu
                         tableName={tableName}
                         dbContext={dbContext}
-                        schema={schema}
+                        chatId={chatId}
                         onExport={onExport}
                         showExportButton={showExportButton}
                         isExportDisabled={isExportDisabled}

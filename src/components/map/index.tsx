@@ -17,7 +17,7 @@ export type { ViewState, VectorTileLayer, TableStyle, ExtraStyle, MapProps } fro
 
 const MapComponent: React.FC<MapProps> = ({
     dbContext,
-    schema = null,
+    chatId = null,
     selectedTable,
     tables,
     selectedColumns,
@@ -103,7 +103,7 @@ const MapComponent: React.FC<MapProps> = ({
         }
     }, [showTileQueue]);
 
-    // Store resolved column types under all identifier variants (schema.table, table)
+    // Store resolved column types under all identifier variants (chatId.table, table)
     const cacheColumnTypes = useCallback(
         (tableIdentifier: string, typeMap: Record<string, string>) => {
             if (!tableIdentifier) {
@@ -118,15 +118,15 @@ const MapComponent: React.FC<MapProps> = ({
                 keys.add(baseName);
             }
 
-            if (schema && baseName) {
-                keys.add(`${schema}.${baseName}`);
+            if (chatId && baseName) {
+                keys.add(`${chatId}.${baseName}`);
             }
 
             keys.forEach(key => {
                 columnTypesRef.current[key] = typeMap;
             });
         },
-        [schema]
+        [chatId]
     );
 
     const removeCachedColumnTypes = useCallback(
@@ -143,15 +143,15 @@ const MapComponent: React.FC<MapProps> = ({
                 keys.add(baseName);
             }
 
-            if (schema && baseName) {
-                keys.add(`${schema}.${baseName}`);
+            if (chatId && baseName) {
+                keys.add(`${chatId}.${baseName}`);
             }
 
             keys.forEach(key => {
                 delete columnTypesRef.current[key];
             });
         },
-        [schema]
+        [chatId]
     );
 
     // Use provided columns or detected columns
@@ -280,7 +280,7 @@ const MapComponent: React.FC<MapProps> = ({
         if (!mapRef.current || !connectionRef.current) return;
 
         try {
-            // Don't use schema-qualified table name - connection already has schema context
+            // Don't use chatId-qualified table name - connection already has chatId context
             const qualifiedTableName = tableName;
 
             // Query the bounds using a robust method that handles mixed geometry types
@@ -359,8 +359,8 @@ const MapComponent: React.FC<MapProps> = ({
             }
 
             try {
-                // Get table schema
-                const schemaQuery = schema ? `DESCRIBE ${schema}.${selectedTable}` : `DESCRIBE ${selectedTable}`;
+                // Get table chatId
+                const schemaQuery = chatId ? `DESCRIBE ${chatId}.${selectedTable}` : `DESCRIBE ${selectedTable}`;
                 const result = await connectionRef.current.query(schemaQuery);
                 const schemaData = result.toArray() as unknown as ColumnInfo[];
 
@@ -419,7 +419,7 @@ const MapComponent: React.FC<MapProps> = ({
                     }
                 }
             } catch (error) {
-                console.error('[Map] Failed to fetch schema info:', error);
+                console.error('[Map] Failed to fetch chatId info:', error);
                 removeCachedColumnTypes(selectedTable);
                 if (selectedColumns === undefined) {
                     setDetectedColumns([]);
@@ -432,7 +432,7 @@ const MapComponent: React.FC<MapProps> = ({
     }, [
         selectedTable,
         selectedColumns,
-        schema,
+        chatId,
         geometryColumnName,
         isInitialized,
         cacheColumnTypes,
@@ -469,8 +469,8 @@ const MapComponent: React.FC<MapProps> = ({
 
     // Get connection from map-specific pool (DatabaseContext handles round-robin internally)
     const getMapConnection = useCallback(async (): Promise<AsyncDuckDBConnection> => {
-        return await tileDbContext.createManagedConnection(schema);
-    }, [tileDbContext, schema]);
+        return await tileDbContext.createManagedConnection(chatId);
+    }, [tileDbContext, chatId]);
 
     // Function to update map layers dynamically
     const updateMapLayers = useCallback(
@@ -486,7 +486,7 @@ const MapComponent: React.FC<MapProps> = ({
                 onExtraStyleChange,
                 initializedTables: initializedTablesRef.current,
                 styleManager: styleManagerRef.current,
-                schema,
+                chatId,
             });
 
             // Schedule fit bounds for when tiles are loaded
@@ -522,7 +522,7 @@ const MapComponent: React.FC<MapProps> = ({
         // If it already exists, it will be overwritten which is fine for our use case
         try {
             maplibregl.addProtocol('duckdb', async params => {
-                // Parse URL: duckdb://[schema.]table/{z}/{x}/{y}.pbf
+                // Parse URL: duckdb://[chatId.]table/{z}/{x}/{y}.pbf
                 const url = params.url.replace(/\.pbf$/, '.mvt'); // Convert extension for parsing
 
                 const parseResult = parseDuckDBTileUrl(url);
@@ -588,8 +588,8 @@ const MapComponent: React.FC<MapProps> = ({
 
                     if (!columnTypeMap) {
                         const describeTargets = new Set<string>();
-                        if (schema) {
-                            describeTargets.add(`${schema}.${tableName}`);
+                        if (chatId) {
+                            describeTargets.add(`${chatId}.${tableName}`);
                         }
                         describeTargets.add(tableSpec);
                         describeTargets.add(tableName);
@@ -627,13 +627,13 @@ const MapComponent: React.FC<MapProps> = ({
                     }
 
                     // Build SQL query to get selected columns
-                    // Don't pass schema - connection already has schema context
+                    // Don't pass chatId - connection already has chatId context
                     const query = generateVectorTileQuery({
                         zxy,
                         selectedTable: tableName,
                         selectedColumns: currentColumns,
                         geometryColumnName: currentGeometryColumn,
-                        schema: null, // Don't use URL-extracted schema
+                        chatId: null, // Don't use URL-extracted chatId
                         columnTypes: columnTypeMap,
                     });
 
@@ -738,7 +738,7 @@ const MapComponent: React.FC<MapProps> = ({
         } catch {
             // Failed to register protocol
         }
-    }, [geometryColumnName, schema, cacheColumnTypes]);
+    }, [geometryColumnName, chatId, cacheColumnTypes]);
 
     // Update loading state based on tile generation only (protocol-based control)
     // Use a ref to track if we're already in a loading state to prevent unnecessary updates
@@ -867,18 +867,18 @@ const MapComponent: React.FC<MapProps> = ({
         const initMap = async () => {
             try {
                 // Keep connection
-                // Use schema-aware connection
-                connectionRef.current = await dbContext.createManagedConnection(schema);
+                // Use chatId-aware connection
+                connectionRef.current = await dbContext.createManagedConnection(chatId);
                 if (!connectionRef.current) {
                     setMapError('Failed to connect to DuckDB');
                     return;
                 }
 
-                // Fetch schema information after connection is established
+                // Fetch chatId information after connection is established
                 if (selectedTable) {
                     try {
-                        const schemaQuery = schema
-                            ? `DESCRIBE ${schema}.${selectedTable}`
+                        const schemaQuery = chatId
+                            ? `DESCRIBE ${chatId}.${selectedTable}`
                             : `DESCRIBE ${selectedTable}`;
                         const result = await connectionRef.current.query(schemaQuery);
                         const schemaData = result.toArray() as unknown as ColumnInfo[];

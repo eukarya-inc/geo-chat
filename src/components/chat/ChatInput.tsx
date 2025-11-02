@@ -13,7 +13,7 @@ interface ChatInputProps {
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     placeholder?: string;
     className?: string;
-    schemaName?: string | null;
+    chatId?: string | null;
     selectedTable?: string | null;
     isLoading?: boolean;
     isSubmitting?: boolean;
@@ -41,7 +41,7 @@ export default function ChatInput({
     textareaRef,
     placeholder,
     className,
-    schemaName,
+    chatId,
     selectedTable,
     isLoading,
     isSubmitting: externalIsSubmitting,
@@ -79,7 +79,7 @@ export default function ChatInput({
             }
 
             try {
-                const tableNames = await dbContext.getTables(schemaName);
+                const tableNames = await dbContext.getTables(chatId);
                 setTables(tableNames);
             } catch (error) {
                 console.error('Failed to fetch tables:', error);
@@ -87,7 +87,7 @@ export default function ChatInput({
         };
 
         fetchTables();
-    }, [dbContext, schemaName, value]); // Re-fetch when value changes to catch new tables
+    }, [dbContext, chatId, value]); // Re-fetch when value changes to catch new tables
 
     // Fetch fields from selected table
     useEffect(() => {
@@ -98,7 +98,7 @@ export default function ChatInput({
             }
 
             try {
-                const columns = await dbContext.getTableColumns(selectedTable, schemaName);
+                const columns = await dbContext.getTableColumns(selectedTable, chatId);
                 setFields(columns);
             } catch (error) {
                 console.error('Failed to fetch fields:', error);
@@ -107,7 +107,7 @@ export default function ChatInput({
         };
 
         fetchFields();
-    }, [dbContext, selectedTable, schemaName]);
+    }, [dbContext, selectedTable, chatId]);
 
     // Calculate textarea height based on content
     useEffect(() => {

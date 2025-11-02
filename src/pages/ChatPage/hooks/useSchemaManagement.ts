@@ -6,7 +6,7 @@ import { cleanupOrphanedChartSpecs } from './chartSpecCleanup';
 
 export function useSchemaManagement(
     dbContext: DBContext | null,
-    schemaName: string | null,
+    chatId: string | null,
     chats: Chat[],
     onChartSpecCleanup?: (cleanedChartSpecs: ChartSpecs) => void
 ) {
@@ -14,7 +14,7 @@ export function useSchemaManagement(
 
     // Combined schema switching and connection setup
     useEffect(() => {
-        if (!dbContext || !schemaName) return;
+        if (!dbContext || !chatId) return;
 
         let isCleanedUp = false;
 
@@ -34,7 +34,7 @@ export function useSchemaManagement(
 
             try {
                 // Create new connection with the new schema
-                const conn = await dbContext.createManagedConnection(schemaName);
+                const conn = await dbContext.createManagedConnection(chatId);
                 connectionRef.current = conn;
 
                 if (!isCleanedUp) {
@@ -42,9 +42,7 @@ export function useSchemaManagement(
                     await new Promise(resolve => setTimeout(resolve, 100));
 
                     // Restore table selection for this chat
-                    const targetChat = chats.find(
-                        chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName
-                    );
+                    const targetChat = chats.find(chat => chat.id === chatId);
                     if (targetChat?.selectedTable) {
                         try {
                             // Check if table exists in this schema
@@ -52,28 +50,26 @@ export function useSchemaManagement(
                             // Table exists, will be restored by useTableSelection hook
                         } catch {
                             // Table not found in schema, clear it
-                            console.log(`Table ${targetChat.selectedTable} not found in schema ${schemaName}`);
+                            console.log(`Table ${targetChat.selectedTable} not found in schema ${chatId}`);
                         }
                     }
 
                     // Notify table change after connection is established with a longer delay
                     if (dbContext) {
                         setTimeout(() => {
-                            dbContext.notifyTableChange(undefined, schemaName);
+                            dbContext.notifyTableChange(undefined, chatId);
                         }, 500);
                     }
 
                     // Clean up orphaned chartSpecs for tables that no longer exist
                     if (onChartSpecCleanup) {
-                        const targetChat = chats.find(
-                            chat => `chat_${chat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName
-                        );
+                        const targetChat = chats.find(chat => chat.id === chatId);
                         // Type guard: check if targetChat has chartSpecs property
                         if (targetChat && 'chartSpecs' in targetChat && targetChat.chartSpecs) {
                             const cleanedChartSpecs = await cleanupOrphanedChartSpecs(
                                 targetChat.chartSpecs as ChartSpecs,
                                 dbContext,
-                                schemaName
+                                chatId
                             );
                             if (Object.keys(cleanedChartSpecs).length !== Object.keys(targetChat.chartSpecs).length) {
                                 onChartSpecCleanup(cleanedChartSpecs);
@@ -103,5 +99,5 @@ export function useSchemaManagement(
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [schemaName, dbContext]); // Only depend on schemaName and dbContext
+    }, [chatId, dbContext]); // Only depend on chatId and dbContext
 }

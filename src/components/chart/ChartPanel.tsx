@@ -17,7 +17,7 @@ import { generateChartSpec, type ChartConfig, type ColumnInfo } from '../../lib/
 interface ChartPanelProps {
     chartSpec: ChartSpec;
     dbContext?: DBContext;
-    schema?: string;
+    chatId?: string;
     configMode: 'modal' | 'panel';
     vizId?: string; // Optional vizId for modal mode
     onViewReady?: (view: View | null) => void;
@@ -47,7 +47,7 @@ interface ChartPanelProps {
 export function ChartPanel({
     chartSpec,
     dbContext,
-    schema,
+    chatId,
     configMode,
     vizId,
     onViewReady,
@@ -197,7 +197,7 @@ export function ChartPanel({
     const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
         if (!onSpecChange) return;
         // Generate new spec from config
-        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, schema);
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, chatId);
         const updatedSpec: ChartSpec = {
             ...chartSpec,
             title: config.title as string,
@@ -210,7 +210,7 @@ export function ChartPanel({
     };
 
     const toolButtons = [
-        ...((configMode === 'modal' && dbContext && schema) || (onConfigOpen && dbContext && schema)
+        ...((configMode === 'modal' && dbContext && chatId) || (onConfigOpen && dbContext && chatId)
             ? [
                   createStyleEditorButton({
                       onOpenStyleEditor: handleConfigOpen,
@@ -253,7 +253,7 @@ export function ChartPanel({
                             chartSpec={chartSpec}
                             vegaView={vegaViewRef}
                             dbContext={dbContext}
-                            schema={schema}
+                            chatId={chatId}
                             onConfigOpen={handleConfigOpen}
                             onDataSourceOpen={handleDataSourceOpen}
                             onJsonSourceOpen={handleJsonSourceOpen}
@@ -272,7 +272,7 @@ export function ChartPanel({
                     <VegaLiteChart
                         spec={chartSpec.spec}
                         dbContext={dbContext}
-                        schema={schema}
+                        chatId={chatId}
                         showHeader={false}
                         enableActions={false}
                         onViewReady={handleViewReady}
@@ -296,11 +296,11 @@ export function ChartPanel({
                         </button>
                     </div>
                     <div className="overflow-auto p-3" style={{ height: 'calc(100% - 41px)' }}>
-                        {dbContext && schema && onSpecChange && (
+                        {dbContext && chatId && onSpecChange && (
                             <ChartConfigForm
                                 chartSpec={chartSpec}
                                 dbContext={dbContext}
-                                schema={schema}
+                                chatId={chatId}
                                 onConfigChange={handleConfigChange}
                                 autoApplyChanges={autoApplyChanges}
                                 showApplyButton={showApplyButton}
@@ -311,7 +311,7 @@ export function ChartPanel({
             )}
 
             {/* Modals - Only for modal mode */}
-            {configMode === 'modal' && dbContext && schema && onSpecChange && (
+            {configMode === 'modal' && dbContext && chatId && onSpecChange && (
                 <>
                     {/* Configuration Modal */}
                     {createPortal(
@@ -320,7 +320,7 @@ export function ChartPanel({
                             onClose={() => setIsConfigModalOpen(false)}
                             chartSpec={chartSpec}
                             dbContext={dbContext}
-                            schema={schema}
+                            chatId={chatId}
                             vizId={vizId || 'chart'}
                             onUpdateChart={(_vizId: string, newSpec: ChartSpec) => onSpecChange(newSpec)}
                         />,

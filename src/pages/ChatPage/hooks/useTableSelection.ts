@@ -3,7 +3,7 @@ import { useSetAtom, useAtomValue } from 'jotai';
 import type { DBContext } from '../../../lib/duckdb/dbContext';
 import { selectTableAtom, currentChatAtom } from '../../../store/atoms';
 
-export function useTableSelection(dbContext: DBContext | null, schemaName: string | null) {
+export function useTableSelection(dbContext: DBContext | null, chatId: string | null) {
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [prevSchemaName, setPrevSchemaName] = useState<string | null>(null);
     const setTableInAtom = useSetAtom(selectTableAtom);
@@ -11,12 +11,12 @@ export function useTableSelection(dbContext: DBContext | null, schemaName: strin
 
     // Clear selected table immediately when schema changes
     useEffect(() => {
-        if (prevSchemaName !== schemaName && prevSchemaName !== null) {
+        if (prevSchemaName !== chatId && prevSchemaName !== null) {
             // Schema has changed, immediately clear the selected table
             setSelectedTable(null);
         }
-        setPrevSchemaName(schemaName);
-    }, [schemaName, prevSchemaName]);
+        setPrevSchemaName(chatId);
+    }, [chatId, prevSchemaName]);
 
     // Handle table selection and update both local state and Jotai atom
     const handleTableSelection = useCallback(
@@ -24,11 +24,11 @@ export function useTableSelection(dbContext: DBContext | null, schemaName: strin
             setSelectedTable(tableName);
 
             // Update the selected table in Jotai atom
-            if (schemaName) {
+            if (chatId) {
                 setTableInAtom(tableName);
             }
         },
-        [schemaName, setTableInAtom]
+        [chatId, setTableInAtom]
     );
 
     // Subscribe to table changes from dbContext
@@ -37,7 +37,7 @@ export function useTableSelection(dbContext: DBContext | null, schemaName: strin
 
         const unsubscribe = dbContext.onTableChange(async (tableName?: string, schema?: string | null) => {
             // Only process table changes for the current schema
-            if (schema !== schemaName) {
+            if (schema !== chatId) {
                 return;
             }
 
@@ -60,17 +60,17 @@ export function useTableSelection(dbContext: DBContext | null, schemaName: strin
         return () => {
             unsubscribe();
         };
-    }, [dbContext, handleTableSelection, schemaName]);
+    }, [dbContext, handleTableSelection, chatId]);
 
     // Restore selected table when switching chats (only after connection is ready)
     useEffect(() => {
         const restoreTableSelection = async () => {
             // Only restore if we have a connection and this is the right chat
-            if (currentChat && `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === schemaName && dbContext) {
+            if (currentChat && `chat_${currentChat.id.replace(/[^a-zA-Z0-9]/g, '_')}` === chatId && dbContext) {
                 if (currentChat.selectedTable) {
                     // Check if the table actually exists in this schema
                     try {
-                        const isValid = await dbContext.validateTable(currentChat.selectedTable, schemaName);
+                        const isValid = await dbContext.validateTable(currentChat.selectedTable, chatId);
                         if (isValid) {
                             // Table exists, restore the selection
                             setSelectedTable(currentChat.selectedTable);
@@ -92,7 +92,7 @@ export function useTableSelection(dbContext: DBContext | null, schemaName: strin
         };
 
         restoreTableSelection();
-    }, [currentChat, dbContext, schemaName, setTableInAtom]);
+    }, [currentChat, dbContext, chatId, setTableInAtom]);
 
     return {
         selectedTable,

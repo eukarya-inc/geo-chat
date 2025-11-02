@@ -9,7 +9,7 @@ export interface Chat {
     title: string;
     createdAt: Date;
     messages: StructuredMessage[];
-    schemaName?: string;
+    chatId?: string;
     selectedTable?: string | null;
     mapSpecs?: Record<string, MapSpec>;
     isTitleDefault?: boolean;

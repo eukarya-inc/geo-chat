@@ -254,6 +254,7 @@ describe('useDashboardManagement', () => {
             id: 'viz-1',
             type: 'chart' as const,
             title: 'Test Chart',
+            chatId: 'chat_1234567890',
             chartSpec: {
                 id: 'chart-1',
                 title: 'Test Chart',

@@ -5,21 +5,21 @@ import type { ChatState, ChartSpecs } from '../../../store/remoteAtoms';
  * Cleans up orphaned chartSpecs for tables that no longer exist in the database
  * @param chartSpecs Current chartSpecs object
  * @param dbContext Database context
- * @param schemaName Current schema name
+ * @param chatId Current schema name
  * @returns Cleaned chartSpecs object with only valid table references
  */
 export async function cleanupOrphanedChartSpecs(
     chartSpecs: ChartSpecs | undefined,
     dbContext: DBContext | null,
-    schemaName: string | null
+    chatId: string | null
 ): Promise<ChartSpecs> {
-    if (!chartSpecs || !dbContext || !schemaName) {
+    if (!chartSpecs || !dbContext || !chatId) {
         return (chartSpecs || {}) as ChartSpecs;
     }
 
     try {
         // Get all tables in the current schema
-        const existingTables = await dbContext.getTables(schemaName);
+        const existingTables = await dbContext.getTables(chatId);
         const existingTableSet = new Set(existingTables);
 
         // Filter chartSpecs to only include tables that exist
@@ -53,13 +53,13 @@ export async function cleanupOrphanedChartSpecs(
  * Validates that all chartSpec keys correspond to existing tables
  * @param chatState Current chat state
  * @param dbContext Database context
- * @param schemaName Current schema name
+ * @param chatId Current schema name
  * @returns Validation result with list of orphaned chartSpecs
  */
 export async function validateChartSpecs(
     chatState: ChatState | null,
     dbContext: DBContext | null,
-    schemaName: string | null
+    chatId: string | null
 ): Promise<{
     isValid: boolean;
     orphanedChartSpecs: string[];
@@ -71,13 +71,13 @@ export async function validateChartSpecs(
         existingTables: [] as string[],
     };
 
-    if (!chatState?.chartSpecs || !dbContext || !schemaName) {
+    if (!chatState?.chartSpecs || !dbContext || !chatId) {
         return result;
     }
 
     try {
         // Get all tables in the current schema
-        const existingTables = await dbContext.getTables(schemaName);
+        const existingTables = await dbContext.getTables(chatId);
         const existingTableSet = new Set(existingTables);
         result.existingTables = existingTables;
 

@@ -12,7 +12,7 @@ export interface QueryParams {
     selectedTable: string;
     selectedColumns: string[];
     geometryColumnName?: string;
-    schema?: string | null;
+    chatId?: string | null;
     columnTypes?: Record<string, string>;
 }
 
