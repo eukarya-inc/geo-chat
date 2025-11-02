@@ -41,7 +41,7 @@ export type ExtraStyle = {
 
 export interface MapProps {
     dbContext: DBContext;
-    schema?: string | null; // Current schema context
+    chatId?: string | null; // Current chat ID (maps to DuckDB schema)
     selectedTable: string | null; // For backward compatibility and primary table
     tables?: string[]; // New prop for multiple tables: ["schema.table1", "table2", ...]
     selectedColumns?: string[];

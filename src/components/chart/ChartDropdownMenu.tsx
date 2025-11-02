@@ -15,7 +15,7 @@ interface ChartDropdownMenuProps {
     chartSpec: ChartSpec;
     vegaView?: View | null;
     dbContext?: DBContext;
-    schema?: string;
+    chatId?: string;
     onConfigOpen?: () => void;
     onDataSourceOpen?: () => void;
     onJsonSourceOpen?: () => void;
@@ -33,7 +33,7 @@ export function ChartDropdownMenu({
     chartSpec,
     vegaView,
     dbContext,
-    schema,
+    chatId,
     onConfigOpen,
     onDataSourceOpen,
     onJsonSourceOpen,
@@ -182,12 +182,12 @@ export function ChartDropdownMenu({
     };
 
     const hasConfigSection =
-        (showConfigButton && onConfigOpen && dbContext && schema) ||
+        (showConfigButton && onConfigOpen && dbContext && chatId) ||
         (showDataSourceButton && onDataSourceOpen) ||
         (showJsonSourceButton && onJsonSourceOpen);
 
     const menuItems: DropdownMenuItem[] = [
-        ...(showConfigButton && onConfigOpen && dbContext && schema
+        ...(showConfigButton && onConfigOpen && dbContext && chatId
             ? [
                   {
                       title: 'グラフスタイルを編集',

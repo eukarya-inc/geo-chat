@@ -10,7 +10,7 @@ interface ChartConfigModalProps {
     onClose: () => void;
     chartSpec: ChartSpec;
     dbContext: DBContext;
-    schema: string;
+    chatId: string;
     onUpdateChart: (vizId: string, newSpec: ChartSpec) => void;
     vizId: string;
 }
@@ -20,7 +20,7 @@ export function ChartConfigModal({
     onClose,
     chartSpec,
     dbContext,
-    schema,
+    chatId,
     onUpdateChart,
     vizId,
 }: ChartConfigModalProps) {
@@ -44,7 +44,7 @@ export function ChartConfigModal({
 
     const handleConfigChange = (config: ChartConfig, columns: ColumnInfo[]) => {
         // Generate new spec from config
-        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, schema);
+        const newVegaSpec = generateChartSpec(config, columns, chartSpec.spec, chatId);
         const updatedSpec: ChartSpec = {
             ...chartSpec,
             title: config.title as string,
@@ -71,7 +71,7 @@ export function ChartConfigModal({
                     <ChartConfigForm
                         chartSpec={chartSpec}
                         dbContext={dbContext}
-                        schema={schema}
+                        chatId={chatId}
                         onConfigChange={handleConfigChange}
                         showApplyButton={false}
                         autoApplyChanges={true}

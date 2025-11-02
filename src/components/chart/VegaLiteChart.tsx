@@ -8,7 +8,7 @@ import type { TopLevelSpec } from 'vega-lite';
 import { loader as vegaLoader, type Loader } from 'vega';
 
 // Create a custom loader that queries DuckDB directly
-function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader {
+function createDuckDBLoader(dbContext: DBContext, chatId: string | null): Loader {
     const defaultLoader = vegaLoader();
 
     return {
@@ -22,8 +22,8 @@ function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader
                 }
 
                 const { schemaName: urlSchema, tableName } = parsed;
-                // Use schema from URL if provided, otherwise use default schema
-                const schemaName = urlSchema || schema;
+                // Use schema from URL if provided, otherwise use the chatId (which maps to schema)
+                const schemaName = urlSchema || chatId;
 
                 // Build SQL query
                 const sql = `SELECT * FROM ${tableName}`;
@@ -51,7 +51,7 @@ function createDuckDBLoader(dbContext: DBContext, schema: string | null): Loader
 interface VegaLiteChartProps {
     spec: VegaChartSpec;
     dbContext?: DBContext;
-    schema?: string | null;
+    chatId?: string | null;
     showHeader?: boolean;
     enableActions?: boolean;
     onViewReady?: (view: View | null) => void;
@@ -60,7 +60,7 @@ interface VegaLiteChartProps {
 const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     spec: initialSpec,
     dbContext,
-    schema = null,
+    chatId = null,
     showHeader = true,
     enableActions = false,
     onViewReady,
@@ -68,26 +68,26 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentSpec, setCurrentSpec] = useState(initialSpec);
-    const [prevSchema, setPrevSchema] = useState(schema);
+    const [prevChatId, setPrevChatId] = useState(chatId);
     const [dataUrl, setDataUrl] = useState<string | null>(null);
     const vegaViewRef = useRef<View | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
-    // Create loader with current dbContext and schema
+    // Create loader with current dbContext and chatId
     const duckdbLoader = useMemo(() => {
         if (!dbContext) return vegaLoader();
-        return createDuckDBLoader(dbContext, schema);
-    }, [dbContext, schema]);
+        return createDuckDBLoader(dbContext, chatId);
+    }, [dbContext, chatId]);
 
-    // Clear data when schema changes
+    // Clear data when chatId changes
     useEffect(() => {
-        if (prevSchema !== schema && prevSchema !== null) {
+        if (prevChatId !== chatId && prevChatId !== null) {
             setDataUrl(null);
             setError(null);
             setLoading(true);
-            setPrevSchema(schema);
+            setPrevChatId(chatId);
         }
-    }, [schema, prevSchema]);
+    }, [chatId, prevChatId]);
 
     // Update internal state when spec changes
     useEffect(() => {
@@ -199,7 +199,7 @@ const VegaLiteChart: React.FC<VegaLiteChartProps> = ({
             setError(err instanceof Error ? err.message : 'Failed to configure chart');
             setDataUrl(null);
         }
-    }, [dbContext, currentSpec, schema]);
+    }, [dbContext, currentSpec, chatId]);
 
     // Create final spec with URL data, ensuring it's valid TopLevelSpec
     // Memoize to prevent unnecessary re-renders in VegaLite component
@@ -304,7 +304,7 @@ export default React.memo(VegaLiteChart, (prevProps, nextProps) => {
     return (
         JSON.stringify(prevProps.spec) === JSON.stringify(nextProps.spec) &&
         prevProps.dbContext === nextProps.dbContext &&
-        prevProps.schema === nextProps.schema &&
+        prevProps.chatId === nextProps.chatId &&
         prevProps.showHeader === nextProps.showHeader &&
         prevProps.enableActions === nextProps.enableActions &&
         prevProps.onViewReady === nextProps.onViewReady

@@ -5,7 +5,6 @@ import { VisualizationGridItem } from './VisualizationGridItem';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
-import { chatIdToSchemaName } from '../../utils/schema';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -27,7 +26,6 @@ export interface Dashboard {
 interface DashboardProps {
     dashboard: Dashboard;
     dbContext: DBContext;
-    schemaName: string;
     onLayoutChange: (layout: Layout[]) => void;
     onRemoveVisualization: (vizId: string) => void;
     onAddVisualization: (vizId: string) => void;
@@ -38,7 +36,6 @@ interface DashboardProps {
 export function Dashboard({
     dashboard,
     dbContext,
-    schemaName,
     onLayoutChange,
     onRemoveVisualization,
     onAddVisualization,
@@ -402,7 +399,7 @@ export function Dashboard({
                                         <VisualizationGridItem
                                             viz={viz}
                                             dbContext={dbContext}
-                                            schemaName={chatIdToSchemaName(viz.chatId) || schemaName}
+                                            chatId={viz.chatId}
                                             onRemove={handleRemoveVisualization}
                                             onUpdateChart={handleUpdateChart}
                                             onUpdateTitle={handleUpdateTitle}
@@ -433,7 +430,7 @@ export function Dashboard({
                                         <VisualizationGridItem
                                             viz={viz}
                                             dbContext={dbContext}
-                                            schemaName={chatIdToSchemaName(viz.chatId) || schemaName}
+                                            chatId={viz.chatId}
                                             onRemove={handleRemoveVisualization}
                                             onUpdateChart={handleUpdateChart}
                                             onUpdateTitle={handleUpdateTitle}

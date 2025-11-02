@@ -14,7 +14,7 @@ interface MapPanelProps {
     tableName: string;
     geometryColumn?: string;
     dbContext: DBContext;
-    schema?: string;
+    chatId?: string;
     mapSpec?: MapSpec;
     onRemove?: () => void;
     onExport?: () => void;
@@ -32,7 +32,7 @@ export function MapPanel({
     tableName,
     geometryColumn,
     dbContext,
-    schema,
+    chatId,
     mapSpec,
     onRemove,
     onExport,
@@ -149,7 +149,7 @@ export function MapPanel({
             <div className="flex-1 overflow-hidden">
                 <Map
                     dbContext={dbContext}
-                    schema={schema}
+                    chatId={chatId}
                     selectedTable={tableName}
                     geometryColumnName={geometryColumn}
                     tableStyles={mapSpec?.tableStyles}

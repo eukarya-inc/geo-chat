@@ -56,7 +56,7 @@ export function addTableLayers(
     tableSpec: string,
     tableStyle: TableStyle,
     sourceId: string,
-    schema: string | null = null
+    chatId: string | null = null
 ): void {
     // Check if source already exists, if so remove it first
     if (map.getSource(sourceId)) {
@@ -80,8 +80,8 @@ export function addTableLayers(
 
     // Add the source
     try {
-        // Include schema in tile URL if provided
-        const baseUrl = createDuckDBUrl(tableSpec, schema);
+        // Include chatId in tile URL if provided
+        const baseUrl = createDuckDBUrl(tableSpec, chatId);
         const tileUrl = `${baseUrl}/{z}/{x}/{y}.pbf`;
         map.addSource(sourceId, {
             type: 'vector',
@@ -182,7 +182,7 @@ export function updateMapLayers(params: {
     onExtraStyleChange?: (style: ExtraStyle) => void;
     initializedTables: Set<string>;
     styleManager?: MapStyleManager | null;
-    schema?: string | null;
+    chatId?: string | null;
 }): void {
     const {
         map,
@@ -195,7 +195,7 @@ export function updateMapLayers(params: {
         onExtraStyleChange,
         initializedTables,
         styleManager,
-        schema,
+        chatId,
     } = params;
 
     // Always ensure StyleManager has the current map reference before any operations
@@ -240,7 +240,7 @@ export function updateMapLayers(params: {
             }
         }
 
-        addTableLayers(map, tableSpec, tableStyle, sourceId, schema);
+        addTableLayers(map, tableSpec, tableStyle, sourceId, chatId);
     });
 
     // Apply extra style if provided

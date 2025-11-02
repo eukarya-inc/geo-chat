@@ -7,7 +7,7 @@ import { updateChatStateAtom, currentChatStateAtom, currentTableShowGraphAtom } 
 export function useChartVisualization(
     selectedTable: string | null,
     dbContext: DBContext | null,
-    schemaName: string | null
+    chatId: string | null
 ) {
     const updateChatState = useSetAtom(updateChatStateAtom);
     const currentChatState = useAtomValue(currentChatStateAtom);
@@ -35,14 +35,14 @@ export function useChartVisualization(
     // Update chart spec from AI tool
     const updateChartFromAI = useCallback(
         async (tableName: string, spec: VegaChartSpec) => {
-            if (!dbContext || !schemaName) {
+            if (!dbContext || !chatId) {
                 throw new Error('Database context or schema not available');
             }
 
             // Validate table exists
-            const isValid = await dbContext.validateTable(tableName, schemaName);
+            const isValid = await dbContext.validateTable(tableName, chatId);
             if (!isValid) {
-                throw new Error(`Table "${tableName}" does not exist in schema "${schemaName}"`);
+                throw new Error(`Table "${tableName}" does not exist in schema "${chatId}"`);
             }
 
             // Get existing chart spec to preserve aiGeneratedSpec
@@ -70,13 +70,13 @@ export function useChartVisualization(
                 },
             });
         },
-        [dbContext, schemaName, currentChatState, updateChatState]
+        [dbContext, chatId, currentChatState, updateChatState]
     );
 
     // Delete chart spec from AI tool
     const deleteChartFromAI = useCallback(
         async (tableName: string) => {
-            if (!dbContext || !schemaName) {
+            if (!dbContext || !chatId) {
                 throw new Error('Database context or schema not available');
             }
 
@@ -90,7 +90,7 @@ export function useChartVisualization(
                 },
             });
         },
-        [dbContext, schemaName, updateChatState]
+        [dbContext, chatId, updateChatState]
     );
 
     // Deprecated function kept for backward compatibility

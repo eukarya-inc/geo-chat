@@ -93,7 +93,7 @@ export const createChatAtom = atom(null, async (get, set) => {
 
     const chatCount = Object.keys(remoteState.chats).length;
     const newChat: Chat = {
-        id: `chat-${Date.now()}`,
+        id: `chat_${Date.now()}`,
         title: `Chat ${chatCount + 1}`,
         createdAt: new Date(),
         selectedTable: null,

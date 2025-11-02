@@ -25,7 +25,6 @@ import { localStateAtom, viewModeAtom, chatWidthPercentageAtom } from '../../sto
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
 import { ResizableHandle } from '../../components/ResizableHandle';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
-import { chatIdToSchemaName } from '../../utils/schema';
 import {
     useApiKeyManagement,
     useChatManagement,
@@ -142,17 +141,15 @@ function ChatPage() {
     // Get current chat state reactively
     const currentChatState = useAtomValue(currentChatStateAtom);
 
-    // Convert chatId to schemaName at the top level
-    const schemaName = chatIdToSchemaName(selectedChatId);
-
     // Schema management (uses chats state from above)
-    useSchemaManagement(dbContext, schemaName, chats, cleanedChartSpecs => {
+    // Note: selectedChatId is also used as the DuckDB schema name (format: "chat_<timestamp>")
+    useSchemaManagement(dbContext, selectedChatId, chats, cleanedChartSpecs => {
         // Update the chat state with cleaned chartSpecs when orphaned specs are removed
         updateChatState({ chartSpecs: cleanedChartSpecs });
     });
 
     // Table selection
-    const { selectedTable, handleTableSelection } = useTableSelection(dbContext, schemaName);
+    const { selectedTable, handleTableSelection } = useTableSelection(dbContext, selectedChatId);
 
     // Icon click handlers for TableCreatedMessage
     const handleChartIconClick = useCallback(
@@ -179,13 +176,13 @@ function ChatPage() {
         mapStyle,
         updateTableStyle,
         deleteTableStyle,
-    } = useMapVisualization(selectedTable, dbContext, schemaName);
+    } = useMapVisualization(selectedTable, dbContext, selectedChatId);
 
     // Chart visualization
     const { chartSpec, updateChartFromAI, deleteChartFromAI } = useChartVisualization(
         selectedTable,
         dbContext,
-        schemaName
+        selectedChatId
     );
 
     // Handler for conversation completion - updates chat title if needed
@@ -237,7 +234,7 @@ function ChatPage() {
     // Use AI Chat hook for Split View
     const { messages, isLoading, input, handleInputChange, handleSubmit, handleStop, sendMessage } = useAIChat({
         chatId: selectedChatId || 'default',
-        schema: schemaName,
+        schema: selectedChatId,
         dbContext,
         apiKey,
         selectedTable,
@@ -347,12 +344,8 @@ function ChatPage() {
                         return null;
                     }
 
-                    const newSchemaName = chatIdToSchemaName(newChatId);
-                    const { tableName, message: tableMessage } = await createTableFromUrl(
-                        dataUrl,
-                        db,
-                        newSchemaName || null
-                    );
+                    // Note: newChatId is also used as the DuckDB schema name
+                    const { tableName, message: tableMessage } = await createTableFromUrl(dataUrl, db, newChatId);
 
                     // Create a promise that resolves when messages are added
                     let resolveMessageAdded: (() => void) | null = null;
@@ -370,8 +363,8 @@ function ChatPage() {
                         }
                     };
 
-                    // Pass db, schema and onMessagesChange as overrides
-                    await sendMessage(tableMessage, newChatId, db, newSchemaName, {
+                    // Pass db, chatId and onMessagesChange as overrides
+                    await sendMessage(tableMessage, newChatId, db, newChatId, {
                         onMessagesChange: newChatOnMessagesChange,
                     });
 
@@ -387,15 +380,14 @@ function ChatPage() {
                         return null;
                     }
 
-                    const newSchemaName = chatIdToSchemaName(newChatId);
-
+                    // Note: newChatId is also used as the DuckDB schema name
                     // Create onMessagesChange for this specific chat
                     const newChatOnMessagesChange = (messages: StructuredMessage[]) => {
                         updateChatMessagesWithAutoSelect(newChatId, messages);
                     };
 
                     // Start sending message in background (don't wait)
-                    sendMessage(message, newChatId, db, newSchemaName, {
+                    sendMessage(message, newChatId, db, newChatId, {
                         onMessagesChange: newChatOnMessagesChange,
                     });
 
@@ -417,11 +409,11 @@ function ChatPage() {
 
             // If a table was created, notify table change to trigger auto-selection
             if (tableName && dbContext) {
-                const schemaName = chatIdToSchemaName(chatId);
                 // Use setTimeout to ensure the chat is fully switched before notifying
                 setTimeout(() => {
                     if (dbContext) {
-                        dbContext.notifyTableChange(tableName, schemaName);
+                        // Note: chatId is also used as the DuckDB schema name
+                        dbContext.notifyTableChange(tableName, chatId);
                     }
                 }, 100);
             }
@@ -432,8 +424,8 @@ function ChatPage() {
     // Handle sending message with URL - creates table from URL in existing chat
     const handleSendMessageWithUrl = useCallback(
         async (url: string) => {
-            if (!selectedChatId || !schemaName || !dbContext) {
-                console.error('Cannot process URL: missing chat ID, schema, or dbContext');
+            if (!selectedChatId || !dbContext) {
+                console.error('Cannot process URL: missing chat ID or dbContext');
                 return;
             }
 
@@ -446,7 +438,7 @@ function ChatPage() {
                 }
 
                 // Create table from URL in the current chat's schema
-                const { message: tableMessage } = await createTableFromUrl(dataUrl, dbContext, schemaName);
+                const { message: tableMessage } = await createTableFromUrl(dataUrl, dbContext, selectedChatId);
 
                 // Send the result message to AI
                 sendMessage(tableMessage);
@@ -454,7 +446,7 @@ function ChatPage() {
                 console.error('Failed to create table from URL:', error);
             }
         },
-        [selectedChatId, schemaName, dbContext, sendMessage]
+        [selectedChatId, dbContext, sendMessage]
     );
 
     // Wrap sendMessage to handle URL processing for existing chat
@@ -661,7 +653,7 @@ function ChatPage() {
             type: 'map' as const,
             title: mapTitle,
             mapSpec: mapSpec,
-            tableName: selectedTable,
+            tableId: selectedTable,
             geometryColumn: selectedGeometryColumn,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
@@ -709,7 +701,7 @@ function ChatPage() {
             id: `viz-${Date.now()}`,
             type: 'table' as const,
             title: tableTitle,
-            tableName: selectedTable,
+            tableId: selectedTable,
             sql: `SELECT * FROM ${selectedTable}`, // Base SQL for the table
             createdAt: new Date(),
             chatId: selectedChatId,
@@ -737,7 +729,7 @@ function ChatPage() {
         }
 
         try {
-            const result = await generateChartByType(chartType, selectedTable, dbContext, schemaName);
+            const result = await generateChartByType(chartType, selectedTable, dbContext, selectedChatId);
             if (result) {
                 updateChartFromAI(selectedTable, result.spec);
                 // Automatically open the chart configuration panel
@@ -789,7 +781,6 @@ function ChatPage() {
                                     key={selectedDashboardId} // Force re-render when dashboard changes
                                     dashboard={currentDashboard}
                                     dbContext={dbContext!}
-                                    schemaName={schemaName || 'main'}
                                     onLayoutChange={layout => updateDashboardLayout(selectedDashboardId, layout)}
                                     onRemoveVisualization={vizId => {
                                         if (!selectedDashboardId) {
@@ -832,7 +823,7 @@ function ChatPage() {
                                         <EmptyChat
                                             dbContext={dbContext}
                                             apiKey={apiKey}
-                                            schemaName={schemaName}
+                                            chatId={selectedChatId}
                                             onApiKeyChange={setApiKey}
                                             onApiKeySave={saveApiKey}
                                             showApiKeyInput={showApiKeyInput}
@@ -885,7 +876,7 @@ function ChatPage() {
                                 <Chat
                                     dbContext={dbContext}
                                     apiKey={apiKey}
-                                    schemaName={schemaName}
+                                    chatId={selectedChatId}
                                     messages={messages}
                                     isLoading={isLoading}
                                     input={input}
@@ -934,7 +925,7 @@ function ChatPage() {
                                                     dbContext={dbContext}
                                                     selectedTable={selectedTable}
                                                     onTableSelect={handleTableSelection}
-                                                    schema={schemaName}
+                                                    schema={selectedChatId}
                                                 />
                                             </div>
                                         </div>
@@ -1004,7 +995,7 @@ function ChatPage() {
                                                 <TableSQLDisplay
                                                     tableName={selectedTable}
                                                     dbContext={dbContext}
-                                                    schema={schemaName}
+                                                    schema={selectedChatId}
                                                 />
                                             </div>
                                         )}
@@ -1022,7 +1013,7 @@ function ChatPage() {
                                                         title={displayTitle}
                                                         tableName={selectedTable}
                                                         dbContext={dbContext}
-                                                        schema={schemaName || null}
+                                                        chatId={selectedChatId || null}
                                                         showExportButton={true}
                                                         onExport={() => {
                                                             setExportType('table');
@@ -1042,7 +1033,7 @@ function ChatPage() {
                                                 <ChartPanel
                                                     chartSpec={displayChartSpec}
                                                     dbContext={dbContext}
-                                                    schema={schemaName || 'main'}
+                                                    chatId={selectedChatId || 'main'}
                                                     configMode="panel"
                                                     onViewReady={view => {
                                                         chatPageVegaViewRef.current = view;
@@ -1091,7 +1082,7 @@ function ChatPage() {
                                                             tableName={selectedTable}
                                                             geometryColumn={selectedGeometryColumn}
                                                             dbContext={dbContext}
-                                                            schema={schemaName || undefined}
+                                                            chatId={selectedChatId || undefined}
                                                             mapSpec={{ tableStyles, style: mapStyle }}
                                                             showRemoveButton={false}
                                                             onExport={() => {
