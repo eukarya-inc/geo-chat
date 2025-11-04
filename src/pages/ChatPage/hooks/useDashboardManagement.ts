@@ -24,6 +24,19 @@ export function createDefaultLayoutForVisualization(
     };
 }
 
+/**
+ * Helper function to add a visualization to dashboard with automatic layout creation.
+ * Extracted from export handlers to make the auto-add logic testable.
+ */
+export function exportVisualizationToDashboard(dashboard: Dashboard, visualization: DashboardVisualization): Dashboard {
+    const defaultLayout = createDefaultLayoutForVisualization(visualization.id, visualization.type);
+    return {
+        ...dashboard,
+        visualizations: [...dashboard.visualizations, visualization],
+        layout: [...dashboard.layout, defaultLayout],
+    };
+}
+
 export function useDashboardManagement() {
     const [remoteState, setRemoteState] = useAtom(remoteStateAtom);
 

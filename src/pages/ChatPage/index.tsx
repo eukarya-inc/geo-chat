@@ -34,7 +34,7 @@ import {
     useChartVisualization,
     useTableHistorySync,
     useDashboardManagement,
-    createDefaultLayoutForVisualization,
+    exportVisualizationToDashboard,
 } from './hooks';
 
 function ChatPage() {
@@ -522,14 +522,8 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Create default layout for automatic addition to dashboard
-        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
-
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, defaultLayout],
-        };
+        // Use extracted function for auto-add logic
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
         updateDashboard(updatedDashboard);
@@ -666,14 +660,8 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Create default layout for automatic addition to dashboard
-        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
-
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, defaultLayout],
-        };
+        // Use extracted function for auto-add logic
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
         updateDashboard(updatedDashboard);
@@ -717,14 +705,8 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Create default layout for automatic addition to dashboard
-        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
-
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-            layout: [...dashboard.layout, defaultLayout],
-        };
+        // Use extracted function for auto-add logic
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
         updateDashboard(updatedDashboard);

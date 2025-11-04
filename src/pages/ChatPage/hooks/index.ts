@@ -65,4 +65,8 @@ export { useTableSelection } from './useTableSelection';
 export { useMapVisualization } from './useMapVisualization';
 export { useChartVisualization } from './useChartVisualization';
 export { useTableHistorySync } from './useTableHistorySync';
-export { useDashboardManagement, createDefaultLayoutForVisualization } from './useDashboardManagement';
+export {
+    useDashboardManagement,
+    createDefaultLayoutForVisualization,
+    exportVisualizationToDashboard,
+} from './useDashboardManagement';
