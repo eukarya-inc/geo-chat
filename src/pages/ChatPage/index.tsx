@@ -35,6 +35,7 @@ import {
     useTableHistorySync,
     useDashboardManagement,
 } from './hooks';
+import { useDashboardPreview } from '../../hooks/useDashboardPreview';
 
 function ChatPage() {
     const { dbContext, isInitializing } = useDuckDB();
@@ -267,6 +268,27 @@ function ChatPage() {
         removeVisualizationFromDashboard,
         renameDashboard,
     } = useDashboardManagement();
+
+    // Dashboard preview management
+    const { capturePreview } = useDashboardPreview();
+
+    // Auto-capture screenshot when leaving dashboard
+    useEffect(() => {
+        // Track the previous dashboard ID to capture its screenshot when switching
+        const previousDashboardId = selectedDashboardId;
+
+        return () => {
+            // Cleanup: capture screenshot of the dashboard we're leaving
+            if (previousDashboardId) {
+                // Use setTimeout to ensure DOM is still available during cleanup
+                setTimeout(() => {
+                    capturePreview(previousDashboardId).catch(err => {
+                        console.error('Failed to capture dashboard preview on unmount:', err);
+                    });
+                }, 100);
+            }
+        };
+    }, [selectedDashboardId, capturePreview]);
 
     // Navigation handler for sidebar buttons
     const handleNavigate = useCallback(

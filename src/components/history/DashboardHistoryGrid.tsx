@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { PresentationChartBarIcon } from '@heroicons/react/24/outline';
 import type { Dashboard } from '../../store/remoteAtoms';
 import { HistoryCard } from './HistoryCard';
+import { useDashboardPreview } from '../../hooks/useDashboardPreview';
 
 interface DashboardHistoryGridProps {
     dashboards: Dashboard[];
@@ -20,6 +21,7 @@ export function DashboardHistoryGrid({
 }: DashboardHistoryGridProps) {
     const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
     const [deletingDashboardId, setDeletingDashboardId] = useState<string | null>(null);
+    const { getPreview } = useDashboardPreview();
 
     const handleStartEdit = useCallback((dashboardId: string) => {
         setEditingDashboardId(dashboardId);
@@ -72,6 +74,7 @@ export function DashboardHistoryGrid({
                         key={dashboard.id}
                         title={dashboard.title}
                         date={dashboard.createdAt}
+                        previewImage={getPreview(dashboard.id)}
                         onClick={() => onSelectDashboard(dashboard.id)}
                         onStartDelete={() => handleStartDelete(dashboard.id)}
                         onConfirmDelete={() => handleConfirmDelete(dashboard.id)}

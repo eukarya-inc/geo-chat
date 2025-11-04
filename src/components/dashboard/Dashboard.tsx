@@ -193,7 +193,7 @@ export function Dashboard({
     }, [shownVisualizations.length]);
 
     return (
-        <div className="flex h-full">
+        <div className="flex h-full" data-dashboard-id={dashboard.id}>
             {/* Left Sidebar with Tabs */}
             <div className="w-80 h-full border-r border-gray-300 bg-gray-50 flex flex-col">
                 {/* Tab Navigation */}

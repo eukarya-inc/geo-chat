@@ -10,6 +10,7 @@ interface HistoryCardProps {
         label: string;
         color: 'blue' | 'green' | 'purple';
     };
+    previewImage?: string | null;
     onClick: () => void;
     onStartDelete?: () => void;
     onConfirmDelete?: () => void;
@@ -25,6 +26,7 @@ export function HistoryCard({
     date,
     subtitle,
     badge,
+    previewImage,
     onClick,
     onStartDelete,
     onConfirmDelete,
@@ -93,69 +95,76 @@ export function HistoryCard({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             onClick={!isEditing ? onClick : undefined}
-            className={`bg-white border border-gray-200 rounded-lg p-4 transition-shadow relative ${
+            className={`bg-white border border-gray-200 rounded-lg overflow-hidden transition-shadow relative ${
                 !isEditing ? 'hover:shadow-lg cursor-pointer' : ''
             }`}
         >
-            <div className="flex justify-between items-start mb-2">
-                {isEditing ? (
-                    <input
-                        type="text"
-                        value={editingTitle}
-                        onChange={e => setEditingTitle(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleSaveEdit}
-                        autoFocus
-                        className="flex-1 font-medium text-lg border border-blue-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        onClick={e => e.stopPropagation()}
-                    />
-                ) : (
-                    <h3 className="font-medium text-lg truncate flex-1">{title}</h3>
-                )}
-                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                    {badge && (
-                        <span
-                            className={`text-xs px-2 py-1 rounded ${
-                                badge.color === 'blue'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : badge.color === 'green'
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-purple-100 text-purple-700'
-                            }`}
-                        >
-                            {badge.label}
-                        </span>
-                    )}
-                    {!isEditing && isHovered && onRename && (
-                        <button
-                            onClick={e => {
-                                e.stopPropagation();
-                                onStartEdit?.();
-                            }}
-                            className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                        >
-                            <PencilIcon className="w-4 h-4" />
-                        </button>
-                    )}
-                    {!isEditing && isHovered && onStartDelete && (
-                        <button
-                            onClick={e => {
-                                e.stopPropagation();
-                                onStartDelete();
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                            <TrashIcon className="w-4 h-4" />
-                        </button>
-                    )}
+            {previewImage && (
+                <div className="w-full aspect-video bg-gray-100 overflow-hidden">
+                    <img src={previewImage} alt={`Preview of ${title}`} className="w-full h-full object-cover" />
                 </div>
-            </div>
-            {!isEditing && (
-                <>
-                    <p className="text-sm text-gray-500">last message {relativeTime}</p>
-                    {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
-                </>
             )}
+            <div className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={e => setEditingTitle(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onBlur={handleSaveEdit}
+                            autoFocus
+                            className="flex-1 font-medium text-lg border border-blue-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onClick={e => e.stopPropagation()}
+                        />
+                    ) : (
+                        <h3 className="font-medium text-lg truncate flex-1">{title}</h3>
+                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        {badge && (
+                            <span
+                                className={`text-xs px-2 py-1 rounded ${
+                                    badge.color === 'blue'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : badge.color === 'green'
+                                          ? 'bg-green-100 text-green-700'
+                                          : 'bg-purple-100 text-purple-700'
+                                }`}
+                            >
+                                {badge.label}
+                            </span>
+                        )}
+                        {!isEditing && isHovered && onRename && (
+                            <button
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    onStartEdit?.();
+                                }}
+                                className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                            >
+                                <PencilIcon className="w-4 h-4" />
+                            </button>
+                        )}
+                        {!isEditing && isHovered && onStartDelete && (
+                            <button
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    onStartDelete();
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                                <TrashIcon className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                {!isEditing && (
+                    <>
+                        <p className="text-sm text-gray-500">last message {relativeTime}</p>
+                        {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

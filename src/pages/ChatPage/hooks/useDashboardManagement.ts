@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { Layout } from 'react-grid-layout';
 import { remoteStateAtom, Dashboard, DashboardVisualization } from '../../../store/remoteAtoms';
+import { deleteDashboardPreviewAtom } from '../../../store/previewAtoms';
 
 export function useDashboardManagement() {
     const [remoteState, setRemoteState] = useAtom(remoteStateAtom);
+    const deletePreview = useSetAtom(deleteDashboardPreviewAtom);
 
     const createDashboard = useCallback(
         (title?: string): Dashboard => {
@@ -74,8 +76,10 @@ export function useDashboardManagement() {
                     dashboards: remainingDashboards,
                 };
             });
+            // Also delete the preview image for this dashboard
+            deletePreview(dashboardId);
         },
-        [setRemoteState]
+        [setRemoteState, deletePreview]
     );
 
     const addVisualizationToDashboard = useCallback(
