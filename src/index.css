@@ -107,6 +107,47 @@ body {
     white-space: pre-wrap;
 }
 
+/* Markdown table styling */
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    font-size: 0.875em;
+    line-height: 1.5;
+    overflow-x: auto;
+    display: block;
+}
+
+.prose thead {
+    background-color: #f3f4f6;
+}
+
+.prose th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+}
+
+.prose td {
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+}
+
+.prose tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.prose tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+.prose tbody tr:hover {
+    background-color: #f3f4f6;
+}
+
 /* Hide scrollbar for recommended prompts */
 .scrollbar-hide {
     -ms-overflow-style: none; /* Internet Explorer 10+ */

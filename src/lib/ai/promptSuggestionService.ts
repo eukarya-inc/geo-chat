@@ -84,13 +84,18 @@ Requirements:
    - For geographic columns: suggest spatial analysis
 7. Avoid technical jargon - write as if explaining to a business user
 
-IMPORTANT: 
+IMPORTANT:
 - Only suggest analyses that can be done with the columns that actually exist
 - ALWAYS use "〜したい" ending for consistency
 For example:
 - If you see 'balance' or 'acctbal' columns → "残高の分析をしたい", NOT "売上を分析したい"
 - If you see 'customer' data → "顧客の分布を見たい", NOT "売上推移を見たい"
 - If you see 'order' data → then you can suggest "注文の分析をしたい"
+
+SPECIAL CASE - Diet Answer Data:
+- If the table contains Diet answer characteristics (columns like 年度, 年月日, 委員会, 質問者, 答弁内容, 答弁者, 会議録, etc.), this is Diet/parliamentary answer data
+- For Diet answer data, ALWAYS include this prompt: "この答弁データから新しい国会答弁案を作成したい"
+- This should be one of the top suggestions (first or second) since it's a primary use case for Diet answer data
 `;
 
         const { object } = await generateObject({
