@@ -11,6 +11,16 @@ import 'react-resizable/css/styles.css';
 const GridLayout = WidthProvider(ReactGridLayout);
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
+/**
+ * Helper function to detect newly added visualization IDs.
+ * Extracted to follow project's "aggressively split" principle.
+ */
+function detectNewlyAddedIds(prevLayout: Layout[], currentLayout: Layout[]): string[] {
+    const prevIds = new Set(prevLayout.map(item => item.i));
+    const currentIds = new Set(currentLayout.map(item => item.i));
+    return Array.from(currentIds).filter(id => !prevIds.has(id));
+}
+
 // Re-export for backward compatibility, but use the one from remoteAtoms
 export type DashboardVisualization = DashboardVisualizationType;
 
@@ -49,6 +59,7 @@ export function Dashboard({
     const [editedTitle, setEditedTitle] = useState(dashboard.title);
     const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
     const titleInputRef = useRef<HTMLInputElement>(null);
+    const prevDashboardIdRef = useRef<string>(dashboard.id);
     const prevLayoutRef = useRef<Layout[]>(dashboard.layout);
 
     // Determine which visualizations are shown on dashboard
@@ -57,11 +68,16 @@ export function Dashboard({
 
     // Detect newly added visualizations and trigger animation
     useEffect(() => {
-        const prevIds = new Set(prevLayoutRef.current.map(item => item.i));
-        const currentIds = new Set(dashboard.layout.map(item => item.i));
+        // If dashboard changed, reset refs without animation
+        if (prevDashboardIdRef.current !== dashboard.id) {
+            prevDashboardIdRef.current = dashboard.id;
+            prevLayoutRef.current = dashboard.layout;
+            return;
+        }
 
-        // Find new IDs that weren't in previous layout
-        const newIds = Array.from(currentIds).filter(id => !prevIds.has(id));
+        // Detect newly added items using helper function
+        const newIds = detectNewlyAddedIds(prevLayoutRef.current, dashboard.layout);
+        prevLayoutRef.current = dashboard.layout;
 
         if (newIds.length > 0) {
             setNewlyAddedIds(new Set(newIds));
@@ -73,10 +89,7 @@ export function Dashboard({
 
             return () => clearTimeout(timer);
         }
-
-        // Update previous layout reference
-        prevLayoutRef.current = dashboard.layout;
-    }, [dashboard.layout]);
+    }, [dashboard.layout, dashboard.id]);
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
