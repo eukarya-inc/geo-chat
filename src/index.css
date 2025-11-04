@@ -29,6 +29,22 @@ body {
     animation: shimmer 2s linear infinite;
 }
 
+/* Fade in and scale animation for newly added dashboard items */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-fadeInScale {
+    animation: fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Prose styles for markdown rendering */
 .prose {
     color: inherit;

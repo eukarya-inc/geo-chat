@@ -47,11 +47,36 @@ export function Dashboard({
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState(dashboard.title);
+    const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
     const titleInputRef = useRef<HTMLInputElement>(null);
+    const prevLayoutRef = useRef<Layout[]>(dashboard.layout);
 
     // Determine which visualizations are shown on dashboard
     const shownVisualizationIds = new Set(dashboard.layout.map(item => item.i));
     const shownVisualizations = dashboard.visualizations.filter(viz => shownVisualizationIds.has(viz.id));
+
+    // Detect newly added visualizations and trigger animation
+    useEffect(() => {
+        const prevIds = new Set(prevLayoutRef.current.map(item => item.i));
+        const currentIds = new Set(dashboard.layout.map(item => item.i));
+
+        // Find new IDs that weren't in previous layout
+        const newIds = Array.from(currentIds).filter(id => !prevIds.has(id));
+
+        if (newIds.length > 0) {
+            setNewlyAddedIds(new Set(newIds));
+
+            // Clear animation after 400ms (animation duration)
+            const timer = setTimeout(() => {
+                setNewlyAddedIds(new Set());
+            }, 400);
+
+            return () => clearTimeout(timer);
+        }
+
+        // Update previous layout reference
+        prevLayoutRef.current = dashboard.layout;
+    }, [dashboard.layout]);
 
     const handleLayoutChange = useCallback(
         (layout: Layout[]) => {
@@ -392,7 +417,7 @@ export function Dashboard({
                                 {shownVisualizations.map(viz => (
                                     <div
                                         key={viz.id}
-                                        className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                        className={`bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden ${newlyAddedIds.has(viz.id) ? 'animate-fadeInScale' : ''}`}
                                         data-viz-id={viz.id}
                                         style={{ height: '100%' }}
                                     >
@@ -423,7 +448,7 @@ export function Dashboard({
                                 {shownVisualizations.map(viz => (
                                     <div
                                         key={viz.id}
-                                        className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                                        className={`bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden ${newlyAddedIds.has(viz.id) ? 'animate-fadeInScale' : ''}`}
                                         data-viz-id={viz.id}
                                         style={{ height: '100%' }}
                                     >

@@ -34,6 +34,7 @@ import {
     useChartVisualization,
     useTableHistorySync,
     useDashboardManagement,
+    createDefaultLayoutForVisualization,
 } from './hooks';
 
 function ChatPage() {
@@ -521,15 +522,20 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
+        // Create default layout for automatic addition to dashboard
+        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
+
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
+            layout: [...dashboard.layout, defaultLayout],
         };
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
+
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);
@@ -660,16 +666,20 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
+        // Create default layout for automatic addition to dashboard
+        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
+
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
+            layout: [...dashboard.layout, defaultLayout],
         };
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
 
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);
@@ -707,16 +717,20 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
+        // Create default layout for automatic addition to dashboard
+        const defaultLayout = createDefaultLayoutForVisualization(newVisualization.id, newVisualization.type);
+
         const updatedDashboard = {
             ...dashboard,
             visualizations: [...dashboard.visualizations, newVisualization],
+            layout: [...dashboard.layout, defaultLayout],
         };
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
 
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);
