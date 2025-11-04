@@ -3,6 +3,40 @@ import { useAtom } from 'jotai';
 import { Layout } from 'react-grid-layout';
 import { remoteStateAtom, Dashboard, DashboardVisualization } from '../../../store/remoteAtoms';
 
+/**
+ * Helper function to create default layout for a visualization.
+ * Extracted to avoid code duplication between export and manual add flows.
+ */
+export function createDefaultLayoutForVisualization(
+    visualizationId: string,
+    visualizationType: 'chart' | 'map' | 'table',
+    layoutOverride?: Partial<Layout>
+): Layout {
+    return {
+        i: visualizationId,
+        x: 0,
+        y: Infinity, // Put at bottom
+        w: visualizationType === 'map' ? 8 : 6,
+        h: visualizationType === 'map' ? 6 : 4,
+        minW: visualizationType === 'map' ? 4 : 3,
+        minH: visualizationType === 'map' ? 3 : 2,
+        ...layoutOverride,
+    };
+}
+
+/**
+ * Helper function to add a visualization to dashboard with automatic layout creation.
+ * Extracted from export handlers to make the auto-add logic testable.
+ */
+export function exportVisualizationToDashboard(dashboard: Dashboard, visualization: DashboardVisualization): Dashboard {
+    const defaultLayout = createDefaultLayoutForVisualization(visualization.id, visualization.type);
+    return {
+        ...dashboard,
+        visualizations: [...dashboard.visualizations, visualization],
+        layout: [...dashboard.layout, defaultLayout],
+    };
+}
+
 export function useDashboardManagement() {
     const [remoteState, setRemoteState] = useAtom(remoteStateAtom);
 
@@ -206,16 +240,7 @@ export function useDashboardManagement() {
             }
 
             // Create default layout based on visualization type
-            const defaultLayout: Layout = {
-                i: visualizationId,
-                x: 0,
-                y: Infinity, // Put at bottom
-                w: viz.type === 'map' ? 8 : 6,
-                h: viz.type === 'map' ? 6 : 4,
-                minW: viz.type === 'map' ? 4 : 3,
-                minH: viz.type === 'map' ? 3 : 2,
-                ...layoutOverride,
-            };
+            const defaultLayout = createDefaultLayoutForVisualization(visualizationId, viz.type, layoutOverride);
 
             const updatedDashboard: Dashboard = {
                 ...dashboard,

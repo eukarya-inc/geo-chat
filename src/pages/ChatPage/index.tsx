@@ -34,6 +34,7 @@ import {
     useChartVisualization,
     useTableHistorySync,
     useDashboardManagement,
+    exportVisualizationToDashboard,
 } from './hooks';
 
 function ChatPage() {
@@ -521,15 +522,13 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-        };
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
+
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);
@@ -660,16 +659,13 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-        };
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
 
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);
@@ -707,16 +703,13 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        const updatedDashboard = {
-            ...dashboard,
-            visualizations: [...dashboard.visualizations, newVisualization],
-        };
+        const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
+
+        // Update the dashboard with new visualization and layout
+        updateDashboard(updatedDashboard);
 
         // Remember the selected dashboard for next time
         setLastSelectedExportDashboard(dashboard.id);
-
-        // Update the dashboard
-        updateDashboard(updatedDashboard);
 
         // Switch to the dashboard view to show available visualizations
         handleSelectDashboard(dashboard.id);

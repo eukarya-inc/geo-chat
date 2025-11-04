@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
-import { useDashboardManagement } from './useDashboardManagement';
-import type { Dashboard } from '../../../store/remoteAtoms';
+import {
+    useDashboardManagement,
+    exportVisualizationToDashboard,
+    createDefaultLayoutForVisualization,
+} from './useDashboardManagement';
+import type { Dashboard, DashboardVisualization } from '../../../store/remoteAtoms';
 import type { ReactNode } from 'react';
 import React from 'react';
 
@@ -313,5 +317,216 @@ describe('useDashboardManagement', () => {
         expect(consoleSpy).toHaveBeenCalledWith('Dashboard not found:', 'non-existent-id');
 
         consoleSpy.mockRestore();
+    });
+
+    describe('exportVisualizationToDashboard', () => {
+        it('should add chart visualization to dashboard with auto-generated layout', () => {
+            const dashboard: Dashboard = {
+                id: 'dashboard-1',
+                title: 'Test Dashboard',
+                createdAt: new Date(),
+                visualizations: [],
+                layout: [],
+            };
+
+            const chartVisualization: DashboardVisualization = {
+                id: 'viz-chart-1',
+                type: 'chart',
+                title: 'Test Chart',
+                chartSpec: {
+                    id: 'chart-1',
+                    title: 'Test Chart',
+                    spec: {
+                        $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+                        mark: { type: 'bar' },
+                        encoding: {},
+                        data: { values: [] },
+                    },
+                    timestamp: new Date(),
+                },
+                createdAt: new Date(),
+                chatId: 'chat-1',
+            };
+
+            const result = exportVisualizationToDashboard(dashboard, chartVisualization);
+
+            // Verify visualization was added
+            expect(result.visualizations).toHaveLength(1);
+            expect(result.visualizations[0]).toEqual(chartVisualization);
+
+            // Verify layout was auto-generated with correct dimensions for chart
+            expect(result.layout).toHaveLength(1);
+            expect(result.layout[0].i).toBe('viz-chart-1');
+            expect(result.layout[0].w).toBe(6); // Chart default width
+            expect(result.layout[0].h).toBe(4); // Chart default height
+            expect(result.layout[0].x).toBe(0);
+            expect(result.layout[0].y).toBe(Infinity); // Always at bottom
+        });
+
+        it('should add map visualization to dashboard with correct dimensions', () => {
+            const dashboard: Dashboard = {
+                id: 'dashboard-2',
+                title: 'Test Dashboard',
+                createdAt: new Date(),
+                visualizations: [],
+                layout: [],
+            };
+
+            const mapVisualization: DashboardVisualization = {
+                id: 'viz-map-1',
+                type: 'map',
+                title: 'Test Map',
+                mapSpec: {},
+                tableId: 'table-1',
+                geometryColumn: 'geom',
+                sql: 'SELECT * FROM table-1',
+                createdAt: new Date(),
+                chatId: 'chat-1',
+            };
+
+            const result = exportVisualizationToDashboard(dashboard, mapVisualization);
+
+            expect(result.visualizations).toHaveLength(1);
+            expect(result.layout).toHaveLength(1);
+            expect(result.layout[0].i).toBe('viz-map-1');
+            expect(result.layout[0].w).toBe(8); // Map default width (larger)
+            expect(result.layout[0].h).toBe(6); // Map default height (larger)
+        });
+
+        it('should add table visualization to dashboard', () => {
+            const dashboard: Dashboard = {
+                id: 'dashboard-3',
+                title: 'Test Dashboard',
+                createdAt: new Date(),
+                visualizations: [],
+                layout: [],
+            };
+
+            const tableVisualization: DashboardVisualization = {
+                id: 'viz-table-1',
+                type: 'table',
+                title: 'Test Table',
+                tableId: 'test_table',
+                createdAt: new Date(),
+                chatId: 'chat-1',
+            };
+
+            const result = exportVisualizationToDashboard(dashboard, tableVisualization);
+
+            expect(result.visualizations).toHaveLength(1);
+            expect(result.layout).toHaveLength(1);
+            expect(result.layout[0].i).toBe('viz-table-1');
+            expect(result.layout[0].w).toBe(6); // Table default width
+            expect(result.layout[0].h).toBe(4); // Table default height
+        });
+
+        it('should preserve existing visualizations and layouts', () => {
+            const existingVisualization: DashboardVisualization = {
+                id: 'viz-existing',
+                type: 'chart',
+                title: 'Existing Chart',
+                chartSpec: {
+                    id: 'chart-existing',
+                    title: 'Existing',
+                    spec: {
+                        $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+                        mark: { type: 'line' },
+                        encoding: {},
+                        data: { values: [] },
+                    },
+                    timestamp: new Date(),
+                },
+                createdAt: new Date(),
+                chatId: 'chat-1',
+            };
+
+            const dashboard: Dashboard = {
+                id: 'dashboard-4',
+                title: 'Test Dashboard',
+                createdAt: new Date(),
+                visualizations: [existingVisualization],
+                layout: [{ i: 'viz-existing', x: 0, y: 0, w: 6, h: 4 }],
+            };
+
+            const newVisualization: DashboardVisualization = {
+                id: 'viz-new',
+                type: 'chart',
+                title: 'New Chart',
+                chartSpec: {
+                    id: 'chart-new',
+                    title: 'New',
+                    spec: {
+                        $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+                        mark: { type: 'bar' },
+                        encoding: {},
+                        data: { values: [] },
+                    },
+                    timestamp: new Date(),
+                },
+                createdAt: new Date(),
+                chatId: 'chat-1',
+            };
+
+            const result = exportVisualizationToDashboard(dashboard, newVisualization);
+
+            // Verify both old and new exist
+            expect(result.visualizations).toHaveLength(2);
+            expect(result.visualizations[0]).toEqual(existingVisualization);
+            expect(result.visualizations[1]).toEqual(newVisualization);
+
+            expect(result.layout).toHaveLength(2);
+            expect(result.layout[0].i).toBe('viz-existing');
+            expect(result.layout[1].i).toBe('viz-new');
+        });
+    });
+
+    describe('createDefaultLayoutForVisualization', () => {
+        it('should create layout with chart dimensions', () => {
+            const layout = createDefaultLayoutForVisualization('viz-1', 'chart');
+
+            expect(layout.i).toBe('viz-1');
+            expect(layout.x).toBe(0);
+            expect(layout.y).toBe(Infinity);
+            expect(layout.w).toBe(6);
+            expect(layout.h).toBe(4);
+            expect(layout.minW).toBe(3);
+            expect(layout.minH).toBe(2);
+        });
+
+        it('should create layout with map dimensions', () => {
+            const layout = createDefaultLayoutForVisualization('viz-2', 'map');
+
+            expect(layout.i).toBe('viz-2');
+            expect(layout.w).toBe(8);
+            expect(layout.h).toBe(6);
+            expect(layout.minW).toBe(4);
+            expect(layout.minH).toBe(3);
+        });
+
+        it('should create layout with table dimensions', () => {
+            const layout = createDefaultLayoutForVisualization('viz-3', 'table');
+
+            expect(layout.i).toBe('viz-3');
+            expect(layout.w).toBe(6);
+            expect(layout.h).toBe(4);
+        });
+
+        it('should apply layout override', () => {
+            const layout = createDefaultLayoutForVisualization('viz-4', 'chart', {
+                x: 5,
+                y: 10,
+                w: 10,
+                h: 8,
+            });
+
+            expect(layout.i).toBe('viz-4');
+            expect(layout.x).toBe(5);
+            expect(layout.y).toBe(10);
+            expect(layout.w).toBe(10);
+            expect(layout.h).toBe(8);
+            // Original minW/minH should be preserved
+            expect(layout.minW).toBe(3);
+            expect(layout.minH).toBe(2);
+        });
     });
 });
