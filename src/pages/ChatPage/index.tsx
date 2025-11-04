@@ -522,7 +522,6 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Use extracted function for auto-add logic
         const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
@@ -660,7 +659,6 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Use extracted function for auto-add logic
         const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
@@ -705,7 +703,6 @@ function ChatPage() {
             chatId: selectedChatId,
         };
 
-        // Use extracted function for auto-add logic
         const updatedDashboard = exportVisualizationToDashboard(dashboard, newVisualization);
 
         // Update the dashboard with new visualization and layout
