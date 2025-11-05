@@ -642,6 +642,8 @@ const MapComponent: React.FC<MapProps> = ({
                         throw new Error('Aborted');
                     }
 
+                    // Track rendering performance for debugging
+                    const renderStartTime = performance.now();
                     let result: Awaited<ReturnType<AsyncDuckDBConnection['query']>>;
 
                     try {
@@ -720,6 +722,23 @@ const MapComponent: React.FC<MapProps> = ({
 
                     // Process MVT data
                     const { returnData } = processMVTResult(mvtRow.mvt);
+
+                    // Log rendering performance metrics
+                    const renderTime = performance.now() - renderStartTime;
+                    const tileSize = returnData.length;
+                    console.log(
+                        `[MVT Render] Tile ${zxy.z}/${zxy.x}/${zxy.y}: ` +
+                            `${renderTime.toFixed(1)}ms, ` +
+                            `${(tileSize / 1024).toFixed(1)}KB, ` +
+                            `${currentColumns.length} columns`
+                    );
+
+                    // Warn if rendering is slow (>1 second)
+                    if (renderTime > 1000) {
+                        console.warn(
+                            `[MVT Performance] Slow tile render detected: ${renderTime.toFixed(0)}ms for tile ${zxy.z}/${zxy.x}/${zxy.y}`
+                        );
+                    }
 
                     return returnData;
                 };

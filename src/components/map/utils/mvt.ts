@@ -109,23 +109,32 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
 /**
  * Calculate simplification tolerance based on zoom level
+ * Enhanced for better performance with complex geometries (e.g., municipality polygons)
  */
 export function calculateSimplifyTolerance(zoomLevel: number): number {
     // Zoom level 15 and above have no simplification
     if (zoomLevel >= 15) return 0;
 
-    // For zoom levels from 0 to 15, linearly changing from 0.001 to 0
-    // The lower the zoom level (wider view), the larger the value
+    // Enhanced simplification with exponential curve for better performance
+    // Low zoom levels (wide view) get much more aggressive simplification
+    // This significantly speeds up rendering of complex polygons like municipalities
+
+    // Zoom 0-5: Very aggressive simplification (0.01 - 0.005)
+    if (zoomLevel <= 5) {
+        return 0.01 - zoomLevel * 0.001;
+    }
+
+    // Zoom 6-10: Moderate simplification (0.005 - 0.001)
+    if (zoomLevel <= 10) {
+        return 0.005 - (zoomLevel - 5) * 0.0008;
+    }
+
+    // Zoom 11-14: Light simplification (0.001 - 0)
     const maxSimplify = 0.001;
-    const minZoom = 0;
+    const minZoom = 11;
     const maxZoom = 15;
-
-    // Linear interpolation: y = mx + b
-    // m = (y2 - y1) / (x2 - x1)
-    // Here, x1=15, y1=0, x2=0, y2=0.001
     const m = (0 - maxSimplify) / (maxZoom - minZoom);
-    const b = maxSimplify;
-
+    const b = maxSimplify * ((maxZoom - minZoom) / (maxZoom - minZoom)) + (maxSimplify * minZoom) / (maxZoom - minZoom);
     const simplify = m * zoomLevel + b;
 
     return Number(simplify.toFixed(6));
