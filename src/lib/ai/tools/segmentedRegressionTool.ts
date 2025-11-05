@@ -1,48 +1,50 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { DBContext } from '../../duckdb/dbContext';
-import { performRegressionAnalysis } from './regressionTool';
 import type {
-    SegmentRegressionResult,
-    SegmentedRegressionAnalysisResponse,
-    SegmentComparison,
+    SegmentedRegressionResponse,
+    SegmentPlan,
+    SegmentExecutionStep,
 } from '../../../types/segmentedRegression';
 
 const MAX_PREDICTORS = 6;
-const MAX_SEGMENTS = 10; // Limit number of segments to prevent excessive computation
+const MAX_SEGMENTS = 10;
 
 export function createSegmentedRegressionTool(dbContext: DBContext, schema: string | null) {
     return tool({
-        description: `Perform multiple linear regression analysis on DuckDB tables, separately for each segment/cluster.
-This tool allows you to discover how relationships between variables differ across segments.
+        description: `Plan segmented regression analysis - analyze each segment/cluster separately.
 
-IMPORTANT: Use this tool AFTER clustering or when data has natural segments:
-1. Run clusterTool to create clusters
-2. Use this tool with cluster_labels_table_name to analyze each cluster separately
-3. Compare regression coefficients across segments to understand differences
+IMPORTANT: This is a PLANNER tool that returns an execution plan.
+After receiving the plan, you MUST execute ALL steps for ALL segments.
 
-WHEN TO USE:
-- After running clusterTool to analyze regression within each cluster
-- When you have categorical columns defining natural segments (regions, categories, etc.)
-- To compare how predictor effects differ across groups
+CRITICAL - PREDICTOR SELECTION:
+- If explanatory_columns NOT specified, select_predictors_for_regression runs ONCE on source table (STEP 0)
+- The SAME predictors are used for ALL segments for consistent comparison
+- DO NOT auto-select predictors separately for each segment
 
-EXAMPLES:
-✓ "クラスター別に従業員数と売上の関係を分析してください"
-✓ "地域ごとに価格と需要の回帰分析を行ってください"
-✓ "セグメント別に広告費用対効果を分析してください"
+CRITICAL - VISUALIZATION REQUIREMENT:
+- After regression for each segment, you MUST create scatter plots for ALL predictors
+- Each predictor needs a scatter plot with regression line
+- DO NOT skip visualization step - it is MANDATORY for analysis completeness
+- Use create_chart tool for each predictor in each segment
 
-OUTPUT:
-- Separate regression results for each segment
-- Comparison of coefficients across segments
-- Identification of segments with strongest/weakest relationships`,
+When to use:
+- "クラスター別に回帰分析"
+- "セグメントごとに回帰分析"
+- "地域別に分析"
+
+Output: Execution plan with segments, steps, and tool calls`,
         inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
-            target_column: z.string().describe('Dependent variable column (required)'),
+            target_column: z
+                .string()
+                .optional()
+                .describe('Target variable. If omitted, will be auto-selected in each segment.'),
             explanatory_columns: z
                 .array(z.string())
-                .min(1)
                 .max(MAX_PREDICTORS)
-                .describe('Predictor columns (1-6, required)'),
+                .optional()
+                .describe('Predictor columns (max 6). If omitted, will be auto-selected in each segment.'),
             segment_column: z
                 .string()
                 .describe(
@@ -53,7 +55,7 @@ OUTPUT:
                 .string()
                 .optional()
                 .describe(
-                    'Cluster labels table name from clusterTool (contains row_id and cluster columns). If provided, automatically joins with the main table.'
+                    'Cluster labels table from clusterTool (contains row_id and cluster columns). Creates temporary joined table.'
                 ),
         }),
         execute: async ({
@@ -62,7 +64,7 @@ OUTPUT:
             explanatory_columns,
             segment_column,
             cluster_labels_table_name,
-        }): Promise<SegmentedRegressionAnalysisResponse> => {
+        }): Promise<SegmentedRegressionResponse> => {
             try {
                 const tableName = table_name.trim();
                 if (!tableName) {
@@ -79,38 +81,12 @@ OUTPUT:
                 // Determine working table and segment column
                 let workingTable: string;
                 let actualSegmentColumn: string;
-                let isTemporaryTable = false;
+                let needsJoin = false;
 
                 if (cluster_labels_table_name) {
-                    // Create temporary joined table
-                    const joinedTableName = `${tableName}_with_clusters_temp`;
-                    const sanitizedOriginal = quoteIdentifier(tableName);
-                    const qualifiedOriginal = schema
-                        ? `${quoteIdentifier(schema)}.${sanitizedOriginal}`
-                        : sanitizedOriginal;
-                    const sanitizedLabels = quoteIdentifier(cluster_labels_table_name);
-                    const qualifiedLabels = schema ? `${quoteIdentifier(schema)}.${sanitizedLabels}` : sanitizedLabels;
-                    const sanitizedJoined = quoteIdentifier(joinedTableName);
-                    const qualifiedJoined = schema ? `${quoteIdentifier(schema)}.${sanitizedJoined}` : sanitizedJoined;
-
-                    // Drop existing temporary table if exists
-                    try {
-                        await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedJoined};`, schema);
-                    } catch {
-                        // Ignore drop errors
-                    }
-
-                    // Create joined table with cluster labels
-                    const createJoinedQuery = `CREATE TABLE ${qualifiedJoined} AS
-                        SELECT t.*, l.cluster
-                        FROM ${qualifiedOriginal} t
-                        JOIN ${qualifiedLabels} l ON ROW_NUMBER() OVER () = l.row_id;`;
-
-                    await dbContext.executeQuery(createJoinedQuery, schema);
-
-                    workingTable = joinedTableName;
+                    workingTable = tableName;
                     actualSegmentColumn = 'cluster';
-                    isTemporaryTable = true;
+                    needsJoin = true;
                 } else {
                     workingTable = tableName;
                     actualSegmentColumn = segment_column!;
@@ -119,30 +95,25 @@ OUTPUT:
                 const sanitizedTable = quoteIdentifier(workingTable);
                 const qualifiedTable = schema ? `${quoteIdentifier(schema)}.${sanitizedTable}` : sanitizedTable;
 
-                // Validate that segment column exists
-                const columns = await dbContext.getTableColumns(workingTable, schema);
-                if (!columns || columns.length === 0) {
-                    return errorResponse(`テーブル「${workingTable}」のカラム情報が取得できませんでした。`);
-                }
-
-                const allColumnNames = columns.map(col => col.name);
-                if (!allColumnNames.includes(actualSegmentColumn)) {
-                    return errorResponse(
-                        `セグメントカラム「${actualSegmentColumn}」が存在しません。利用可能なカラム: ${allColumnNames.join(', ')}`
-                    );
-                }
-
                 // Get unique segment values
-                const segmentQuery = `SELECT DISTINCT ${quoteIdentifier(actualSegmentColumn)} as segment_value
-                    FROM ${qualifiedTable}
-                    WHERE ${quoteIdentifier(actualSegmentColumn)} IS NOT NULL
-                    ORDER BY segment_value;`;
+                let segmentQuery: string;
+                if (needsJoin) {
+                    const sanitizedLabels = quoteIdentifier(cluster_labels_table_name!);
+                    const qualifiedLabels = schema ? `${quoteIdentifier(schema)}.${sanitizedLabels}` : sanitizedLabels;
+                    segmentQuery = `SELECT DISTINCT l.cluster as segment_value
+                        FROM ${qualifiedLabels} l
+                        ORDER BY l.cluster;`;
+                } else {
+                    segmentQuery = `SELECT DISTINCT ${quoteIdentifier(actualSegmentColumn)} as segment_value
+                        FROM ${qualifiedTable}
+                        WHERE ${quoteIdentifier(actualSegmentColumn)} IS NOT NULL
+                        ORDER BY segment_value;`;
+                }
+
                 const segmentRows = await dbContext.executeQuery(segmentQuery, schema);
 
                 if (!Array.isArray(segmentRows) || segmentRows.length === 0) {
-                    return errorResponse(
-                        `セグメントカラム「${actualSegmentColumn}」に有効な値が見つかりませんでした。`
-                    );
+                    return errorResponse(`セグメント値が見つかりませんでした。`);
                 }
 
                 const segmentValues = segmentRows.map(row => row.segment_value);
@@ -153,196 +124,209 @@ OUTPUT:
                     );
                 }
 
-                // Perform regression for each segment
-                const segmentResults: SegmentRegressionResult[] = [];
-                const globalWarnings: string[] = [];
+                // Create common steps for predictor selection (if needed)
+                const commonSteps: SegmentExecutionStep[] = [];
+                let globalStepNumber = 1;
+
+                if (!explanatory_columns || explanatory_columns.length === 0) {
+                    commonSteps.push({
+                        stepNumber: globalStepNumber++,
+                        tool: 'select_predictors_for_regression',
+                        description: `Select predictors ONCE from source table: ${workingTable}`,
+                        parameters: {
+                            table_name: workingTable,
+                            target_column: target_column,
+                            top_k: 3,
+                        },
+                    });
+                }
+
+                // Build execution plan for each segment
+                const segmentPlans: SegmentPlan[] = [];
 
                 for (const segmentValue of segmentValues) {
                     const segmentLabel = `${actualSegmentColumn}=${segmentValue}`;
+                    const segmentTableName = `${workingTable}_segment_${segmentValue}`;
 
-                    // Create a filtered temporary table for this segment
-                    const segmentTableName = `${workingTable}_segment_${segmentValue}_temp`;
-                    const sanitizedSegmentTable = quoteIdentifier(segmentTableName);
-                    const qualifiedSegmentTable = schema
-                        ? `${quoteIdentifier(schema)}.${sanitizedSegmentTable}`
-                        : sanitizedSegmentTable;
-
-                    try {
-                        // Drop existing segment table if exists
-                        try {
-                            await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedSegmentTable};`, schema);
-                        } catch {
-                            // Ignore drop errors
-                        }
-
-                        // Create segment table
-                        const createSegmentQuery = `CREATE TABLE ${qualifiedSegmentTable} AS
-                            SELECT * FROM ${qualifiedTable}
+                    // Get row count for this segment
+                    let rowCountQuery: string;
+                    if (needsJoin) {
+                        const sanitizedLabels = quoteIdentifier(cluster_labels_table_name!);
+                        const qualifiedLabels = schema
+                            ? `${quoteIdentifier(schema)}.${sanitizedLabels}`
+                            : sanitizedLabels;
+                        rowCountQuery = `SELECT COUNT(*) as count
+                            FROM ${qualifiedTable} t
+                            JOIN ${qualifiedLabels} l ON ROW_NUMBER() OVER () = l.row_id
+                            WHERE l.cluster = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
+                    } else {
+                        rowCountQuery = `SELECT COUNT(*) as count
+                            FROM ${qualifiedTable}
                             WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
-                        await dbContext.executeQuery(createSegmentQuery, schema);
+                    }
 
-                        // Call performRegressionAnalysis directly for this segment
-                        const regressionResult = await performRegressionAnalysis(dbContext, schema, {
+                    const countResult = await dbContext.executeQuery(rowCountQuery, schema);
+                    const rowCount = countResult[0]?.count ?? 0;
+
+                    // Build execution steps
+                    const steps: SegmentExecutionStep[] = [];
+                    let stepNumber = 1;
+
+                    // Step 1: Create segment table
+                    let createTableSQL: string;
+                    if (needsJoin) {
+                        const sanitizedLabels = quoteIdentifier(cluster_labels_table_name!);
+                        const qualifiedLabels = schema
+                            ? `${quoteIdentifier(schema)}.${sanitizedLabels}`
+                            : sanitizedLabels;
+                        createTableSQL = `CREATE TABLE ${quoteIdentifier(segmentTableName)} AS
+SELECT t.*
+FROM ${qualifiedTable} t
+JOIN ${qualifiedLabels} l ON ROW_NUMBER() OVER () = l.row_id
+WHERE l.cluster = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
+                    } else {
+                        createTableSQL = `CREATE TABLE ${quoteIdentifier(segmentTableName)} AS
+SELECT * FROM ${qualifiedTable}
+WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'string' ? `'${segmentValue.replace(/'/g, "''")}'` : segmentValue};`;
+                    }
+
+                    steps.push({
+                        stepNumber: stepNumber++,
+                        tool: 'create_scatter_charts',
+                        description: `Create segment table: ${segmentTableName}`,
+                        parameters: {
+                            sql: createTableSQL,
+                            purpose: 'analysis',
+                        },
+                    });
+
+                    // Step 2: Perform regression (using common predictors if auto-selected)
+                    const regressionDescription =
+                        !explanatory_columns || explanatory_columns.length === 0
+                            ? `Perform regression for ${segmentLabel} using predictors selected in STEP 0 (DO NOT auto-select predictors again)`
+                            : `Perform regression for ${segmentLabel}`;
+
+                    steps.push({
+                        stepNumber: stepNumber++,
+                        tool: 'perform_regression_analysis',
+                        description: regressionDescription,
+                        parameters: {
                             table_name: segmentTableName,
-                            target_column,
-                            explanatory_columns,
-                        });
+                            target_column: target_column,
+                            explanatory_columns: explanatory_columns,
+                            note:
+                                !explanatory_columns || explanatory_columns.length === 0
+                                    ? 'Use predictors from STEP 0 - same predictors for all segments'
+                                    : undefined,
+                        },
+                    });
 
-                        if (!regressionResult.success) {
-                            globalWarnings.push(`セグメント「${segmentLabel}」: ${regressionResult.message}`);
-                            // Clean up segment table before continuing
-                            try {
-                                await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedSegmentTable};`, schema);
-                            } catch {
-                                // Ignore cleanup errors
-                            }
-                            continue;
-                        }
+                    // Step 3: Create scatter charts for ALL predictors
+                    steps.push({
+                        stepNumber: stepNumber++,
+                        tool: 'create_scatter_charts',
+                        description: `MANDATORY: Create scatter plot + regression line charts for EVERY predictor in ${segmentLabel}`,
+                        parameters: {
+                            segment_table: segmentTableName,
+                            target_column: target_column,
+                            note: 'For EACH predictor: (1) Create temp table with predictor, target, and regression line using SQL, (2) Call create_chart tool with scatter + line mark',
+                        },
+                    });
 
-                        // Clean up segment table after successful regression
-                        try {
-                            await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedSegmentTable};`, schema);
-                        } catch {
-                            // Ignore cleanup errors
-                        }
-
-                        segmentResults.push({
-                            segmentValue,
-                            segmentLabel,
-                            dataInfo: regressionResult.dataInfo,
-                            regression: regressionResult.regression,
-                            columnSummaries: regressionResult.columnSummaries,
-                            warnings: regressionResult.warnings,
-                        });
-                    } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
-                        globalWarnings.push(`セグメント「${segmentLabel}」: エラーが発生しました: ${message}`);
-                    }
+                    segmentPlans.push({
+                        segmentValue,
+                        segmentLabel,
+                        segmentTable: segmentTableName,
+                        rowCount,
+                        steps,
+                    });
                 }
 
-                // Clean up temporary table if created
-                if (isTemporaryTable) {
-                    try {
-                        const sanitizedJoined = quoteIdentifier(workingTable);
-                        const qualifiedJoined = schema
-                            ? `${quoteIdentifier(schema)}.${sanitizedJoined}`
-                            : sanitizedJoined;
-                        await dbContext.executeQuery(`DROP TABLE IF EXISTS ${qualifiedJoined};`, schema);
-                    } catch {
-                        // Ignore cleanup errors
-                    }
-                }
-
-                if (segmentResults.length === 0) {
-                    return errorResponse(
-                        'すべてのセグメントで回帰分析に失敗しました。データを確認してください。',
-                        globalWarnings
-                    );
-                }
-
-                // Build comparison
-                const comparison = buildComparison(segmentResults, explanatory_columns);
-
-                // Generate suggestions
-                const suggestions = generateSuggestions(segmentResults, comparison);
-
-                const response: SegmentedRegressionAnalysisResponse = {
-                    success: true,
-                    message: `テーブル「${tableName}」の${segmentResults.length}個のセグメントに対して回帰分析が完了しました。目的変数: ${target_column}、説明変数: ${explanatory_columns.join(', ')}。`,
+                // Build detailed instructions
+                const instructions = buildInstructions(
+                    segmentPlans,
                     tableName,
-                    segmentColumn: actualSegmentColumn,
-                    targetColumn: target_column,
-                    predictorColumns: explanatory_columns,
-                    segments: segmentResults,
-                    comparison,
-                    warnings: globalWarnings.length > 0 ? globalWarnings : undefined,
-                    suggestions: suggestions.length > 0 ? suggestions : undefined,
-                };
+                    actualSegmentColumn,
+                    target_column,
+                    explanatory_columns,
+                    commonSteps
+                );
 
-                return response;
+                const totalSteps = commonSteps.length + segmentPlans.reduce((sum, plan) => sum + plan.steps.length, 0);
+
+                return {
+                    success: true,
+                    message: `${segmentPlans.length}個のセグメントに対する実行プランを作成しました。以下の指示に従って各ステップを順番に実行してください。`,
+                    plan: {
+                        totalSegments: segmentPlans.length,
+                        totalSteps,
+                        commonSteps: commonSteps.length > 0 ? commonSteps : undefined,
+                        segments: segmentPlans,
+                        sourceTable: tableName,
+                        segmentColumn: actualSegmentColumn,
+                        targetColumn: target_column,
+                        predictorColumns: explanatory_columns,
+                        instructions,
+                    },
+                };
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                return errorResponse(`セグメント別回帰分析ツールの実行中に予期せぬエラーが発生しました: ${message}`);
+                return errorResponse(`セグメント別回帰分析プランの作成中にエラーが発生しました: ${message}`);
             }
         },
     });
 }
 
-function errorResponse(message: string, warnings?: string[]): SegmentedRegressionAnalysisResponse {
+function buildInstructions(
+    segments: SegmentPlan[],
+    sourceTable: string,
+    _segmentColumn: string,
+    _targetColumn?: string,
+    _predictorColumns?: string[],
+    commonSteps?: SegmentExecutionStep[]
+): string {
+    const commonStepsSection =
+        commonSteps && commonSteps.length > 0
+            ? `
+CRITICAL - STEP 0 (DO THIS FIRST, ONLY ONCE):
+Explanatory variables are NOT specified. You MUST:
+1. Run select_predictors_for_regression on "${sourceTable}" ONCE
+2. Before calling it, run DESCRIBE "${sourceTable}" to check column types
+3. If numeric columns < 10, investigate source tables (SHOW TABLES, check for raw data tables)
+4. Store the selected predictors in a variable
+5. Use the EXACT SAME predictors for ALL ${segments.length} segments below
+6. DO NOT call select_predictors_for_regression again for individual segments
+7. DO NOT let perform_regression_analysis auto-select predictors for each segment
+
+`
+            : '';
+
+    return `
+Execute ALL ${segments.length} segments. Each segment MUST complete these steps:
+1. Create segment table using SQL (CREATE TABLE)
+2. Perform regression analysis (perform_regression_analysis tool)
+3. CRITICAL: Create visualization for EVERY predictor (DO NOT SKIP):
+   - For each predictor, create scatter plot with regression line
+   - Use create_chart tool for each predictor
+   - Charts are MANDATORY for analysis completeness
+
+${commonStepsSection}
+Segments:
+${segments.map((seg, idx) => `${idx + 1}. ${seg.segmentLabel} (${seg.rowCount} rows)`).join('\n')}
+
+VERIFICATION CHECKLIST:
+✓ All ${segments.length} segments processed
+✓ All segments use same predictors (if auto-selected in STEP 0)
+✓ All predictors have scatter charts for EVERY segment
+`.trim();
+}
+
+function errorResponse(message: string, warnings?: string[]): SegmentedRegressionResponse {
     return {
         success: false,
         message,
         warnings,
     };
-}
-
-function buildComparison(segments: SegmentRegressionResult[], predictors: string[]): SegmentComparison {
-    const rSquaredBySegment = segments.map(seg => seg.regression.r2);
-    const adjustedRSquaredBySegment = segments.map(seg => seg.regression.adjustedR2);
-
-    const coefficientsBySegment: Record<string, number[]> = {};
-
-    for (const predictor of predictors) {
-        coefficientsBySegment[predictor] = segments.map(seg => {
-            const metric = seg.regression.metricsPerPredictor.find(m => m.name === predictor);
-            return metric?.beta ?? Number.NaN;
-        });
-    }
-
-    return {
-        numSegments: segments.length,
-        rSquaredBySegment,
-        adjustedRSquaredBySegment,
-        coefficientsBySegment,
-    };
-}
-
-function generateSuggestions(segments: SegmentRegressionResult[], comparison: SegmentComparison): string[] {
-    const suggestions: string[] = [];
-
-    // Find segment with best R²
-    const bestR2Index = comparison.adjustedRSquaredBySegment.indexOf(
-        Math.max(...comparison.adjustedRSquaredBySegment.filter(r => Number.isFinite(r)))
-    );
-    if (bestR2Index !== -1) {
-        const bestSegment = segments[bestR2Index];
-        suggestions.push(
-            `最も説明力が高いセグメント: ${bestSegment.segmentLabel} (調整済みR² = ${formatNumeric(bestSegment.regression.adjustedR2)})`
-        );
-    }
-
-    // Find predictors with largest variation across segments
-    for (const [predictor, coefficients] of Object.entries(comparison.coefficientsBySegment)) {
-        const validCoefs = coefficients.filter(c => Number.isFinite(c));
-        if (validCoefs.length < 2) continue;
-
-        const minCoef = Math.min(...validCoefs);
-        const maxCoef = Math.max(...validCoefs);
-        const range = maxCoef - minCoef;
-
-        if (range > 0.1) {
-            // Arbitrary threshold for "significant" variation
-            suggestions.push(
-                `説明変数「${predictor}」の係数はセグメント間で大きく異なります（範囲: ${formatNumeric(minCoef)} 〜 ${formatNumeric(maxCoef)}）。セグメントごとに異なる戦略が必要かもしれません。`
-            );
-        }
-    }
-
-    // Suggest visualization
-    suggestions.push(`次のステップ: セグメント別の散布図を作成し、各セグメントの回帰直線を重ねて比較してください。`);
-
-    return suggestions;
-}
-
-function formatNumeric(value: number): string {
-    if (!Number.isFinite(value)) {
-        return 'null';
-    }
-    const precise = Number.parseFloat(value.toPrecision(6));
-    if (!Number.isFinite(precise)) {
-        return value.toString();
-    }
-    return Object.is(precise, -0) ? '0' : precise.toString();
 }
 
 function quoteIdentifier(identifier: string): string {
