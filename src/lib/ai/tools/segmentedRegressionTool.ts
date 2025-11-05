@@ -22,6 +22,12 @@ CRITICAL - PREDICTOR SELECTION:
 - The SAME predictors are used for ALL segments for consistent comparison
 - DO NOT auto-select predictors separately for each segment
 
+CRITICAL - VISUALIZATION REQUIREMENT:
+- After regression for each segment, you MUST create scatter plots for ALL predictors
+- Each predictor needs a scatter plot with regression line
+- DO NOT skip visualization step - it is MANDATORY for analysis completeness
+- Use create_chart tool for each predictor in each segment
+
 When to use:
 - "クラスター別に回帰分析"
 - "セグメントごとに回帰分析"
@@ -219,9 +225,11 @@ WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'strin
                     steps.push({
                         stepNumber: stepNumber++,
                         tool: 'create_scatter_charts',
-                        description: `Create scatter + regression line charts for ALL predictors in ${segmentLabel}`,
+                        description: `MANDATORY: Create scatter plot + regression line charts for EVERY predictor in ${segmentLabel}`,
                         parameters: {
-                            note: 'Follow the regression visualization workflow for each predictor',
+                            segment_table: segmentTableName,
+                            target_column: target_column,
+                            note: 'For EACH predictor: (1) Create temp table with predictor, target, and regression line using SQL, (2) Call create_chart tool with scatter + line mark',
                         },
                     });
 
@@ -272,9 +280,9 @@ WHERE ${quoteIdentifier(actualSegmentColumn)} = ${typeof segmentValue === 'strin
 function buildInstructions(
     segments: SegmentPlan[],
     sourceTable: string,
-    segmentColumn: string,
-    targetColumn?: string,
-    predictorColumns?: string[],
+    _segmentColumn: string,
+    _targetColumn?: string,
+    _predictorColumns?: string[],
     commonSteps?: SegmentExecutionStep[]
 ): string {
     const commonStepsSection =
@@ -294,14 +302,22 @@ Explanatory variables are NOT specified. You MUST:
             : '';
 
     return `
-Execute ALL ${segments.length} segments. Each segment:
-1. Create segment table
-2. Perform regression
-3. Create charts for each predictor
+Execute ALL ${segments.length} segments. Each segment MUST complete these steps:
+1. Create segment table using SQL (CREATE TABLE)
+2. Perform regression analysis (perform_regression_analysis tool)
+3. CRITICAL: Create visualization for EVERY predictor (DO NOT SKIP):
+   - For each predictor, create scatter plot with regression line
+   - Use create_chart tool for each predictor
+   - Charts are MANDATORY for analysis completeness
 
 ${commonStepsSection}
 Segments:
 ${segments.map((seg, idx) => `${idx + 1}. ${seg.segmentLabel} (${seg.rowCount} rows)`).join('\n')}
+
+VERIFICATION CHECKLIST:
+✓ All ${segments.length} segments processed
+✓ All segments use same predictors (if auto-selected in STEP 0)
+✓ All predictors have scatter charts for EVERY segment
 `.trim();
 }
 

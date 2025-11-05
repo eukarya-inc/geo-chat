@@ -14,6 +14,7 @@ const MIN_REQUIRED_ROWS = 10;
 const MAX_AUTO_COLUMNS = 20;
 const DEFAULT_TOP_K = 3;
 const HIGH_CORRELATION_THRESHOLD = 0.95;
+const MIN_RECOMMENDED_CANDIDATES = 10;
 
 export function createPredictorSelectionTool(dbContext: DBContext, schema: string | null) {
     return tool({
@@ -24,7 +25,17 @@ IMPORTANT: Use this tool BEFORE perform_regression_analysis when explanatory var
 - Helps detect circular dependencies (e.g., target="revenue_per_employee", predictor="revenue")
 - Identifies highly correlated predictors that may cause multicollinearity
 - Provides transparency in variable selection process
-- Allows exclusion of problematic predictors before regression`,
+- Allows exclusion of problematic predictors before regression
+
+CRITICAL - MINIMUM CANDIDATE REQUIREMENT (10 columns):
+- This tool requires at least 10 numeric column candidates for effective variable selection
+- If fewer than 10 candidates are found, the tool returns warnings with the column list
+- YOU MUST then analyze column names and create derived variables:
+  1. Analyze column names to infer meaningful ratios (e.g., sales/employees → sales_per_employee)
+  2. Consider interactions (price*quantity → revenue), densities (area/population), rates, etc.
+  3. Use CREATE TABLE with derived columns: CREATE TABLE new_table AS SELECT *, col1/NULLIF(col2,0) AS derived_col FROM table
+  4. Re-run this tool on the new table with derived variables
+- DO NOT proceed with regression if candidates < 10 without creating derived variables first`,
         inputSchema: z.object({
             table_name: z.string().describe('Table name to analyze'),
             target_column: z.string().describe('Target variable (dependent variable) for correlation analysis'),
@@ -248,6 +259,25 @@ IMPORTANT: Use this tool BEFORE perform_regression_analysis when explanatory var
                 const k = Math.min(top_k ?? DEFAULT_TOP_K, filteredCorrelations.length);
                 const selectedCorrelations = filteredCorrelations.slice(0, k);
                 const selectedPredictors = selectedCorrelations.map(c => c.predictor);
+
+                // Check for minimum recommended candidates
+                if (candidateColumns.length < MIN_RECOMMENDED_CANDIDATES) {
+                    const needed = MIN_RECOMMENDED_CANDIDATES - candidateColumns.length;
+                    warnings.push(
+                        `⚠️ 説明変数候補が${candidateColumns.length}件のみです（推奨: 最低${MIN_RECOMMENDED_CANDIDATES}件、不足: ${needed}件）。`
+                    );
+                    warnings.push(`📋 現在の数値カラム: ${candidateColumns.join(', ')}`);
+                    warnings.push(
+                        `🤖 CRITICAL: カラム名から意味のある派生変数を${needed}件以上生成してください：` +
+                            `\n  1. カラム名を分析して、比率（例: revenue/employees → revenue_per_employee）や` +
+                            `\n     交互作用（例: price*quantity）など意味のある変数を推測` +
+                            `\n  2. CREATE TABLE AS SELECT 元カラム, 派生変数式 AS 派生カラム名 FROM ${tableName}` +
+                            `\n  3. 新しいテーブルで再度 select_predictors_for_regression を実行`
+                    );
+                    warnings.push(
+                        `💡 例: sales/employees AS sales_per_employee, price*quantity AS revenue, area/population AS density_ratio`
+                    );
+                }
 
                 if (truncated) {
                     warnings.push(
