@@ -119,9 +119,6 @@ export function createDuckDBTool(
                 const originalLength = data.length;
 
                 if (data.length > AI_RETURN_LIMIT) {
-                    console.log(
-                        `[DuckDB Tool] Truncating result from ${data.length} to ${AI_RETURN_LIMIT} rows for AI response`
-                    );
                     data = data.slice(0, AI_RETURN_LIMIT);
                     truncated = true;
                 }

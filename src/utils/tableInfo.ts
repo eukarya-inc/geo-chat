@@ -35,6 +35,8 @@ export interface TableInfo {
     rowCount?: number;
     columnStatistics?: Record<string, ColumnStatistics>;
     suggestions?: string[];
+    sampleDataTruncated?: boolean;
+    totalNonGeometryColumns?: number;
 }
 
 /**
@@ -219,7 +221,8 @@ export async function getTableInfo(dbContext: DBContext, tableName: string, sche
         info.hasGeometry = geometryAnalysis.hasGeometry;
         info.geometryInfo = geometryAnalysis.geometryInfo;
 
-        // Get sample data (first 5 rows) - exclude only geometry and blob columns
+        // Get sample data (reduced to 3 rows to save context)
+        // Limit columns to max 10 if table has many columns
         const columnsToSelect: string[] = [];
         for (const col of schemaData) {
             const upperType = col.column_type.toUpperCase();
@@ -230,12 +233,23 @@ export async function getTableInfo(dbContext: DBContext, tableName: string, sche
             }
         }
 
-        if (columnsToSelect.length > 0) {
+        // Limit to first 10 columns if there are too many (to save context)
+        const MAX_SAMPLE_COLUMNS = 10;
+        const limitedColumns = columnsToSelect.slice(0, MAX_SAMPLE_COLUMNS);
+        const hasMoreColumns = columnsToSelect.length > MAX_SAMPLE_COLUMNS;
+
+        if (limitedColumns.length > 0) {
             const sampleQuery = schema
-                ? `SELECT ${columnsToSelect.join(', ')} FROM ${schema}.${tableName} LIMIT 5`
-                : `SELECT ${columnsToSelect.join(', ')} FROM ${tableName} LIMIT 5`;
+                ? `SELECT ${limitedColumns.join(', ')} FROM ${schema}.${tableName} LIMIT 3`
+                : `SELECT ${limitedColumns.join(', ')} FROM ${tableName} LIMIT 3`;
             const sampleResult = await dbContext.executeQuery(sampleQuery, schema);
             info.sampleData = sampleResult as Record<string, unknown>[];
+
+            // Store info about truncated columns for later display
+            if (hasMoreColumns) {
+                info.sampleDataTruncated = true;
+                info.totalNonGeometryColumns = columnsToSelect.length;
+            }
         } else {
             // If all columns are geometry/blob, don't include sample data
             info.sampleData = [];
@@ -252,28 +266,66 @@ export async function getTableInfo(dbContext: DBContext, tableName: string, sche
         }
 
         // Get column statistics (but don't fail if statistics collection fails)
+        // For tables with many columns (>30), limit statistics collection to save context
+        const STATS_COLUMN_THRESHOLD = 30;
+        const shouldLimitStats = schemaData.length > STATS_COLUMN_THRESHOLD;
+
         try {
             info.columnStatistics = {};
-            for (const column of schemaData) {
-                // Skip geometry and complex columns for statistics
-                if (!column.column_type.toUpperCase().includes('GEOMETRY') && !isComplexType(column.column_type)) {
-                    try {
-                        const stats = await getColumnStatistics(
-                            dbContext,
-                            tableName,
-                            column.column_name,
-                            column.column_type,
-                            schema
-                        );
-                        info.columnStatistics[column.column_name] = stats;
-                    } catch (colError) {
-                        console.warn(`Failed to get statistics for column ${column.column_name}:`, colError);
-                        // Set basic statistics with just the data type
+
+            if (shouldLimitStats) {
+                // For large tables, collect minimal statistics (just data type and distinct count for key columns)
+                const MAX_STATS_COLUMNS = 15;
+                let statsCount = 0;
+
+                for (const column of schemaData) {
+                    // Always include data type
+                    info.columnStatistics[column.column_name] = { dataType: column.column_type };
+
+                    // Only collect detailed stats for first few non-geometry, non-complex columns
+                    if (
+                        statsCount < MAX_STATS_COLUMNS &&
+                        !column.column_type.toUpperCase().includes('GEOMETRY') &&
+                        !isComplexType(column.column_type)
+                    ) {
+                        try {
+                            const stats = await getColumnStatistics(
+                                dbContext,
+                                tableName,
+                                column.column_name,
+                                column.column_type,
+                                schema
+                            );
+                            info.columnStatistics[column.column_name] = stats;
+                            statsCount++;
+                        } catch (colError) {
+                            console.warn(`Failed to get statistics for column ${column.column_name}:`, colError);
+                        }
+                    }
+                }
+            } else {
+                // For smaller tables, collect full statistics as before
+                for (const column of schemaData) {
+                    // Skip geometry and complex columns for statistics
+                    if (!column.column_type.toUpperCase().includes('GEOMETRY') && !isComplexType(column.column_type)) {
+                        try {
+                            const stats = await getColumnStatistics(
+                                dbContext,
+                                tableName,
+                                column.column_name,
+                                column.column_type,
+                                schema
+                            );
+                            info.columnStatistics[column.column_name] = stats;
+                        } catch (colError) {
+                            console.warn(`Failed to get statistics for column ${column.column_name}:`, colError);
+                            // Set basic statistics with just the data type
+                            info.columnStatistics[column.column_name] = { dataType: column.column_type };
+                        }
+                    } else {
+                        // For geometry and complex types, just store the data type
                         info.columnStatistics[column.column_name] = { dataType: column.column_type };
                     }
-                } else {
-                    // For geometry and complex types, just store the data type
-                    info.columnStatistics[column.column_name] = { dataType: column.column_type };
                 }
             }
         } catch (statsError) {
@@ -282,29 +334,24 @@ export async function getTableInfo(dbContext: DBContext, tableName: string, sche
         }
 
         // Add suggestions based on geometry presence
+        // Limit to max 5 suggestions to save context
         info.suggestions = [];
+        const MAX_SUGGESTIONS = 5;
 
         if (info.hasGeometry && info.geometryInfo) {
             const geometryInfoStr = formatGeometryInfo(info.geometryInfo);
             info.suggestions.push(
-                `テーブル「${tableName}」が作成されました。`,
-                `ジオメトリカラムが検出されました: ${geometryInfoStr}`,
-                `このテーブルは地図での可視化が可能です。地図スタイルを設定するには update_map_style_for_table ツールを使用してください。`
+                `テーブル「${tableName}」が作成されました。ジオメトリカラムが検出されました: ${geometryInfoStr}`,
+                `地図スタイルを設定するには update_map_style_for_table ツールを使用してください。`
             );
         } else {
             info.suggestions.push(
-                `テーブル「${tableName}」が作成されました。ジオメトリフィールドがないため、地図での可視化はできません。`,
-                `グラフでの可視化は update_vega_chart_spec_for_table ツールを使用してください。`
+                `テーブル「${tableName}」が作成されました。グラフ作成は update_vega_chart_spec_for_table ツールを使用してください。`
             );
         }
 
-        // Add chart suggestion for all tables with statistics-based recommendations
-        info.suggestions.push(
-            `このテーブルのVega-Liteチャート設定はまだ作成されていません。グラフを作成するには update_vega_chart_spec_for_table ツールを使用してください。`
-        );
-
-        // Add visualization suggestions based on column statistics
-        if (info.columnStatistics) {
+        // Add visualization suggestions based on column statistics (limited to save context)
+        if (info.columnStatistics && info.suggestions.length < MAX_SUGGESTIONS) {
             const numericColumns = Object.entries(info.columnStatistics)
                 .filter(([, stats]) => stats.min !== undefined && stats.max !== undefined)
                 .map(([name, stats]) => ({ name, stats }));
@@ -313,74 +360,27 @@ export async function getTableInfo(dbContext: DBContext, tableName: string, sche
                 .filter(([, stats]) => stats.distinctCount !== undefined && stats.distinctCount < 20)
                 .map(([name, stats]) => ({ name, stats }));
 
-            const dateColumns = Object.entries(info.columnStatistics)
-                .filter(([, stats]) => stats.minDate !== undefined)
-                .map(([name, stats]) => ({ name, stats }));
+            // Only add 1-2 most important suggestions to stay within limit
+            const remainingSlots = MAX_SUGGESTIONS - info.suggestions.length;
 
-            if (numericColumns.length > 0) {
-                const suggestions: string[] = [];
-
-                // Suggest histogram for columns with wide ranges
-                numericColumns.forEach(({ name, stats }) => {
-                    const range = (stats.max || 0) - (stats.min || 0);
-                    const cv = stats.stddev && stats.avg ? stats.stddev / Math.abs(stats.avg) : 0;
-
-                    if (range > 0) {
-                        suggestions.push(
-                            `「${name}」列は数値データ（範囲: ${stats.min?.toFixed(2)} - ${stats.max?.toFixed(2)}）です。ヒストグラムや散布図での可視化が適しています。`
-                        );
-                    }
-
-                    if (cv > 0.5) {
-                        suggestions.push(
-                            `「${name}」列は変動が大きい（標準偏差: ${stats.stddev?.toFixed(2)}）ため、箱ひげ図での外れ値確認をお勧めします。`
-                        );
-                    }
-                });
-
-                if (suggestions.length > 0) {
-                    info.suggestions.push(...suggestions.slice(0, 2)); // Limit to 2 suggestions
-                }
-            }
-
-            if (categoricalColumns.length > 0 && info.suggestions) {
-                const suggestions = info.suggestions;
-                categoricalColumns.slice(0, 2).forEach(({ name, stats }) => {
-                    suggestions.push(
-                        `「${name}」列はカテゴリカルデータ（${stats.distinctCount}個のユニーク値）です。棒グラフや円グラフでの可視化が適しています。`
-                    );
-                });
-            }
-
-            if (dateColumns.length > 0 && info.suggestions) {
-                const suggestions = info.suggestions;
-                dateColumns.slice(0, 1).forEach(({ name, stats }) => {
-                    suggestions.push(
-                        `「${name}」列は時系列データ（${stats.minDate} 〜 ${stats.maxDate}）です。折れ線グラフでの時系列分析が適しています。`
-                    );
-                });
-            }
-
-            // Add suggestions for map visualization based on statistics
-            if (info.hasGeometry && numericColumns.length > 0 && info.suggestions) {
-                const bestNumericCol = numericColumns[0];
+            if (remainingSlots > 0 && numericColumns.length > 0) {
+                const firstNumeric = numericColumns[0];
                 info.suggestions.push(
-                    `地図の色分けには「${bestNumericCol.name}」列（範囲: ${bestNumericCol.stats.min?.toFixed(2)} - ${bestNumericCol.stats.max?.toFixed(2)}）を使用すると良いでしょう。分位数（P50: ${bestNumericCol.stats.p50?.toFixed(2)}, P75: ${bestNumericCol.stats.p75?.toFixed(2)}, P90: ${bestNumericCol.stats.p90?.toFixed(2)}, P95: ${bestNumericCol.stats.p95?.toFixed(2)}）を考慮した段階的な色分けをお勧めします。`
+                    `「${firstNumeric.name}」は数値データ（${firstNumeric.stats.min?.toFixed(0)}-${firstNumeric.stats.max?.toFixed(0)}）です。`
+                );
+            }
+
+            if (remainingSlots > 1 && categoricalColumns.length > 0) {
+                const firstCategorical = categoricalColumns[0];
+                info.suggestions.push(
+                    `「${firstCategorical.name}」はカテゴリカルデータ（${firstCategorical.stats.distinctCount}個）です。`
                 );
             }
         }
 
-        // Add data analysis suggestions based on row count
-        if (info.rowCount) {
-            if (info.rowCount > 100) {
-                info.suggestions.push(
-                    'データが多いです。特定の条件でフィルタしてみませんか？',
-                    'COUNT(), AVG(), SUM()などの集計関数を使ってデータを要約できます',
-                    'GROUP BYを使ってカテゴリ別の集計ができます'
-                );
-            } else if (info.rowCount > 20) {
-                info.suggestions.push('ORDER BYでデータを並び替えられます', '集計関数でデータの概要を把握できます');
-            }
+        // Trim suggestions to max limit
+        if (info.suggestions.length > MAX_SUGGESTIONS) {
+            info.suggestions = info.suggestions.slice(0, MAX_SUGGESTIONS);
         }
     } catch (error) {
         console.error('Failed to get table info:', error);
@@ -491,11 +491,19 @@ export function formatTableInfoForAI(info: TableInfo): string {
             return upperType.includes('GEOMETRY') || upperType.includes('BLOB');
         });
 
+        const sampleDataTruncated = info.sampleDataTruncated;
+        const totalNonGeometryColumns = info.totalNonGeometryColumns;
+
+        let sampleLabel = 'Sample data (first 3 rows';
         if (hasExcludedColumns) {
-            parts.push('Sample data (first 5 rows, excluding GEOMETRY/BLOB columns):');
-        } else {
-            parts.push('Sample data (first 5 rows):');
+            sampleLabel += ', excluding GEOMETRY/BLOB';
         }
+        if (sampleDataTruncated) {
+            sampleLabel += `, showing ${Object.keys(info.sampleData[0] || {}).length} of ${totalNonGeometryColumns} columns`;
+        }
+        sampleLabel += '):';
+
+        parts.push(sampleLabel);
         parts.push(JSON.stringify(info.sampleData, null, 2));
     }
 
