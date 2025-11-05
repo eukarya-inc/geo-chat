@@ -16,6 +16,12 @@ export function createClusterTool(dbContext: DBContext, schema: string | null) {
         description: `Perform k-means cluster analysis on DuckDB tables to discover natural groupings in data.
 Returns cluster labels, centroids, inertia, silhouette score, and cluster sizes.
 
+CRITICAL - TABLE NAMING:
+- ALWAYS use English table names for cluster analysis (e.g., "logistics_companies", "customer_segments")
+- NEVER use Japanese table names (e.g., "貨物運送事業者", "顧客データ")
+- The tool creates derivative tables with English suffixes (e.g., "table_name_cluster_labels")
+- English names ensure consistency across all analysis tables and avoid character encoding issues
+
 USE THIS TOOL WHEN:
 - User wants to discover natural groupings/segments in data based on numeric features
 - User says "グループ分け", "分類", "セグメント化", "クラスタリング" without specifying explicit rules
@@ -50,10 +56,9 @@ IMPORTANT:
 
 IMPORTANT: After using this tool successfully, ALWAYS create visualizations:
 1. Create a new table with cluster labels added
-2. For visualization, create a sampled table with LIMIT 100
-3. For 2D data: Create scatter plot with points colored by cluster label
-4. For 3D data: Consider creating multiple 2D projections
-5. Suggest appropriate SQL queries for creating these tables
+2. For 2D data: Create scatter plot with points colored by cluster label
+3. For 3D data: Consider creating multiple 2D projections
+4. Suggest appropriate SQL queries for creating these tables
 
 CRITICAL - DO NOT CREATE SUMMARY TABLES:
 - DO NOT create separate summary tables (e.g., cluster_summary, {table}_summary)
@@ -62,7 +67,11 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 - Only create tables for visualization purposes (scatter plots), not for summary statistics
 - If you need to show cluster statistics, use the clustering result data directly in your text response`,
         inputSchema: z.object({
-            table_name: z.string().describe('Table name to analyze'),
+            table_name: z
+                .string()
+                .describe(
+                    'Table name to analyze - MUST be in English (e.g., "logistics_companies", "customer_segments"). Do NOT use Japanese characters in table names.'
+                ),
             feature_columns: z
                 .array(z.string())
                 .min(2)
