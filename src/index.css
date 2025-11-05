@@ -29,6 +29,22 @@ body {
     animation: shimmer 2s linear infinite;
 }
 
+/* Fade in and scale animation for newly added dashboard items */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-fadeInScale {
+    animation: fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Prose styles for markdown rendering */
 .prose {
     color: inherit;
@@ -105,6 +121,47 @@ body {
     word-break: break-word;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+}
+
+/* Markdown table styling */
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    font-size: 0.875em;
+    line-height: 1.5;
+    overflow-x: auto;
+    display: block;
+}
+
+.prose thead {
+    background-color: #f3f4f6;
+}
+
+.prose th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+}
+
+.prose td {
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+}
+
+.prose tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.prose tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+.prose tbody tr:hover {
+    background-color: #f3f4f6;
 }
 
 /* Hide scrollbar for recommended prompts */

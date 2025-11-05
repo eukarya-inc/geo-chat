@@ -7,6 +7,7 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { RegressionAnalysisResponse, ColumnSummary } from '../../types/regression';
 import type { ClusterAnalysisResponse } from '../../types/clustering';
+import type { SegmentedRegressionResponse } from '../../types/segmentedRegression';
 import type { ChartSpecs } from '../../store/remoteAtoms';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
@@ -489,6 +490,11 @@ const renderContentBlock = (
                     onChartIconClick,
                     onMapIconClick
                 );
+            }
+
+            if (block.name === 'plan_segmented_regression_analysis') {
+                const result = block.result as SegmentedRegressionResponse;
+                return renderSegmentedRegressionToolResult(result, index);
             }
 
             // Handle get_map_style_for_table tool results
@@ -1454,5 +1460,105 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
         </div>
     );
 };
+
+function renderSegmentedRegressionToolResult(
+    result: SegmentedRegressionResponse | undefined,
+    key: number
+): React.ReactNode {
+    if (!result) {
+        return <CollapsibleSection key={key} title="❌ **セグメント別回帰分析プランの結果がありません**" />;
+    }
+
+    if (!result.success) {
+        return (
+            <CollapsibleSection key={key} title={`❌ **エラー:** ${result.message}`} defaultOpen={true}>
+                {result.warnings && result.warnings.length > 0 && (
+                    <div className="text-sm text-amber-600 space-y-1">
+                        {result.warnings.map((warning, idx) => (
+                            <div key={idx}>⚠️ {warning}</div>
+                        ))}
+                    </div>
+                )}
+            </CollapsibleSection>
+        );
+    }
+
+    const { plan } = result;
+    const title = `📋 **セグメント別回帰分析プラン: ${plan.totalSegments}セグメント、${plan.totalSteps}ステップ**`;
+
+    return (
+        <CollapsibleSection key={key} title={title} defaultOpen={true}>
+            <div className="space-y-4 text-sm">
+                {/* Summary */}
+                <div className="p-3 bg-blue-50 rounded-md">
+                    <div className="font-semibold text-blue-900 mb-2">📊 実行プラン概要</div>
+                    <div className="space-y-1 text-blue-800">
+                        <div>
+                            ソーステーブル: <code>{plan.sourceTable}</code>
+                        </div>
+                        <div>
+                            セグメント列: <code>{plan.segmentColumn}</code>
+                        </div>
+                        {plan.targetColumn && (
+                            <div>
+                                目的変数: <code>{plan.targetColumn}</code>
+                            </div>
+                        )}
+                        {plan.predictorColumns && plan.predictorColumns.length > 0 && (
+                            <div>
+                                説明変数: <code>{plan.predictorColumns.join(', ')}</code>
+                            </div>
+                        )}
+                        <div className="mt-2 font-medium">
+                            合計: {plan.totalSegments}セグメント × 各{Math.ceil(plan.totalSteps / plan.totalSegments)}
+                            ステップ
+                        </div>
+                    </div>
+                </div>
+
+                {/* Segments */}
+                {plan.segments.map((segment, segIdx) => (
+                    <div key={segIdx} className="p-3 border border-gray-200 rounded-md">
+                        <div className="font-semibold mb-2">
+                            {segIdx + 1}. {segment.segmentLabel}
+                            {segment.rowCount && (
+                                <span className="ml-2 text-gray-600 font-normal">({segment.rowCount} rows)</span>
+                            )}
+                        </div>
+                        <div className="ml-4 space-y-2">
+                            {segment.steps.map((step, stepIdx) => (
+                                <div key={stepIdx} className="text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-gray-500">{step.stepNumber}.</span>
+                                        <div className="flex-1">
+                                            <div>{step.description}</div>
+                                            <div className="text-xs text-gray-500 mt-0.5">
+                                                ツール: <code className="text-xs">{step.tool}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+
+                {/* Instructions */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                    <div className="font-semibold text-amber-900 mb-2">⚠️ 重要な指示</div>
+                    <pre className="text-xs text-amber-800 whitespace-pre-wrap font-mono">{plan.instructions}</pre>
+                </div>
+
+                {result.warnings && result.warnings.length > 0 && (
+                    <div className="text-sm text-amber-600 space-y-1">
+                        {result.warnings.map((warning, idx) => (
+                            <div key={idx}>⚠️ {warning}</div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </CollapsibleSection>
+    );
+}
 
 export default StructuredMessageRenderer;
