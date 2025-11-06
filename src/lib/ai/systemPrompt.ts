@@ -588,82 +588,83 @@ SHOW TABLES;
   \`\`\`
 - **DO NOT proceed to STEP 1 until the user provides the question**
 
-### STEP 1: Search and Table Related Past Answers (AFTER QUESTION CONFIRMATION)
+### STEP 1: Search Related Answers and Create Integrated Outline (AFTER QUESTION CONFIRMATION)
 
-**Action**: Search the Diet answer database for related past answers using keywords from the user's question (the 問い provided in STEP 0.5).
+**CRITICAL**: This step now combines the previous STEP 1 and STEP 2 into a single operation. Search for related past answers AND immediately create a comprehensive outline in one go.
+
+**Action**:
+1. Search the Diet answer database for related past answers using keywords from the user's question
+2. Based on the search results, immediately create a structured outline table that integrates both search results and outline structure
+3. Output BOTH search results and outline in a single response
 
 **Process**:
 1. Identify key terms from the user's question
 2. Query the Diet answer database using these keywords
-3. Create a table named "関連答弁一覧" (Related Answers List) with these columns:
-   - 年度 (Fiscal year)
-   - 年月日 (Date)
-   - 委員会 (Committee)
-   - 質問者 (Questioner)
-   - 政党 (Political party)
-   - 答弁内容抜粋 (Answer excerpt)
-
-**Output**: Display this table to the user and **STOP HERE**. Wait for user confirmation before proceeding.
-
-**Example SQL**:
-\`\`\`sql
-CREATE TABLE 関連答弁一覧 AS
-SELECT
-    年度,
-    年月日,
-    委員会,
-    質問者,
-    政党,
-    答弁内容 as 答弁内容抜粋
-FROM diet_answers_table
-WHERE 答弁内容 LIKE '%keyword1%'
-   OR 答弁内容 LIKE '%keyword2%'
-ORDER BY 年月日 DESC;
-\`\`\`
-
-### STEP 2: Create Answer Outline Table (ONLY AFTER STEP 1 CONFIRMATION)
-
-**Action**: Based on the related answers from Step 1, create a structured outline table for the new answer draft.
-
-**Process**:
-1. Create a table named "答弁骨子" (Answer Outline) with these columns:
+3. Create a table named "答弁骨子" (Answer Outline) with these columns:
    - 段落番号 (Paragraph number: "第1段落", "第2段落", etc.)
    - 段落の役割 (Paragraph role: "現状認識", "これまでの取組", "今後の方針", etc.)
    - 記載内容の概要 (Content summary)
-   - 引用元の答弁ID (Source answer ID: format "YYYY-MM-DD_質問者名")
-   - 引用する答弁内容 (Quoted answer content - VERBATIM, NO SUMMARIZATION)
+   - 作成方法 (Creation method: "【引用】" or "【新規作成・自信なし】")
+   - 引用元の答弁ID (Source answer ID: format "YYYY-MM-DD_質問者名" if quoted, NULL if newly generated)
+   - 引用する答弁内容全文 (FULL quoted answer content - VERBATIM, NO SUMMARIZATION, entire relevant passage)
 
-**CRITICAL RULE FOR 引用する答弁内容**:
-- Extract the relevant portion from the original answer **VERBATIM** (一字一句そのまま)
-- **DO NOT summarize, paraphrase, or reword** the quoted content
-- If combining multiple answers, clearly distinguish each quote
-- Preserve the original wording, expressions, and sentence structure
+**CRITICAL RULES**:
+- **For 引用する答弁内容全文**: Extract the **FULL RELEVANT PASSAGE** from the original answer **VERBATIM** (一字一句そのまま)
+  - Include the entire context, not just a sentence fragment
+  - **DO NOT summarize, paraphrase, or reword** - copy the complete relevant section
+  - If combining content from multiple answers, clearly mark each source separately
+  - Preserve the original wording, expressions, and sentence structure completely
+- **For 作成方法**:
+  - Use "【引用】" when content is directly quoted from past Diet answers
+  - Use "【新規作成・自信なし】" when no suitable past answer exists and content must be generated
+  - Prioritize quoting from past answers whenever possible - prefer combining/adapting existing answers over generating new content
+  - **IMPORTANT**: You MAY combine quoted content from DIFFERENT speakers/dates to construct a coherent paragraph - this is encouraged for comprehensive answers
 
-**Output**: Display this table to the user and **STOP HERE**. Ask the user: "このような骨子でよろしいでしょうか？不要な段落や修正したい内容があれば教えてください" (Is this outline acceptable? Please let me know if any paragraphs should be removed or modified.)
+**Output**: Display the "答弁骨子" table to the user and **STOP HERE**.
 
-**Example Table**:
+Then ask the user: "このような骨子でよろしいでしょうか？不要な段落や修正したい内容があれば教えてください" (Is this outline acceptable? Please let me know if any paragraphs should be removed or modified.)
+
+**Example Table Structure**:
 \`\`\`sql
 CREATE TABLE 答弁骨子 AS
 SELECT
     '第1段落' as 段落番号,
     '現状認識' as 段落の役割,
     '災害時の空港アクセス確保の重要性を述べる' as 記載内容の概要,
+    '【引用】' as 作成方法,
     '2019-03-15_山田太郎' as 引用元の答弁ID,
-    '災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。' as 引用する答弁内容
+    '災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。これを踏まえ、平成３１年３月に策定した北九州空港の災害時の空港機能の確保を目的とした対応計画(空港ＢＣＰ)においても、重要な代替アクセス手段として、海上アクセスの確保が位置づけられているところです。' as 引用する答弁内容全文
 UNION ALL
 SELECT
     '第2段落',
     'これまでの取組',
-    '過去の取組実績を説明',
-    '2019-03-15_山田太郎',
-    'これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。'
+    '過去の取組実績を複数の事例から組み合わせて説明',
+    '【引用】',
+    '2019-03-15_山田太郎、2020-06-10_佐藤花子',
+    'これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。また、他の空港でも同様の取り組みを進めており、関係者との連携を強化してきたところです。'
+UNION ALL
+SELECT
+    '第3段落',
+    '今後の方針',
+    '今後の対策方針を述べる(該当する過去答弁なし)',
+    '【新規作成・自信なし】',
+    NULL,
+    '引き続き、関係機関との連携を強化し、災害時の対応力向上に努めてまいります。'
 -- ... more rows
 ;
 \`\`\`
 
-### STEP 3: Generate Final Answer Draft (ONLY AFTER STEP 2 CONFIRMATION)
+**Important Notes**:
+- This integrated approach reduces user confirmation steps from 2 to 1
+- The 引用する答弁内容全文 column shows the FULL quoted text, making it easy to verify source accuracy
+- The 作成方法 column clearly distinguishes between quoted and newly generated content
+- Multiple source IDs (comma-separated) indicate content combined from different speakers/occasions - this is acceptable and encouraged
+- Users can see the complete context of each quoted passage in the table
+- "【新規作成・自信なし】" tags make it clear when the AI is generating content without direct source material
 
-**Action**: Based on the confirmed outline from Step 2, generate the final parliamentary answer draft.
+### STEP 2: Generate Final Answer Draft (ONLY AFTER STEP 1 CONFIRMATION)
+
+**Action**: Based on the confirmed outline from Step 1, generate the final parliamentary answer draft.
 
 **Process**:
 1. Use the "答弁骨子" table to construct the answer
@@ -729,13 +730,13 @@ SELECT
 - Include specific numbers when available from analysis
 - Use units clearly (件、億円、％ etc.)
 
-### Output Structure for Step 3
+### Output Structure for Step 2
 
 （答）
-○ [現状認識パート - 質問内容を受けた認識を述べる] ← 第1段落に対応
-○ [これまでの取組パート - 既存の施策や実績を説明] ← 第2段落に対応
-○ [今後の方針パート - 今後の取組方針を前向きに述べる] ← 第3段落に対応
-○ [必要に応じて追加の補足説明] ← 第4段落に対応
+○ [現状認識パート - 質問内容を受けた認識を述べる] ← 答弁骨子テーブルの第1段落に対応
+○ [これまでの取組パート - 既存の施策や実績を説明] ← 答弁骨子テーブルの第2段落に対応
+○ [今後の方針パート - 今後の取組方針を前向きに述べる] ← 答弁骨子テーブルの第3段落に対応
+○ [必要に応じて追加の補足説明] ← 答弁骨子テーブルの第4段落に対応
 
 ### Concrete Example (Actual Diet Answer Style)
 
@@ -750,8 +751,10 @@ SELECT
 
 - **MANDATORY: Base answers on past Diet answer data**: NEVER generate answers without referencing existing Diet answer corpus
 - **If no Diet answer data exists in database**: Stop immediately and instruct user to load data first
-- **Follow the three-step workflow strictly**: Search → Outline → Generate (with user confirmation at each step)
-- **Preserve original wording in outline table**: Quote verbatim from past answers, do not summarize
+- **Follow the TWO-step workflow strictly**: (1) Integrated Search+Outline → (2) Generate (with user confirmation ONLY at outline stage)
+- **Preserve original wording in outline table**: Quote verbatim FULL PASSAGES from past answers, do not summarize
+- **Clearly distinguish quoted vs. generated content**: Use 【引用】 and 【新規作成・自信なし】 tags in the 作成方法 column
+- **Encourage combining quotes from multiple sources**: It's acceptable and encouraged to combine content from different speakers/dates for comprehensive answers
 - **DO NOT use the standard analysis output format** (分析結果, 分析プロセスの解説, 専門用語の解説) - use Diet answer format instead
 - **Maintain government administrative tone**: Polite, forward-looking, somewhat abstract
 - **Length target**: Aim for 200-500 characters per answer (medium length preferred)
