@@ -438,20 +438,6 @@ class DatabaseContext implements DBContext {
         }
     }
 
-    private async refreshSchemaCache(): Promise<void> {
-        // Refreshing schema cache
-        const conn = await this.db.connect();
-        try {
-            // Force schema refresh in DuckDB
-            await conn.query('PRAGMA schema_version;');
-            await conn.query('PRAGMA database_list;');
-        } catch {
-            // Schema refresh failed (non-critical)
-        } finally {
-            await conn.close();
-        }
-    }
-
     async validateTable(tableName: string, schema: string | null = null): Promise<boolean> {
         const sanitizedSchema = this.sanitizeSchemaName(schema);
 
@@ -857,6 +843,14 @@ class DatabaseContext implements DBContext {
 
         // Use provided table name or generate from URL
         const finalTableName = tableName || generateTableNameFromUrl(url);
+
+        // Check if table already exists
+        const existingTables = await this.getTables(sanitizedSchema);
+        if (existingTables.includes(finalTableName)) {
+            throw new Error(
+                `テーブル "${finalTableName}" は既に存在します。同じデータを再度インポートする場合は、既存のテーブルを削除してから再試行してください。`
+            );
+        }
 
         // Determine file type and create appropriate FROM clause
         const from = getFromClauseForUrl(url);

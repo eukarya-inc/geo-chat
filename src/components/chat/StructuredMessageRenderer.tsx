@@ -13,7 +13,12 @@ import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
 import { PromptSuggestions } from './PromptSuggestions';
 import { CopyButton } from './CopyButton';
-import { isTableCreatedOnlyMessage, removeMetadataMarkers } from './utils';
+import {
+    isTableCreatedOnlyMessage,
+    removeMetadataMarkers,
+    parseSummaryAndDetails,
+    parseStreamingSummaryAndDetails,
+} from './utils';
 
 interface StructuredMessageRendererProps {
     message: StructuredMessage;
@@ -107,6 +112,9 @@ const renderContentBlock = (
             // Check if this is a final message (final conclusion)
             const isFinalMessage = block.text.includes('<!--FINAL_MESSAGE-->');
 
+            // Check for summary and details markers
+            const parsed = parseSummaryAndDetails(cleanedText);
+
             // Check for table created markers in text
             const tableCreatedRegex = /<!--TABLE_CREATED:([^:>]+)-->/g;
             const tableMatches = Array.from(cleanedText.matchAll(tableCreatedRegex));
@@ -171,6 +179,49 @@ const renderContentBlock = (
                 return (
                     <div key={index} className="space-y-1">
                         {parts}
+                    </div>
+                );
+            }
+
+            // Handle summary and details if present
+            if (parsed.summary && parsed.details) {
+                return (
+                    <div key={index} className="space-y-2">
+                        {/* Summary - always visible */}
+                        <div className="prose max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                                {parsed.summary}
+                            </ReactMarkdown>
+                        </div>
+                        {/* Details - collapsible */}
+                        <CollapsibleSection title="📋 **詳細情報**" defaultOpen={false}>
+                            <div className="prose prose-sm max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                                    {parsed.details}
+                                </ReactMarkdown>
+                            </div>
+                        </CollapsibleSection>
+                        {/* Remaining content if any */}
+                        {parsed.remaining && (
+                            <div className="prose max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                                    {parsed.remaining}
+                                </ReactMarkdown>
+                            </div>
+                        )}
+                        {!isLoadingMessage && isFinalMessage && (
+                            <div className="mt-2 flex">
+                                <CopyButton
+                                    onCopy={() =>
+                                        navigator.clipboard.writeText(
+                                            [parsed.summary, parsed.details, parsed.remaining]
+                                                .filter(Boolean)
+                                                .join('\n\n')
+                                        )
+                                    }
+                                />
+                            </div>
+                        )}
                     </div>
                 );
             }
@@ -1366,6 +1417,67 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                             const displayText = message.streaming.replace('<!--FINAL_MESSAGE-->', '').trim();
 
                             if (displayText) {
+                                // Use streaming parser to detect summary and details markers
+                                const parsed = parseStreamingSummaryAndDetails(displayText);
+
+                                // If we have summary or details markers, render with structure
+                                if (parsed.hasSummary || parsed.hasDetails) {
+                                    return (
+                                        <div className="space-y-2">
+                                            {/* Remaining content before summary */}
+                                            {parsed.remaining && !parsed.hasSummary && (
+                                                <div className="prose max-w-none">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        rehypePlugins={[rehypeHighlight]}
+                                                    >
+                                                        {parsed.remaining}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            )}
+
+                                            {/* Summary section (always visible when available) */}
+                                            {parsed.summary && (
+                                                <div className="prose max-w-none">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        rehypePlugins={[rehypeHighlight]}
+                                                    >
+                                                        {parsed.summary}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            )}
+
+                                            {/* Details section (collapsible, created immediately when marker appears) */}
+                                            {parsed.hasDetails && (
+                                                <CollapsibleSection title="📋 **詳細情報**" defaultOpen={false}>
+                                                    <div className="prose prose-sm max-w-none">
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkGfm]}
+                                                            rehypePlugins={[rehypeHighlight]}
+                                                        >
+                                                            {parsed.details}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                </CollapsibleSection>
+                                            )}
+
+                                            {/* Remaining content after summary (if applicable) */}
+                                            {parsed.remaining && parsed.hasSummary && (
+                                                <div className="prose max-w-none">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        rehypePlugins={[rehypeHighlight]}
+                                                    >
+                                                        {parsed.remaining}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
+                                // No markers found, render as plain text
                                 return (
                                     <div className="prose max-w-none">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>

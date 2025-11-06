@@ -6,7 +6,7 @@ import {
     CameraIcon,
     PaintBrushIcon,
 } from '@heroicons/react/24/outline';
-import html2canvas from 'html2canvas';
+import { toBlob } from 'html-to-image';
 import { DropdownMenu, type DropdownMenuItem } from '../common/DropdownMenu';
 
 interface MapDropdownMenuProps {
@@ -49,26 +49,23 @@ export function MapDropdownMenu({
                 return;
             }
 
-            // Use html2canvas to capture the entire map container
-            const canvas = await html2canvas(mapContainer as HTMLElement, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
+            // Use html-to-image to capture the entire map container
+            const blob = await toBlob(mapContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2,
             });
 
-            canvas.toBlob(blob => {
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    const filename = vizTitle ? `${vizTitle}.png` : 'map.png';
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                } else {
-                    alert('Failed to export map as image. Please try again.');
-                }
-            }, 'image/png');
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const filename = vizTitle ? `${vizTitle}.png` : 'map.png';
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert('Failed to export map as image. Please try again.');
+            }
         } catch (error) {
             console.error('Error exporting map:', error);
             alert('Failed to export map as image. Please try again.');
@@ -105,23 +102,18 @@ export function MapDropdownMenu({
                 return;
             }
 
-            // Use html2canvas to capture the entire map container
-            const canvas = await html2canvas(mapContainer as HTMLElement, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
+            // Use html-to-image to capture the entire map container
+            const blob = await toBlob(mapContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2,
             });
 
+            if (!blob) {
+                throw new Error('Failed to create image from map');
+            }
+
             // Safari requires ClipboardItem to be created synchronously with a Promise
-            const blobPromise = new Promise<Blob>((resolve, reject) => {
-                canvas.toBlob(blob => {
-                    if (blob) {
-                        resolve(blob);
-                    } else {
-                        reject(new Error('Failed to create image from map'));
-                    }
-                }, 'image/png');
-            });
+            const blobPromise = Promise.resolve(blob);
 
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
 
