@@ -80,11 +80,44 @@ export function MapPanel({
                 return;
             }
 
+            // Get all elements and their computed styles before cloning
+            const elementsWithStyles = Array.from(mapContainer.querySelectorAll('*')).map(el => ({
+                styles: window.getComputedStyle(el),
+            }));
+
             // Use html2canvas to capture the entire map container
             const canvas = await html2canvas(mapContainer as HTMLElement, {
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: null,
+                onclone: (_clonedDoc: Document, clonedElement: HTMLElement) => {
+                    // Apply computed styles as inline styles to avoid oklch parsing
+                    const clonedElements = Array.from(clonedElement.querySelectorAll('*'));
+
+                    elementsWithStyles.forEach(({ styles }, index) => {
+                        const clonedEl = clonedElements[index];
+                        if (!clonedEl) return;
+
+                        const htmlElement = clonedEl as HTMLElement;
+
+                        // Apply color-related computed styles as inline styles
+                        const colorProps = [
+                            'background-color',
+                            'color',
+                            'border-top-color',
+                            'border-right-color',
+                            'border-bottom-color',
+                            'border-left-color',
+                        ];
+
+                        colorProps.forEach(prop => {
+                            const value = styles.getPropertyValue(prop);
+                            if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
+                                htmlElement.style.setProperty(prop, value, 'important');
+                            }
+                        });
+                    });
+                },
             });
 
             // Safari requires ClipboardItem to be created synchronously with a Promise
