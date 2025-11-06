@@ -271,7 +271,7 @@ describe('EmptyChat', () => {
 
     // 6. Props propagation
     it('should pass correct props to ChatInput', () => {
-        render(<EmptyChat {...defaultProps} apiKey="test-key" schemaName="test-schema" />);
+        render(<EmptyChat {...defaultProps} apiKey="test-key" />);
 
         const textarea = screen.getByTestId('chat-input-textarea');
         expect(textarea).not.toBeDisabled();
