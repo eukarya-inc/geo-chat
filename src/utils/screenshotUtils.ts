@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 
 /**
  * Configuration for screenshot capture
@@ -6,7 +6,6 @@ import html2canvas from 'html2canvas';
 const SCREENSHOT_CONFIG = {
     maxWidth: 800, // Maximum width for thumbnail
     quality: 0.7, // JPEG quality (60-70%)
-    format: 'image/jpeg' as const,
     delay: 500, // Delay in ms to ensure rendering is complete
 } as const;
 
@@ -14,52 +13,61 @@ const SCREENSHOT_CONFIG = {
  * Captures a screenshot of a DOM element and returns it as a Base64 Data URL
  *
  * @param element - The DOM element to capture
- * @returns Promise resolving to a Base64 Data URL string (JPEG format), or null if capture fails
+ * @returns Promise resolving to a Base64 Data URL string (PNG format), or null if capture fails
  */
 export async function captureElementScreenshot(element: HTMLElement): Promise<string | null> {
     try {
         // Wait a bit to ensure all rendering is complete (charts, maps, etc.)
         await new Promise(resolve => setTimeout(resolve, SCREENSHOT_CONFIG.delay));
 
-        // Capture the element as canvas
-        const canvas = await html2canvas(element, {
-            useCORS: true, // Allow cross-origin images
-            allowTaint: false,
-            backgroundColor: '#ffffff',
-            scale: 1, // Use device pixel ratio for better quality
-            logging: false, // Disable console logging
+        // Capture the element using html-to-image
+        const dataUrl = await toPng(element, {
+            cacheBust: true,
+            pixelRatio: 1, // Use 1 for thumbnail quality
         });
 
         // Calculate thumbnail dimensions while maintaining aspect ratio
-        const originalWidth = canvas.width;
-        const originalHeight = canvas.height;
-        let thumbnailWidth = originalWidth;
-        let thumbnailHeight = originalHeight;
+        const img = new Image();
+        img.src = dataUrl;
 
-        if (originalWidth > SCREENSHOT_CONFIG.maxWidth) {
-            const scale = SCREENSHOT_CONFIG.maxWidth / originalWidth;
-            thumbnailWidth = SCREENSHOT_CONFIG.maxWidth;
-            thumbnailHeight = Math.round(originalHeight * scale);
-        }
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                const originalWidth = img.width;
+                const originalHeight = img.height;
+                let thumbnailWidth = originalWidth;
+                let thumbnailHeight = originalHeight;
 
-        // Create a new canvas for the thumbnail
-        const thumbnailCanvas = document.createElement('canvas');
-        thumbnailCanvas.width = thumbnailWidth;
-        thumbnailCanvas.height = thumbnailHeight;
+                if (originalWidth > SCREENSHOT_CONFIG.maxWidth) {
+                    const scale = SCREENSHOT_CONFIG.maxWidth / originalWidth;
+                    thumbnailWidth = SCREENSHOT_CONFIG.maxWidth;
+                    thumbnailHeight = Math.round(originalHeight * scale);
+                }
 
-        const ctx = thumbnailCanvas.getContext('2d');
-        if (!ctx) {
-            console.error('Failed to get canvas 2D context');
-            return null;
-        }
+                // Create a new canvas for the thumbnail
+                const thumbnailCanvas = document.createElement('canvas');
+                thumbnailCanvas.width = thumbnailWidth;
+                thumbnailCanvas.height = thumbnailHeight;
 
-        // Draw the scaled image
-        ctx.drawImage(canvas, 0, 0, thumbnailWidth, thumbnailHeight);
+                const ctx = thumbnailCanvas.getContext('2d');
+                if (!ctx) {
+                    console.error('Failed to get canvas 2D context');
+                    resolve(null);
+                    return;
+                }
 
-        // Convert to JPEG Data URL
-        const dataUrl = thumbnailCanvas.toDataURL(SCREENSHOT_CONFIG.format, SCREENSHOT_CONFIG.quality);
+                // Draw the scaled image
+                ctx.drawImage(img, 0, 0, thumbnailWidth, thumbnailHeight);
 
-        return dataUrl;
+                // Convert to PNG Data URL
+                const thumbnailDataUrl = thumbnailCanvas.toDataURL('image/png', SCREENSHOT_CONFIG.quality);
+                resolve(thumbnailDataUrl);
+            };
+
+            img.onerror = () => {
+                console.error('Failed to load captured image');
+                reject(new Error('Failed to load captured image'));
+            };
+        });
     } catch (error) {
         console.error('Failed to capture screenshot:', error);
         return null;

@@ -8,6 +8,7 @@ import {
     PencilIcon,
     ClipboardDocumentIcon,
     CheckIcon,
+    ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import { VisualizationGridItem } from './VisualizationGridItem';
 import type { ChartSpec } from '../../types/chart';
@@ -260,6 +261,44 @@ export function Dashboard({
         }
     }, []);
 
+    const handleDownloadDashboardAsPNG = useCallback(async () => {
+        try {
+            // Find the grid layout container
+            const gridContainer = document.querySelector('.layout');
+            if (!gridContainer) {
+                console.error('Dashboard grid container not found');
+                return;
+            }
+
+            // Use html-to-image to capture the entire dashboard grid
+            const blob = await toBlob(gridContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2, // Higher quality for retina displays
+            });
+
+            if (!blob) {
+                throw new Error('Failed to create image from dashboard');
+            }
+
+            // Create a download link and trigger download
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const filename = `${dashboard.title.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
+
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Clean up the object URL
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Error downloading dashboard:', err);
+        }
+    }, [dashboard.title]);
+
     // Focus input when editing starts
     useEffect(() => {
         if (isEditingTitle && titleInputRef.current) {
@@ -460,18 +499,28 @@ export function Dashboard({
                                 </button>
                             </div>
                         )}
-                        <button
-                            onClick={handleCopyDashboardToClipboard}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                            title={showCopyFeedback ? 'コピーしました！' : 'クリップボードにコピー'}
-                            data-testid="dashboard-copy-button"
-                        >
-                            {showCopyFeedback ? (
-                                <CheckIcon className="w-5 h-5 text-green-500" />
-                            ) : (
-                                <ClipboardDocumentIcon className="w-5 h-5" />
-                            )}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleDownloadDashboardAsPNG}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                title="PNGとしてダウンロード"
+                                data-testid="dashboard-download-button"
+                            >
+                                <ArrowDownTrayIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={handleCopyDashboardToClipboard}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                title={showCopyFeedback ? 'コピーしました！' : 'クリップボードにコピー'}
+                                data-testid="dashboard-copy-button"
+                            >
+                                {showCopyFeedback ? (
+                                    <CheckIcon className="w-5 h-5 text-green-500" />
+                                ) : (
+                                    <ClipboardDocumentIcon className="w-5 h-5" />
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
