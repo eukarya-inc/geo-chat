@@ -5,7 +5,7 @@ import { MapStyleModal } from './MapStyleModal';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { MapSpec } from '../../store/remoteAtoms';
 import type { MapStyleManager } from './mapStyleManager';
-import html2canvas from 'html2canvas';
+import { toBlob } from 'html-to-image';
 import { VisualizationHeader } from '../common/VisualizationHeader';
 import { createCopyButton, createExportButton } from '../common/VisualizationToolButtons';
 
@@ -80,56 +80,19 @@ export function MapPanel({
                 return;
             }
 
-            // Get all elements and their computed styles before cloning
-            const elementsWithStyles = Array.from(mapContainer.querySelectorAll('*')).map(el => ({
-                styles: window.getComputedStyle(el),
-            }));
-
-            // Use html2canvas to capture the entire map container
-            const canvas = await html2canvas(mapContainer as HTMLElement, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
-                onclone: (_clonedDoc: Document, clonedElement: HTMLElement) => {
-                    // Apply computed styles as inline styles to avoid oklch parsing
-                    const clonedElements = Array.from(clonedElement.querySelectorAll('*'));
-
-                    elementsWithStyles.forEach(({ styles }, index) => {
-                        const clonedEl = clonedElements[index];
-                        if (!clonedEl) return;
-
-                        const htmlElement = clonedEl as HTMLElement;
-
-                        // Apply color-related computed styles as inline styles
-                        const colorProps = [
-                            'background-color',
-                            'color',
-                            'border-top-color',
-                            'border-right-color',
-                            'border-bottom-color',
-                            'border-left-color',
-                        ];
-
-                        colorProps.forEach(prop => {
-                            const value = styles.getPropertyValue(prop);
-                            if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
-                                htmlElement.style.setProperty(prop, value, 'important');
-                            }
-                        });
-                    });
-                },
+            // Use html-to-image to capture the entire map container
+            // html-to-image handles modern CSS including OKLCH colors natively
+            const blob = await toBlob(mapContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2, // Higher quality for retina displays
             });
+
+            if (!blob) {
+                throw new Error('Failed to create image from map');
+            }
 
             // Safari requires ClipboardItem to be created synchronously with a Promise
-            const blobPromise = new Promise<Blob>((resolve, reject) => {
-                canvas.toBlob(blob => {
-                    if (blob) {
-                        resolve(blob);
-                    } else {
-                        reject(new Error('Failed to create image from map'));
-                    }
-                }, 'image/png');
-            });
+            const blobPromise = Promise.resolve(blob);
 
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
         } catch (err) {

@@ -13,7 +13,7 @@ import { VisualizationGridItem } from './VisualizationGridItem';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
-import html2canvas from 'html2canvas';
+import { toBlob } from 'html-to-image';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -234,181 +234,19 @@ export function Dashboard({
                 return;
             }
 
-            // Utility: Convert OKLCH to RGBA for html2canvas compatibility
-            const oklchToRgba = (input: string): string | null => {
-                // Match oklch(L C H / A?) with optional % on L and optional alpha
-                const match = input
-                    .trim()
-                    .match(/^oklch\(\s*([0-9.]+%?)\s+([0-9.]+)\s+([0-9.]+)(?:deg)?(?:\s*\/\s*([0-9.]+))?\s*\)$/i);
-                if (!match) return null;
-                const [, lRaw, cRaw, hRaw, aRaw] = match;
-                let L = parseFloat(lRaw);
-                // Percent handling
-                if (lRaw.endsWith('%')) L = L / 100;
-                const C = parseFloat(cRaw);
-                let h = parseFloat(hRaw);
-                // Normalize hue to radians
-                if (!isFinite(h)) h = 0;
-                const hr = (h * Math.PI) / 180;
-                const a = C * Math.cos(hr);
-                const b = C * Math.sin(hr);
-                const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
-                const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-                const s_ = L - 0.0894841775 * a - 1.291485548 * b;
-                const l = l_ * l_ * l_;
-                const m = m_ * m_ * m_;
-                const s = s_ * s_ * s_;
-                let r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
-                let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
-                let b2 = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
-                // clamp
-                r = Math.min(1, Math.max(0, r));
-                g = Math.min(1, Math.max(0, g));
-                b2 = Math.min(1, Math.max(0, b2));
-                // gamma encode
-                const enc = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
-                const R = Math.round(enc(r) * 255);
-                const G = Math.round(enc(g) * 255);
-                const B = Math.round(enc(b2) * 255);
-                let A = 1;
-                if (aRaw != null) {
-                    const aStr = aRaw.trim();
-                    A = aStr.endsWith('%') ? parseFloat(aStr) / 100 : parseFloat(aStr);
-                    if (!isFinite(A)) A = 1;
-                    A = Math.max(0, Math.min(1, A));
-                }
-                return A === 1 ? `rgb(${R}, ${G}, ${B})` : `rgba(${R}, ${G}, ${B}, ${A})`;
-            };
-
-            // Convert oklch() inside a value if present; otherwise return original
-            const normalizeColorValue = (value: string): string => {
-                if (!value) return value;
-                const v = value.trim();
-                if (!/oklch\(/i.test(v)) return v;
-                // If value is exactly one oklch(), convert
-                const converted = oklchToRgba(v);
-                if (converted) return converted;
-                // For complex values (e.g., gradients or shadows), drop to a safe fallback
-                if (/gradient\(/i.test(v)) return 'none';
-                if (/box-shadow/i.test(v)) return 'none';
-                // As a last resort, try replacing any oklch(...) occurrences individually
-                return v.replace(/oklch\([^)]*\)/gi, m => oklchToRgba(m) || 'transparent');
-            };
-
-            // Build list including the root container first to ensure it's also normalized
-            const sourceElements: Element[] = [
-                gridContainer as Element,
-                ...Array.from(gridContainer.querySelectorAll('*')),
-            ];
-            const elementsWithStyles = sourceElements.map(el => ({
-                styles: window.getComputedStyle(el as Element),
-            }));
-
-            // Use html2canvas to capture the entire dashboard grid
-            const canvas = await html2canvas(gridContainer as HTMLElement, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null, // keep transparent to avoid background merges
-                onclone: (_clonedDoc: Document, clonedElement: HTMLElement) => {
-                    // Apply computed styles as inline styles and normalize OKLCH
-                    const clonedElements: Element[] = [
-                        clonedElement as Element,
-                        ...Array.from(clonedElement.querySelectorAll('*')),
-                    ];
-
-                    elementsWithStyles.forEach(({ styles }, index) => {
-                        const clonedEl = clonedElements[index];
-                        if (!clonedEl) return;
-                        const htmlElement = clonedEl as HTMLElement;
-
-                        // Key color-related properties to normalize
-                        const colorProps = [
-                            'background-color',
-                            'color',
-                            'border-top-color',
-                            'border-right-color',
-                            'border-bottom-color',
-                            'border-left-color',
-                            'outline-color',
-                            'text-decoration-color',
-                            'column-rule-color',
-                            'caret-color',
-                            'accent-color',
-                            'fill',
-                            'stroke',
-                        ];
-
-                        colorProps.forEach(prop => {
-                            const raw = styles.getPropertyValue(prop);
-                            if (!raw) return;
-                            const value = normalizeColorValue(raw);
-                            if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
-                                htmlElement.style.setProperty(prop, value, 'important');
-                            }
-                        });
-
-                        // Neutralize complex properties that may embed oklch()
-                        const bgImage = styles.getPropertyValue('background-image');
-                        if (bgImage && /oklch\(/i.test(bgImage)) {
-                            htmlElement.style.setProperty('background-image', 'none', 'important');
-                        }
-                        const boxShadow = styles.getPropertyValue('box-shadow');
-                        if (boxShadow && /oklch\(/i.test(boxShadow)) {
-                            htmlElement.style.setProperty('box-shadow', 'none', 'important');
-                        }
-                        const textShadow = styles.getPropertyValue('text-shadow');
-                        if (textShadow && /oklch\(/i.test(textShadow)) {
-                            htmlElement.style.setProperty('text-shadow', 'none', 'important');
-                        }
-
-                        // Fallback: scan all computed properties and sanitize any with oklch()
-                        for (let i = 0; i < styles.length; i++) {
-                            const propName = styles.item(i);
-                            if (!propName) continue;
-                            const rawVal = styles.getPropertyValue(propName);
-                            if (!rawVal || !/oklch\(/i.test(rawVal)) continue;
-
-                            let safeVal = rawVal;
-                            if (/background-image|mask-image|list-style-image/i.test(propName)) {
-                                safeVal = 'none';
-                            } else if (/shadow/i.test(propName)) {
-                                safeVal = 'none';
-                            } else if (
-                                /color|background|border|outline|fill|stroke|caret|accent|text-decoration|column-rule/i.test(
-                                    propName
-                                )
-                            ) {
-                                safeVal = normalizeColorValue(rawVal);
-                            } else {
-                                // Replace any oklch() occurrences within the value
-                                safeVal = rawVal.replace(/oklch\([^)]*\)/gi, m => oklchToRgba(m) || 'transparent');
-                            }
-
-                            // If normalization didn't change and still has oklch or gradient, neutralize
-                            if (/oklch\(/i.test(safeVal) || /gradient\(/i.test(safeVal)) {
-                                safeVal = /background/i.test(propName) ? 'transparent' : 'initial';
-                            }
-
-                            try {
-                                htmlElement.style.setProperty(propName, safeVal, 'important');
-                            } catch {
-                                // Ignore invalid property set
-                            }
-                        }
-                    });
-                },
+            // Use html-to-image to capture the entire dashboard grid
+            // html-to-image handles modern CSS including OKLCH colors natively
+            const blob = await toBlob(gridContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2, // Higher quality for retina displays
             });
+
+            if (!blob) {
+                throw new Error('Failed to create image from dashboard');
+            }
 
             // Safari requires ClipboardItem to be created synchronously with a Promise
-            const blobPromise = new Promise<Blob>((resolve, reject) => {
-                canvas.toBlob(blob => {
-                    if (blob) {
-                        resolve(blob);
-                    } else {
-                        reject(new Error('Failed to create image from dashboard'));
-                    }
-                }, 'image/png');
-            });
+            const blobPromise = Promise.resolve(blob);
 
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
 
