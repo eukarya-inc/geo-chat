@@ -1,10 +1,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactGridLayout, { Responsive, WidthProvider, Layout } from 'react-grid-layout';
-import { ChartBarIcon, CogIcon, EllipsisVerticalIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import {
+    ChartBarIcon,
+    CogIcon,
+    EllipsisVerticalIcon,
+    TrashIcon,
+    PencilIcon,
+    ClipboardDocumentIcon,
+    CheckIcon,
+} from '@heroicons/react/24/outline';
 import { VisualizationGridItem } from './VisualizationGridItem';
 import type { ChartSpec } from '../../types/chart';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { DashboardVisualization as DashboardVisualizationType } from '../../store/remoteAtoms';
+import { toBlob } from 'html-to-image';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -58,6 +67,7 @@ export function Dashboard({
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState(dashboard.title);
     const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
+    const [showCopyFeedback, setShowCopyFeedback] = useState(false);
     const titleInputRef = useRef<HTMLInputElement>(null);
     const prevDashboardIdRef = useRef<string>(dashboard.id);
     const prevLayoutRef = useRef<Layout[]>(dashboard.layout);
@@ -208,6 +218,47 @@ export function Dashboard({
         },
         [handleSaveTitle, handleCancelEditingTitle]
     );
+
+    const handleCopyDashboardToClipboard = useCallback(async () => {
+        try {
+            // Check if Clipboard API is available
+            if (!navigator.clipboard || !navigator.clipboard.write) {
+                console.error('Clipboard API is not supported');
+                return;
+            }
+
+            // Find the grid layout container
+            const gridContainer = document.querySelector('.layout');
+            if (!gridContainer) {
+                console.error('Dashboard grid container not found');
+                return;
+            }
+
+            // Use html-to-image to capture the entire dashboard grid
+            // html-to-image handles modern CSS including OKLCH colors natively
+            const blob = await toBlob(gridContainer as HTMLElement, {
+                cacheBust: true,
+                pixelRatio: 2, // Higher quality for retina displays
+            });
+
+            if (!blob) {
+                throw new Error('Failed to create image from dashboard');
+            }
+
+            // Safari requires ClipboardItem to be created synchronously with a Promise
+            const blobPromise = Promise.resolve(blob);
+
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+
+            // Show success feedback
+            setShowCopyFeedback(true);
+            setTimeout(() => {
+                setShowCopyFeedback(false);
+            }, 1500);
+        } catch (err) {
+            console.error('Error copying dashboard:', err);
+        }
+    }, []);
 
     // Focus input when editing starts
     useEffect(() => {
@@ -383,31 +434,45 @@ export function Dashboard({
             <div className="flex-1 h-full flex flex-col bg-gray-50">
                 {/* Dashboard Title Header */}
                 <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200">
-                    {isEditingTitle ? (
-                        <div className="flex items-center gap-2">
-                            <input
-                                ref={titleInputRef}
-                                type="text"
-                                value={editedTitle}
-                                onChange={e => setEditedTitle(e.target.value)}
-                                onKeyDown={handleTitleKeyDown}
-                                onBlur={handleSaveTitle}
-                                className="flex-1 text-2xl font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none bg-transparent"
-                                placeholder="Dashboard name"
-                            />
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-3 group">
-                            <h1 className="text-2xl font-bold text-gray-900">{dashboard.title}</h1>
-                            <button
-                                onClick={handleStartEditingTitle}
-                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                title="Edit dashboard name"
-                            >
-                                <PencilIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                    )}
+                    <div className="flex items-center justify-between">
+                        {isEditingTitle ? (
+                            <div className="flex items-center gap-2 flex-1">
+                                <input
+                                    ref={titleInputRef}
+                                    type="text"
+                                    value={editedTitle}
+                                    onChange={e => setEditedTitle(e.target.value)}
+                                    onKeyDown={handleTitleKeyDown}
+                                    onBlur={handleSaveTitle}
+                                    className="flex-1 text-2xl font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                                    placeholder="Dashboard name"
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3 group">
+                                <h1 className="text-2xl font-bold text-gray-900">{dashboard.title}</h1>
+                                <button
+                                    onClick={handleStartEditingTitle}
+                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Edit dashboard name"
+                                >
+                                    <PencilIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        )}
+                        <button
+                            onClick={handleCopyDashboardToClipboard}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                            title={showCopyFeedback ? 'コピーしました！' : 'クリップボードにコピー'}
+                            data-testid="dashboard-copy-button"
+                        >
+                            {showCopyFeedback ? (
+                                <CheckIcon className="w-5 h-5 text-green-500" />
+                            ) : (
+                                <ClipboardDocumentIcon className="w-5 h-5" />
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Grid Layout Area */}
