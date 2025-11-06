@@ -42,6 +42,36 @@ function shouldStringifyColumn(columnType?: string | null): boolean {
 }
 
 /**
+ * Determine the target cast type for integer columns that ST_AsMVT doesn't support
+ * ST_AsMVT only supports: VARCHAR, FLOAT, DOUBLE, INTEGER, BIGINT, BOOLEAN
+ *
+ * @returns 'INTEGER' for small types, 'BIGINT' for large types, null if no cast needed
+ */
+function getIntegerCastTarget(columnType?: string | null): 'INTEGER' | 'BIGINT' | null {
+    if (!columnType) {
+        return null;
+    }
+
+    const upperType = columnType.toUpperCase();
+
+    // Small integer types → cast to INTEGER (4 bytes, supported by ST_AsMVT)
+    if (upperType === 'TINYINT' || upperType === 'SMALLINT' || upperType === 'UTINYINT' || upperType === 'USMALLINT') {
+        return 'INTEGER';
+    }
+
+    // Large integer types → cast to BIGINT (8 bytes, supported by ST_AsMVT)
+    // UINTEGER: unsigned 4-byte, may exceed INTEGER range, safer to use BIGINT
+    // UBIGINT: unsigned 8-byte, cast to BIGINT (some precision loss possible)
+    // HUGEINT/UHUGEINT: 16-byte, cast to BIGINT (precision loss expected)
+    if (upperType === 'HUGEINT' || upperType === 'UHUGEINT' || upperType === 'UINTEGER' || upperType === 'UBIGINT') {
+        return 'BIGINT';
+    }
+
+    // INTEGER and BIGINT are already supported by ST_AsMVT
+    return null;
+}
+
+/**
  * Generate SQL query for creating MVT using ST_AsMVT
  *
  * IMPORTANT: Uses the axis order trap fix - EPSG:4326 defaults to lat,lon order
@@ -64,11 +94,23 @@ export function generateVectorTileQuery(params: QueryParams): string {
 
     // Build column selection for the struct
     // Use TRY_CAST to safely convert complex types to VARCHAR (JSON string) for ST_AsMVT compatibility
+    // Integer types not supported by ST_AsMVT must be cast to INTEGER or BIGINT
     const columnList = selectedColumns
         .map(col => {
             const columnType = columnTypes?.[col];
             const structKey = col.replace(/'/g, "''"); // Escape single quotes for SQL string literal keys
-            const valueExpression = shouldStringifyColumn(columnType) ? `TRY_CAST("${col}" AS VARCHAR)` : `"${col}"`;
+
+            let valueExpression: string;
+            if (shouldStringifyColumn(columnType)) {
+                valueExpression = `TRY_CAST("${col}" AS VARCHAR)`;
+            } else {
+                const castTarget = getIntegerCastTarget(columnType);
+                if (castTarget) {
+                    valueExpression = `TRY_CAST("${col}" AS ${castTarget})`;
+                } else {
+                    valueExpression = `"${col}"`;
+                }
+            }
 
             return `'${structKey}': ${valueExpression}`;
         })
