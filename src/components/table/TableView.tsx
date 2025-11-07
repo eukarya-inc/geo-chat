@@ -30,9 +30,10 @@ const scrollbarStyles = `
 `;
 
 interface TableViewProps {
-    connection: AsyncDuckDBConnection;
+    connection?: AsyncDuckDBConnection;
     tableName: string;
     dbContext?: DBContext;
+    schema?: string | null;
 }
 
 // Helper function to check if a column type is geometry
@@ -119,7 +120,67 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
     return String(value);
 };
 
-export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbContext }) => {
+export const TableView: React.FC<TableViewProps> = ({
+    connection: providedConnection,
+    tableName,
+    dbContext,
+    schema,
+}) => {
+    const [internalConnection, setInternalConnection] = useState<AsyncDuckDBConnection | null>(null);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
+
+    // Create connection from dbContext if not provided
+    useEffect(() => {
+        if (providedConnection) {
+            // Use provided connection
+            setInternalConnection(providedConnection);
+            return;
+        }
+
+        if (!dbContext) {
+            setConnectionError('Neither connection nor dbContext provided');
+            return;
+        }
+
+        // Create managed connection from dbContext
+        let isActive = true;
+        let connectionToCleanup: AsyncDuckDBConnection | null = null;
+
+        dbContext
+            .createManagedConnection(schema || null)
+            .then(conn => {
+                if (isActive) {
+                    connectionToCleanup = conn;
+                    setInternalConnection(conn);
+                    setConnectionError(null);
+                } else {
+                    // Connection arrived after unmount - close it immediately
+                    conn.close().catch(err => {
+                        console.error('[TableView] Failed to close late-arriving connection:', err);
+                    });
+                }
+            })
+            .catch(err => {
+                if (isActive) {
+                    setConnectionError(
+                        `Failed to create connection: ${err instanceof Error ? err.message : String(err)}`
+                    );
+                }
+            });
+
+        return () => {
+            isActive = false;
+            // Cleanup connection when component unmounts
+            if (connectionToCleanup) {
+                connectionToCleanup.close().catch(err => {
+                    console.warn('[TableView] Failed to close connection:', err);
+                });
+            }
+        };
+    }, [providedConnection, dbContext, schema]);
+
+    const connection = internalConnection;
+
     // Inject scrollbar styles
     useEffect(() => {
         const styleElement = document.createElement('style');
@@ -154,6 +215,10 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
 
     useEffect(() => {
         const loadInitialData = async (retryCount = 0) => {
+            if (!connection) {
+                return;
+            }
+
             setLoading(true);
             setError(null);
             // Clear cache and reset loading windows when connection or table changes
@@ -305,6 +370,10 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
 
     const loadDataWindow = useCallback(
         async (startRow: number) => {
+            if (!connection) {
+                return;
+            }
+
             const windowSize = 100;
             const windowStart = Math.floor(startRow / windowSize) * windowSize;
             const windowEnd = windowStart + windowSize;
@@ -486,6 +555,19 @@ export const TableView: React.FC<TableViewProps> = ({ connection, tableName, dbC
             })
         );
     }, [sortColumn, sortDirection, columnTypes]);
+
+    if (connectionError) {
+        return (
+            <div style={{ padding: '20px', color: '#dc3545' }}>
+                <strong>Connection Error:</strong>
+                <div style={{ marginTop: '10px', fontSize: '14px', fontFamily: 'monospace' }}>{connectionError}</div>
+            </div>
+        );
+    }
+
+    if (!connection) {
+        return <div style={{ padding: '20px' }}>Connecting to database...</div>;
+    }
 
     if (loading) {
         return <div style={{ padding: '20px' }}>Loading table...</div>;

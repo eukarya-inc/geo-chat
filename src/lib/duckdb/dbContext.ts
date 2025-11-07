@@ -126,16 +126,32 @@ class DatabaseContext implements DBContext {
     }
 
     async closeAllConnections(): Promise<void> {
-        for (const connections of this.connectionPool.values()) {
+        if (this.debugLogging) {
+            console.log('[DBContext] closeAllConnections: Starting cleanup');
+            console.log('[DBContext] Current pool stats:', this.getPoolStats());
+        }
+
+        let totalClosed = 0;
+        for (const [schema, connections] of this.connectionPool.entries()) {
+            if (this.debugLogging) {
+                console.log(`[DBContext] Closing ${connections.length} connections for schema: ${schema}`);
+            }
             for (const pooledConn of connections) {
                 try {
                     await pooledConn.connection.close();
-                } catch {
-                    // Ignore errors when closing connections
+                    totalClosed++;
+                } catch (err) {
+                    if (this.debugLogging) {
+                        console.error(`[DBContext] Error closing connection for schema ${schema}:`, err);
+                    }
                 }
             }
         }
         this.connectionPool.clear();
+
+        if (this.debugLogging) {
+            console.log(`[DBContext] closeAllConnections: Closed ${totalClosed} connections total`);
+        }
     }
 
     // Sanitize schema name to be valid SQL identifier

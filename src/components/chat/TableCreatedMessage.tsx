@@ -45,24 +45,30 @@ export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.mem
                     テーブルを作成しました: <strong>{tableName}</strong>
                 </span>
                 {hasChartSpec && (
-                    <ChartBarIcon
-                        className="w-5 h-5 flex-shrink-0 text-green-600 hover:text-green-700 transition-colors"
+                    <button
+                        className="flex items-center gap-1 px-2 py-1 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                         title="クリックしてチャートを表示"
                         onClick={e => {
                             e.stopPropagation();
                             onChartIconClick?.();
                         }}
-                    />
+                    >
+                        <ChartBarIcon className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm font-medium">グラフ</span>
+                    </button>
                 )}
                 {hasGeometry && (
-                    <MapIcon
-                        className="w-5 h-5 flex-shrink-0 text-blue-600 hover:text-blue-700 transition-colors"
+                    <button
+                        className="flex items-center gap-1 px-2 py-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
                         title="クリックして地図を表示"
                         onClick={e => {
                             e.stopPropagation();
                             onMapIconClick?.();
                         }}
-                    />
+                    >
+                        <MapIcon className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm font-medium">地図</span>
+                    </button>
                 )}
             </div>
         );
