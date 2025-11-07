@@ -636,21 +636,68 @@ SHOW TABLES;
    - 段落番号 (Paragraph number: "第1段落", "第2段落", etc.)
    - 段落の役割 (Paragraph role: "現状認識", "これまでの取組", "今後の方針", etc.)
    - 記載内容の概要 (Content summary)
-   - 作成方法 (Creation method: "【引用】" or "【新規作成・自信なし】")
+   - 作成方法 (Creation method: "【引用】" or "【新規作成】")
+   - 信頼度 (Confidence level: "高" for quoted content, "低" for newly generated content)
+   - 信頼度の理由 (Reason for confidence level: e.g., "過去答弁から直接引用", "類似答弁なし・推論による作成", "テーマに関する過去答弁が存在しない")
    - 引用元の答弁ID (Source answer ID: format "YYYY-MM-DD_質問者名" if quoted, NULL if newly generated)
-   - 引用する答弁内容全文 (FULL quoted answer content - VERBATIM, NO SUMMARIZATION, entire relevant passage)
+   - 引用元答弁全文 (COMPLETE FULL ANSWER TEXT from the source answer ID - the entire original Diet answer verbatim for full context verification)
+   - 引用箇所 (Actual quoted portion to be used - the specific excerpt being referenced, VERBATIM)
+   - 引用箇所の前後文脈 (Context before and after the quote - to verify the quote's original context and appropriateness)
 
-**CRITICAL RULES**:
-- **For 引用する答弁内容全文**: Extract the **FULL RELEVANT PASSAGE** from the original answer **VERBATIM** (一字一句そのまま)
-  - Include the entire context, not just a sentence fragment
-  - **DO NOT summarize, paraphrase, or reword** - copy the complete relevant section
-  - If combining content from multiple answers, clearly mark each source separately
-  - Preserve the original wording, expressions, and sentence structure completely
-- **For 作成方法**:
-  - Use "【引用】" when content is directly quoted from past Diet answers
-  - Use "【新規作成・自信なし】" when no suitable past answer exists and content must be generated
-  - Prioritize quoting from past answers whenever possible - prefer combining/adapting existing answers over generating new content
-  - **IMPORTANT**: You MAY combine quoted content from DIFFERENT speakers/dates to construct a coherent paragraph - this is encouraged for comprehensive answers
+**CRITICAL RULES - PRIORITIZED BY IMPORTANCE**:
+
+1. **ABSOLUTE PRIORITY: Semantic Consistency with the Question**
+   - The answer outline MUST directly address the core elements of the user's question
+   - Every paragraph in the outline must contribute to answering the specific question asked
+   - **BEFORE creating any paragraph**, verify: "Does this paragraph help answer the question?"
+   - If the question asks about "外国人による混雑", the answer MUST include content about foreign visitors and congestion
+   - **NEVER omit key elements** from the question just because past answers don't mention them
+   - Maintain logical coherence: the outline should read as a complete, meaningful answer to the question
+
+2. **New Content Generation Logic - When to Create New Content**:
+   - **IF no past answer addresses a core element of the question**: Generate new content for that element
+   - **IF past answers exist but miss key aspects**: Combine quoted content + generate missing parts
+   - **IF the question cannot be answered from past data alone**: Generate new content with clear confidence indicators
+   - **Priority order**:
+     1. Try to find relevant past answers first
+     2. If not found, generate new content rather than leaving gaps in the answer
+     3. Clearly mark new content with confidence level and reasoning
+
+3. **Confidence Level and Reasoning - Transparency Requirements**:
+   - **For 信頼度**:
+     - Use "高" (High) when content is directly quoted from past Diet answers
+     - Use "低" (Low) when content is newly generated without direct source material
+   - **For 信頼度の理由** (MUST provide specific reason):
+     - For quoted content: "過去答弁から直接引用（YYYY-MM-DD_質問者名）"
+     - For new content due to no similar answers: "類似答弁なし・問いに答えるため推論により作成"
+     - For new content due to theme absence: "「[specific theme]」に関する過去答弁が存在しないため新規作成"
+     - For new content filling gaps: "引用のみでは問いの核心要素「[specific element]」に言及できないため補足作成"
+
+4. **For 引用元答弁全文**: Provide the COMPLETE original Diet answer for full context
+   - Copy the **ENTIRE ANSWER TEXT** from the source answer ID (該当答弁IDに紐づく全体答弁)
+   - This is the full, unedited Diet answer from start to finish
+   - **VERBATIM** (一字一句そのまま) - no summarization, no omission
+   - Allows reviewers to see the complete context of the original answer
+   - If NULL (for newly generated content), leave empty
+
+5. **For 引用箇所**: Extract the **SPECIFIC QUOTED PORTION** to be used **VERBATIM** (一字一句そのまま)
+   - This is the actual excerpt being referenced in this paragraph
+   - **DO NOT summarize, paraphrase, or reword** - copy the exact quoted section
+   - This should be a subset of the 引用元答弁全文
+   - If combining content from multiple answers, clearly indicate each source in the 記載内容の概要
+   - Preserve the original wording, expressions, and sentence structure completely
+
+6. **For 引用箇所の前後文脈**: Provide immediate context to verify quote appropriateness
+   - Include 1-2 sentences BEFORE the quoted passage
+   - Include 1-2 sentences AFTER the quoted passage
+   - This allows reviewers to verify the quote is used in the correct context
+   - Format: "【前】[preceding context] 【引用部分】[quoted content] 【後】[following context]"
+   - If the quote is from the beginning or end of an answer, note: "【前】（答弁冒頭）" or "【後】（答弁末尾）"
+
+7. **For 作成方法**:
+   - Use "【引用】" when content is directly quoted from past Diet answers
+   - Use "【新規作成】" when content is newly generated (removed "自信なし" - confidence is now explicit in 信頼度 column)
+   - **IMPORTANT**: You MAY combine quoted content from DIFFERENT speakers/dates to construct a coherent paragraph - this is encouraged for comprehensive answers
 
 **Output**: Display the "答弁骨子" table to the user and **STOP HERE**.
 
@@ -664,35 +711,84 @@ SELECT
     '現状認識' as 段落の役割,
     '災害時の空港アクセス確保の重要性を述べる' as 記載内容の概要,
     '【引用】' as 作成方法,
+    '高' as 信頼度,
+    '過去答弁から直接引用（2019-03-15_山田太郎）' as 信頼度の理由,
     '2019-03-15_山田太郎' as 引用元の答弁ID,
-    '災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。これを踏まえ、平成３１年３月に策定した北九州空港の災害時の空港機能の確保を目的とした対応計画(空港ＢＣＰ)においても、重要な代替アクセス手段として、海上アクセスの確保が位置づけられているところです。' as 引用する答弁内容全文
+    '（答）
+○ 災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。これを踏まえ、平成３１年３月に策定した北九州空港の災害時の空港機能の確保を目的とした対応計画(空港ＢＣＰ)においても、重要な代替アクセス手段として、海上アクセスの確保が位置づけられているところです。
+○ 海上アクセスの構築にあたっては、空港を結ぶ定期航路がないことから、これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。
+○ これを踏まえ、当該船会社との間で災害時の代替輸送に係る協定について年度内を目処に締結するとともに、実際に使用する船舶を用いた滞留者避難訓練の実施について調整を進めているところです。
+○ 引き続き、関係者協力のもと、船会社との連携や滞留者避難訓練等を通じて災害時の対応力の強化に努めて参ります。' as 引用元答弁全文,
+    '災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。これを踏まえ、平成３１年３月に策定した北九州空港の災害時の空港機能の確保を目的とした対応計画(空港ＢＣＰ)においても、重要な代替アクセス手段として、海上アクセスの確保が位置づけられているところです。' as 引用箇所,
+    '【前】（答弁冒頭） 【引用部分】災害時における空港の海上アクセスの構築については、連絡橋が途絶した場合の代替アクセス手段として、滞留者避難の観点から非常に重要であると認識しています。これを踏まえ、平成３１年３月に策定した北九州空港の災害時の空港機能の確保を目的とした対応計画(空港ＢＣＰ)においても、重要な代替アクセス手段として、海上アクセスの確保が位置づけられているところです。 【後】海上アクセスの構築にあたっては、空港を結ぶ定期航路がないことから、これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってまいりました。' as 引用箇所の前後文脈
 UNION ALL
 SELECT
     '第2段落',
     'これまでの取組',
     '過去の取組実績を複数の事例から組み合わせて説明',
     '【引用】',
+    '高',
+    '過去答弁から直接引用（2019-03-15_山田太郎、2020-06-10_佐藤花子）',
     '2019-03-15_山田太郎、2020-06-10_佐藤花子',
-    'これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。また、他の空港でも同様の取り組みを進めており、関係者との連携を強化してきたところです。'
+    '（複数答弁から組み合わせているため、それぞれの全文を記載）
+[2019-03-15_山田太郎の答弁全文]
+（答）
+○ 海上アクセスの構築にあたっては、空港を結ぶ定期航路がないことから、これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。
+○ これを踏まえ、当該船会社との間で災害時の代替輸送に係る協定について年度内を目処に締結する予定です。
+
+[2020-06-10_佐藤花子の答弁全文]
+（答）
+○ 他の空港でも同様の取り組みを進めており、関係者との連携を強化してきたところです。
+○ 今後も引き続き、実効性のある対策を進めてまいります。',
+    'これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。また、他の空港でも同様の取り組みを進めており、関係者との連携を強化してきたところです。',
+    '【前】海上アクセスの構築にあたっては、空港を結ぶ定期航路がないことから検討が必要でした。 【引用部分】これまで、空港周辺で船舶を保有する関係行政機関や民間企業と調整を行ってきた結果、民間の船会社から協力が得られることとなりました。 【後】これを踏まえ、当該船会社との間で災害時の代替輸送に係る協定について年度内を目処に締結する予定です。'
 UNION ALL
 SELECT
     '第3段落',
-    '今後の方針',
-    '今後の対策方針を述べる(該当する過去答弁なし)',
-    '【新規作成・自信なし】',
+    '外国人による混雑への具体的対策',
+    'オーバーツーリズムにおける外国人混雑問題への対応を説明(該当する過去答弁なし)',
+    '【新規作成】',
+    '低',
+    '類似答弁なし・問いの核心要素「外国人による混雑」に答えるため推論により作成',
     NULL,
-    '引き続き、関係機関との連携を強化し、災害時の対応力向上に努めてまいります。'
+    NULL,
+    '外国人観光客の増加に伴う公共交通機関の混雑については、地域住民の生活への影響を十分に認識しており、観光需要の分散化や利用時間帯の調整など、関係機関と連携した対策を検討してまいります。',
+    NULL
+UNION ALL
+SELECT
+    '第4段落',
+    '今後の方針',
+    '今後の対策方針を述べる',
+    '【引用】',
+    '高',
+    '過去答弁から直接引用（2020-06-10_佐藤花子）',
+    '2020-06-10_佐藤花子',
+    '（答）
+○ これまでの訓練実施を通じて、運用面での課題も明らかになってきました。
+○ 引き続き、関係機関との連携を強化し、災害時の対応力向上に努めてまいります。
+○ 今後も実効性のある対策を進めてまいります。',
+    '引き続き、関係機関との連携を強化し、災害時の対応力向上に努めてまいります。',
+    '【前】これまでの訓練実施を通じて、運用面での課題も明らかになってきました。 【引用部分】引き続き、関係機関との連携を強化し、災害時の対応力向上に努めてまいります。 【後】今後も実効性のある対策を進めてまいります。'
 -- ... more rows
 ;
 \`\`\`
 
 **Important Notes**:
 - This integrated approach reduces user confirmation steps from 2 to 1
-- The 引用する答弁内容全文 column shows the FULL quoted text, making it easy to verify source accuracy
+- **NEW: Three-layer quote verification system** for full transparency:
+  1. **引用元答弁全文**: Complete original Diet answer (該当答弁IDに紐づく全体) - allows full context review
+  2. **引用箇所**: Actual quoted portion being used (実際に採用する部分のみ) - shows what's being referenced
+  3. **引用箇所の前後文脈**: Immediate surrounding context - quick verification of appropriateness
+- **NEW: 信頼度 and 信頼度の理由 columns** provide transparency about content reliability and why
 - The 作成方法 column clearly distinguishes between quoted and newly generated content
 - Multiple source IDs (comma-separated) indicate content combined from different speakers/occasions - this is acceptable and encouraged
-- Users can see the complete context of each quoted passage in the table
-- "【新規作成・自信なし】" tags make it clear when the AI is generating content without direct source material
+- **For multiple source combinations**: List all source answer texts in the 引用元答弁全文 column with clear labels
+- Users can now see:
+  - **Complete original context**: Full Diet answer text (引用元答弁全文)
+  - **What's being used**: Specific quoted portion (引用箇所)
+  - **Immediate context**: Surrounding sentences (引用箇所の前後文脈)
+  - **Why it's reliable or not**: Confidence level + reasoning (信頼度 + 信頼度の理由)
+- The third paragraph example shows how to handle missing content: generate new content with clear confidence indicators rather than leaving gaps in the answer
 
 ### STEP 2: Generate Final Answer Draft (ONLY AFTER STEP 1 CONFIRMATION)
 
@@ -781,11 +877,22 @@ SELECT
 
 ### Critical Guidelines for Diet Answers
 
-- **MANDATORY: Base answers on past Diet answer data**: NEVER generate answers without referencing existing Diet answer corpus
+- **ABSOLUTE PRIORITY: Answer the question meaningfully**: The answer MUST address all core elements of the user's question with semantic consistency
+  - If the question asks about "外国人による混雑", the answer MUST include content about foreign visitors and congestion
+  - NEVER omit key elements from the question just because past answers don't mention them
+  - Generate new content when necessary to fill gaps and maintain answer coherence
+- **MANDATORY: Base answers on past Diet answer data when available**: Reference existing Diet answer corpus for consistency and credibility
+  - Prioritize quoting from past answers whenever possible
+  - **However**: If past answers don't address core elements of the question, generate new content rather than leaving gaps
 - **If no Diet answer data exists in database**: Stop immediately and instruct user to load data first
 - **Follow the TWO-step workflow strictly**: (1) Integrated Search+Outline → (2) Generate (with user confirmation ONLY at outline stage)
 - **Preserve original wording in outline table**: Quote verbatim FULL PASSAGES from past answers, do not summarize
-- **Clearly distinguish quoted vs. generated content**: Use 【引用】 and 【新規作成・自信なし】 tags in the 作成方法 column
+- **Clearly distinguish quoted vs. generated content**: Use 【引用】 and 【新規作成】 tags in the 作成方法 column
+- **Provide transparency with confidence levels**: Use 信頼度 (高/低) and 信頼度の理由 columns to explain reliability
+- **Implement three-layer quote verification system**:
+  - 引用元答弁全文: Complete original Diet answer for full context review
+  - 引用箇所: Actual quoted portion being used
+  - 引用箇所の前後文脈: Immediate surrounding context for quick verification
 - **Encourage combining quotes from multiple sources**: It's acceptable and encouraged to combine content from different speakers/dates for comprehensive answers
 - **DO NOT use the standard analysis output format** (分析結果, 分析プロセスの解説, 専門用語の解説) - use Diet answer format instead
 - **Maintain government administrative tone**: Polite, forward-looking, somewhat abstract
