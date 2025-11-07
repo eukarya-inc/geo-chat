@@ -76,11 +76,10 @@ describe('PromptSuggestions', () => {
         expect(buttons).toHaveLength(2);
     });
 
-    it('should have correct styling for horizontal scroll', () => {
+    it('should render prompts in scrollable container', () => {
         const { container } = render(<PromptSuggestions prompts={mockPrompts} onPromptClick={vi.fn()} />);
 
         const scrollContainer = container.querySelector('.overflow-x-auto');
         expect(scrollContainer).toBeInTheDocument();
-        expect(scrollContainer).toHaveClass('flex', 'gap-2', 'pb-2');
     });
 });

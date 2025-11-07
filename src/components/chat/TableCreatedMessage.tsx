@@ -25,7 +25,7 @@ export const TableCreatedMessage: React.FC<TableCreatedMessageProps> = React.mem
         return (
             <div
                 className={`
-                w-full flex items-center gap-2 px-4 py-3 my-2 rounded-lg cursor-pointer
+                w-full flex items-center gap-2 px-4 py-3 my-2 mb-4 rounded-lg cursor-pointer
                 transition-all duration-200 select-none
                 ${
                     isSelected

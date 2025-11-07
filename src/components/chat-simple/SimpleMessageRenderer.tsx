@@ -48,8 +48,10 @@ const renderContentBlock = (
                 .replace('<!--FINAL_MESSAGE-->', '')
                 .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
                 .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
-                .replace(/<!--SUMMARY-->[\s\S]*?<!--\/SUMMARY-->/g, '')
-                .replace(/<!--DETAILS-->[\s\S]*?<!--\/DETAILS-->/g, '')
+                .replace(/<!--SUMMARY-->/g, '')
+                .replace(/<!--\/SUMMARY-->/g, '')
+                .replace(/<!--DETAILS-->/g, '')
+                .replace(/<!--\/DETAILS-->/g, '')
                 .trim();
 
             const isFinalMessage = block.text.includes('<!--FINAL_MESSAGE-->');
@@ -73,7 +75,7 @@ const renderContentBlock = (
                                     {beforeText}
                                 </ReactMarkdown>
                                 {isFinalMessage && (
-                                    <div className="mt-2 flex">
+                                    <div className="mt-2 mb-4 flex">
                                         <CopyButton
                                             onCopy={() => navigator.clipboard.writeText(beforeText)}
                                             showLabel={true}
@@ -110,7 +112,7 @@ const renderContentBlock = (
                                 {remainingText}
                             </ReactMarkdown>
                             {isFinalMessage && (
-                                <div className="mt-2 flex">
+                                <div className="mt-2 mb-4 flex">
                                     <CopyButton
                                         onCopy={() => navigator.clipboard.writeText(remainingText)}
                                         showLabel={true}
@@ -137,7 +139,7 @@ const renderContentBlock = (
                         {cleanedText}
                     </ReactMarkdown>
                     {isFinalMessage && (
-                        <div className="mt-2 flex">
+                        <div className="mt-2 mb-4 flex">
                             <CopyButton onCopy={() => navigator.clipboard.writeText(cleanedText)} showLabel={true} />
                         </div>
                     )}
@@ -322,8 +324,10 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
                             .replace('<!--FINAL_MESSAGE-->', '')
                             .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
                             .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
-                            .replace(/<!--SUMMARY-->[\s\S]*?<!--\/SUMMARY-->/g, '')
-                            .replace(/<!--DETAILS-->[\s\S]*?<!--\/DETAILS-->/g, '')
+                            .replace(/<!--SUMMARY-->/g, '')
+                            .replace(/<!--\/SUMMARY-->/g, '')
+                            .replace(/<!--DETAILS-->/g, '')
+                            .replace(/<!--\/DETAILS-->/g, '')
                             .trim();
 
                         if (displayText) {

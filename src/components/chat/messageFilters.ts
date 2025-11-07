@@ -52,9 +52,11 @@ export function hasCollapsibleContent(content: StructuredContent[]): boolean {
         if (block.type === 'text') {
             const hasTableMarker = block.text.includes('<!--TABLE_CREATED:');
             const hasFinalMarker = block.text.includes('<!--FINAL_MESSAGE-->');
+            const hasSummary = block.text.includes('<!--SUMMARY-->');
+            const hasDetails = block.text.includes('<!--DETAILS-->');
 
-            // Table markers and final messages are always shown - not collapsible
-            if (hasTableMarker || hasFinalMarker) {
+            // Table markers, final messages, summaries, and details are always shown - not collapsible
+            if (hasTableMarker || hasFinalMarker || hasSummary || hasDetails) {
                 return false;
             }
 
