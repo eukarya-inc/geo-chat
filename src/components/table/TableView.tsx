@@ -274,23 +274,50 @@ export const TableView: React.FC<TableViewProps> = ({
                         // Calculate width based on column name
                         let maxTextWidth = estimateTextWidth(col.name);
 
-                        // Check sample data values to get max text width
-                        for (let rowIndex = 0; rowIndex < Math.min(initialData.arrowTable.numRows, 100); rowIndex++) {
-                            const value = getValueFromArrowTable(initialData.arrowTable, rowIndex, colIndex, col.type);
-                            if (value !== null) {
-                                const valueStr = String(value);
-                                // Only check first 50 characters to avoid very long values
-                                const textWidth = estimateTextWidth(valueStr.slice(0, 50));
-                                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                        // Use rawData if available (more reliable for width calculation)
+                        if (initialData.rawData) {
+                            for (let rowIndex = 0; rowIndex < Math.min(initialData.rawData.length, 100); rowIndex++) {
+                                // rawData is an array of Maps, not plain objects
+                                const rowData = initialData.rawData[rowIndex];
+                                const value = rowData instanceof Map ? rowData.get(col.name) : rowData[col.name];
+                                if (value !== null && value !== undefined) {
+                                    const valueStr = String(value);
+                                    // Check more characters for better width estimation
+                                    const textWidth = estimateTextWidth(valueStr.slice(0, 100));
+                                    if (textWidth > maxTextWidth) {
+                                        maxTextWidth = textWidth;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Fallback to ArrowTable if rawData is not available
+                            for (
+                                let rowIndex = 0;
+                                rowIndex < Math.min(initialData.arrowTable.numRows, 100);
+                                rowIndex++
+                            ) {
+                                const value = getValueFromArrowTable(
+                                    initialData.arrowTable,
+                                    rowIndex,
+                                    colIndex,
+                                    col.type
+                                );
+                                if (value !== null && value !== undefined) {
+                                    const valueStr = String(value);
+                                    const textWidth = estimateTextWidth(valueStr.slice(0, 100));
+                                    if (textWidth > maxTextWidth) {
+                                        maxTextWidth = textWidth;
+                                    }
+                                }
                             }
                         }
 
-                        // Add padding (16px for cell padding + some margin)
-                        const calculatedWidth = maxTextWidth + 32;
+                        // Add padding (cell padding + scrollbar + margin)
+                        const calculatedWidth = maxTextWidth + 48; // Increased from 32 to 48
 
                         // Apply min and max constraints
-                        const minColumnWidth = 80;
-                        const maxColumnWidth = 400;
+                        const minColumnWidth = 100; // Increased from 80 to 100
+                        const maxColumnWidth = 500; // Increased from 400 to 500
                         const finalWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, calculatedWidth));
 
                         return {
