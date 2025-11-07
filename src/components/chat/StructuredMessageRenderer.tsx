@@ -34,6 +34,7 @@ interface StructuredMessageRendererProps {
     tableGeometries?: Record<string, boolean>;
     onChartIconClick?: (tableName: string) => void;
     onMapIconClick?: (tableName: string) => void;
+    showCopyLabel?: boolean;
 }
 
 interface CollapsibleSectionProps {
@@ -98,7 +99,8 @@ const renderContentBlock = (
     chartSpecs?: ChartSpecs,
     tableGeometries?: Record<string, boolean>,
     onChartIconClick?: (tableName: string) => void,
-    onMapIconClick?: (tableName: string) => void
+    onMapIconClick?: (tableName: string) => void,
+    showCopyLabel?: boolean
 ): React.ReactNode => {
     switch (block.type) {
         case 'text': {
@@ -135,7 +137,10 @@ const renderContentBlock = (
                                 </ReactMarkdown>
                                 {isFinalMessage && (
                                     <div className="mt-2 flex">
-                                        <CopyButton onCopy={() => navigator.clipboard.writeText(beforeText)} />
+                                        <CopyButton
+                                            onCopy={() => navigator.clipboard.writeText(beforeText)}
+                                            showLabel={showCopyLabel}
+                                        />
                                     </div>
                                 )}
                             </div>
@@ -169,7 +174,10 @@ const renderContentBlock = (
                             </ReactMarkdown>
                             {isFinalMessage && (
                                 <div className="mt-2 flex">
-                                    <CopyButton onCopy={() => navigator.clipboard.writeText(remainingText)} />
+                                    <CopyButton
+                                        onCopy={() => navigator.clipboard.writeText(remainingText)}
+                                        showLabel={showCopyLabel}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -236,7 +244,10 @@ const renderContentBlock = (
                     </ReactMarkdown>
                     {!isLoadingMessage && isFinalMessage && (
                         <div className="mt-2 flex">
-                            <CopyButton onCopy={() => navigator.clipboard.writeText(cleanedText)} />
+                            <CopyButton
+                                onCopy={() => navigator.clipboard.writeText(cleanedText)}
+                                showLabel={showCopyLabel}
+                            />
                         </div>
                     )}
                 </div>
@@ -1323,6 +1334,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
     tableGeometries,
     onChartIconClick,
     onMapIconClick,
+    showCopyLabel,
 }) => {
     // Handle structured content with optional streaming text
     if (Array.isArray(message.content)) {
@@ -1348,6 +1360,11 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             filteredContent = message.content.filter((block, index) => {
                 // Always keep completion tool use (suggested prompts)
                 if (block.type === 'tool_use' && block.name === 'completion') {
+                    return true;
+                }
+
+                // Always keep completion tool result (suggested prompts from AIStore)
+                if (block.type === 'tool_result' && block.name === 'completion') {
                     return true;
                 }
 
@@ -1399,7 +1416,8 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                         chartSpecs,
                         tableGeometries,
                         onChartIconClick,
-                        onMapIconClick
+                        onMapIconClick,
+                        showCopyLabel
                     )
                 )}
 

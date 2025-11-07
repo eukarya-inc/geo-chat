@@ -156,3 +156,7 @@ export const updateSessionAtom = atom(
 // ===== View Mode Atom =====
 // Manages the current view mode for the main content area
 export const viewModeAtom = atom<'chat' | 'dashboard-list' | 'dashboard'>('chat');
+
+// ===== Chat Mode Atom =====
+// Manages the chat interface mode (normal or simple)
+export const chatModeAtom = atom<'normal' | 'simple'>('normal');

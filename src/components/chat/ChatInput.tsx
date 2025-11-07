@@ -478,7 +478,7 @@ export default function ChatInput({
                 type="button"
                 onClick={handleButtonClick}
                 disabled={(!isLoading && !value.trim()) || isSubmitting || disabled}
-                className={`p-2 rounded-full transition-colors duration-200 ${
+                className={`p-2 rounded-full transition-colors duration-200 flex items-center ${
                     isLoading || isSubmitting
                         ? 'text-red-600 hover:bg-red-50'
                         : !value.trim() || disabled
@@ -488,11 +488,20 @@ export default function ChatInput({
                 title={isLoading || isSubmitting ? '停止' : disabled ? 'APIキーを設定してください' : '送信'}
             >
                 {isLoading ? (
-                    <StopIcon className="w-5 h-5" />
+                    <>
+                        <StopIcon className="w-5 h-5" />
+                        <span className="ml-2">停止</span>
+                    </>
                 ) : isSubmitting ? (
-                    <div className="w-5 h-5 border-[3px] border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                    <>
+                        <div className="w-5 h-5 border-[3px] border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                        <span className="ml-2">送信</span>
+                    </>
                 ) : (
-                    <PaperAirplaneIcon className="w-5 h-5" />
+                    <>
+                        <PaperAirplaneIcon className="w-5 h-5" />
+                        <span className="ml-2">送信</span>
+                    </>
                 )}
             </button>
         );

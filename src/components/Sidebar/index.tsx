@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Bars3Icon, ChatBubbleLeftRightIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
 import { ChatList } from '../chat/ChatList';
+import { useAtom } from 'jotai';
+import { chatModeAtom } from '../../store/localAtoms';
 
 interface SidebarProps {
     selectedView?: 'chat' | 'dashboard-list';
@@ -63,6 +65,7 @@ function TooltipButton({ onClick, icon, label, isActive = false }: TooltipButton
 
 export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [chatMode, setChatMode] = useAtom(chatModeAtom);
 
     return (
         <div
@@ -103,6 +106,35 @@ export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
                 ) : (
                     <ChatList selectedView={selectedView} onNavigate={onNavigate} />
                 )}
+
+                {/* Chat Mode Toggle (bottom) */}
+                <div className="border-t border-gray-200 p-3">
+                    {isCollapsed ? (
+                        <button
+                            onClick={() => setChatMode(chatMode === 'normal' ? 'simple' : 'normal')}
+                            className={`w-full p-2 rounded transition-colors ${
+                                chatMode === 'simple' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'
+                            }`}
+                            title={chatMode === 'normal' ? 'シンプルモードに切り替え' : 'ノーマルモードに切り替え'}
+                        >
+                            <span className="text-xs font-bold">{chatMode === 'normal' ? 'N' : 'S'}</span>
+                        </button>
+                    ) : (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-700">表示モード</span>
+                            <button
+                                onClick={() => setChatMode(chatMode === 'normal' ? 'simple' : 'normal')}
+                                className={`px-3 py-1 rounded text-sm transition-colors ${
+                                    chatMode === 'simple'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                            >
+                                {chatMode === 'normal' ? '通常' : 'シンプル'}
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

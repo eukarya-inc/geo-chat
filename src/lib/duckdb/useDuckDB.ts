@@ -53,7 +53,16 @@ export function useMapDuckDB(maxConnections = 20) {
             initMapDB();
             isInitialized.current = true;
         }
-    }, [maxConnections]);
+
+        // Cleanup: Close all connections when component unmounts
+        return () => {
+            if (mapDbContext) {
+                mapDbContext.closeAllConnections().catch(err => {
+                    console.error('[useMapDuckDB] Error closing Map DuckDB connections:', err);
+                });
+            }
+        };
+    }, [maxConnections, mapDbContext]);
 
     return { mapDbContext, error };
 }
