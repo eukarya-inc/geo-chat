@@ -4,9 +4,9 @@ import { convertArrowToJS } from '../../utils/arrowConverter';
 import { detectCreateTableFromUrl, generateTableNameFromUrl, getFromClauseForUrl } from './tableUrlHelpers';
 
 export interface DBContext {
-    // For components that need long-lived connections (like Table component)
-    // This is a temporary solution until we refactor all components
-    createManagedConnection(schema: string | null): Promise<AsyncDuckDBConnection>;
+    // Create a new connection for a specific schema
+    // IMPORTANT: Caller must call destroy() on the returned connection when done
+    createUnmanagedConnection(schema: string | null): Promise<AsyncDuckDBConnection>;
     forceConsistency(): Promise<void>;
     notifyTableChange(tableName?: string, schema?: string | null): void;
     onTableChange(callback: (tableName?: string, schema?: string | null) => void): () => void;
@@ -167,9 +167,9 @@ class DatabaseContext implements DBContext {
         return sanitized;
     }
 
-    // Temporary public method for components that need long-lived connections
-    // This will be removed once all components are refactored
-    async createManagedConnection(schema: string | null): Promise<AsyncDuckDBConnection> {
+    // Create an unmanaged connection that must be manually destroyed
+    // Caller is responsible for calling destroy() when done
+    async createUnmanagedConnection(schema: string | null): Promise<AsyncDuckDBConnection> {
         const sanitizedSchema = this.sanitizeSchemaName(schema);
         return this.connect(sanitizedSchema);
     }
@@ -720,7 +720,7 @@ class DatabaseContext implements DBContext {
             throw new Error('Invalid schema name');
         }
 
-        const conn = await this.createManagedConnection(null);
+        const conn = await this.createUnmanagedConnection(null);
         try {
             await conn.query(`CREATE SCHEMA IF NOT EXISTS "${sanitizedSchema}"`);
             console.log(`DBContext: Created schema ${sanitizedSchema}`);
@@ -735,7 +735,7 @@ class DatabaseContext implements DBContext {
             throw new Error('Invalid schema name');
         }
 
-        const conn = await this.createManagedConnection(null);
+        const conn = await this.createUnmanagedConnection(null);
         try {
             // First switch to main schema to avoid dropping the current schema
             await conn.query(`SET search_path = "main"`);

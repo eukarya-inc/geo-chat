@@ -147,7 +147,7 @@ export const TableView: React.FC<TableViewProps> = ({
         let connectionToCleanup: AsyncDuckDBConnection | null = null;
 
         dbContext
-            .createManagedConnection(schema || null)
+            .createUnmanagedConnection(schema || null)
             .then(conn => {
                 if (isActive) {
                     connectionToCleanup = conn;

@@ -53,11 +53,8 @@ export default function TableSQLDisplay({ tableName, dbContext, schema }: TableS
         // Get table schema
         const fetchSchema = async () => {
             try {
-                const conn = await dbContext.createManagedConnection(schema ?? null);
-                const schemaQuery = schema ? `DESCRIBE ${schema}.${tableName}` : `DESCRIBE ${tableName}`;
-                const result = await conn.query(schemaQuery);
-                const schemaData = result.toArray() as unknown as ColumnSchema[];
-                setTableSchema(schemaData);
+                const schemaData = await dbContext.describeTable(tableName, schema ?? null);
+                setTableSchema(schemaData as ColumnSchema[]);
             } catch (error) {
                 console.error('Failed to fetch table schema:', error);
                 setTableSchema([]);

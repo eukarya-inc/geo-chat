@@ -42,7 +42,7 @@ export function TablePanel({
         let isMounted = true;
 
         const initConnection = async () => {
-            const conn = await dbContext.createManagedConnection(chatId || null);
+            const conn = await dbContext.createUnmanagedConnection(chatId || null);
             connectionRef.current = conn;
             if (isMounted) {
                 setConnection(conn);

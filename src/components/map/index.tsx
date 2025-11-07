@@ -469,7 +469,7 @@ const MapComponent: React.FC<MapProps> = ({
 
     // Get connection from map-specific pool (DatabaseContext handles round-robin internally)
     const getMapConnection = useCallback(async (): Promise<AsyncDuckDBConnection> => {
-        return await tileDbContext.createManagedConnection(chatId);
+        return await tileDbContext.createUnmanagedConnection(chatId);
     }, [tileDbContext, chatId]);
 
     // Function to update map layers dynamically
@@ -868,7 +868,7 @@ const MapComponent: React.FC<MapProps> = ({
             try {
                 // Keep connection
                 // Use chatId-aware connection
-                connectionRef.current = await dbContext.createManagedConnection(chatId);
+                connectionRef.current = await dbContext.createUnmanagedConnection(chatId);
                 if (!connectionRef.current) {
                     setMapError('Failed to connect to DuckDB');
                     return;
