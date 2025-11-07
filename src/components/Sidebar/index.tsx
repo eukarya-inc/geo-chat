@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Bars3Icon, ChatBubbleLeftRightIcon, PresentationChartBarIcon } from '@heroicons/react/24/outline';
 import { ChatList } from '../chat/ChatList';
-import { useAtom } from 'jotai';
-import { chatModeAtom } from '../../store/localAtoms';
 
 interface SidebarProps {
     selectedView?: 'chat' | 'dashboard-list';
     onNavigate?: (view: 'chat' | 'dashboard-list') => void;
+    isCollapsed: boolean;
+    onToggleCollapse: () => void;
+    chatMode: 'normal' | 'simple';
+    onChatModeChange: (mode: 'normal' | 'simple') => void;
 }
 
 interface TooltipButtonProps {
@@ -63,10 +65,14 @@ function TooltipButton({ onClick, icon, label, isActive = false }: TooltipButton
     );
 }
 
-export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
-    const [isCollapsed, setIsCollapsed] = useState(false);
-    const [chatMode, setChatMode] = useAtom(chatModeAtom);
-
+export function Sidebar({
+    selectedView,
+    onNavigate,
+    isCollapsed,
+    onToggleCollapse,
+    chatMode,
+    onChatModeChange,
+}: SidebarProps) {
     return (
         <div
             className={`h-full border-r border-gray-300 bg-gray-50 flex-shrink-0 transition-all duration-300 ${
@@ -77,7 +83,7 @@ export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
                 {/* Toggle Button */}
                 <div className={`p-2 border-b border-gray-200 flex ${isCollapsed ? 'justify-center' : 'justify-end'}`}>
                     <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        onClick={onToggleCollapse}
                         className={`hover:bg-gray-200 rounded transition-colors ${isCollapsed ? 'p-3 w-full flex items-center justify-center' : 'p-2'}`}
                         title={isCollapsed ? 'サイドバーを展開' : 'サイドバーを折りたたむ'}
                     >
@@ -111,7 +117,7 @@ export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
                 <div className="border-t border-gray-200 p-3">
                     {isCollapsed ? (
                         <button
-                            onClick={() => setChatMode(chatMode === 'normal' ? 'simple' : 'normal')}
+                            onClick={() => onChatModeChange(chatMode === 'normal' ? 'simple' : 'normal')}
                             className={`w-full p-2 rounded transition-colors ${
                                 chatMode === 'simple' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'
                             }`}
@@ -123,7 +129,7 @@ export function Sidebar({ selectedView, onNavigate }: SidebarProps) {
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-700">表示モード</span>
                             <button
-                                onClick={() => setChatMode(chatMode === 'normal' ? 'simple' : 'normal')}
+                                onClick={() => onChatModeChange(chatMode === 'normal' ? 'simple' : 'normal')}
                                 className={`px-3 py-1 rounded text-sm transition-colors ${
                                     chatMode === 'simple'
                                         ? 'bg-blue-500 text-white'
