@@ -22,7 +22,13 @@ import type { StructuredMessage } from '../../types/message';
 import { useStoreSync } from '../../store/sync';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { currentDashboardAtom, selectDashboardAtom, currentChatStateAtom } from '../../store/derivedAtoms';
-import { localStateAtom, viewModeAtom, chatWidthPercentageAtom, chatModeAtom } from '../../store/localAtoms';
+import {
+    localStateAtom,
+    viewModeAtom,
+    chatWidthPercentageAtom,
+    chatModeAtom,
+    isSidebarOpenAtom,
+} from '../../store/localAtoms';
 import { ChatHistoryGrid, DashboardHistoryGrid } from '../../components/history';
 import { ResizableHandle } from '../../components/ResizableHandle';
 import { extractDataUrl, createTableFromUrl } from '../../utils/tableCreation';
@@ -123,7 +129,10 @@ function ChatPage() {
     const [viewMode, setViewMode] = useAtom(viewModeAtom);
 
     // Chat mode management (normal or simple)
-    const chatMode = useAtomValue(chatModeAtom);
+    const [chatMode, setChatMode] = useAtom(chatModeAtom);
+
+    // Sidebar management
+    const [isSidebarOpen, setIsSidebarOpen] = useAtom(isSidebarOpenAtom);
 
     // Chat width management
     const [chatWidthPercentage, setChatWidthPercentage] = useAtom(chatWidthPercentageAtom);
@@ -761,7 +770,14 @@ function ChatPage() {
         <>
             <div className="flex h-full w-full overflow-hidden">
                 {/* Sidebar */}
-                <Sidebar selectedView={sidebarSelection} onNavigate={handleNavigate} />
+                <Sidebar
+                    selectedView={sidebarSelection}
+                    onNavigate={handleNavigate}
+                    isCollapsed={!isSidebarOpen}
+                    onToggleCollapse={() => setIsSidebarOpen(!isSidebarOpen)}
+                    chatMode={chatMode}
+                    onChatModeChange={setChatMode}
+                />
 
                 {/* Main Content Area */}
                 {viewMode === 'dashboard-list' ? (

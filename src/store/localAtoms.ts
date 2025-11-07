@@ -45,7 +45,7 @@ export const localStateAtom = atom<LocalState>({
     sessions: {},
     selectedDashboardId: null,
     dashboardLayouts: {},
-    isSidebarOpen: true,
+    isSidebarOpen: false,
     chatWidthPercentage: 50,
     apiKey: '',
     showApiKeyInput: false,
