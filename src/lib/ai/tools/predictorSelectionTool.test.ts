@@ -7,7 +7,7 @@ import { SQLHistoryManager } from '../../duckdb/sqlHistoryManager';
 
 function createMockDBContext(overrides: Partial<DBContext> = {}): DBContext {
     const base: DBContext = {
-        createManagedConnection: async () => {
+        createUnmanagedConnection: async () => {
             throw new Error('Not implemented in tests');
         },
         forceConsistency: async () => {},

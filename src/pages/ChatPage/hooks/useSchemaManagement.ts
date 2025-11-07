@@ -34,7 +34,7 @@ export function useSchemaManagement(
 
             try {
                 // Create new connection with the new schema
-                const conn = await dbContext.createManagedConnection(chatId);
+                const conn = await dbContext.createUnmanagedConnection(chatId);
                 connectionRef.current = conn;
 
                 if (!isCleanedUp) {

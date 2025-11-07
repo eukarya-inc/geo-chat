@@ -295,11 +295,11 @@ describe('DBContext Browser Integration', () => {
         });
     });
 
-    describe('createManagedConnection', () => {
+    describe('createUnmanagedConnection', () => {
         it('should create connection without schema', async () => {
             const tableName = `conn_test_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-            const conn = await dbContext.createManagedConnection(null);
+            const conn = await dbContext.createUnmanagedConnection(null);
 
             await conn.query(`CREATE TABLE ${tableName} (id INTEGER)`);
 
@@ -313,7 +313,7 @@ describe('DBContext Browser Integration', () => {
         it('should create connection with schema', async () => {
             const schemaName = `conn_schema_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-            const conn = await dbContext.createManagedConnection(schemaName);
+            const conn = await dbContext.createUnmanagedConnection(schemaName);
 
             await conn.query('CREATE TABLE schema_conn_test (id INTEGER)');
 
@@ -328,8 +328,8 @@ describe('DBContext Browser Integration', () => {
             const table1 = `conn_test1_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             const table2 = `conn_test2_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-            const conn1 = await dbContext.createManagedConnection(null);
-            const conn2 = await dbContext.createManagedConnection(null);
+            const conn1 = await dbContext.createUnmanagedConnection(null);
+            const conn2 = await dbContext.createUnmanagedConnection(null);
 
             await conn1.query(`CREATE TABLE ${table1} (id INTEGER)`);
             await conn2.query(`CREATE TABLE ${table2} (id INTEGER)`);
@@ -415,13 +415,13 @@ describe('DBContext Browser Integration', () => {
         it('should force database consistency across connections', async () => {
             const tableName = `consistency_test_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-            const conn1 = await dbContext.createManagedConnection(null);
+            const conn1 = await dbContext.createUnmanagedConnection(null);
 
             await conn1.query(`CREATE TABLE ${tableName} (id INTEGER)`);
             await dbContext.forceConsistency();
 
             // Should be visible from different connection
-            const conn2 = await dbContext.createManagedConnection(null);
+            const conn2 = await dbContext.createUnmanagedConnection(null);
             const result = await conn2.query(
                 `SELECT tbl_name FROM sqlite_master WHERE type='table' AND tbl_name='${tableName}'`
             );
@@ -443,8 +443,8 @@ describe('DBContext Browser Integration', () => {
             const nullSchemaStatsBefore = statsBefore.find(s => s.schema === null);
             const initialNullInUse = nullSchemaStatsBefore?.inUse ?? 0;
 
-            const conn1 = await dbContext.createManagedConnection(null);
-            const conn2 = await dbContext.createManagedConnection(schemaName);
+            const conn1 = await dbContext.createUnmanagedConnection(null);
+            const conn2 = await dbContext.createUnmanagedConnection(schemaName);
 
             const stats = dbContext.getPoolStats();
 
@@ -486,8 +486,8 @@ describe('DBContext Browser Integration', () => {
         it('should close all connections for a schema', async () => {
             const schemaName = `close_test_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-            await dbContext.createManagedConnection(schemaName);
-            await dbContext.createManagedConnection(schemaName);
+            const conn1 = await dbContext.createUnmanagedConnection(schemaName);
+            const conn2 = await dbContext.createUnmanagedConnection(schemaName);
 
             let stats = dbContext.getPoolStats();
             expect(stats).toContainEqual(
@@ -505,6 +505,11 @@ describe('DBContext Browser Integration', () => {
                     schema: schemaName,
                 })
             );
+
+            // Cleanup - connections might have been closed by closeSchemaConnections,
+            // but call close() anyway to be safe (it should be idempotent)
+            await conn1.close().catch(() => {});
+            await conn2.close().catch(() => {});
         });
     });
 
