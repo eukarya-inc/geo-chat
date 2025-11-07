@@ -167,6 +167,14 @@ function ChatPage() {
     const { selectedTable, handleTableSelection } = useTableSelection(dbContext, selectedChatId);
 
     // Icon click handlers for TableCreatedMessage
+    const handleTableIconClick = useCallback(
+        (tableName: string) => {
+            handleTableSelection(tableName);
+            setActiveTab('table');
+        },
+        [handleTableSelection]
+    );
+
     const handleChartIconClick = useCallback(
         (tableName: string) => {
             handleTableSelection(tableName);
@@ -942,7 +950,7 @@ function ChatPage() {
                                             handleStop={handleStop}
                                             sendMessage={sendMessageWithUrlProcessing}
                                             selectedTable={selectedTable}
-                                            onTableSelect={handleTableSelection}
+                                            onTableSelect={handleTableIconClick}
                                             currentChatState={currentChatState}
                                             onLoadSample={handleSendMessageWithUrl}
                                             renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
