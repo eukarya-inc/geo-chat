@@ -872,7 +872,8 @@ class DatabaseContext implements DBContext {
         const from = getFromClauseForUrl(url);
 
         // Create the table directly without going through executeQuery to avoid recursion
-        const createTableSQL = `CREATE TABLE ${finalTableName} AS SELECT * FROM ${from}`;
+        // Quote table name to support CJK and other special characters
+        const createTableSQL = `CREATE TABLE "${finalTableName}" AS SELECT * FROM ${from}`;
         const conn = await this.connect(sanitizedSchema);
         try {
             await conn.query(createTableSQL);

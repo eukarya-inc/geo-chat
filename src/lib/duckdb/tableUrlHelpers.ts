@@ -36,6 +36,7 @@ export function detectCreateTableFromUrl(sql: string): { tableName: string; url:
 /**
  * Generates a valid table name from a URL
  * Extracts the filename from the URL and converts it to a valid SQL table name
+ * Supports CJK and other Unicode characters in table names
  */
 export function generateTableNameFromUrl(url: string): string {
     // Extract file name from URL
@@ -45,25 +46,18 @@ export function generateTableNameFromUrl(url: string): string {
     // Remove extension
     const nameWithoutExt = decodedFileName.split('.')[0];
 
-    // Convert to valid table name
-    let tableName: string;
+    // Replace special characters (spaces, hyphens, dots) with underscores
+    // Keep alphanumeric (including Unicode letters and numbers) and underscores
+    let tableName = nameWithoutExt.replace(/[^\p{L}\p{N}_]/gu, '_');
 
-    // Check for non-ASCII characters (e.g., Japanese)
-    // eslint-disable-next-line no-control-regex
-    if (/[^\x00-\x7F]/.test(nameWithoutExt)) {
-        // For non-ASCII characters, generate a simple hash
-        const hash = nameWithoutExt
-            .split('')
-            .reduce((acc, char) => acc + char.charCodeAt(0), 0)
-            .toString(16);
-        tableName = `table_${hash}`;
-    } else {
-        // For ASCII only, replace invalid characters with underscores
-        tableName = nameWithoutExt.replace(/[^a-zA-Z0-9_]/g, '_');
-        // Ensure it doesn't start with a number
-        if (/^\d/.test(tableName)) {
-            tableName = `t_${tableName}`;
-        }
+    // Ensure it doesn't start with a number
+    if (/^\d/.test(tableName)) {
+        tableName = `t_${tableName}`;
+    }
+
+    // If the name is empty or becomes only underscores, use a fallback
+    if (!tableName || /^_+$/.test(tableName)) {
+        tableName = 'remote_file';
     }
 
     return tableName;
