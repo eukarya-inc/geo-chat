@@ -6,7 +6,7 @@ export default defineWorkspace([
             name: 'unit',
             globals: true,
             environment: 'jsdom',
-            setupFiles: [],
+            setupFiles: ['./src/test/setup.ts', 'vitest-localstorage-mock'],
             include: ['src/**/*.test.{ts,tsx}'],
             exclude: ['node_modules', 'dist', 'tmp', '.idea', '.git', '.cache', 'src/**/*.browser.test.{ts,tsx}'],
         },

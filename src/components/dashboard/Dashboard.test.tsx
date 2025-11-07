@@ -33,16 +33,9 @@ describe('Dashboard Chart Configuration Logic', () => {
             vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as unknown as Node);
             vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as unknown as Node);
 
-            // Mock URL.createObjectURL
-            Object.defineProperty(URL, 'createObjectURL', {
-                value: vi.fn(() => 'blob:fake-url'),
-                writable: true,
-            });
-
-            Object.defineProperty(URL, 'revokeObjectURL', {
-                value: vi.fn(),
-                writable: true,
-            });
+            // Mock URL methods (already defined in setup.ts, just spy on them)
+            vi.mocked(URL.createObjectURL).mockReturnValue('blob:fake-url');
+            vi.mocked(URL.revokeObjectURL).mockImplementation(() => {});
         });
 
         it('should create PNG export function that triggers blob download', async () => {

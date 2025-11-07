@@ -4716,6 +4716,11 @@ vite@^7.1.12:
   optionalDependencies:
     fsevents "~2.3.3"
 
+vitest-localstorage-mock@^0.1.2:
+  version "0.1.2"
+  resolved "https://registry.npmjs.org/vitest-localstorage-mock/-/vitest-localstorage-mock-0.1.2.tgz"
+  integrity sha512-1oee6iDWhhquzVogssbpwQi6a2F3L+nCKF2+qqyCs5tH0sOYRyTqnsfj2dtmEQiL4xtJkHLn42hEjHGESlsJHw==
+
 vitest@^2.1.8:
   version "2.1.9"
   resolved "https://registry.npmjs.org/vitest/-/vitest-2.1.9.tgz"
