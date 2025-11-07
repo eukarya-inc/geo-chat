@@ -76,9 +76,7 @@ export function ChartViewModal({
                     />
                 </div>
             ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                    グラフが設定されていません
-                </div>
+                <div className="flex items-center justify-center h-full text-gray-500">グラフが設定されていません</div>
             )}
         </ModalWrapper>
     );
