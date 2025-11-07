@@ -397,11 +397,11 @@ export default function SimpleChat({
                                                                     />
                                                                 </svg>
                                                                 <div className="text-lg font-medium text-gray-700 relative overflow-hidden">
-                                                                    <span className="relative z-10">
+                                                                    <span className="relative">
                                                                         AIが考えています...お待ち下さい...
                                                                     </span>
                                                                     <span
-                                                                        className="absolute inset-0 animate-shimmer"
+                                                                        className="absolute inset-0 animate-shimmer pointer-events-none"
                                                                         style={{
                                                                             backgroundImage:
                                                                                 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%)',
