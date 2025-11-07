@@ -2,7 +2,13 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { StructuredMessage, StructuredContent, DuckDBToolInput, DuckDBToolResult } from '../../types/message';
+import type {
+    StructuredMessage,
+    StructuredContent,
+    DuckDBToolInput,
+    DuckDBToolResult,
+    ErrorContent,
+} from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { VegaChartSpec } from '../../types/chart';
 import type { RegressionAnalysisResponse, ColumnSummary } from '../../types/regression';
@@ -11,6 +17,7 @@ import type { SegmentedRegressionResponse } from '../../types/segmentedRegressio
 import type { ChartSpecs } from '../../store/remoteAtoms';
 import { formatSQLCompact } from '../../utils/sqlFormatter';
 import { TableCreatedMessage } from './TableCreatedMessage';
+import { ErrorMessage } from './ErrorMessage';
 import { PromptSuggestions } from './PromptSuggestions';
 import { CopyButton } from './CopyButton';
 import {
@@ -103,6 +110,11 @@ const renderContentBlock = (
     showCopyLabel?: boolean
 ): React.ReactNode => {
     switch (block.type) {
+        case 'error': {
+            const errorBlock = block as ErrorContent;
+            return <ErrorMessage key={index} message={errorBlock.message} />;
+        }
+
         case 'text': {
             // Remove FINAL_MESSAGE, CONTEXT, and TABLE_INFO markers from display
             const cleanedText = block.text
@@ -477,12 +489,7 @@ const renderContentBlock = (
                         return <CollapsibleSection key={index} title={`ℹ️ **${result.message}**`} />;
                     }
                 } else {
-                    return (
-                        <CollapsibleSection
-                            key={index}
-                            title={`❌ **エラー:** ${result?.message || 'グラフ設定の取得に失敗しました'}`}
-                        />
-                    );
+                    return <ErrorMessage key={index} message={result?.message || 'グラフ設定の取得に失敗しました'} />;
                 }
             }
 
@@ -492,12 +499,7 @@ const renderContentBlock = (
                 if (result?.success) {
                     return <CollapsibleSection key={index} title={`✅ **${result.message}**`} />;
                 } else {
-                    return (
-                        <CollapsibleSection
-                            key={index}
-                            title={`❌ **エラー:** ${result?.message || 'グラフの更新に失敗しました'}`}
-                        />
-                    );
+                    return <ErrorMessage key={index} message={result?.message || 'グラフの更新に失敗しました'} />;
                 }
             }
 
@@ -521,12 +523,7 @@ const renderContentBlock = (
                 if (result?.success) {
                     return <CollapsibleSection key={index} title={`✅ **${result.message}**`} />;
                 } else {
-                    return (
-                        <CollapsibleSection
-                            key={index}
-                            title={`❌ **エラー:** ${result?.error || '地図スタイルの更新に失敗しました'}`}
-                        />
-                    );
+                    return <ErrorMessage key={index} message={result?.error || '地図スタイルの更新に失敗しました'} />;
                 }
             }
 
@@ -611,12 +608,7 @@ const renderContentBlock = (
                         </CollapsibleSection>
                     );
                 } else {
-                    return (
-                        <CollapsibleSection
-                            key={index}
-                            title={`❌ **エラー:** ${result?.error || '地図スタイルの取得に失敗しました'}`}
-                        />
-                    );
+                    return <ErrorMessage key={index} message={result?.error || '地図スタイルの取得に失敗しました'} />;
                 }
             }
 
@@ -669,19 +661,7 @@ const renderContentBlock = (
 
                 if (result?.error) {
                     const errorMsg = String(result.error);
-                    return (
-                        <CollapsibleSection
-                            key={index}
-                            title={`❌ **エラー:** ${errorMsg.includes('\n') ? '詳細を表示' : errorMsg}`}
-                            defaultOpen={false}
-                        >
-                            {errorMsg.includes('\n') && (
-                                <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
-                                    <code className="text-xs">{errorMsg}</code>
-                                </pre>
-                            )}
-                        </CollapsibleSection>
-                    );
+                    return <ErrorMessage key={index} message={errorMsg} />;
                 }
 
                 if (result?.data) {
@@ -1352,12 +1332,18 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
             }
 
             // Filter to keep only:
-            // 1. Table creation messages (tool_result with createdTable) - ALWAYS show
-            // 2. Completion tool use (suggested prompts) - ALWAYS show
-            // 3. The last text message (only when not streaming)
-            // 4. Text blocks with TABLE_CREATED markers - ALWAYS show
+            // 1. Error messages - ALWAYS show
+            // 2. Table creation messages (tool_result with createdTable) - ALWAYS show
+            // 3. Completion tool use (suggested prompts) - ALWAYS show
+            // 4. The last text message (only when not streaming)
+            // 5. Text blocks with TABLE_CREATED markers - ALWAYS show
             // Note: SQL results and chart update results are hidden when collapsed
             filteredContent = message.content.filter((block, index) => {
+                // Always keep error messages even when collapsed
+                if (block.type === 'error') {
+                    return true;
+                }
+
                 // Always keep completion tool use (suggested prompts)
                 if (block.type === 'tool_use' && block.name === 'completion') {
                     return true;
@@ -1368,11 +1354,13 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     return true;
                 }
 
-                // Only keep table creation tool results, not all SQL results
+                // Only keep table creation tool results and errors, not all SQL results
                 if (block.type === 'tool_result' && block.name === 'duckdb_query') {
                     const result = block.result as DuckDBToolResult;
-                    // Only show if it created a table
+                    // Always show if it created a table
                     if (result?.createdTable) return true;
+                    // Always show errors even when collapsed
+                    if (result?.error) return true;
                     // Hide regular SQL results when collapsed
                     return false;
                 }

@@ -285,12 +285,11 @@ export class AIStore {
             const errorMsg = err instanceof Error ? err.message : 'エラーが発生しました';
             this.setError(chatId, err instanceof Error ? err : new Error(errorMsg));
 
-            const errorContent = `❌ **エラーが発生しました:** ${errorMsg}`;
             const currentMessages: StructuredMessage[] = [
                 ...newMessages,
                 {
                     role: 'assistant',
-                    content: [{ type: 'text' as const, text: errorContent }],
+                    content: [{ type: 'error' as const, message: errorMsg }],
                 },
             ];
             session.messages = currentMessages;
@@ -376,29 +375,32 @@ export class AIStore {
                 let errorText: string;
 
                 if (part.error === 'aborted') {
-                    errorText = '⏹️ **処理が停止されました**';
+                    errorText = '処理が停止されました';
                 } else {
                     // Provide more specific error messages based on error content
                     const errorMessage = part.error.toLowerCase();
 
-                    if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-                        errorText = '❌ **APIレート制限に達しました:** しばらく待ってから再度お試しください。';
+                    // Check for "No output generated" message (user stopped the generation)
+                    if (errorMessage.includes('no output generated')) {
+                        errorText = '処理が停止されました';
+                    } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+                        errorText = 'APIレート制限に達しました。しばらく待ってから再度お試しください。';
                     } else if (errorMessage.includes('overloaded') || errorMessage.includes('request_overloaded')) {
-                        errorText = '❌ **APIサーバーが過負荷状態です:** 少し時間をおいてから再度お試しください。';
+                        errorText = 'APIサーバーが過負荷状態です。少し時間をおいてから再度お試しください。';
                     } else if (errorMessage.includes('503') || errorMessage.includes('unavailable')) {
-                        errorText = '❌ **APIサービスが一時的に利用できません:** 後ほど再度お試しください。';
+                        errorText = 'APIサービスが一時的に利用できません。後ほど再度お試しください。';
                     } else if (errorMessage.includes('500') || errorMessage.includes('internal')) {
-                        errorText = '❌ **サーバー内部エラーが発生しました:** 再度お試しください。';
+                        errorText = 'サーバー内部エラーが発生しました。再度お試しください。';
                     } else if (errorMessage.includes('402') || errorMessage.includes('quota')) {
-                        errorText = '❌ **APIクォータを超過しました:** APIアカウントの状態を確認してください。';
+                        errorText = 'APIクォータを超過しました。APIアカウントの状態を確認してください。';
                     } else if (
                         errorMessage.includes('401') ||
                         (errorMessage.includes('invalid') && errorMessage.includes('key'))
                     ) {
-                        errorText = '❌ **無効なAPIキーです:** APIキーの設定を確認してください。';
+                        errorText = '無効なAPIキーです。APIキーの設定を確認してください。';
                     } else {
                         // For other errors, show the original message
-                        errorText = `❌ **エラーが発生しました:** ${part.error}`;
+                        errorText = part.error;
                     }
                 }
 
@@ -406,7 +408,7 @@ export class AIStore {
                 if (streamingText) {
                     existingContent.push({ type: 'text' as const, text: streamingText });
                 }
-                existingContent.push({ type: 'text' as const, text: errorText });
+                existingContent.push({ type: 'error' as const, message: errorText });
 
                 updatedMessages[updatedMessages.length - 1] = {
                     ...lastMessage,
