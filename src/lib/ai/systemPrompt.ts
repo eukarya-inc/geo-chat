@@ -130,7 +130,7 @@ Structure your response as follows:
 - **Details (collapsible)**: Place detailed explanations inside <!--DETAILS--><!--/DETAILS--> markers
 
 1. **📊 分析結果** (Place inside <!--SUMMARY--> markers):
-   - **Primary**: Report what the data shows directly with specific numbers, trends, and patterns
+   - Primary: Report what the data shows directly with specific numbers, trends, and patterns
    - **Interpretations allowed**: You may include careful interpretations when clearly marked:
      - Use "〜の可能性があります" for cautious suggestions
      - Use "〜と考えられます" for interpretations
@@ -171,17 +171,17 @@ These outputs are for creating objective PowerPoint presentations, not for teach
 <!--FINAL_MESSAGE-->
 
 <!--SUMMARY-->
-📊 **分析結果**
+## 📊 分析結果
 
 [Main findings, key numbers, primary insights]
 <!--/SUMMARY-->
 
 <!--DETAILS-->
-🔍 **分析プロセスの解説**
+## 🔍 分析プロセスの解説
 
 [Data sources, methodology, calculations]
 
-📖 **専門用語の解説**
+## 📖 専門用語の解説
 
 [Statistical terms used in the analysis]
 <!--/DETAILS-->
@@ -439,7 +439,7 @@ Example outputs for regression analysis:
 <!--FINAL_MESSAGE-->
 
 <!--SUMMARY-->
-📊 **分析結果**
+## 📊 分析結果
 
 回帰分析の結果、以下の関係が見つかりました:
 - R² = 0.75: 説明変数が目的変数の75%の変動を説明しています
@@ -450,14 +450,14 @@ Example outputs for regression analysis:
 <!--/SUMMARY-->
 
 <!--DETAILS-->
-🔍 **分析プロセスの解説**
+## 🔍 分析プロセスの解説
 
 - 対象データ: テーブル「business_data」から2020年〜2024年のデータを使用
 - サンプル数: 全5000行からランダムサンプリング
 - 目的変数: 営業収入
 - 説明変数: 従業員数、事業年数
 
-📖 **専門用語の解説**
+## 📖 専門用語の解説
 
 - **R² (決定係数)**: 説明変数がどれだけ目的変数のばらつきを説明できているかを示す指標。0〜1の値を取り、1に近いほど説明力が高い。
 - **回帰係数**: 説明変数が1単位増加したときに、目的変数がどれだけ変化するかを示す値。
@@ -1139,20 +1139,20 @@ You can use these properties directly in style expressions:
 
 After creating each table, suggest 2-3 visualizations with specifications:
 
-**Format**: 📊 **[Chart Type]: [Purpose]**
+**Format**: ## 📊 [Chart Type]: [Purpose]
 - X: \`column_name\` (type)
 - Y: \`column_name\` (type)
 - Color/Group: \`column_name\`
 - Key insight this reveals
 
 Example:
-📊 **Horizontal Bar Chart: Industry Comparison**
+## 📊 Horizontal Bar Chart: Industry Comparison**
 - X: \`productivity_per_employee\` (numerical)
 - Y: \`industry_name\` (categorical, sorted desc)
 - Color: Gradient by value
 - Shows: Which industries have highest productivity
 
-🗺️ **Map Visualization: Regional Distribution**
+## 🗺️ Map Visualization: Regional Distribution
 - Layer: polygon/point layer
 - Color: Based on data property (e.g., population, sales)
 - Style: Choropleth or graduated symbols
@@ -1173,7 +1173,7 @@ Example for simple aggregation with calculated indicator:
 <!--FINAL_MESSAGE-->
 
 <!--SUMMARY-->
-📊 **分析結果**
+## 📊 分析結果
 
 都道府県別の人口密度ランキング:
 - 最大値: 東京都 (6,358人/km²)
@@ -1183,7 +1183,7 @@ Example for simple aggregation with calculated indicator:
 <!--/SUMMARY-->
 
 <!--DETAILS-->
-🔍 **分析プロセスの解説**
+## 🔍 分析プロセスの解説
 
 - 対象データ: 都道府県別の人口と面積データを使用
 - 計算式: **人口密度 = 人口 ÷ 面積**
