@@ -14,7 +14,14 @@ const LARGE_DATA_THRESHOLD = 10000; // Use scalable k-means for datasets > 10k r
 export function createClusterTool(dbContext: DBContext, schema: string | null) {
     return tool({
         description: `Perform k-means cluster analysis on DuckDB tables to discover natural groupings in data.
-Returns cluster labels, centroids, inertia, silhouette score, and cluster sizes.
+Returns cluster labels (numeric indices 0, 1, 2...), centroids, inertia, silhouette score, and cluster sizes.
+
+CRITICAL - AFTER CLUSTER ANALYSIS:
+After running this tool, you MUST:
+1. Look at the centroid values provided in the tool response
+2. Create descriptive labels based on the centroid values (e.g., "小規模事業者", "中堅企業", "大企業")
+3. Create a new table with string labels by converting numeric labels (0, 1, 2...) to descriptive labels
+4. Use the new table with string labels for visualization and user presentation
 
 CRITICAL - TABLE NAMING:
 - ALWAYS use English table names for cluster analysis (e.g., "logistics_companies", "customer_segments")
@@ -249,13 +256,35 @@ CRITICAL - DO NOT CREATE SUMMARY TABLES:
 
                 // Provide guidance for AI on how to use cluster labels
                 suggestions.push(
-                    `クラスターラベルは一時テーブル「${labelsTableName}」に保存されました。このテーブルには row_id (1から始まる行番号) と cluster (クラスターラベル) カラムがあります。`
+                    `クラスターラベルは一時テーブル「${labelsTableName}」に保存されました。このテーブルには row_id (1から始まる行番号) と cluster (数値ラベル: 0, 1, 2...) カラムがあります。`
                 );
+
+                // Provide detailed centroid information for AI to create descriptive labels
+                const centroidDetails = clustering.centroids
+                    .map((c, i) => {
+                        const values = providedFeatures.map((f, j) => `${f}=${formatNumeric(c[j])}`).join(', ');
+                        return `クラスター${i}: ${values}`;
+                    })
+                    .join('\n');
+
                 suggestions.push(
-                    `クラスターラベルを元のテーブルに結合する方法: SELECT t.*, l.cluster FROM ${tableName} t JOIN ${labelsTableName} l ON ROW_NUMBER() OVER () = l.row_id`
-                );
-                suggestions.push(
-                    `クラスターの特性: ${clustering.centroids.map((c, i) => `クラスター${i}: ${providedFeatures.map((f, j) => `${f}=${formatNumeric(c[j])}`).join(', ')}`).join(' / ')}`
+                    `\n## 次のステップ: 文字列ラベルへの変換\n\n` +
+                        `各クラスターのセントロイド（中心値）:\n${centroidDetails}\n\n` +
+                        `**これらのセントロイド値を分析して、各クラスターに適切な日本語の名前を付けてください。**\n` +
+                        `例: クラスター0の${providedFeatures[0]}が小さければ「小規模事業者」、大きければ「大企業」など\n\n` +
+                        `その後、以下のSQLで文字列ラベルのテーブルを作成してください:\n\n` +
+                        `\`\`\`sql\n` +
+                        `CREATE TABLE ${tableName}_labeled AS\n` +
+                        `SELECT t.*, \n` +
+                        `  CASE l.cluster\n` +
+                        `    WHEN 0 THEN 'セントロイドの値から考えた適切なラベル名'\n` +
+                        `    WHEN 1 THEN 'セントロイドの値から考えた適切なラベル名'\n` +
+                        `    WHEN 2 THEN 'セントロイドの値から考えた適切なラベル名'\n` +
+                        `  END AS cluster_label\n` +
+                        `FROM ${tableName} t\n` +
+                        `JOIN ${labelsTableName} l ON ROW_NUMBER() OVER () = l.row_id;\n` +
+                        `\`\`\`\n\n` +
+                        `**必ずこのテーブル（${tableName}_labeled）を作成し、以降の可視化や分析に使用してください。**`
                 );
 
                 // 2D visualization suggestion

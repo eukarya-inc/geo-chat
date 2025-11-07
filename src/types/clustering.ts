@@ -65,7 +65,7 @@ export interface ClusterAnalysisSuccess {
     success: true;
     message: string;
     tableName: string;
-    labelsTableName: string; // Name of the temporary table containing cluster labels
+    labelsTableName: string; // Name of the temporary table containing numeric cluster labels (row_id INTEGER, cluster INTEGER)
     featureColumns: string[];
     dataInfo: ClusterDataInfo;
     metrics: ClusterMetrics; // Clustering metrics for AI decision making

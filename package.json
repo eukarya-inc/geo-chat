@@ -31,7 +31,7 @@
         "@viz-js/viz": "^3.16.0",
         "ai": "^5.0.82",
         "apache-arrow": "^21.0.0",
-        "html2canvas": "^1.4.1",
+        "html-to-image": "^1.11.13",
         "jotai": "^2.13.1",
         "jstat": "^1.9.6",
         "lodash": "^4.17.21",

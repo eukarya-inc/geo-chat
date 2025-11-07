@@ -49,6 +49,7 @@ function ChatPage() {
     const chatPageVegaViewRef = useRef<View | null>(null);
     const dbContextRef = useRef<DBContext | null>(dbContext);
     const isInitializingRef = useRef<boolean>(isInitializing);
+    const [urlProcessingError, setUrlProcessingError] = useState<string | null>(null);
 
     // Update refs when values change
     useEffect(() => {
@@ -435,6 +436,7 @@ function ChatPage() {
                 const dataUrl = extractDataUrl(url);
                 if (!dataUrl) {
                     console.error('Invalid URL:', url);
+                    setUrlProcessingError(`無効なURLです: ${url}`);
                     return;
                 }
 
@@ -445,14 +447,19 @@ function ChatPage() {
                 sendMessage(tableMessage);
             } catch (error) {
                 console.error('Failed to create table from URL:', error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                setUrlProcessingError(`テーブルの作成に失敗しました: ${errorMessage}`);
             }
         },
-        [selectedChatId, dbContext, sendMessage]
+        [selectedChatId, dbContext, sendMessage, setUrlProcessingError]
     );
 
     // Wrap sendMessage to handle URL processing for existing chat
     const sendMessageWithUrlProcessing = useCallback(
         (message: string) => {
+            // Clear any previous error
+            setUrlProcessingError(null);
+
             const dataUrl = extractDataUrl(message);
 
             if (dataUrl) {
@@ -472,6 +479,9 @@ function ChatPage() {
             e.preventDefault();
 
             if (!input.trim()) return;
+
+            // Clear any previous error
+            setUrlProcessingError(null);
 
             const messageToSend = input.trim();
             const dataUrl = extractDataUrl(messageToSend);
@@ -866,32 +876,63 @@ function ChatPage() {
                                 <div className="p-5 text-center text-gray-600">APIキーを読み込み中...</div>
                             )}
                             {!isLoadingApiKey && dbContext && selectedChatId && (
-                                <Chat
-                                    dbContext={dbContext}
-                                    apiKey={apiKey}
-                                    chatId={selectedChatId}
-                                    messages={messages}
-                                    isLoading={isLoading}
-                                    input={input}
-                                    handleInputChange={handleInputChange}
-                                    handleSubmit={handleSubmitWithUrlProcessing}
-                                    handleStop={handleStop}
-                                    sendMessage={sendMessageWithUrlProcessing}
-                                    selectedTable={selectedTable}
-                                    onTableSelect={handleTableSelection}
-                                    currentChatState={currentChatState}
-                                    onLoadSample={handleSendMessageWithUrl}
-                                    renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
-                                        <DataSourceSelector
-                                            onClose={onClose}
-                                            onShowUrlGuide={onShowUrlGuide}
-                                            sampleUrl={getSampleDataUrl()}
-                                            onLoadSample={onLoadSample || (() => {})}
-                                        />
+                                <>
+                                    {urlProcessingError && (
+                                        <div className="mb-3 mx-4 p-3 bg-red-50 border border-red-300 rounded-lg">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <strong className="text-red-800 text-sm">エラー</strong>
+                                                    <p className="text-red-700 text-sm mt-1">{urlProcessingError}</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setUrlProcessingError(null)}
+                                                    className="ml-2 p-1 hover:bg-red-100 rounded transition-colors"
+                                                    title="閉じる"
+                                                >
+                                                    <svg
+                                                        className="w-4 h-4 text-red-800"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
                                     )}
-                                    onChartIconClick={handleChartIconClick}
-                                    onMapIconClick={handleMapIconClick}
-                                />
+                                    <Chat
+                                        dbContext={dbContext}
+                                        apiKey={apiKey}
+                                        chatId={selectedChatId}
+                                        messages={messages}
+                                        isLoading={isLoading}
+                                        input={input}
+                                        handleInputChange={handleInputChange}
+                                        handleSubmit={handleSubmitWithUrlProcessing}
+                                        handleStop={handleStop}
+                                        sendMessage={sendMessageWithUrlProcessing}
+                                        selectedTable={selectedTable}
+                                        onTableSelect={handleTableSelection}
+                                        currentChatState={currentChatState}
+                                        onLoadSample={handleSendMessageWithUrl}
+                                        renderMenu={(onClose, onShowUrlGuide, onLoadSample) => (
+                                            <DataSourceSelector
+                                                onClose={onClose}
+                                                onShowUrlGuide={onShowUrlGuide}
+                                                sampleUrl={getSampleDataUrl()}
+                                                onLoadSample={onLoadSample || (() => {})}
+                                            />
+                                        )}
+                                        onChartIconClick={handleChartIconClick}
+                                        onMapIconClick={handleMapIconClick}
+                                    />
+                                </>
                             )}
                         </div>
 
