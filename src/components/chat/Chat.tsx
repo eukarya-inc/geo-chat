@@ -7,6 +7,7 @@ import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import type { ChatState } from '../../store/remoteAtoms';
 import { isTableCreatedOnlyMessage } from './utils';
 import { analyzeTableGeometry } from '../../lib/ai/tools/geometryDetector';
+import { hasCollapsibleContent } from './messageFilters';
 
 interface ChatProps {
     dbContext: DBContext | null;
@@ -607,7 +608,12 @@ export default function Chat({
                                                     'を分析中... おすすめの分析を生成しています...'
                                                 );
 
-                                            if (isPromptOnlyMessage || isLoadingMessage) {
+                                            // Check if there's any collapsible content
+                                            const hasCollapsible =
+                                                Array.isArray(group.assistantMessage.content) &&
+                                                hasCollapsibleContent(group.assistantMessage.content);
+
+                                            if (isPromptOnlyMessage || isLoadingMessage || !hasCollapsible) {
                                                 return null;
                                             }
 

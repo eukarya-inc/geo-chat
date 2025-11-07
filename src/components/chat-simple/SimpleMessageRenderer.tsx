@@ -2,10 +2,11 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { StructuredMessage, StructuredContent, DuckDBToolResult } from '../../types/message';
+import type { StructuredMessage, StructuredContent, DuckDBToolResult, ErrorContent } from '../../types/message';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import type { ChartSpecs } from '../../store/remoteAtoms';
 import { TableCreatedMessage } from '../chat/TableCreatedMessage';
+import { ErrorMessage } from '../chat/ErrorMessage';
 import { PromptSuggestions } from '../chat/PromptSuggestions';
 import { CopyButton } from '../chat/CopyButton';
 import { isTableCreatedOnlyMessage, removeMetadataMarkers } from '../chat/utils';
@@ -36,6 +37,11 @@ const renderContentBlock = (
     onMapIconClick?: (tableName: string) => void
 ): React.ReactNode => {
     switch (block.type) {
+        case 'error': {
+            const errorBlock = block as ErrorContent;
+            return <ErrorMessage key={index} message={errorBlock.message} />;
+        }
+
         case 'text': {
             // Remove markers from display
             const cleanedText = block.text
@@ -191,6 +197,13 @@ const renderContentBlock = (
             // Handle table creation from duckdb_query
             if (block.name === 'duckdb_query') {
                 const result = block.result as DuckDBToolResult;
+
+                // Show errors
+                if (result?.error) {
+                    const errorMsg = String(result.error);
+                    return <ErrorMessage key={index} message={errorMsg} />;
+                }
+
                 const tableCreated = result?.createdTable || null;
 
                 if (tableCreated) {
@@ -233,8 +246,13 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
         const contentArray = message.content;
 
         // Filter content for simple view
-        // Keep: completion tools (prompts), table creation results, final text messages
+        // Keep: error messages, completion tools (prompts), table creation results, final text messages
         const filteredContent = contentArray.filter((block, index) => {
+            // Always keep error messages
+            if (block.type === 'error') {
+                return true;
+            }
+
             // Keep completion tool use/result (suggested prompts)
             if (block.type === 'tool_use' && block.name === 'completion') {
                 return true;
@@ -243,10 +261,11 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
                 return true;
             }
 
-            // Keep table creation results
+            // Keep table creation results and errors
             if (block.type === 'tool_result' && block.name === 'duckdb_query') {
                 const result = block.result as DuckDBToolResult;
                 if (result?.createdTable) return true;
+                if (result?.error) return true; // Show errors
                 return false;
             }
 

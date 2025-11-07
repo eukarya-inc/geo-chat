@@ -4,6 +4,11 @@ export interface TextContent {
     text: string;
 }
 
+export interface ErrorContent {
+    type: 'error';
+    message: string;
+}
+
 export interface DuckDBToolInput {
     sql: string;
 }
@@ -35,7 +40,7 @@ export interface ToolResultContent {
     result: unknown;
 }
 
-export type StructuredContent = TextContent | ToolUseContent | ToolResultContent;
+export type StructuredContent = TextContent | ErrorContent | ToolUseContent | ToolResultContent;
 
 // Token usage information (AI SDK v5)
 export interface TokenUsage {
