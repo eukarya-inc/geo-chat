@@ -105,14 +105,14 @@ describe('tableUrlHelpers', () => {
             expect(generateTableNameFromUrl('https://example.com/123.csv')).toBe('t_123');
         });
 
-        it('should handle Japanese characters by generating hash', () => {
+        it('should handle Japanese characters by keeping them', () => {
             const result = generateTableNameFromUrl('https://example.com/日本語データ.csv');
-            expect(result).toMatch(/^table_[0-9a-f]+$/);
+            expect(result).toBe('日本語データ');
         });
 
         it('should handle mixed ASCII and non-ASCII characters', () => {
             const result = generateTableNameFromUrl('https://example.com/data_日本語.csv');
-            expect(result).toMatch(/^table_[0-9a-f]+$/);
+            expect(result).toBe('data_日本語');
         });
 
         it('should handle URLs without filename', () => {
