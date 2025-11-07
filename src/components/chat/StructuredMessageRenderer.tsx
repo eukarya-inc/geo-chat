@@ -97,7 +97,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
             </summary>
-            <div className="pl-2 mt-1">{children}</div>
+            <div className="pl-2 mt-4">{children}</div>
         </details>
     );
 };

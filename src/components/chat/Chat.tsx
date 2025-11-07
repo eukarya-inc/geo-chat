@@ -740,7 +740,7 @@ export default function Chat({
                     );
                 })}
 
-                {isLoading && messages.length === 0 && (
+                {isLoading && (
                     <div className="flex justify-start mb-4">
                         <div className="italic text-gray-600 w-full">考えています...</div>
                     </div>
