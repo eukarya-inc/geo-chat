@@ -620,7 +620,7 @@ export default function Chat({
                                             return (
                                                 <button
                                                     onClick={() => toggleGroupCollapse(groupIndex)}
-                                                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-1 relative overflow-hidden"
+                                                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors mb-3 relative overflow-hidden"
                                                 >
                                                     {isCollapsed ? (
                                                         <ChevronRightIcon className="w-4 h-4" />
@@ -665,7 +665,7 @@ export default function Chat({
 
                                             if (isPromptOnlyMessage || isLoadingMessage) {
                                                 return (
-                                                    <div className="break-words">
+                                                    <div className="break-words mb-6">
                                                         <StructuredMessageRenderer
                                                             message={group.assistantMessage}
                                                             className="prose max-w-none"
@@ -687,7 +687,7 @@ export default function Chat({
                                             return (
                                                 <>
                                                     {!isCollapsed && (
-                                                        <div className="break-words">
+                                                        <div className="break-words mb-6">
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"
@@ -712,7 +712,7 @@ export default function Chat({
                                                     )}
 
                                                     {isCollapsed && (
-                                                        <div className="break-words">
+                                                        <div className="break-words mb-6">
                                                             <StructuredMessageRenderer
                                                                 message={group.assistantMessage}
                                                                 className="prose max-w-none"

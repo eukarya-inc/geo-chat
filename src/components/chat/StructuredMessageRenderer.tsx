@@ -48,9 +48,15 @@ interface CollapsibleSectionProps {
     title: string;
     children?: React.ReactNode;
     defaultOpen?: boolean;
+    isLast?: boolean;
 }
 
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, defaultOpen = false }) => {
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+    title,
+    children,
+    defaultOpen = false,
+    isLast = false,
+}) => {
     // If no children, render as a simple non-collapsible item
     if (!children) {
         return (
@@ -70,7 +76,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
     }
 
     return (
-        <details className="group my-1" open={defaultOpen}>
+        <details className={`group ${isLast ? 'mb-3' : ''}`} open={defaultOpen}>
             <summary className="cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 transition-colors duration-200 rounded-md p-1.5 select-none">
                 <div className="prose prose-sm max-w-none">
                     <ReactMarkdown
@@ -99,6 +105,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
 const renderContentBlock = (
     block: StructuredContent,
     index: number,
+    allContent: StructuredContent[],
     selectedTable?: string | null,
     onTableSelect?: (tableName: string) => void,
     onPromptClick?: (promptText: string) => void,
@@ -109,6 +116,12 @@ const renderContentBlock = (
     onMapIconClick?: (tableName: string) => void,
     showCopyLabel?: boolean
 ): React.ReactNode => {
+    // Check if this is the last collapsible section before text content
+    const isLastCollapsibleBeforeText = () => {
+        // Check if next element exists and is text type
+        const nextBlock = allContent[index + 1];
+        return nextBlock?.type === 'text' || index === allContent.length - 1;
+    };
     switch (block.type) {
         case 'error': {
             const errorBlock = block as ErrorContent;
@@ -148,7 +161,7 @@ const renderContentBlock = (
                                     {beforeText}
                                 </ReactMarkdown>
                                 {isFinalMessage && (
-                                    <div className="mt-2 flex">
+                                    <div className="mt-2 mb-3 flex">
                                         <CopyButton
                                             onCopy={() => navigator.clipboard.writeText(beforeText)}
                                             showLabel={showCopyLabel}
@@ -185,7 +198,7 @@ const renderContentBlock = (
                                 {remainingText}
                             </ReactMarkdown>
                             {isFinalMessage && (
-                                <div className="mt-2 flex">
+                                <div className="mt-2 mb-3 flex">
                                     <CopyButton
                                         onCopy={() => navigator.clipboard.writeText(remainingText)}
                                         showLabel={showCopyLabel}
@@ -214,7 +227,11 @@ const renderContentBlock = (
                             </ReactMarkdown>
                         </div>
                         {/* Details - collapsible */}
-                        <CollapsibleSection title="📋 **詳細情報**" defaultOpen={false}>
+                        <CollapsibleSection
+                            title="📋 **詳細情報**"
+                            defaultOpen={false}
+                            isLast={isLastCollapsibleBeforeText()}
+                        >
                             <div className="prose prose-sm max-w-none">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                                     {parsed.details}
@@ -230,7 +247,7 @@ const renderContentBlock = (
                             </div>
                         )}
                         {!isLoadingMessage && isFinalMessage && (
-                            <div className="mt-2 flex">
+                            <div className="mt-2 mb-3 flex">
                                 <CopyButton
                                     onCopy={() =>
                                         navigator.clipboard.writeText(
@@ -255,7 +272,7 @@ const renderContentBlock = (
                         {cleanedText}
                     </ReactMarkdown>
                     {!isLoadingMessage && isFinalMessage && (
-                        <div className="mt-2 flex">
+                        <div className="mt-2 mb-3 flex">
                             <CopyButton
                                 onCopy={() => navigator.clipboard.writeText(cleanedText)}
                                 showLabel={showCopyLabel}
@@ -272,7 +289,12 @@ const renderContentBlock = (
                 const formattedSQL = formatSQLCompact(input.sql);
 
                 return (
-                    <CollapsibleSection key={index} title="🔧 **SQL実行中:**" defaultOpen={false}>
+                    <CollapsibleSection
+                        key={index}
+                        title="🔧 **SQL実行中:**"
+                        defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
+                    >
                         <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
                             <code className="language-sql text-xs">{formattedSQL}</code>
                         </pre>
@@ -286,6 +308,7 @@ const renderContentBlock = (
                         key={index}
                         title={`📊 **グラフ設定を更新中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
                             <code className="language-json text-xs">{JSON.stringify(input.vega_spec, null, 2)}</code>
@@ -300,6 +323,7 @@ const renderContentBlock = (
                         key={index}
                         title={`📊 **グラフ設定を取得中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs text-gray-600">
                             テーブル「{input.table_name}」のVega-Liteチャート設定を取得しています...
@@ -320,6 +344,7 @@ const renderContentBlock = (
                         key={index}
                         title={`🔍 **説明変数選択を実行中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs space-y-1 text-gray-600">
                             <div>目的変数: {input.target_column}</div>
@@ -344,6 +369,7 @@ const renderContentBlock = (
                         key={index}
                         title={`📈 **回帰分析を実行中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs space-y-1 text-gray-600">
                             <div>目的変数: {input.target_column ?? '自動選択'}</div>
@@ -370,6 +396,7 @@ const renderContentBlock = (
                         key={index}
                         title={`🎯 **クラスター分析を実行中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs space-y-1 text-gray-600">
                             <div>特徴量: {input.feature_columns.join(', ')}</div>
@@ -391,6 +418,7 @@ const renderContentBlock = (
                         key={index}
                         title={`🗺️ **地図スタイルを更新中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs space-y-2">
                             <div className="text-gray-600">
@@ -414,6 +442,7 @@ const renderContentBlock = (
                         key={index}
                         title={`🗺️ **地図スタイルを取得中: ${input.table_name}**`}
                         defaultOpen={false}
+                        isLast={isLastCollapsibleBeforeText()}
                     >
                         <div className="p-2 text-xs text-gray-600">
                             テーブル「{input.table_name}」の地図スタイル設定を取得しています...
@@ -477,7 +506,12 @@ const renderContentBlock = (
                     if (result.spec) {
                         const title = `✅ **${result.message}**`;
                         return (
-                            <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                            <CollapsibleSection
+                                key={index}
+                                title={title}
+                                defaultOpen={false}
+                                isLast={isLastCollapsibleBeforeText()}
+                            >
                                 <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
                                     <code className="language-json text-xs">
                                         {JSON.stringify(result.spec, null, 2)}
@@ -486,7 +520,13 @@ const renderContentBlock = (
                             </CollapsibleSection>
                         );
                     } else {
-                        return <CollapsibleSection key={index} title={`ℹ️ **${result.message}**`} />;
+                        return (
+                            <CollapsibleSection
+                                key={index}
+                                title={`ℹ️ **${result.message}**`}
+                                isLast={isLastCollapsibleBeforeText()}
+                            />
+                        );
                     }
                 } else {
                     return <ErrorMessage key={index} message={result?.message || 'グラフ設定の取得に失敗しました'} />;
@@ -497,7 +537,13 @@ const renderContentBlock = (
             if (block.name === 'update_vega_chart_spec_for_table') {
                 const result = block.result as { success: boolean; message: string; tableName?: string };
                 if (result?.success) {
-                    return <CollapsibleSection key={index} title={`✅ **${result.message}**`} />;
+                    return (
+                        <CollapsibleSection
+                            key={index}
+                            title={`✅ **${result.message}**`}
+                            isLast={isLastCollapsibleBeforeText()}
+                        />
+                    );
                 } else {
                     return <ErrorMessage key={index} message={result?.message || 'グラフの更新に失敗しました'} />;
                 }
@@ -521,7 +567,13 @@ const renderContentBlock = (
                     };
                 };
                 if (result?.success) {
-                    return <CollapsibleSection key={index} title={`✅ **${result.message}**`} />;
+                    return (
+                        <CollapsibleSection
+                            key={index}
+                            title={`✅ **${result.message}**`}
+                            isLast={isLastCollapsibleBeforeText()}
+                        />
+                    );
                 } else {
                     return <ErrorMessage key={index} message={result?.error || '地図スタイルの更新に失敗しました'} />;
                 }
@@ -574,7 +626,12 @@ const renderContentBlock = (
                 if (result?.success) {
                     const title = result.message ? `✅ **${result.message}**` : '✅ **地図スタイルを取得しました**';
                     return (
-                        <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                        <CollapsibleSection
+                            key={index}
+                            title={title}
+                            defaultOpen={false}
+                            isLast={isLastCollapsibleBeforeText()}
+                        >
                             <div className="p-2 text-xs space-y-2">
                                 {result.metadata && (
                                     <div className="text-gray-600">
@@ -689,7 +746,12 @@ const renderContentBlock = (
                     const displayStr = isLongData ? dataStr.substring(0, 8000) + '...' : dataStr;
 
                     return (
-                        <CollapsibleSection key={index} title={title} defaultOpen={false}>
+                        <CollapsibleSection
+                            key={index}
+                            title={title}
+                            defaultOpen={false}
+                            isLast={isLastCollapsibleBeforeText()}
+                        >
                             <pre className="p-2 bg-gray-100 rounded-md overflow-x-auto text-xs">
                                 <code className="text-xs">{displayStr}</code>
                             </pre>
@@ -1372,9 +1434,11 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                 if (block.type === 'text') {
                     const hasTableMarker = block.text.includes('<!--TABLE_CREATED:');
                     const hasFinalMarker = block.text.includes('<!--FINAL_MESSAGE-->');
+                    const hasSummary = block.text.includes('<!--SUMMARY-->');
+                    const hasDetails = block.text.includes('<!--DETAILS-->');
 
-                    // Always show table markers and final messages
-                    if (hasTableMarker || hasFinalMarker) return true;
+                    // Always show table markers, final messages, summaries, and details
+                    if (hasTableMarker || hasFinalMarker || hasSummary || hasDetails) return true;
 
                     // Only show last text when not streaming
                     const isLastText = index === lastTextIndex;
@@ -1397,6 +1461,7 @@ export const StructuredMessageRenderer: React.FC<StructuredMessageRendererProps>
                     renderContentBlock(
                         block,
                         index,
+                        filteredContent,
                         selectedTable,
                         onTableSelect,
                         onPromptClick,

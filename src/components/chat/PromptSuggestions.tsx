@@ -26,14 +26,14 @@ export const PromptSuggestions: React.FC<PromptSuggestionsProps> = ({
     }
 
     return (
-        <div className={`${isSimple ? 'mt-8' : 'mt-4'} ${className}`}>
+        <div className={className}>
             {title && (
                 <div className={`${isSimple ? 'text-xl font-semibold' : 'text-xs font-medium'} text-gray-600 mb-2`}>
                     {title}
                 </div>
             )}
             <div
-                className={`flex gap-2 pb-2 scrollbar-hide ${isSimple ? 'flex-wrap' : 'overflow-x-auto'}`}
+                className={`flex gap-2 scrollbar-hide ${isSimple ? 'flex-wrap' : 'overflow-x-auto'}`}
                 style={
                     isSimple
                         ? undefined
