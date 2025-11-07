@@ -48,6 +48,8 @@ const renderContentBlock = (
                 .replace('<!--FINAL_MESSAGE-->', '')
                 .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
                 .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
+                .replace(/<!--SUMMARY-->[\s\S]*?<!--\/SUMMARY-->/g, '')
+                .replace(/<!--DETAILS-->[\s\S]*?<!--\/DETAILS-->/g, '')
                 .trim();
 
             const isFinalMessage = block.text.includes('<!--FINAL_MESSAGE-->');
@@ -316,7 +318,13 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
                 {/* Render streaming text if present */}
                 {message.streaming &&
                     (() => {
-                        const displayText = message.streaming.replace('<!--FINAL_MESSAGE-->', '').trim();
+                        const displayText = message.streaming
+                            .replace('<!--FINAL_MESSAGE-->', '')
+                            .replace(/<!--CONTEXT_START-->[\s\S]*?<!--CONTEXT_END-->/g, '')
+                            .replace(/<!--TABLE_INFO_START-->[\s\S]*?<!--TABLE_INFO_END-->/g, '')
+                            .replace(/<!--SUMMARY-->[\s\S]*?<!--\/SUMMARY-->/g, '')
+                            .replace(/<!--DETAILS-->[\s\S]*?<!--\/DETAILS-->/g, '')
+                            .trim();
 
                         if (displayText) {
                             return (
