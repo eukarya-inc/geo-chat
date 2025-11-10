@@ -84,6 +84,13 @@
     transition: background-color 0.2s;
 }
 
+/* Non-sortable header (for row number column) */
+.tanstack-table-th:first-child {
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+}
+
 .tanstack-table-sortable:hover {
     background-color: #e9ecef;
 }
@@ -167,12 +174,16 @@
 }
 
 /* Row Number Column - Special Styling */
-.tanstack-table-cell:first-child,
-.tanstack-table-th:first-child .tanstack-table-sortable {
+.tanstack-table-cell:first-child {
     background-color: #fafafa;
     font-weight: 500;
     color: #6c757d;
     text-align: center;
+    justify-content: center;
+}
+
+.tanstack-table-th:first-child {
+    background-color: #fafafa;
     justify-content: center;
 }
 
