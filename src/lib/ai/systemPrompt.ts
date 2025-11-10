@@ -685,10 +685,18 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
 3. **RULE #3: Response Verification Checklist**
    After creating each paragraph, verify:
    - Does this paragraph address specific core elements? (Check 核心要素対応)
+   - **CRITICAL**: Are the elements in "核心要素対応" ACTUALLY present in the text?
+     - If "B" is listed → Text MUST contain bus-related content
+     - If "C" is listed → Text MUST mention foreign tourists
+     - If "D" is listed → Text MUST address resident impact
    - If the question mentions "バス", does the answer mention "バス"?
    - If the question mentions "外国人", does the answer mention "外国人"?
    - If the question mentions "住民生活", does the answer show empathy for residents?
    - Is the paragraph meaningful and not just generic filler?
+   - **ACTION**: If element not found in text, either:
+     - Remove from "核心要素対応", or
+     - Modify text to include it, or
+     - Find different quote that includes it
 
 4. **RULE #4: Strict Confidence Level Distinction**
    - **For 信頼度 (CRITICAL DISTINCTION)**:
@@ -751,7 +759,31 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - **When in doubt, choose LOWER confidence**
    - **Update both 信頼度 and 信頼度の理由 if changed**
 
-**Output**: Display the "答弁骨子" table to the user and **STOP HERE**.
+**🔍 FINAL VERIFICATION STEP (MANDATORY BEFORE OUTPUT)**:
+
+Before displaying the outline, perform this critical integrity check:
+
+1. **Core Element Verification**:
+   - For EACH row in the 答弁骨子 table:
+   - Check if elements listed in "核心要素対応" are ACTUALLY addressed in "引用箇所" or "記載内容の概要"
+   - Example: If "B" (バス利用での混雑) is listed, the text MUST mention buses
+   - Example: If "C" (外国人による混雑) is listed, the text MUST mention foreign tourists
+
+2. **If Mismatches Found**:
+   - Option A: Remove the element from "核心要素対応" column
+   - Option B: Find a different quote that actually addresses the element
+   - Option C: Change to "【新規作成】" and write content that addresses it
+
+3. **Quotation Accuracy Check**:
+   - Verify that "引用箇所" text is EXACTLY copied from "引用元答弁全文"
+   - No paraphrasing allowed for "高" confidence quotes
+   - Modifications must be documented in "修正内容" for "中" confidence
+
+4. **Completeness Check**:
+   - Verify ALL core elements (A,B,C,D,E...) appear somewhere in the table
+   - If any missing: Add a paragraph or expand existing ones
+
+**Output**: Display the VERIFIED "答弁骨子" table to the user and **STOP HERE**.
 
 Then ask the user: "このような骨子でよろしいでしょうか？不要な段落や修正したい内容があれば教えてください" (Is this outline acceptable? Please let me know if any paragraphs should be removed or modified.)
 
@@ -858,9 +890,12 @@ SELECT
 
 **Process**:
 1. Use the "答弁骨子" table to construct the answer
-2. Maintain consistency with the quoted content while ensuring natural flow
-3. Apply the format rules and style guidelines below
-4. **DO NOT include paragraph correspondence markers** (like "← 第1段落に対応") in the final answer
+2. **VERIFY**: Each paragraph actually contains the core elements claimed in "核心要素対応"
+   - Double-check that specific terms appear (e.g., "バス", "外国人", "住民")
+   - If discrepancy found, correct the answer to include missing elements
+3. Maintain consistency with the quoted content while ensuring natural flow
+4. Apply the format rules and style guidelines below
+5. **DO NOT include paragraph correspondence markers** (like "← 第1段落に対応") in the final answer
 
 **Output**: Present the final answer draft in proper Diet answer format WITHOUT paragraph correspondence markers.
 
