@@ -655,6 +655,7 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - 作成方法 (Creation method: "【引用】" or "【新規作成】")
    - 信頼度 (Confidence level: "高" for quoted content, "低" for newly generated content)
    - 信頼度の理由 (Reason for confidence level)
+   - 修正内容 (Modifications made: For 信頼度="中", describe what was changed from original)
    - 引用元の答弁ID (Source answer ID if quoted, NULL if newly generated)
    - 引用元の問い (Original question that prompted the quoted answer)
    - 引用元答弁全文 (COMPLETE FULL ANSWER TEXT from source)
@@ -669,13 +670,17 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - **ALWAYS generate content** when no past answer addresses a core element
    - The answer must be **semantically complete** even if confidence is low
 
-2. **RULE #2: Prioritize Semantic Flow Over Quote Hunting**
+2. **RULE #2: Maximize Core Element Coverage Per Paragraph**
+   - **Efficient coverage**: Each paragraph should address MULTIPLE core elements when possible
+   - **Avoid fragmentation**: Don't create separate paragraphs for each element if they can be naturally combined
+   - **Example**: A single paragraph can address both "外国人観光客" (C) and "住民生活への影響" (D) together
    - **Good outline**: Addresses all core elements with logical flow (even if mixing quotes and new content)
    - **Bad outline**: Perfect quotes that miss key elements or don't flow logically
    - **When creating paragraphs**:
      1. First ask: "What needs to be said to answer this part of the question?"
-     2. Then check: "Is there a past answer I can quote?"
-     3. If not: Generate new content with clear confidence indicators
+     2. Consider: "Which core elements can be naturally addressed together?"
+     3. Then check: "Is there a past answer I can quote?"
+     4. If not: Generate new content with clear confidence indicators
 
 3. **RULE #3: Response Verification Checklist**
    After creating each paragraph, verify:
@@ -695,6 +700,11 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
      - Adapted: "過去答弁を問いに合わせて修正（元：YYYY-MM-DD_質問者名）"
      - New for missing element: "核心要素[B,C]に対応する過去答弁なし・応答性確保のため新規作成"
      - New for semantic flow: "意味の通る答弁にするため新規作成"
+   - **For 修正内容** (REQUIRED when 信頼度="中"):
+     - Be specific about what was changed
+     - Example: "「観光需要」を「バス利用での外国人観光客」に具体化"
+     - Example: "一般的な混雑対策を住民生活への影響に焦点を当てて修正"
+     - Example: "「関係機関」に「バス事業者」を追加して具体化"
 
 5. **RULE #5: Quote Handling - Secondary Priority**
    - **For 引用元の問い**: Include the ORIGINAL QUESTION that prompted the quoted answer
@@ -725,6 +735,7 @@ SELECT
     '【新規作成】' as 作成方法,
     '低' as 信頼度,
     '核心要素[B,C,D]に対応する過去答弁なし・応答性確保のため新規作成' as 信頼度の理由,
+    NULL as 修正内容,
     NULL as 引用元の答弁ID,
     NULL as 引用元の問い,
     NULL as 引用元答弁全文,
@@ -738,6 +749,7 @@ SELECT
     '【引用】' as 作成方法,
     '中' as 信頼度,
     '過去答弁を問いに合わせて修正（元：2020-06-10_佐藤花子）' as 信頼度の理由,
+    '「混雑緩和策」を「バス事業者と連携した混雑情報の提供や増便対応」に具体化' as 修正内容,
     '2020-06-10_佐藤花子' as 引用元の答弁ID,
     '観光地における混雑対策について、これまでの国土交通省の取組如何。' as 引用元の問い,
     '（答）
@@ -754,6 +766,7 @@ SELECT
     '【新規作成】' as 作成方法,
     '低' as 信頼度,
     '核心要素[C]に対応する過去答弁なし・応答性確保のため新規作成' as 信頼度の理由,
+    NULL as 修正内容,
     NULL,
     NULL,
     NULL,
@@ -767,6 +780,7 @@ SELECT
     '【引用】',
     '高',
     '過去答弁から直接引用（2021-03-20_鈴木一郎）',
+    NULL as 修正内容,
     '2021-03-20_鈴木一郎',
     '地域の公共交通機関における住民の生活環境の確保について、どのような方針で取り組むか。',
     '（答）
@@ -813,11 +827,11 @@ SELECT
 
 **Process**:
 1. Use the "答弁骨子" table to construct the answer
-2. For each paragraph, indicate which row from the outline table it corresponds to
-3. Maintain consistency with the quoted content while ensuring natural flow
-4. Apply the format rules and style guidelines below
+2. Maintain consistency with the quoted content while ensuring natural flow
+3. Apply the format rules and style guidelines below
+4. **DO NOT include paragraph correspondence markers** (like "← 第1段落に対応") in the final answer
 
-**Output**: Present the final answer draft in proper Diet answer format with paragraph markers showing correspondence to the outline table.
+**Output**: Present the final answer draft in proper Diet answer format WITHOUT paragraph correspondence markers.
 
 ### Format Rules (Based on Real Diet Answer Corpus)
 
@@ -878,10 +892,10 @@ SELECT
 ### Output Structure for Step 2
 
 （答）
-○ [現状認識パート - 質問内容を受けた認識を述べる] ← 答弁骨子テーブルの第1段落に対応
-○ [これまでの取組パート - 既存の施策や実績を説明] ← 答弁骨子テーブルの第2段落に対応
-○ [今後の方針パート - 今後の取組方針を前向きに述べる] ← 答弁骨子テーブルの第3段落に対応
-○ [必要に応じて追加の補足説明] ← 答弁骨子テーブルの第4段落に対応
+○ [現状認識パート - 質問内容を受けた認識を述べる]
+○ [これまでの取組パート - 既存の施策や実績を説明]
+○ [今後の方針パート - 今後の取組方針を前向きに述べる]
+○ [必要に応じて追加の補足説明]
 
 ### Concrete Example (Actual Diet Answer Style)
 
