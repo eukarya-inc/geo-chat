@@ -65,8 +65,8 @@ export async function* createAIStreamGenerator(options: StreamGeneratorOptions):
             temperature: 0,
             abortSignal: options.abortSignal,
             // Enable multi-step tool execution (default is stepCountIs(1))
-            // Allow up to 100 steps for complex agent workflows
-            stopWhen: stepCountIs(100),
+            // Allow up to 200 steps for complex agent workflows
+            stopWhen: stepCountIs(200),
         });
 
         // Stream the full response including text and tool calls
