@@ -22,6 +22,7 @@ interface TableViewProps {
     tableName: string;
     dbContext?: DBContext;
     schema?: string | null;
+    wrapText?: boolean;
 }
 
 // Helper function to check if a column type is geometry
@@ -129,6 +130,7 @@ export const TableView: React.FC<TableViewProps> = ({
     tableName,
     dbContext,
     schema,
+    wrapText: providedWrapText = true,
 }) => {
     const [internalConnection, setInternalConnection] = useState<AsyncDuckDBConnection | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export const TableView: React.FC<TableViewProps> = ({
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const [sorting, setSorting] = useState<SortingState>([]);
     const columnResizeMode: ColumnResizeMode = 'onChange';
-    const wrapText = true; // Always wrap text
+    const wrapText = providedWrapText; // Use provided value or default
     const [columnSizing, setColumnSizing] = useState({});
     const [isResizing, setIsResizing] = useState(false);
 
@@ -559,6 +561,12 @@ export const TableView: React.FC<TableViewProps> = ({
             }
         }
     }, [rowVirtualizer.range, throttledLoadDataWindow, totalRows]);
+
+    // Recalculate row heights when wrapText changes
+    useEffect(() => {
+        // Force recalculation of all visible row heights
+        rowVirtualizer.measure();
+    }, [wrapText, rowVirtualizer]);
 
     const virtualRows = rowVirtualizer.getVirtualItems();
     const totalSize = rowVirtualizer.getTotalSize();

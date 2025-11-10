@@ -151,7 +151,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     min-height: 36px;
 }
 
@@ -169,8 +169,8 @@
     height: auto !important;
     min-height: 36px;
     align-items: flex-start;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
 }
 
 /* Row Number Column - Special Styling */
@@ -180,6 +180,7 @@
     color: #6c757d;
     text-align: center;
     justify-content: center;
+    align-items: center;
 }
 
 .tanstack-table-th:first-child {

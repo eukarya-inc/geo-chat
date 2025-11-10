@@ -1,4 +1,10 @@
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+    ArrowDownTrayIcon,
+    ArrowUpTrayIcon,
+    TrashIcon,
+    DocumentTextIcon,
+    Bars3Icon,
+} from '@heroicons/react/24/outline';
 import type { DBContext } from '../../lib/duckdb/dbContext';
 import { DropdownMenu, type DropdownMenuItem } from '../common/DropdownMenu';
 
@@ -11,6 +17,8 @@ interface TableDropdownMenuProps {
     isExportDisabled?: boolean;
     onRemove?: () => void;
     showRemoveButton?: boolean;
+    wrapText?: boolean;
+    onWrapTextChange?: (value: boolean) => void;
 }
 
 export function TableDropdownMenu({
@@ -22,6 +30,8 @@ export function TableDropdownMenu({
     isExportDisabled = false,
     onRemove,
     showRemoveButton = false,
+    wrapText = true,
+    onWrapTextChange,
 }: TableDropdownMenuProps) {
     const handleDownload = async (format: 'parquet' | 'csv' | 'json') => {
         try {
@@ -47,6 +57,17 @@ export function TableDropdownMenu({
     };
 
     const menuItems: DropdownMenuItem[] = [
+        // Text wrap toggle
+        ...(onWrapTextChange
+            ? [
+                  {
+                      title: wrapText ? 'テキスト折り返しをOFF' : 'テキスト折り返しをON',
+                      icon: wrapText ? <Bars3Icon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />,
+                      onClick: () => onWrapTextChange(!wrapText),
+                      divider: 'after' as const,
+                  } as DropdownMenuItem,
+              ]
+            : []),
         {
             title: 'CSV形式でダウンロード',
             icon: <ArrowDownTrayIcon className="w-4 h-4" />,
