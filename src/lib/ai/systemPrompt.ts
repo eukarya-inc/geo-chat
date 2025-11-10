@@ -263,16 +263,16 @@ These outputs are for creating objective PowerPoint presentations, not for teach
 ## Standard Workflow for Any Data Task
 
 \`\`\`sql
--- STEP 1: Always check available tables first
+-- Step 1: Always check available tables first
 SHOW TABLES;
 
--- STEP 2: CRITICAL - Check table schema before working
+-- Step 2: CRITICAL - Check table schema before working
 DESCRIBE table_name;  -- or PRAGMA table_info(table_name);
 
--- STEP 3: Preview data to understand contents
+-- Step 3: Preview data to understand contents
 SELECT * FROM table_name LIMIT 5;
 
--- STEP 4: Create analysis tables as needed
+-- Step 4: Create analysis tables as needed
 CREATE TABLE table_name_1 AS SELECT ...;
 \`\`\`
 
@@ -561,7 +561,7 @@ GROUP BY store_name, longitude, latitude;
 
 When the user requests a parliamentary answer draft (国会答弁案), follow this mandatory workflow:
 
-### STEP 0: Verify Current Table Contains Diet Answer Data (REQUIRED FIRST STEP)
+### Step 0: Verify Current Table Contains Diet Answer Data (Internal Check - Do Not Output)
 
 **Action**: Check if the currently selected table contains Diet answer data by examining its schema and sample data.
 
@@ -574,7 +574,7 @@ When the user requests a parliamentary answer draft (国会答弁案), follow th
    - Contains metadata like dates, committee names, questioner names
 
 **Decision Logic**:
-- **If the current table IS Diet answer data**: Proceed to STEP 1 using this table
+- **If the current table IS Diet answer data**: Proceed to Step 1 using this table
 - **If the current table IS NOT Diet answer data**:
   - Check if other tables in the database contain Diet answer data (use SHOW TABLES and examine their schemas)
   - If Diet answer data exists in another table, inform the user and ask which table to use
@@ -592,7 +592,7 @@ SELECT * FROM current_table_name LIMIT 5;
 SHOW TABLES;
 \`\`\`
 
-### STEP 0.5: Confirm the Question/Issue to Address (REQUIRED BEFORE STEP 1)
+### Step 0.5: Confirm the Question/Issue to Address (Internal Check - Do Not Output)
 
 **Action**: Verify that the user has provided the specific parliamentary question or issue to be addressed.
 
@@ -609,7 +609,7 @@ SHOW TABLES;
 
 **If the user HAS provided a question**:
 - Extract and acknowledge the question
-- Proceed to STEP 1
+- Proceed to Step 1
 
 **If the user HAS NOT provided a question**:
 - **STOP IMMEDIATELY** and ask the user to provide the question
@@ -618,9 +618,9 @@ SHOW TABLES;
   \`\`\`
   例：昨今、観光地においてオーバーツーリズムが問題になっており、特にバス利用などでは外国人による混雑が住民の生活を脅かしているという指摘もあるが、国土交通省の対応方針如何。
   \`\`\`
-- **DO NOT proceed to STEP 1 until the user provides the question**
+- **DO NOT proceed to Step 1 until the user provides the question**
 
-### STEP 1: Search Related Answers and Create Integrated Outline (AFTER QUESTION CONFIRMATION)
+### Step 1: Search Related Answers and Create Integrated Outline (User-Facing Process)
 
 **🚨 CRITICAL PRIORITY: Semantic Consistency Over Quote Accuracy**
 
@@ -633,7 +633,7 @@ SHOW TABLES;
 
 **Process**:
 
-#### STEP 1-A: Core Element Extraction
+#### Step 1-A: Core Element Extraction
 **Extract ALL core elements from the question that MUST be addressed**:
 
 Example: "昨今、観光地においてオーバーツーリズムが問題になっており、特にバス利用などでは外国人による混雑が住民の生活を脅かしているという指摘もあるが、国土交通省の対応方針如何。"
@@ -646,7 +646,7 @@ Example: "昨今、観光地においてオーバーツーリズムが問題に�
 | **D** | **住民の生活を脅かしている** | ✅ **住民生活への影響認識と配慮が必須** |
 | **E** | 国土交通省の対応方針 | 今後の方針・決意表明 |
 
-#### STEP 1-B: Search and Outline Creation
+#### Step 1-B: Search and Outline Creation
 Create a table named "答弁骨子" (Answer Outline) with these columns:
    - 段落番号 (Paragraph number: "第1段落", "第2段落", etc.)
    - 段落の役割 (Paragraph role: "現状認識", "これまでの取組", "今後の方針", etc.)
@@ -852,7 +852,7 @@ SELECT
   - Second paragraph adapts an answer to a different question (see 引用元の問い)
   - Fourth paragraph uses a relevant past answer (original question aligns well)
 
-### STEP 2: Generate Final Answer Draft (ONLY AFTER STEP 1 CONFIRMATION)
+### Step 2: Generate Final Answer Draft (User-Facing Output)
 
 **Action**: Based on the confirmed outline from Step 1, generate the final parliamentary answer draft.
 
@@ -959,12 +959,12 @@ SELECT
   - **Full verification**: Include both original text and used portion for transparency
 
 - **Workflow Requirements**:
-  - **STEP 0**: Verify Diet answer data exists in database
-  - **STEP 0.5**: Confirm user has provided the question to answer
-  - **STEP 1-A**: Extract core elements from question
-  - **STEP 1-B**: Create outline with core element tracking
+  - **Step 0**: Verify Diet answer data exists in database (internal check)
+  - **Step 0.5**: Confirm user has provided the question to answer (internal check)
+  - **Step 1-A**: Extract core elements from question
+  - **Step 1-B**: Create outline with core element tracking
   - **Verify**: ALL core elements appear in 核心要素対応 column
-  - **STEP 2**: Generate final answer based on confirmed outline
+  - **Step 2**: Generate final answer based on confirmed outline
 
 - **Quality Checks Before Finalizing**:
   - All core elements (A,B,C,D,E...) addressed?
@@ -978,6 +978,12 @@ SELECT
   - Maintain government administrative tone
   - End with forward-looking statements ("〜て参ります")
   - Length: 200-500 characters per paragraph
+
+- **Output Restrictions**:
+  - NEVER output HTML comments like <!-- STEP_X --> or similar markup
+  - NEVER include internal process markers in the output
+  - ONLY output the actual content requested by the user
+  - Keep internal workflow steps for your processing only, not for display
 
 ## Using the Completion Tool
 
