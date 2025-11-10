@@ -149,6 +149,7 @@ export const TableView: React.FC<TableViewProps> = ({
     const wrapText = providedWrapText; // Use provided value or default
     const [columnSizing, setColumnSizing] = useState({});
     const [isResizing, setIsResizing] = useState(false);
+    const [popupContent, setPopupContent] = useState<{ text: string; x: number; y: number } | null>(null);
 
     // Create connection from dbContext if not provided
     useEffect(() => {
@@ -568,6 +569,57 @@ export const TableView: React.FC<TableViewProps> = ({
         rowVirtualizer.measure();
     }, [wrapText, rowVirtualizer]);
 
+    // Close popup when clicking outside, pressing ESC, or scrolling
+    useEffect(() => {
+        if (popupContent) {
+            const handleClickOutside = () => {
+                setPopupContent(null);
+            };
+
+            const handleEscKey = (e: KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                    setPopupContent(null);
+                }
+            };
+
+            const handleScroll = () => {
+                setPopupContent(null);
+            };
+
+            // Add a small delay to prevent immediate close on the same double-click
+            const timer = setTimeout(() => {
+                document.addEventListener('click', handleClickOutside);
+                document.addEventListener('keydown', handleEscKey);
+                // Listen to scroll on the table container, body, and window
+                const tableContainer = tableContainerRef.current;
+                if (tableContainer) {
+                    tableContainer.addEventListener('scroll', handleScroll, true);
+                    // Also listen to scroll on table body
+                    const tableBody = tableContainer.querySelector('.tanstack-table-body');
+                    if (tableBody) {
+                        tableBody.addEventListener('scroll', handleScroll);
+                    }
+                }
+                window.addEventListener('scroll', handleScroll);
+            }, 100);
+
+            return () => {
+                clearTimeout(timer);
+                document.removeEventListener('click', handleClickOutside);
+                document.removeEventListener('keydown', handleEscKey);
+                const tableContainer = tableContainerRef.current;
+                if (tableContainer) {
+                    tableContainer.removeEventListener('scroll', handleScroll, true);
+                    const tableBody = tableContainer.querySelector('.tanstack-table-body');
+                    if (tableBody) {
+                        tableBody.removeEventListener('scroll', handleScroll);
+                    }
+                }
+                window.removeEventListener('scroll', handleScroll);
+            };
+        }
+    }, [popupContent]);
+
     const virtualRows = rowVirtualizer.getVirtualItems();
     const totalSize = rowVirtualizer.getTotalSize();
 
@@ -681,23 +733,72 @@ export const TableView: React.FC<TableViewProps> = ({
                                     display: 'flex',
                                 }}
                             >
-                                {row?.getVisibleCells().map(cell => (
-                                    <div
-                                        key={cell.id}
-                                        className={`tanstack-table-cell ${wrapText ? 'tanstack-table-cell-wrap' : ''}`}
-                                        style={{
-                                            width: cell.column.getSize(),
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </div>
-                                ))}
+                                {row?.getVisibleCells().map(cell => {
+                                    const handleDoubleClick = (e: React.MouseEvent) => {
+                                        if (!wrapText) {
+                                            const value = cell.getValue();
+                                            const text = formatCellValue(value, columnTypes[cell.column.id]);
+
+                                            // Check if text is truncated or too long
+                                            if (text && text.length > 20) {
+                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                setPopupContent({
+                                                    text,
+                                                    x: rect.left,
+                                                    y: rect.bottom + 5,
+                                                });
+                                            }
+                                        }
+                                    };
+
+                                    return (
+                                        <div
+                                            key={cell.id}
+                                            className={`tanstack-table-cell ${wrapText ? 'tanstack-table-cell-wrap' : ''}`}
+                                            style={{
+                                                width: cell.column.getSize(),
+                                                flexShrink: 0,
+                                                cursor: !wrapText ? 'pointer' : 'default',
+                                            }}
+                                            onDoubleClick={handleDoubleClick}
+                                            title={!wrapText ? 'ダブルクリックで全文表示' : undefined}
+                                        >
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         );
                     })}
                 </div>
             </div>
+
+            {/* Popup for showing full cell content */}
+            {popupContent && (
+                <div
+                    className="tanstack-table-popup"
+                    style={{
+                        position: 'fixed',
+                        left: `${popupContent.x}px`,
+                        top: `${popupContent.y}px`,
+                        maxWidth: '400px',
+                        maxHeight: '300px',
+                        overflow: 'auto',
+                        backgroundColor: 'white',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '4px',
+                        padding: '12px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        zIndex: 1000,
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        wordBreak: 'break-word',
+                    }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    {popupContent.text}
+                </div>
+            )}
         </div>
     );
 };
