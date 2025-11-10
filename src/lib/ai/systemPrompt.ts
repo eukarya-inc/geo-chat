@@ -690,21 +690,35 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - If the question mentions "住民生活", does the answer show empathy for residents?
    - Is the paragraph meaningful and not just generic filler?
 
-4. **RULE #4: Transparency in Content Creation**
-   - **For 信頼度**:
-     - "高" = Directly quoted from past Diet answers
-     - "中" = Modified/adapted from past answers to fit the question
-     - "低" = Newly generated to address core elements
+4. **RULE #4: Strict Confidence Level Distinction**
+   - **For 信頼度 (CRITICAL DISTINCTION)**:
+     - **"高" (High)** = Directly quoted from past Diet answers with NO or minimal changes
+       - Only formatting or conjunction adjustments allowed
+       - Original meaning and content preserved
+     - **"中" (Medium)** = Minor to moderate adaptations while keeping core structure
+       - Key terms replaced or added to fit the question
+       - Original structure and flow largely preserved
+       - **MUST retain at least 60% of original content**
+     - **"低" (Low)** = Major changes or newly generated content
+       - Original barely recognizable OR completely new content
+       - **If less than 40% of original remains, MUST use "低" not "中"**
+       - Includes cases where past answer inspired but heavily rewritten
+
+   - **CRITICAL RULE**: If you start with "中" but realize the changes are substantial, **CHANGE TO "低"**
+
    - **For 信頼度の理由**:
-     - Quoted: "過去答弁から直接引用（YYYY-MM-DD_質問者名）"
-     - Adapted: "過去答弁を問いに合わせて修正（元：YYYY-MM-DD_質問者名）"
-     - New for missing element: "核心要素[B,C]に対応する過去答弁なし・応答性確保のため新規作成"
-     - New for semantic flow: "意味の通る答弁にするため新規作成"
-   - **For 修正内容** (REQUIRED when 信頼度="中"):
-     - Be specific about what was changed
-     - Example: "「観光需要」を「バス利用での外国人観光客」に具体化"
-     - Example: "一般的な混雑対策を住民生活への影響に焦点を当てて修正"
-     - Example: "「関係機関」に「バス事業者」を追加して具体化"
+     - High: "過去答弁から直接引用（YYYY-MM-DD_質問者名）"
+     - Medium: "過去答弁を問いに合わせて一部修正（元：YYYY-MM-DD_質問者名）"
+     - Low (heavily modified): "過去答弁を基に大幅に書き換え（原型：YYYY-MM-DD_質問者名）"
+     - Low (new): "核心要素[B,C]に対応する過去答弁なし・応答性確保のため新規作成"
+
+   - **For 修正内容** (REQUIRED when 信頼度="中" or heavily modified "低"):
+     - For "中": List specific term replacements
+       - Example: "「観光需要」を「バス利用での外国人観光客」に置換"
+       - Example: "「関係機関」に「バス事業者」を追加"
+     - For heavily modified "低": Describe the extensive changes
+       - Example: "原文の構造を維持しつつ内容を全面的に書き換え"
+       - Example: "一般論を具体的事例に置き換えて再構成"
 
 5. **RULE #5: Quote Handling - Secondary Priority**
    - **For 引用元の問い**: Include the ORIGINAL QUESTION that prompted the quoted answer
@@ -719,6 +733,16 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - **ENCOURAGED**: Combine quotes from different sources for comprehensive answers
    - **ALLOWED**: Adapt past answers by changing specific terms to match the question
    - **REQUIRED**: Clearly indicate when content is adapted vs. directly quoted
+
+7. **RULE #7: Re-evaluate Confidence After Writing**
+   - **CRITICAL**: After writing each paragraph in the outline, re-evaluate the confidence level
+   - **If you modified more than expected**: Change from "中" to "低"
+   - **Ask yourself**:
+     - Is the original answer still recognizable?
+     - Did I preserve the core structure and flow?
+     - What percentage of the original remains?
+   - **When in doubt, choose LOWER confidence**
+   - **Update both 信頼度 and 信頼度の理由 if changed**
 
 **Output**: Display the "答弁骨子" table to the user and **STOP HERE**.
 
@@ -744,12 +768,12 @@ UNION ALL
 SELECT
     '第2段落',
     'これまでの取組',
-    'A,E' as 核心要素対応,
+    'A,B,E' as 核心要素対応,
     '観光分散化の取組を過去答弁から引用（バス特有の対策は追加）',
     '【引用】' as 作成方法,
     '中' as 信頼度,
-    '過去答弁を問いに合わせて修正（元：2020-06-10_佐藤花子）' as 信頼度の理由,
-    '「混雑緩和策」を「バス事業者と連携した混雑情報の提供や増便対応」に具体化' as 修正内容,
+    '過去答弁を問いに合わせて一部修正（元：2020-06-10_佐藤花子）' as 信頼度の理由,
+    '「混雑緩和策」を「バス事業者と連携した混雑情報の提供」に具体化' as 修正内容,
     '2020-06-10_佐藤花子' as 引用元の答弁ID,
     '観光地における混雑対策について、これまでの国土交通省の取組如何。' as 引用元の問い,
     '（答）
@@ -760,13 +784,13 @@ SELECT
 UNION ALL
 SELECT
     '第3段落',
-    '外国人観光客への対応',
-    'C' as 核心要素対応,
-    '外国人観光客向けの具体的対策（多言語案内、専用路線等）',
-    '【新規作成】' as 作成方法,
-    '低' as 信頼度,
-    '核心要素[C]に対応する過去答弁なし・応答性確保のため新規作成' as 信頼度の理由,
-    NULL as 修正内容,
+    '外国人観光客への対応とバス対策',
+    'B,C' as 核心要素対応,
+    '一般的な観光案内の答弁をバス・外国人観光客向けに大幅改変',
+    '【引用】' as 作成方法,
+    '低' as 信頼度,  -- Changed from 中 after realizing extensive modifications
+    '過去答弁を基に大幅に書き換え（原型：2019-11-15_田中次郎）' as 信頼度の理由,
+    '「観光案内所」を「バス停での多言語案内」、「情報提供」を「専用シャトルバス運行」に全面改変' as 修正内容,
     NULL,
     NULL,
     NULL,
