@@ -4,6 +4,7 @@ import type { DBContext } from '../../lib/duckdb/dbContext';
 import { getTableData, getTableDataByWindow } from '../../utils/duckdb';
 import { Table as ArrowTable } from 'apache-arrow';
 import { throttle } from '../../utils/throttle';
+import { LRUCache } from '../../utils/lruCache';
 import {
     useReactTable,
     getCoreRowModel,
@@ -134,8 +135,9 @@ export const TableView: React.FC<TableViewProps> = ({
     const [data, setData] = useState<TableData[]>([]);
     const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
     const [totalRows, setTotalRows] = useState(0);
-    const [arrowCache] = useState(new Map<string, ArrowTable>());
-    const [rawDataCache, setRawDataCache] = useState(new Map<string, Map<string, unknown>[]>());
+    // Use LRU cache with max 100 windows (10000 rows at 100 rows per window)
+    const [arrowCache] = useState(() => new LRUCache<string, ArrowTable>(100));
+    const [rawDataCache, setRawDataCache] = useState(() => new LRUCache<string, Map<string, unknown>[]>(100));
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const loadingWindowsRef = useRef(new Set<string>());
@@ -205,7 +207,7 @@ export const TableView: React.FC<TableViewProps> = ({
     // Reset cache when sort changes
     useEffect(() => {
         arrowCache.clear();
-        setRawDataCache(new Map());
+        setRawDataCache(new LRUCache<string, Map<string, unknown>[]>(100));
         loadingWindowsRef.current.clear();
     }, [sortColumn, sortDirection, arrowCache]);
 
@@ -219,7 +221,7 @@ export const TableView: React.FC<TableViewProps> = ({
             setError(null);
             // Clear cache and reset loading windows when connection or table changes
             arrowCache.clear();
-            setRawDataCache(new Map());
+            setRawDataCache(new LRUCache<string, Map<string, unknown>[]>(100));
             loadingWindowsRef.current.clear();
 
             const conn = connection;
@@ -248,7 +250,11 @@ export const TableView: React.FC<TableViewProps> = ({
                 if (initialData.rawData) {
                     const rawData = initialData.rawData;
                     setRawDataCache(prev => {
-                        const newCache = new Map(prev);
+                        const newCache = new LRUCache<string, Map<string, unknown>[]>(100);
+                        // Copy existing entries
+                        prev.forEach((value, key) => {
+                            newCache.set(key, value);
+                        });
                         newCache.set('window-0-100', rawData);
                         return newCache;
                     });
@@ -349,7 +355,11 @@ export const TableView: React.FC<TableViewProps> = ({
                 );
                 arrowCache.set(cacheKey, windowResult.arrowTable);
                 setRawDataCache(prev => {
-                    const newCache = new Map(prev);
+                    const newCache = new LRUCache<string, Map<string, unknown>[]>(100);
+                    // Copy existing entries
+                    prev.forEach((value, key) => {
+                        newCache.set(key, value);
+                    });
                     newCache.set(cacheKey, windowResult.rawData);
                     return newCache;
                 });
@@ -379,7 +389,7 @@ export const TableView: React.FC<TableViewProps> = ({
         const cols: ColumnDef<TableData>[] = [
             {
                 id: '__row_number__',
-                header: 'S.No',
+                header: '',
                 size: 60,
                 enableSorting: false,
                 enableResizing: false,
@@ -429,7 +439,12 @@ export const TableView: React.FC<TableViewProps> = ({
                 size: initialWidth,
                 enableSorting: true,
                 enableResizing: true,
-                cell: ({ getValue }) => {
+                cell: ({ row, getValue }) => {
+                    // Check if data is loaded
+                    const rowData = row.original as TableData;
+                    if (!rowData.__loaded__) {
+                        return ''; // Return empty string for unloaded data
+                    }
                     const value = getValue();
                     return formatCellValue(value, columnType);
                 },
@@ -451,7 +466,7 @@ export const TableView: React.FC<TableViewProps> = ({
             if (cachedData) {
                 const rowInWindow = index - windowStart;
                 const row = cachedData[rowInWindow];
-                const obj: TableData = { __index__: index };
+                const obj: TableData = { __index__: index, __loaded__: true };
                 if (row instanceof Map) {
                     row.forEach((value, key) => {
                         obj[key] = value;
@@ -462,8 +477,8 @@ export const TableView: React.FC<TableViewProps> = ({
                 return obj;
             }
 
-            // Return placeholder data with index
-            return { __index__: index };
+            // Return placeholder data with index and loaded flag
+            return { __index__: index, __loaded__: false };
         });
     }, [totalRows, rawDataCache]);
 
@@ -636,7 +651,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         const row = table.getRowModel().rows[virtualRow.index];
                         // Load data if needed for this row
                         const rowData = virtualData[virtualRow.index];
-                        if (rowData && rowData.__index__ === virtualRow.index && Object.keys(rowData).length === 1) {
+                        if (rowData && !rowData.__loaded__) {
                             // This row needs data
                             throttledLoadDataWindow(virtualRow.index);
                         }
