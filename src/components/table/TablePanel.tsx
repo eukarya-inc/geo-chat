@@ -37,6 +37,7 @@ export function TablePanel({
 }: TablePanelProps) {
     const [connection, setConnection] = useState<AsyncDuckDBConnection | null>(null);
     const connectionRef = useRef<AsyncDuckDBConnection | null>(null);
+    const [wrapText, setWrapText] = useState(true);
 
     useEffect(() => {
         let isMounted = true;
@@ -106,13 +107,15 @@ export function TablePanel({
                         isExportDisabled={isExportDisabled}
                         onRemove={onRemove}
                         showRemoveButton={showRemoveButton}
+                        wrapText={wrapText}
+                        onWrapTextChange={setWrapText}
                     />
                 }
             />
 
             {/* Table Content */}
             <div className="flex-1 overflow-hidden">
-                <TableView connection={connection} tableName={tableName} dbContext={dbContext} />
+                <TableView connection={connection} tableName={tableName} dbContext={dbContext} wrapText={wrapText} />
             </div>
         </div>
     );
