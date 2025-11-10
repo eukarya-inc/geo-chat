@@ -2,6 +2,7 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { SQLHistoryManager } from './sqlHistoryManager';
 import { convertArrowToJS } from '../../utils/arrowConverter';
 import { detectCreateTableFromUrl, generateTableNameFromUrl, getFromClauseForUrl } from './tableUrlHelpers';
+import { removeBOM, hasBOM } from '../../utils/bomUtils';
 
 export interface DBContext {
     // Create a new connection for a specific schema
@@ -880,6 +881,39 @@ class DatabaseContext implements DBContext {
 
             // Force checkpoint for DDL operation
             await this.executeCheckpoint(conn);
+
+            // Check for BOM in column names and fix them
+            const columns = await this.getTableColumns(finalTableName, sanitizedSchema);
+            const columnsWithBOM = columns.filter(col => hasBOM(col.name));
+
+            if (columnsWithBOM.length > 0) {
+                console.log(`[DBContext] Found BOM in column names for table ${finalTableName}, fixing...`);
+
+                // Create a new table with cleaned column names
+                const cleanedColumns = columns.map(col => ({
+                    name: removeBOM(col.name),
+                    originalName: col.name,
+                }));
+
+                // Build the SELECT statement with renamed columns
+                const selectList = cleanedColumns
+                    .map(col =>
+                        col.name !== col.originalName ? `"${col.originalName}" AS "${col.name}"` : `"${col.name}"`
+                    )
+                    .join(', ');
+
+                // Create temporary table with clean column names
+                const tempTableName = `${finalTableName}_temp`;
+                const recreateSQL = `CREATE TABLE "${tempTableName}" AS SELECT ${selectList} FROM "${finalTableName}"`;
+
+                await conn.query(recreateSQL);
+
+                // Drop the original table and rename temp table
+                await conn.query(`DROP TABLE "${finalTableName}"`);
+                await conn.query(`ALTER TABLE "${tempTableName}" RENAME TO "${finalTableName}"`);
+
+                console.log(`[DBContext] Fixed BOM in ${columnsWithBOM.length} column(s)`);
+            }
         } finally {
             await conn.close();
         }
