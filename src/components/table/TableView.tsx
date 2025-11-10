@@ -1,33 +1,20 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { DataEditor, GridCell, GridCellKind, GridColumn, Item } from '@glideapps/glide-data-grid';
 import { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { DBContext } from '../../lib/duckdb/dbContext';
-import { getTableData, getTableDataByWindow, getValueFromArrowTable, getValueFromRawData } from '../../utils/duckdb';
+import { getTableData, getTableDataByWindow } from '../../utils/duckdb';
 import { Table as ArrowTable } from 'apache-arrow';
 import { throttle } from '../../utils/throttle';
-import '@glideapps/glide-data-grid/dist/index.css';
-
-// CSS to ensure scrollbars are visible
-const scrollbarStyles = `
-  .dvn-scroller::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
-  }
-  .dvn-scroller::-webkit-scrollbar-track {
-    background: #f1f1f1;
-  }
-  .dvn-scroller::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 6px;
-  }
-  .dvn-scroller::-webkit-scrollbar-thumb:hover {
-    background: #555;
-  }
-  .dvn-scroller {
-    scrollbar-width: thin;
-    scrollbar-color: #888 #f1f1f1;
-  }
-`;
+import {
+    useReactTable,
+    getCoreRowModel,
+    getSortedRowModel,
+    ColumnDef,
+    flexRender,
+    SortingState,
+    ColumnResizeMode,
+} from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import './TableView.css';
 
 interface TableViewProps {
     connection?: AsyncDuckDBConnection;
@@ -75,9 +62,6 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
         return getGeometryTypeLabel(columnType!);
     }
 
-    // Binary data (Uint8Array) is now handled directly from rawData cache
-    // No need for base64 encoding/decoding
-
     // Handle BLOB/geometry data
     if (
         value instanceof Uint8Array ||
@@ -120,6 +104,25 @@ const formatCellValue = (value: unknown, columnType?: string): string => {
     return String(value);
 };
 
+// Function to estimate text width (approximate)
+const estimateTextWidth = (text: string): number => {
+    let width = 0;
+    for (let i = 0; i < text.length; i++) {
+        const char = text.charCodeAt(i);
+        // Japanese characters and full-width characters are wider
+        if (char > 0x3000) {
+            width += 12; // ~12px per Japanese character
+        } else {
+            width += 8; // ~8px per ASCII character
+        }
+    }
+    return width;
+};
+
+interface TableData {
+    [key: string]: unknown;
+}
+
 export const TableView: React.FC<TableViewProps> = ({
     connection: providedConnection,
     tableName,
@@ -128,6 +131,20 @@ export const TableView: React.FC<TableViewProps> = ({
 }) => {
     const [internalConnection, setInternalConnection] = useState<AsyncDuckDBConnection | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
+    const [data, setData] = useState<TableData[]>([]);
+    const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
+    const [totalRows, setTotalRows] = useState(0);
+    const [arrowCache] = useState(new Map<string, ArrowTable>());
+    const [rawDataCache, setRawDataCache] = useState(new Map<string, Map<string, unknown>[]>());
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const loadingWindowsRef = useRef(new Set<string>());
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+    const [sorting, setSorting] = useState<SortingState>([]);
+    const columnResizeMode: ColumnResizeMode = 'onChange';
+    const wrapText = true; // Always wrap text
+    const [columnSizing, setColumnSizing] = useState({});
+    const [isResizing, setIsResizing] = useState(false);
 
     // Create connection from dbContext if not provided
     useEffect(() => {
@@ -181,37 +198,16 @@ export const TableView: React.FC<TableViewProps> = ({
 
     const connection = internalConnection;
 
-    // Inject scrollbar styles
-    useEffect(() => {
-        const styleElement = document.createElement('style');
-        styleElement.textContent = scrollbarStyles;
-        document.head.appendChild(styleElement);
-
-        return () => {
-            document.head.removeChild(styleElement);
-        };
-    }, []);
-    const [columns, setColumns] = useState<GridColumn[]>([]);
-    const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
-    const [totalRows, setTotalRows] = useState(0);
-    const [arrowCache] = useState(new Map<string, ArrowTable>());
-    const [rawDataCache] = useState(new Map<string, Map<string, unknown>[]>());
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const loadingWindowsRef = useRef(new Set<string>());
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [sortColumn, setSortColumn] = useState<string | null>(null);
-    const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
-
-    // Note: Removed automatic column width adjustment on container resize
-    // Column widths are now calculated based on content and can be manually resized by users
+    // Convert sorting state to our format
+    const sortColumn = sorting[0]?.id || null;
+    const sortDirection = sorting[0]?.desc ? 'DESC' : 'ASC';
 
     // Reset cache when sort changes
     useEffect(() => {
         arrowCache.clear();
-        rawDataCache.clear();
+        setRawDataCache(new Map());
         loadingWindowsRef.current.clear();
-    }, [sortColumn, sortDirection, arrowCache, rawDataCache]);
+    }, [sortColumn, sortDirection, arrowCache]);
 
     useEffect(() => {
         const loadInitialData = async (retryCount = 0) => {
@@ -223,112 +219,20 @@ export const TableView: React.FC<TableViewProps> = ({
             setError(null);
             // Clear cache and reset loading windows when connection or table changes
             arrowCache.clear();
-            rawDataCache.clear();
+            setRawDataCache(new Map());
             loadingWindowsRef.current.clear();
 
-            // Use dbContext connection if available to ensure proper schema context
             const conn = connection;
 
             try {
-                const initialData = await getTableData(conn, tableName, 0, 100, sortColumn || undefined, sortDirection);
-
-                // Function to estimate text width (approximate)
-                const estimateTextWidth = (text: string): number => {
-                    let width = 0;
-                    for (let i = 0; i < text.length; i++) {
-                        const char = text.charCodeAt(i);
-                        // Japanese characters and full-width characters are wider
-                        if (char > 0x3000) {
-                            width += 12; // ~12px per Japanese character
-                        } else {
-                            width += 8; // ~8px per ASCII character
-                        }
-                    }
-                    return width;
-                };
-
-                // Add row number column as the first column
-                const rowNumberColumn: GridColumn = {
-                    id: '__row_number__',
-                    title: 'S.No',
-                    width: 60,
-                };
-
-                const dataColumns: GridColumn[] = initialData.columns.map(
-                    (col: { name: string; type: string }, colIndex: number) => {
-                        // Format column title with name
-                        let title = col.name;
-                        if (sortColumn === col.name) {
-                            title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.name}`;
-                        }
-
-                        // For geometry columns, use fixed width and skip expensive text width calculation
-                        if (isGeometryType(col.type)) {
-                            return {
-                                id: col.name,
-                                title,
-                                width: 150, // Fixed width for geometry columns
-                            };
-                        }
-
-                        // Calculate width based on column name
-                        let maxTextWidth = estimateTextWidth(col.name);
-
-                        // Use rawData if available (more reliable for width calculation)
-                        if (initialData.rawData) {
-                            for (let rowIndex = 0; rowIndex < Math.min(initialData.rawData.length, 100); rowIndex++) {
-                                // rawData is an array of Maps, not plain objects
-                                const rowData = initialData.rawData[rowIndex];
-                                const value = rowData instanceof Map ? rowData.get(col.name) : rowData[col.name];
-                                if (value !== null && value !== undefined) {
-                                    const valueStr = String(value);
-                                    // Check more characters for better width estimation
-                                    const textWidth = estimateTextWidth(valueStr.slice(0, 100));
-                                    if (textWidth > maxTextWidth) {
-                                        maxTextWidth = textWidth;
-                                    }
-                                }
-                            }
-                        } else {
-                            // Fallback to ArrowTable if rawData is not available
-                            for (
-                                let rowIndex = 0;
-                                rowIndex < Math.min(initialData.arrowTable.numRows, 100);
-                                rowIndex++
-                            ) {
-                                const value = getValueFromArrowTable(
-                                    initialData.arrowTable,
-                                    rowIndex,
-                                    colIndex,
-                                    col.type
-                                );
-                                if (value !== null && value !== undefined) {
-                                    const valueStr = String(value);
-                                    const textWidth = estimateTextWidth(valueStr.slice(0, 100));
-                                    if (textWidth > maxTextWidth) {
-                                        maxTextWidth = textWidth;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Add padding (cell padding + scrollbar + margin)
-                        const calculatedWidth = maxTextWidth + 48; // Increased from 32 to 48
-
-                        // Apply min and max constraints
-                        const minColumnWidth = 100; // Increased from 80 to 100
-                        const maxColumnWidth = 500; // Increased from 400 to 500
-                        const finalWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, calculatedWidth));
-
-                        return {
-                            id: col.name,
-                            title,
-                            width: finalWidth,
-                        };
-                    }
+                const initialData = await getTableData(
+                    conn,
+                    tableName,
+                    0,
+                    100,
+                    sortColumn || undefined,
+                    sortDirection as 'ASC' | 'DESC'
                 );
-
-                const gridColumns: GridColumn[] = [rowNumberColumn, ...dataColumns];
 
                 // Store column types for later use
                 const types: Record<string, string> = {};
@@ -336,14 +240,31 @@ export const TableView: React.FC<TableViewProps> = ({
                     types[col.name] = col.type;
                 });
 
-                setColumns(gridColumns);
                 setColumnTypes(types);
                 setTotalRows(initialData.totalRows);
 
                 // Store initial Arrow table and raw data in cache
                 arrowCache.set('window-0-100', initialData.arrowTable);
                 if (initialData.rawData) {
-                    rawDataCache.set('window-0-100', initialData.rawData);
+                    const rawData = initialData.rawData;
+                    setRawDataCache(prev => {
+                        const newCache = new Map(prev);
+                        newCache.set('window-0-100', rawData);
+                        return newCache;
+                    });
+                    // Convert raw data to array format for initial display
+                    const arrayData = initialData.rawData.map((row: Map<string, unknown>) => {
+                        const obj: TableData = {};
+                        if (row instanceof Map) {
+                            row.forEach((value, key) => {
+                                obj[key] = value;
+                            });
+                        } else {
+                            Object.assign(obj, row);
+                        }
+                        return obj;
+                    });
+                    setData(arrayData);
                 }
 
                 // Success - set loading to false
@@ -374,7 +295,7 @@ export const TableView: React.FC<TableViewProps> = ({
                 }
 
                 // Reset state on error
-                setColumns([]);
+                setData([]);
                 setColumnTypes({});
                 setTotalRows(0);
                 setLoading(false); // Only set loading to false when we're done retrying
@@ -393,7 +314,7 @@ export const TableView: React.FC<TableViewProps> = ({
         };
 
         loadInitialData();
-    }, [connection, tableName, arrowCache, dbContext, sortColumn, sortDirection, rawDataCache]);
+    }, [connection, tableName, arrowCache, dbContext, sortColumn, sortDirection]);
 
     const loadDataWindow = useCallback(
         async (startRow: number) => {
@@ -403,19 +324,18 @@ export const TableView: React.FC<TableViewProps> = ({
 
             const windowSize = 100;
             const windowStart = Math.floor(startRow / windowSize) * windowSize;
-            const windowEnd = windowStart + windowSize;
+            const windowEnd = Math.min(windowStart + windowSize, totalRows);
 
             const cacheKey = `window-${windowStart}-${windowEnd}`;
 
             // Check if already cached or currently loading
-            if (arrowCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
-                return;
+            if (rawDataCache.has(cacheKey) || loadingWindowsRef.current.has(cacheKey)) {
+                return rawDataCache.get(cacheKey);
             }
 
             // Mark as loading
             loadingWindowsRef.current.add(cacheKey);
 
-            // Use dbContext connection if available to ensure proper schema context
             const conn = connection;
 
             try {
@@ -425,10 +345,15 @@ export const TableView: React.FC<TableViewProps> = ({
                     windowStart,
                     windowEnd,
                     sortColumn || undefined,
-                    sortDirection
+                    sortDirection as 'ASC' | 'DESC'
                 );
                 arrowCache.set(cacheKey, windowResult.arrowTable);
-                rawDataCache.set(cacheKey, windowResult.rawData);
+                setRawDataCache(prev => {
+                    const newCache = new Map(prev);
+                    newCache.set(cacheKey, windowResult.rawData);
+                    return newCache;
+                });
+                return windowResult.rawData;
             } catch (error) {
                 console.error('Error loading data window:', error, {
                     tableName,
@@ -437,151 +362,191 @@ export const TableView: React.FC<TableViewProps> = ({
                     sortColumn,
                     sortDirection,
                 });
+                return null;
             } finally {
                 // Remove from loading set
                 loadingWindowsRef.current.delete(cacheKey);
             }
         },
-        [connection, tableName, arrowCache, rawDataCache, sortColumn, sortDirection]
+        [connection, tableName, arrowCache, sortColumn, sortDirection, totalRows]
     );
 
     // Create a throttled version of loadDataWindow
     const throttledLoadDataWindow = useMemo(() => throttle(loadDataWindow, 200), [loadDataWindow]);
 
-    const getCellContent = useCallback(
-        (cell: Item): GridCell => {
-            const [col, row] = cell;
+    // Define columns for TanStack Table
+    const columns = useMemo<ColumnDef<TableData>[]>(() => {
+        const cols: ColumnDef<TableData>[] = [
+            {
+                id: '__row_number__',
+                header: 'S.No',
+                size: 60,
+                enableSorting: false,
+                enableResizing: false,
+                cell: ({ row }) => row.index + 1,
+            },
+        ];
 
-            // First column is row number
-            if (col === 0) {
-                const rowNumber = String(row + 1); // 1-based indexing
-                return {
-                    kind: GridCellKind.Text,
-                    data: rowNumber,
-                    displayData: rowNumber,
-                    allowOverlay: false,
-                    readonly: true,
-                };
+        // Add data columns
+        Object.entries(columnTypes).forEach(([columnName, columnType]) => {
+            // Calculate initial column width
+            let initialWidth = 150;
+
+            // For geometry columns, use fixed width
+            if (isGeometryType(columnType)) {
+                initialWidth = 150;
+            } else {
+                // Calculate width based on column name and sample data
+                let maxTextWidth = estimateTextWidth(columnName);
+
+                // Sample first 100 rows of data for width calculation
+                if (data.length > 0) {
+                    for (let i = 0; i < Math.min(data.length, 100); i++) {
+                        const value = data[i][columnName];
+                        if (value !== null && value !== undefined) {
+                            const valueStr = String(value);
+                            const textWidth = estimateTextWidth(valueStr.slice(0, 100));
+                            if (textWidth > maxTextWidth) {
+                                maxTextWidth = textWidth;
+                            }
+                        }
+                    }
+                }
+
+                // Add padding
+                const calculatedWidth = maxTextWidth + 48;
+
+                // Apply min and max constraints
+                const minColumnWidth = 100;
+                const maxColumnWidth = 500;
+                initialWidth = Math.min(maxColumnWidth, Math.max(minColumnWidth, calculatedWidth));
             }
 
-            // Find which window contains this row
+            cols.push({
+                id: columnName,
+                accessorKey: columnName,
+                header: columnName,
+                size: initialWidth,
+                enableSorting: true,
+                enableResizing: true,
+                cell: ({ getValue }) => {
+                    const value = getValue();
+                    return formatCellValue(value, columnType);
+                },
+            });
+        });
+
+        return cols;
+    }, [columnTypes, data]);
+
+    // Create virtualized data that loads on demand
+    const virtualData = useMemo(() => {
+        return Array.from({ length: totalRows }, (_, index) => {
             const windowSize = 100;
-            const windowStart = Math.floor(row / windowSize) * windowSize;
+            const windowStart = Math.floor(index / windowSize) * windowSize;
             const windowEnd = windowStart + windowSize;
             const cacheKey = `window-${windowStart}-${windowEnd}`;
 
-            const rawData = rawDataCache.get(cacheKey);
-            if (!rawData) {
-                // Try to load data but don't block - show empty cell instead
-                throttledLoadDataWindow(row);
-                return {
-                    kind: GridCellKind.Text,
-                    data: '',
-                    displayData: '',
-                    allowOverlay: false,
-                };
-            }
-
-            // Get value directly from raw data (more efficient for binary data)
-            const rowInWindow = row - windowStart;
-            const columnName = columns[col]?.id;
-            const columnType = columnName ? columnTypes[columnName] : undefined;
-            const value = getValueFromRawData(rawData, rowInWindow, columnName || '', columnType);
-            // Format the value for display using our formatting function
-            const displayValue = formatCellValue(value, columnType);
-
-            return {
-                kind: GridCellKind.Text,
-                data: displayValue,
-                displayData: displayValue,
-                allowOverlay: true,
-            };
-        },
-        [rawDataCache, throttledLoadDataWindow, columns, columnTypes]
-    );
-
-    const onVisibleRegionChanged = useCallback(
-        (range: { x: number; y: number; width: number; height: number }) => {
-            const startRow = range.y;
-            const endRow = Math.min(range.y + range.height + 20, totalRows);
-
-            // Load current window immediately
-            loadDataWindow(startRow);
-
-            // Pre-load adjacent windows with throttling
-            const windowSize = 100;
-            for (let row = startRow; row < endRow; row += windowSize) {
-                throttledLoadDataWindow(row);
-            }
-        },
-        [loadDataWindow, throttledLoadDataWindow, totalRows]
-    );
-
-    // Handle column resize
-    const handleColumnResize = useCallback((column: GridColumn, newSize: number) => {
-        // Don't allow resizing row number column
-        if (column.id === '__row_number__') return;
-
-        setColumns(prevColumns => prevColumns.map(col => (col.id === column.id ? { ...col, width: newSize } : col)));
-    }, []);
-
-    // Handle header click for sorting
-    const handleHeaderClicked = useCallback(
-        (colIndex: number) => {
-            // Don't allow sorting on row number column
-            if (colIndex === 0) return;
-
-            const column = columns[colIndex];
-            if (!column) return;
-
-            const columnId = column.id;
-            if (!columnId) return;
-
-            if (sortColumn === columnId) {
-                if (sortDirection === 'ASC') {
-                    // First click: ASC -> DESC
-                    setSortDirection('DESC');
-                } else {
-                    // Second click: DESC -> Remove sort (back to default)
-                    setSortColumn(null);
-                    setSortDirection('ASC');
+            const cachedData = rawDataCache.get(cacheKey);
+            if (cachedData) {
+                const rowInWindow = index - windowStart;
+                const row = cachedData[rowInWindow];
+                const obj: TableData = { __index__: index };
+                if (row instanceof Map) {
+                    row.forEach((value, key) => {
+                        obj[key] = value;
+                    });
+                } else if (row) {
+                    Object.assign(obj, row);
                 }
-            } else {
-                // New column: start with ASC
-                setSortColumn(columnId);
-                setSortDirection('ASC');
+                return obj;
             }
-        },
-        [columns, sortColumn, sortDirection]
-    );
 
-    // Update column titles when sort changes
+            // Return placeholder data with index
+            return { __index__: index };
+        });
+    }, [totalRows, rawDataCache]);
+
+    const table = useReactTable({
+        data: virtualData,
+        columns,
+        state: {
+            sorting,
+            columnSizing,
+        },
+        onSortingChange: setSorting,
+        onColumnSizingChange: setColumnSizing,
+        getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        manualSorting: true, // We handle sorting server-side
+        columnResizeMode,
+        enableColumnResizing: true,
+        debugTable: false,
+    });
+
+    // Row virtualizer
+    const rowVirtualizer = useVirtualizer({
+        count: totalRows,
+        getScrollElement: () => tableContainerRef.current,
+        estimateSize: () => (wrapText ? 60 : 36), // Larger estimate when wrapping
+        overscan: 10,
+        measureElement: element => {
+            // Measure actual element height for accurate scrolling
+            if (element && wrapText) {
+                return element.getBoundingClientRect().height;
+            }
+            return 36;
+        },
+    });
+
+    // Detect when resizing ends
     useEffect(() => {
-        setColumns(prevColumns =>
-            prevColumns.map(col => {
-                // Skip row number column
-                if (col.id === '__row_number__') {
-                    return col;
-                }
+        if (isResizing) {
+            const handleMouseUp = () => {
+                setIsResizing(false);
+            };
+            const handleTouchEnd = () => {
+                setIsResizing(false);
+            };
 
-                // Build the title with column name
-                let title = '';
+            document.addEventListener('mouseup', handleMouseUp);
+            document.addEventListener('touchend', handleTouchEnd);
 
-                // Add sort indicator before column name if this column is sorted
-                if (col.id && sortColumn === col.id) {
-                    title = `${sortDirection === 'ASC' ? '↑' : '↓'} ${col.id}`;
-                }
-                // Regular column name when not sorted
-                else if (col.id) {
-                    title = col.id;
-                } else {
-                    title = col.title || '';
-                }
+            return () => {
+                document.removeEventListener('mouseup', handleMouseUp);
+                document.removeEventListener('touchend', handleTouchEnd);
+            };
+        }
+    }, [isResizing]);
 
-                return { ...col, title };
-            })
-        );
-    }, [sortColumn, sortDirection, columnTypes]);
+    // Load data for visible rows
+    useEffect(() => {
+        const range = rowVirtualizer.range;
+        if (range) {
+            // Load data for visible range
+            const windowSize = 100;
+            const startWindow = Math.floor(range.startIndex / windowSize) * windowSize;
+            const endWindow = Math.min(Math.floor((range.endIndex + windowSize) / windowSize) * windowSize, totalRows);
+
+            // Load current window
+            for (let window = startWindow; window <= endWindow; window += windowSize) {
+                throttledLoadDataWindow(window);
+            }
+
+            // Prefetch next window
+            if (endWindow < totalRows) {
+                throttledLoadDataWindow(endWindow + windowSize);
+            }
+
+            // Prefetch previous window
+            if (startWindow > 0) {
+                throttledLoadDataWindow(startWindow - windowSize);
+            }
+        }
+    }, [rowVirtualizer.range, throttledLoadDataWindow, totalRows]);
+
+    const virtualRows = rowVirtualizer.getVirtualItems();
+    const totalSize = rowVirtualizer.getTotalSize();
 
     if (connectionError) {
         return (
@@ -614,36 +579,102 @@ export const TableView: React.FC<TableViewProps> = ({
     }
 
     return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-            <DataEditor
-                columns={columns}
-                rows={totalRows}
-                getCellContent={getCellContent}
-                smoothScrollX={true}
-                smoothScrollY={true}
-                rowHeight={36}
-                headerHeight={48}
-                onVisibleRegionChanged={onVisibleRegionChanged}
-                // Enable column resize
-                onColumnResize={handleColumnResize}
-                // Enable column sorting
-                onHeaderClicked={handleHeaderClicked}
-                // Make grid read-only but allow overlay for viewing
-                onCellEdited={() => {
-                    // Do nothing - prevents actual editing
-                    return undefined;
-                }}
-                theme={{
-                    bgCell: '#fff',
-                    bgCellMedium: '#fafafa',
-                    bgHeader: '#f8f9fa',
-                    bgHeaderHasFocus: '#e9ecef',
-                    bgHeaderHovered: '#e9ecef',
-                    borderColor: '#dee2e6',
-                    cellHorizontalPadding: 8,
-                    cellVerticalPadding: 6,
-                }}
-            />
+        <div ref={tableContainerRef} className="tanstack-table-container">
+            <div className="tanstack-table-wrapper">
+                {/* Header as a separate div with same structure as rows */}
+                <div className="tanstack-table-header-container">
+                    {table.getHeaderGroups().map(headerGroup => (
+                        <div key={headerGroup.id} className="tanstack-table-header-row">
+                            {headerGroup.headers.map(header => (
+                                <div
+                                    key={header.id}
+                                    className="tanstack-table-th"
+                                    style={{
+                                        width: header.getSize(),
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <div
+                                        className={header.column.getCanSort() ? 'tanstack-table-sortable' : ''}
+                                        onClick={header.column.getToggleSortingHandler()}
+                                    >
+                                        {flexRender(header.column.columnDef.header, header.getContext())}
+                                        {header.column.getIsSorted() && (
+                                            <span className="tanstack-table-sort-indicator">
+                                                {header.column.getIsSorted() === 'desc' ? ' ↓' : ' ↑'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {header.column.getCanResize() && (
+                                        <div
+                                            className="tanstack-table-resizer"
+                                            onMouseDown={e => {
+                                                setIsResizing(true);
+                                                header.getResizeHandler()(e);
+                                            }}
+                                            onTouchStart={e => {
+                                                setIsResizing(true);
+                                                header.getResizeHandler()(e);
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Body with virtualized rows */}
+                <div
+                    className="tanstack-table-body"
+                    style={{
+                        height: `${totalSize}px`,
+                        position: 'relative',
+                    }}
+                >
+                    {virtualRows.map(virtualRow => {
+                        const row = table.getRowModel().rows[virtualRow.index];
+                        // Load data if needed for this row
+                        const rowData = virtualData[virtualRow.index];
+                        if (rowData && rowData.__index__ === virtualRow.index && Object.keys(rowData).length === 1) {
+                            // This row needs data
+                            throttledLoadDataWindow(virtualRow.index);
+                        }
+
+                        return (
+                            <div
+                                key={virtualRow.key}
+                                data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
+                                className="tanstack-table-row"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: wrapText ? 'auto' : `${virtualRow.size}px`,
+                                    minHeight: '36px',
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                    display: 'flex',
+                                }}
+                            >
+                                {row?.getVisibleCells().map(cell => (
+                                    <div
+                                        key={cell.id}
+                                        className={`tanstack-table-cell ${wrapText ? 'tanstack-table-cell-wrap' : ''}`}
+                                        style={{
+                                            width: cell.column.getSize(),
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };

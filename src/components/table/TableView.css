@@ -1,0 +1,190 @@
+/* TanStack Table Container */
+.tanstack-table-container {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    position: relative;
+    background-color: #fff;
+}
+
+/* Custom scrollbar styles */
+.tanstack-table-container::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.tanstack-table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.tanstack-table-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 6px;
+}
+
+.tanstack-table-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.tanstack-table-container {
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+}
+
+/* Table Wrapper */
+.tanstack-table-wrapper {
+    min-width: 100%;
+    display: inline-block;
+    font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
+        sans-serif;
+    font-size: 14px;
+}
+
+/* Header Container */
+.tanstack-table-header-container {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Header Row */
+.tanstack-table-header-row {
+    display: flex;
+    height: 48px;
+}
+
+/* Table Header Cell */
+.tanstack-table-th {
+    position: relative;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-right: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    user-select: none;
+    display: flex;
+    align-items: center;
+}
+
+.tanstack-table-th:last-child {
+    border-right: none;
+}
+
+/* Sortable Header */
+.tanstack-table-sortable {
+    cursor: pointer;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+
+.tanstack-table-sortable:hover {
+    background-color: #e9ecef;
+}
+
+/* Sort Indicator */
+.tanstack-table-sort-indicator {
+    margin-left: 4px;
+    color: #007bff;
+    font-weight: bold;
+}
+
+/* Column Resizer */
+.tanstack-table-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 5px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    background: transparent;
+    transition: background-color 0.2s;
+}
+
+.tanstack-table-resizer:hover {
+    background-color: #007bff;
+    opacity: 0.5;
+}
+
+.tanstack-table-resizer.isResizing {
+    background-color: #007bff;
+    opacity: 1;
+}
+
+/* Table Body */
+.tanstack-table-body {
+    position: relative;
+}
+
+/* Table Row */
+.tanstack-table-row {
+    display: flex;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: background-color 0.1s;
+}
+
+.tanstack-table-row:hover {
+    background-color: #f8f9fa;
+}
+
+/* Table Cell */
+.tanstack-table-cell {
+    padding: 6px 8px;
+    border-right: 1px solid #dee2e6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    min-height: 36px;
+}
+
+.tanstack-table-cell:last-child {
+    border-right: none;
+}
+
+/* Table Cell with Text Wrapping */
+.tanstack-table-cell-wrap {
+    white-space: normal !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    text-overflow: initial;
+    height: auto !important;
+    min-height: 36px;
+    align-items: flex-start;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/* Row Number Column - Special Styling */
+.tanstack-table-cell:first-child,
+.tanstack-table-th:first-child .tanstack-table-sortable {
+    background-color: #fafafa;
+    font-weight: 500;
+    color: #6c757d;
+    text-align: center;
+    justify-content: center;
+}
+
+/* NULL values - Using attribute selector since :has-text is not standard */
+.tanstack-table-cell[data-null='true'] {
+    color: #adb5bd;
+    font-style: italic;
+}
+
+/* Geometry/BLOB types - Apply to cells containing brackets */
+.tanstack-table-cell[data-geometry='true'] {
+    color: #6c757d;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+}
