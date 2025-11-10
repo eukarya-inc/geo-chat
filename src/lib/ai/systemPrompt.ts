@@ -658,7 +658,7 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
    - 修正内容 (Modifications made: For 信頼度="中", describe what was changed from original)
    - 引用元の答弁ID (Source answer ID if quoted, NULL if newly generated)
    - 引用元の問い (Original question that prompted the quoted answer)
-   - 引用元答弁全文 (COMPLETE FULL ANSWER TEXT from source)
+   - 引用元答弁全文 (ABSOLUTELY COMPLETE FULL ANSWER TEXT - entire Diet answer from "（答）" to the end, including ALL paragraphs)
    - 引用箇所 (Actual quoted portion to be used)
 
 **🔥 CRITICAL RULES - REORDERED BY IMPORTANCE**:
@@ -720,13 +720,20 @@ Create a table named "答弁骨子" (Answer Outline) with these columns:
        - Example: "原文の構造を維持しつつ内容を全面的に書き換え"
        - Example: "一般論を具体的事例に置き換えて再構成"
 
-5. **RULE #5: Quote Handling - Secondary Priority**
+5. **RULE #5: Quote Handling - Complete Text Requirements**
    - **For 引用元の問い**: Include the ORIGINAL QUESTION that prompted the quoted answer
      - This helps verify if the quoted answer is relevant to the current question
      - Shows the context in which the original answer was given
      - If NULL (for newly generated content), leave empty
-   - **For 引用元答弁全文**: Provide complete original if quoted
-   - **For 引用箇所**: Extract specific portion VERBATIM if quoted
+   - **For 引用元答弁全文** (CRITICAL REQUIREMENT):
+     - **MUST include the ENTIRE Diet answer from beginning to end**
+     - Start from "（答）" and include ALL paragraphs with "○" bullets
+     - **DO NOT extract only the relevant part** - include everything
+     - Even if you only use one sentence, include the COMPLETE multi-paragraph answer
+     - This allows full context verification
+   - **For 引用箇所**: Extract specific portion VERBATIM that you will actually use
+     - This can be a single sentence or paragraph from the full answer
+     - Shows exactly what part you're borrowing
    - **BUT REMEMBER**: It's better to have a meaningful new paragraph than an irrelevant quote
 
 6. **RULE #6: Combining and Adapting Content**
@@ -831,7 +838,7 @@ SELECT
   - 中 (Medium): Adapted/modified past answers to fit the question
   - 低 (Low): Newly generated content to ensure semantic completeness
 - **Two-layer quote verification** for transparency:
-  - 引用元答弁全文: Complete original (for verification)
+  - 引用元答弁全文: COMPLETE original answer including ALL paragraphs (not just relevant parts)
   - 引用箇所: What's actually being used (may be adapted)
 - **Mindset change**:
   - Old approach: "Find perfect quotes, omit what can't be quoted"
