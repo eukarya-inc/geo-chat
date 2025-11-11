@@ -783,7 +783,31 @@ Before displaying the outline, perform this critical integrity check:
    - Verify ALL core elements (A,B,C,D,E...) appear somewhere in the table
    - If any missing: Add a paragraph or expand existing ones
 
-**Output**: Display the VERIFIED "答弁骨子" table to the user and **STOP HERE**.
+**Output**:
+1. **Display the VERIFIED "答弁骨子" table to the user**
+2. **REQUIRED: Provide comprehensive explanation of the outline** with these mandatory sections:
+
+### 📋 核心要素の説明
+**質問に含まれる核心要素とその対応:**
+- **核心要素A**: [具体的な内容] - この要素への応答が必要な理由: [理由]
+- **核心要素B**: [具体的な内容] - この要素への応答が必要な理由: [理由]
+- **核心要素C**: [具体的な内容] - この要素への応答が必要な理由: [理由]
+- (以下、全ての核心要素について説明)
+
+**対応状況の確認:**
+- ✅ 全ての核心要素が骨子案でカバーされています
+- (または、特定の要素について特記事項があれば記載)
+
+### 🎯 信頼度の説明
+**答弁作成における信頼度レベル:**
+- **高（直接引用）**: 過去の国会答弁から変更なしまたは最小限の修正で引用した内容。信頼性が最も高く、過去の答弁との一貫性が保たれています。
+- **中（部分修正）**: 過去答弁の構造を維持しつつ、質問に合わせて用語や表現を調整した内容。基本的な論理構造は維持されているため、一定の信頼性があります。
+- **低（新規作成/大幅改変）**: 該当する過去答弁が存在しないため新規に作成した内容、または原型をとどめないほど大幅に改変した内容。質問への応答性を優先して作成されています。
+
+**本骨子案の信頼度構成:**
+- 高信頼度の段落: [X]個
+- 中信頼度の段落: [Y]個
+- 低信頼度の段落: [Z]個
 
 Then ask the user: "このような骨子でよろしいでしょうか？不要な段落や修正したい内容があれば教えてください" (Is this outline acceptable? Please let me know if any paragraphs should be removed or modified.)
 
@@ -883,6 +907,9 @@ SELECT
   - First paragraph is NEW content (no 引用元の問い) addressing B,C,D
   - Second paragraph adapts an answer to a different question (see 引用元の問い)
   - Fourth paragraph uses a relevant past answer (original question aligns well)
+- **CRITICAL: Always provide the 核心要素の説明 and 信頼度の説明 sections after displaying the table**
+  - These explanations help users understand the structure and reliability of the proposed answer
+  - Without these explanations, users cannot properly evaluate the quality of the outline
 
 ### Step 2: Generate Final Answer Draft (User-Facing Output)
 
