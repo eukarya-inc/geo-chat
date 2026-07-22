@@ -43,7 +43,7 @@ Settings when you are done.
 
 ## Workshop docs
 
-The curriculum lives in [`docs/`](./docs) — a half-day workshop, "Taking an AI agent
+The curriculum lives in [`docs/`](./docs) — a 3-hour workshop, "Taking an AI agent
 apart: how GIS × LLM actually works." Available in Japanese ([`docs/ja/`](./docs/ja)) and
 English ([`docs/en/`](./docs/en)).
 
@@ -76,7 +76,7 @@ implement it with you.
   Overture Maps GeoParquet make great advanced material (see
   [`docs/en/07-challenge.md`](./docs/en/07-challenge.md)).
 - **Screenshots / demo GIF in this README.**
-- **Workshop timing variants** — the curriculum assumes a half day; a compressed
+- **Workshop timing variants** — the curriculum assumes 3 hours; a compressed
   2-hour variant (skipping ch.05) would fit more conference slots.
 
 ## License

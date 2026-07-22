@@ -1,13 +1,13 @@
 # 01. What is an AI agent
 
-> The first 30 minutes of this workshop. First we see the "magic," then we deliberately break it
+> The first 20 minutes of this workshop. First we see the "magic," then we deliberately break it
 > to extract the skeleton of an "AI agent."
 
 ## ① Concept
 
 ### First, see the magic
 
-Type this into geo-chat's chat box (after loading the sample data):
+Type this into geo-chat's chat box (no need to load data first — the agent fetches the built-in dataset itself):
 
 ```
 人口 10 万人以上の市を地図で塗り分けて
@@ -20,7 +20,7 @@ SQL flows, a table is created, and the map gets shaded. Here we pose one questio
 > **Ask ChatGPT to do the same thing and no map appears. This app uses the same Claude, with no
 > additional training and no fine-tuning. So — what is different?**
 
-"I want to answer, but with what I know now I can't" — that state of suspension is the fuel for the next 4 hours.
+"I want to answer, but with what I know now I can't" — that state of suspension is the fuel for the next 3 hours.
 To give away the answer: the difference is **not the model, but the "tools" and the "loop" around the model.**
 This chapter goes only as far as extracting that skeleton.
 
@@ -97,6 +97,10 @@ For now, just get a feel for "what lives where."
 - `src/lib/ai/tools/index.ts` — `createTools()`. Assembles the **7 tools** handed to the agent.
 - `src/lib/ai/systemPrompt.ts` — the **static part of the context** (role, environment, conventions) plus the
   dynamic part injected every turn (current date, schema of the tables that exist right now).
+  The existence of the **built-in datasets** (`japan_cities`, etc.; their entries live in
+  `src/lib/ai/builtinDatasets.ts`) also reaches the model through here — which is why one line like "show the
+  Japanese municipalities…" lets the agent load that data itself. A concrete example of the **② layer carrying
+  knowledge**, and part of today's magic.
 - `src/lib/ai/useAgentChat.ts` — the React side. Holds the chat state, calls `runAgent`, and does the **wiring**
   that hands it the tools and the context.
 

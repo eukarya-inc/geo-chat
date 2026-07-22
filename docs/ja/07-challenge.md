@@ -25,6 +25,9 @@
   WKT 文字列なら `ST_GeomFromWKB` / `ST_GeomFromText` で `GEOMETRY` に変換する。
 - 結合結果を `CREATE TABLE` し、`SUMMARIZE` で指標の実レンジを見てから
   `update_map_style` の `interpolate` の区切りに使う。
+- **さらに簡単な拡張**: よく使うデータなら、`src/lib/ai/builtinDatasets.ts` に 1 行足して
+  **組み込みデータセット** にすると、以後はチャットで名前を言うだけでエージェントが自分で
+  読み込みます（00 章で触れた仕組み。system prompt 経由でモデルに教える②の層）。
 
 **学べること**: 属性テーブルとジオメトリの空間結合、`SUMMARIZE` 起点の色設計、
 自分のデータを最短でエージェントに載せる流れ。

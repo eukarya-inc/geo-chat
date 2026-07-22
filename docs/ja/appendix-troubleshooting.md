@@ -49,24 +49,24 @@ CORS（`Access-Control-Allow-Origin`）を許可していない** と、ブラ�
 
 ---
 
-## 画面が真っ白 / DuckDB が初期化されない（SharedArrayBuffer・COOP/COEP）
+## 画面が真っ白 / DuckDB が初期化されない（アプリが起動しない）
 
-**症状**: SQL タブが「Initializing DuckDB…」のまま進まない、コンソールに
-`SharedArrayBuffer is not defined` 等が出る。
+**症状**: SQL タブが「Initializing DuckDB…」のまま進まない、または画面が真っ白のまま。
 
-**原因**: DuckDB-WASM はマルチスレッド用に **SharedArrayBuffer** を使い、それを有効化するには
-**COOP/COEP ヘッダ**（`Cross-Origin-Opener-Policy: same-origin` /
-`Cross-Origin-Embedder-Policy: require-corp`）が必要です。開発サーバはこれを
-`vite.config.ts` の `server.headers` で設定済みです。
+**原因**: DuckDB-WASM の初期化は **WebAssembly と Web Worker** に依存します。これらが使えない
+環境——古いブラウザ、`file://` で直接開いた、拡張機能が worker やスクリプトを止めている等——では
+初期化が進みません。
+
+> geo-chat は **SharedArrayBuffer を使いません**（`vite.config.ts` に COOP/COEP ヘッダの設定も
+> ありません）。`SharedArrayBuffer is not defined` 系のエラーが起点ではないので、その方向は
+> 調べなくて大丈夫です。
 
 **対処**:
 
-- **`npm run dev` のローカル URL で開く** — 正しくヘッダが付きます。ファイルを直接
-  `file://` で開くと動きません。
-- **別環境に埋め込むと壊れる** — 独自にホスティング（GitHub Pages 等）する場合、
-  その配信元でも同じ COOP/COEP ヘッダを付ける必要があります。ヘッダが無い環境に
-  iframe 等で埋め込むと SharedArrayBuffer が無効化されます。
-- **ブラウザを最新に** — 下記「ブラウザ対応」を参照。
+- **`npm run dev` のローカル URL で開く** — ファイルを直接 `file://` で開くと動きません。
+- **対応ブラウザを最新に** — Chrome / Edge / Firefox の最新版を推奨。下記「ブラウザ対応」を参照。
+- **拡張機能を疑う** — スクリプトや WebWorker をブロックする拡張があれば無効化するか、
+  シークレットウィンドウで再確認する。
 
 ---
 
@@ -162,7 +162,7 @@ NFC 正規化、大文字小文字の差を含む）と描画できません。
 
 ## ブラウザ対応
 
-geo-chat は **WebAssembly + Web Worker + SharedArrayBuffer** を必要とします。
+geo-chat は **WebAssembly + Web Worker** を必要とします。
 **Chrome / Edge / Firefox の最新版** を推奨します。Safari でも新しめのバージョンなら
 動きますが、WASM / worker 周りの挙動差で問題が出たら Chrome 系で再確認してください。
 モバイルブラウザや、拡張機能でスクリプト/worker を制限している環境は非対応です。

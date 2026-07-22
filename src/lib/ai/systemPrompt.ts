@@ -1,4 +1,5 @@
 import type { QueryColumn } from '@/lib/duckdb/db';
+import { BUILTIN_DATASETS } from './builtinDatasets';
 
 /** A table and its columns, used to give the model schema context. */
 export interface TableContext {
@@ -28,6 +29,10 @@ const BASE_PROMPT = `You are a geospatial data assistant running entirely in the
 2. When a result is worth visualizing, CREATE TABLE it (a stable, named table the visual tabs can read) rather than returning a huge SELECT.
 3. To draw a map, call \`update_map_style\` with the table, its geometry kind, and MapLibre paint properties. To make a chart, call \`update_chart_spec\` with a Vega-Lite spec. Read the current state first with \`get_map_style\` / \`get_chart_spec\` when adjusting an existing visualization.
 4. Use \`geocode_address\` to turn a place name or address into coordinates when the user gives you one instead of data.
+
+## Built-in datasets
+These bundled sample datasets can be loaded on demand. When the user asks about data matching one of these and its table is not yet listed in the Context below, load it yourself by calling \`load_builtin_dataset\` with the table name, then continue with the task.
+${BUILTIN_DATASETS.map(d => `- ${d.table} (${d.url}): ${d.description}`).join('\n')}
 
 ## Skills
 - Deeper how-to instructions live in *skills*. Call \`get_skill\` to load the ones relevant to the task; its description lists the catalog. Fetch skills the moment the task looks non-trivial — don't guess formats from memory.

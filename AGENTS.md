@@ -86,8 +86,10 @@ docs/            # workshop curriculum (Japanese now, English later)
   simple `AgentEvent`s. `useAgentChat.ts` drives the loop from the UI.
 - `systemPrompt.ts` — concise generic GIS-assistant prompt; live date + table schemas are
   appended each turn.
-- `tools/index.ts` — the 7-tool registry: `duckdb_query`, `get_skill`, `update_map_style`,
-  `get_map_style`, `update_chart_spec`, `get_chart_spec`, `geocode_address`. Tools close
+- `tools/index.ts` — the 8-tool registry: `duckdb_query`, `load_builtin_dataset`, `get_skill`,
+  `update_map_style`, `get_map_style`, `update_chart_spec`, `get_chart_spec`, `geocode_address`.
+  Built-in sample datasets are declared in `builtinDatasets.ts` (the system prompt lists them and
+  the model loads one with `load_builtin_dataset`). Tools close
   over a `ToolContext` (`toolContext.ts`) so they touch app state without importing React.
 - **Prerequisite gate** (`skills/gate.ts` + `requireSkill` in `tools/index.ts`): a tiny
   module-level `Set` of fetched skill _domains_. `update_map_style` needs a `map.*` skill

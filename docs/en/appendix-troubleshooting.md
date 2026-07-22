@@ -45,23 +45,22 @@ CORS error.
 
 ---
 
-## Blank screen / DuckDB doesn't initialize (SharedArrayBuffer, COOP/COEP)
+## Blank screen / DuckDB doesn't initialize (the app doesn't boot)
 
-**Symptom**: The SQL tab is stuck at "Initializing DuckDB…", or the console shows
-`SharedArrayBuffer is not defined` or similar.
+**Symptom**: The SQL tab is stuck at "Initializing DuckDB…", or the screen stays blank.
 
-**Cause**: DuckDB-WASM uses **SharedArrayBuffer** for multithreading, and to enable it you need
-**COOP/COEP headers** (`Cross-Origin-Opener-Policy: same-origin` / `Cross-Origin-Embedder-Policy: require-corp`).
-The dev server already sets these via `server.headers` in `vite.config.ts`.
+**Cause**: DuckDB-WASM initialization depends on **WebAssembly and Web Workers.** In environments where these are
+unavailable — an old browser, a page opened directly with `file://`, or an extension that blocks workers/scripts —
+initialization does not proceed.
+
+> geo-chat **does not use SharedArrayBuffer** (`vite.config.ts` sets no COOP/COEP headers either). A
+> `SharedArrayBuffer is not defined`-style error is not the root cause here, so you can skip that avenue.
 
 **What to do**:
 
-- **Open it at the `npm run dev` local URL** — the headers are set correctly there. Opening the file directly with
-  `file://` won't work.
-- **Embedding in another environment breaks it** — if you host it yourself (GitHub Pages, etc.), that server must also
-  set the same COOP/COEP headers. Embedding it via iframe in an environment without the headers disables
-  SharedArrayBuffer.
-- **Update your browser** — see "Browser support" below.
+- **Open it at the `npm run dev` local URL** — opening the file directly with `file://` won't work.
+- **Update to a supported browser** — the latest Chrome / Edge / Firefox is recommended. See "Browser support" below.
+- **Suspect extensions** — if an extension blocks scripts or WebWorkers, disable it or re-check in a private window.
 
 ---
 
@@ -154,7 +153,7 @@ The `geocode_address` tool uses OpenStreetMap's Nominatim
 
 ## Browser support
 
-geo-chat requires **WebAssembly + Web Worker + SharedArrayBuffer.**
+geo-chat requires **WebAssembly + Web Worker.**
 We recommend the **latest Chrome / Edge / Firefox.** Safari works too on a recent-enough version, but if problems arise
 from behavior differences around WASM / workers, re-check in a Chrome-family browser. Mobile browsers, and environments
 that restrict scripts/workers via extensions, are not supported.

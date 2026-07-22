@@ -25,6 +25,9 @@ Each challenge is written in 3 points: **Goal / Hints / What you'll learn.** If 
   `GEOMETRY` with `ST_GeomFromWKB` / `ST_GeomFromText`.
 - `CREATE TABLE` the join result, look at the metric's actual range with `SUMMARIZE`, and use it for the breaks of
   the `interpolate` in `update_map_style`.
+- **An even easier extension**: for data you use often, add one line to `src/lib/ai/builtinDatasets.ts` to make it a
+  **built-in dataset** — after that, just naming it in the chat has the agent load it itself (the mechanism from
+  chapter 00; the ② layer that teaches the model through the system prompt).
 
 **What you'll learn**: The spatial join of an attribute table and geometry, `SUMMARIZE`-driven color design, and the
 shortest flow to get your own data into the agent.

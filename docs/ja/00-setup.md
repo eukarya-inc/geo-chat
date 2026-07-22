@@ -11,8 +11,8 @@
 - **Node.js 20 以上**（`node -v` で確認。20 未満なら [nodejs.org](https://nodejs.org) か
   `nvm` / `volta` などで更新）
 - **モダンブラウザ**: Chrome / Edge / Firefox の最新版。
-  geo-chat は **WebAssembly と Web Worker、SharedArrayBuffer** を使うため、
-  古いブラウザや一部の埋め込み環境では動きません（理由は 02 章で触れます）。
+  geo-chat は **WebAssembly と Web Worker** を使うため、
+  古いブラウザや一部の埋め込み環境では動きません（DuckDB-WASM の詳細は 02 章で触れます）。
 - **Anthropic API キー**（次のステップで取得）
 
 ## 2. クローンして起動
@@ -64,7 +64,7 @@ geo-chat はバックエンドを持たず、**ブラウザから直接 Anthropi
 > 削除してください**（Settings で消すか、ブラウザの localStorage をクリア）。
 > Settings ダイアログにも同じ注意書きが出ます（`src/components/settings/SettingsDialog.tsx`）。
 
-## 5. サンプルデータを読み込む
+## 5. 組み込みデータについて
 
 このリポジトリには `public/data/` に次のサンプルが入っています:
 
@@ -78,15 +78,17 @@ geo-chat はバックエンドを持たず、**ブラウザから直接 Anthropi
 > GeoParquet は spatial 拡張が geo メタデータを認識するため、読み込むと `geom` 列は
 > **最初から `GEOMETRY` 型** になります（変換不要でそのまま地図に出せます）。
 
-読み込み方は 2 通りあります。
+このうち `japan_cities` と `japan_prefectures` は **組み込みデータセット** として
+エージェントに教え込まれています。実体は組み込みデータセットレジストリ
+（`src/lib/ai/builtinDatasets.ts`）で、その内容が system prompt を通じてモデルに渡ります。
+そのため **「日本の自治体を地図に表示して」と頼むだけで、エージェントが自分でこのデータを
+読み込みます**——URL を手で入力する必要はありません。レジストリに 1 行足せば、新しいデータセットを
+エージェントに教えられます（この「② の層に知識を持たせる」発想は 06 章のスキルと同じです）。
 
-**(A) SQL タブから手で読む**（02 章で本格的に使います）:
-SQL タブの「Import from URL」に URL とテーブル名を入れて Import。
-`Try the bundled sample:` のリンクを押すと `japan_cities.parquet` の URL が自動入力されます。
-URL は `/geo-chat/data/japan_cities.parquet`（`import.meta.env.BASE_URL` + `data/…`）です。
-
-**(B) チャットから読む**（次のステップのデモ）:
-チャット欄に自然言語で頼むと、エージェントが `duckdb_query` ツールで読み込みます。
+**自分の好きなデータを読み込みたいとき** は、SQL タブの「Import from URL」に URL と
+テーブル名を入れて Import します（02 章の課題や 07 章のチャレンジで使います）。
+バンドル済みサンプルを手で読むなら URL は `/geo-chat/data/japan_cities.parquet`
+（`import.meta.env.BASE_URL` + `data/…`）です。
 
 ## 6. デモプロンプトで動作確認
 
@@ -94,19 +96,20 @@ URL は `/geo-chat/data/japan_cities.parquet`（`import.meta.env.BASE_URL` + `da
 （`src/components/chat/ChatPanel.tsx` の `EXAMPLE_PROMPTS`）。まずこれで動作確認します。
 
 ```
-/geo-chat/data/japan_cities.parquet を読み込んで地図に表示して
+日本の自治体を地図に表示して
 ```
 
 このチップを押すと入力欄に文が入るので、送信します。うまくいくと:
 
-1. チャットに `duckdb_query` などのツールカードが順に現れる（クリックで入力/出力を展開できる）
-2. Map タブが自動で開き、日本の市区町村が地図に描かれる
+1. チャットに `duckdb_query` などのツールカードが順に現れる（クリックで入力/出力を展開できる）。
+   エージェントは組み込みデータセット `japan_cities` を **自分で読み込みます**。
+2. Map タブが自動で開き、日本の市区町村が地図に描かれる。
 
-これが動けば準備完了です。続けて次のようなプロンプトも試せます:
+これが動けば準備完了です。続けて残りのチップも試せます:
 
 ```
 都道府県ごとの市区町村数をグラフにして
-Load /geo-chat/data/japan_cities.parquet and show it on the map
+Show the Japanese municipalities on the map
 ```
 
 > **言語について**: サンプルチップは日本語と英語が混在していますが、エージェントの
@@ -121,7 +124,7 @@ Load /geo-chat/data/japan_cities.parquet and show it on the map
 - **`credit balance is too low`** → コンソールでクレジットをチャージ（ステップ 3-2）。
 - **地図に何も出ない / URL 読み込みが CORS で失敗** → CORS の説明を含め
   [appendix-troubleshooting.md](./appendix-troubleshooting.md) を参照。
-- **DuckDB が初期化されない / 真っ白** → ブラウザが SharedArrayBuffer 非対応、
-  もしくは COOP/COEP ヘッダの問題。同じく付録を参照。
+- **DuckDB が初期化されない / 真っ白** → 対応ブラウザ（Chrome / Edge / Firefox の最新版）か確認。
+  直らなければ付録の「アプリが起動しない」を参照。
 
 準備ができたら [01. AI エージェントとは何か](./01-what-is-an-agent.md) へ進みます。
