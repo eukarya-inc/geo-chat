@@ -1,5 +1,6 @@
 {
-    "name": "links-bi-prototype",
+    "name": "geo-chat",
+    "description": "AI agent + GIS workshop material: chat with your geospatial data using DuckDB-WASM, MapLibre and Vega-Lite",
     "private": true,
     "version": "0.0.0",
     "type": "module",

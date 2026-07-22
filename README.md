@@ -1,63 +1,20 @@
-# LINKS BI Prototype
+# geo-chat
 
-A modern browser-based Business Intelligence application that combines DuckDB-WASM's analytical capabilities with geospatial visualization on interactive maps.
+FOSS4G workshop material for learning how AI agents work and for building GIS-integrated AI agents. geo-chat lets you chat with your geospatial data directly in the browser, combining DuckDB-WASM for SQL analytics, MapLibre GL for interactive maps, Vega-Lite for charts, and Anthropic Claude for the AI agent.
 
-## Overview
+## 🚧 Under reconstruction
 
-LINKS BI Prototype demonstrates how to build a powerful data analysis platform entirely in the browser using:
+This repository is being rebuilt as workshop material. Structure and features are changing significantly. See [PLAN.md](./PLAN.md) for the rebuild plan and current status.
 
-- **DuckDB-WASM** for SQL analytics with spatial extension support
-- **MapLibre GL** for interactive map visualization
-- **AI-powered SQL assistant** using Claude API
-- **Vega-Lite** for data charting
-
-## Key Features
-
-- 📊 **In-browser SQL Analytics** - Run complex SQL queries directly in your browser without a server
-- 🗺️ **Geospatial Visualization** - Automatically detect and visualize geographic data on interactive maps
-- 🤖 **AI Assistant** - Natural language to SQL conversion with map styling capabilities
-- 📈 **Interactive Charts** - Create Vega-Lite visualizations from query results
-- 🌐 **Remote Data Loading** - Load data from URLs (CSV, JSON, Parquet, etc.)
-
-## Architecture
-
-The application is built with:
-
-- **React** + **TypeScript** for the UI framework
-- **DuckDB-WASM** for database operations
-- **MapLibre GL** for map rendering
-- **Jotai** for state management
-- **Anthropic Claude** for AI capabilities
-- **Vite** for build tooling
-
-## Getting Started
+## Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Start development server
+# Start the development server
 npm run dev
 
-# Build for production
-npm run build
+# Format, lint, typecheck, and run unit tests
+npm run check
 ```
-
-## Usage
-
-1. Enter a remote file URL in the input field
-2. Click "Create Table from URL" to load the data into DuckDB
-3. Select a table from the list to visualize it on the map
-4. Use the AI assistant to query and style your data
-5. Create charts using the Vega-Lite integration
-
-## Documentation
-
-For detailed documentation:
-
-- [CLAUDE.md](./CLAUDE.md) - Development guide for AI assistants and architectural details
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - System design and components (if available)
-
-## License
-
-This is a prototype project for demonstration purposes.

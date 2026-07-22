@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-    base: '/links-bi-prototype/',
+    base: '/geo-chat/',
     plugins: [react(), tailwindcss()],
     optimizeDeps: {
         exclude: ['@duckdb/duckdb-wasm'],
