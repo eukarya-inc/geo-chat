@@ -5,6 +5,7 @@ import type { ModelMessage } from 'ai';
 import { getTables, getTableSchema } from '@/lib/duckdb/db';
 import { apiKeyAtom, modelAtom } from '@/store/settings';
 import { runAgent, type AgentEvent } from './agent';
+import { resetGate } from './skills/gate';
 import { defaultToolContext } from './toolContext';
 import { createTools } from './tools';
 import type { PromptContext } from './systemPrompt';
@@ -20,13 +21,17 @@ async function buildPromptContext(): Promise<PromptContext> {
     return { now: new Date(), tables };
 }
 
-/** Turns raw error text into a short, actionable message for the user. */
+/** The AI SDK emits this when a turn produced no output — usually redundant with a
+ *  more specific error part already shown this turn, so we suppress it in that case. */
+const NO_OUTPUT_RE = /no output generated/i;
+
+/** Keeps the original error text but appends an actionable hint for common cases. */
 function friendlyError(message: string): string {
-    if (message.includes('401') || /api key/i.test(message)) {
-        return 'Authentication failed (401). Check your API key in Settings.';
+    if (/401|unauthor|api[-\s]?key/i.test(message)) {
+        return `${message} — check your API key in Settings.`;
     }
-    if (message.includes('429') || /rate limit/i.test(message)) {
-        return 'Rate limit reached (429). Wait a moment and try again.';
+    if (/429|rate limit/i.test(message)) {
+        return `${message} — rate limit reached; wait a moment and try again.`;
     }
     return message;
 }
@@ -62,6 +67,10 @@ export function useAgentChat() {
             const abort = new AbortController();
             abortRef.current = abort;
 
+            // Track whether a specific error was already shown this turn, so we can
+            // suppress the AI SDK's generic "No output generated" follow-up.
+            let errorShown = false;
+
             // Fold each agent event into the assistant message's parts.
             const onEvent = (event: AgentEvent) => {
                 if (event.type === 'text-delta') {
@@ -92,6 +101,9 @@ export function useAgentChat() {
                         )
                     );
                 } else if (event.type === 'error') {
+                    // Drop the generic no-output error if a specific one already showed.
+                    if (errorShown && NO_OUTPUT_RE.test(event.message)) return;
+                    errorShown = true;
                     updateAssistant(assistantId, parts => [
                         ...parts,
                         { type: 'error', message: friendlyError(event.message) },
@@ -128,6 +140,7 @@ export function useAgentChat() {
     const reset = useCallback(() => {
         abortRef.current?.abort();
         history.current = [];
+        resetGate();
         setMessages([]);
         setStatus('idle');
     }, []);

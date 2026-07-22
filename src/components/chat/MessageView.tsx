@@ -51,13 +51,35 @@ const STATUS_ICON = {
     error: <X className="text-destructive size-3.5" />,
 };
 
+/** Pulls the fetched skill ids out of a get_skill call's input for the badge summary. */
+function fetchedSkillIds(part: Extract<MessagePart, { type: 'tool' }>): string[] {
+    const fromOutput = (part.output as { fetched?: unknown } | undefined)?.fetched;
+    if (Array.isArray(fromOutput)) return fromOutput.map(String);
+    const fromInput = (part.input as { skills?: unknown } | undefined)?.skills;
+    if (Array.isArray(fromInput)) return fromInput.map(String);
+    return [];
+}
+
 /** Compact, collapsible card for a single tool call with its input and output. */
 function ToolCard({ part }: { part: Extract<MessagePart, { type: 'tool' }> }) {
+    const skillBadges = part.name === 'get_skill' ? fetchedSkillIds(part) : [];
     return (
         <details className="bg-muted/40 rounded-md border text-xs">
             <summary className="flex cursor-pointer items-center gap-2 px-2 py-1.5 select-none">
                 <Wrench className="text-muted-foreground size-3.5" />
                 <span className="font-mono font-medium">{part.name}</span>
+                {skillBadges.length > 0 && (
+                    <span className="flex flex-wrap gap-1">
+                        {skillBadges.map(id => (
+                            <span
+                                key={id}
+                                className="bg-primary/10 text-primary rounded px-1.5 py-0.5 font-mono text-[10px]"
+                            >
+                                {id}
+                            </span>
+                        ))}
+                    </span>
+                )}
                 <span className="ml-auto">{STATUS_ICON[part.state]}</span>
             </summary>
             <div className="flex flex-col gap-2 border-t px-2 py-2">
