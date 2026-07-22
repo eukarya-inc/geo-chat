@@ -10,10 +10,10 @@
 Type this into geo-chat's chat box (no need to load data first — the agent fetches the built-in dataset itself):
 
 ```
-人口 10 万人以上の市を地図で塗り分けて
+自治体を都道府県ごとに色分けして地図に表示して
 ```
 
-(English: "shade the cities with a population of 100,000 or more on the map." The app handles both.)
+(English: "color the municipalities by prefecture and show them on the map." The app handles both.)
 
 SQL flows, a table is created, and the map gets shaded. Here we pose one question.
 
@@ -23,6 +23,14 @@ SQL flows, a table is created, and the map gets shaded. Here we pose one questio
 "I want to answer, but with what I know now I can't" — that state of suspension is the fuel for the next 3 hours.
 To give away the answer: the difference is **not the model, but the "tools" and the "loop" around the model.**
 This chapter goes only as far as extracting that skeleton.
+
+> **Try it: the agent is honest about what it doesn't know**
+> Next, ask 「人口 10 万人以上の市を塗り分けて」 ("shade the cities with a population of 100,000 or more").
+> The built-in `japan_cities` dataset has no population column. The agent inspects the schema and
+> **honestly replies that population data is missing, painting nothing** — it does **not hallucinate**
+> plausible-looking numbers. That is proof the agent is **actually looking at the schema and acting on it**,
+> not running on assumptions. Join in a population dataset and it becomes possible (see
+> [07. Hands-on challenge](./07-challenge.md)).
 
 ### Where "today" sits on the GeoAI map
 
@@ -82,11 +90,11 @@ flowchart TB
 **① usage prompt**. The main event is the **② in-agent prompt** (system prompt, tool descriptions, skill md),
 which you read in chapters 03–06 and write yourself.
 
-| Layer                | What kind of string it goes into                                | Example                                                 | Chapters                                             |
-| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
-| ① usage prompt       | geo-chat's **chat box**                                         | "shade the cities with a population of 100,000 or more" | experienced in this chapter                          |
-| ② in-agent prompt    | system prompt / tool description / skill md                     | "this tool runs exactly one SQL statement"              | **the main event.** read in 03, written in 04 and 06 |
-| ③ development prompt | implementation instructions to a **coding AI** like Claude Code | "add an ◯◯ tool"                                        | from 04 on (collected in the appendix)               |
+| Layer                | What kind of string it goes into                                | Example                                    | Chapters                                             |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------- |
+| ① usage prompt       | geo-chat's **chat box**                                         | "color the municipalities by prefecture"   | experienced in this chapter                          |
+| ② in-agent prompt    | system prompt / tool description / skill md                     | "this tool runs exactly one SQL statement" | **the main event.** read in 03, written in 04 and 06 |
+| ③ development prompt | implementation instructions to a **coding AI** like Claude Code | "add an ◯◯ tool"                           | from 04 on (collected in the appendix)               |
 
 ## ② Where to read the code
 
@@ -94,7 +102,7 @@ The heart of the agent is `src/lib/ai/agent.ts` — only about 100 lines (close 
 For now, just get a feel for "what lives where."
 
 - `src/lib/ai/agent.ts` — `runAgent()`. Calls the LLM and turns the round trip of tool calls and results — the **loop body** itself.
-- `src/lib/ai/tools/index.ts` — `createTools()`. Assembles the **7 tools** handed to the agent.
+- `src/lib/ai/tools/index.ts` — `createTools()`. Assembles the **8 tools** handed to the agent.
 - `src/lib/ai/systemPrompt.ts` — the **static part of the context** (role, environment, conventions) plus the
   dynamic part injected every turn (current date, schema of the tables that exist right now).
   The existence of the **built-in datasets** (`japan_cities`, etc.; their entries live in
@@ -138,7 +146,7 @@ tools: {},
 Save and Vite auto-reloads. Type the same question again:
 
 ```
-人口 10 万人以上の市を地図で塗り分けて
+自治体を都道府県ごとに色分けして地図に表示して
 ```
 
 **Observation**: The agent **can describe the steps** — "first I'd run a SQL like this in DuckDB…" —

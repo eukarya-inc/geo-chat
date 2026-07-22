@@ -15,7 +15,7 @@ sequenceDiagram
     participant API as Anthropic API
     participant Tool as ツール実行(DuckDB等)
 
-    U->>App: 「人口10万以上の市を塗り分けて」
+    U->>App: 「自治体を都道府県ごとに色分けして」
     loop 答えが出るか 30 ステップまで
         App->>API: system + これまでの会話 + ツール定義 を送信
         API-->>App: 「duckdb_query をこの引数で呼びたい」(tool_use)
@@ -61,7 +61,7 @@ const result = streamText({
     model: anthropic(options.model),
     system: buildSystemPrompt(options.promptContext), // ← コンテキスト（②プロンプト）
     messages: options.messages, // ← これまでの全会話
-    tools: options.tools, // ← 7つのツール定義
+    tools: options.tools, // ← 8つのツール定義
     temperature: 0, // 再現性重視（毎回ほぼ同じ判断）
     maxOutputTokens: 8000,
     stopWhen: stepCountIs(30), // ← ループの停止条件
@@ -141,7 +141,7 @@ return `${BASE_PROMPT}\n\n## Context\nCurrent date: ${date}\n\nTables in the dat
 
 1. ブラウザの **DevTools** を開き、**Network** タブを選びます。
 2. フィルタに `api.anthropic.com` と入力します。
-3. チャットに `人口 10 万人以上の市を地図で塗り分けて` を送信します。
+3. チャットに `自治体を都道府県ごとに色分けして地図に表示して` を送信します。
 4. `messages` へのリクエストが **複数** 現れます。**この本数を数えてください。**
 
 ### リクエストを読む
@@ -150,7 +150,7 @@ return `${BASE_PROMPT}\n\n## Context\nCurrent date: ${date}\n\nTables in the dat
 
 - `system` — さっき読んだ system prompt の全文（末尾に今あるテーブルのスキーマ）。
 - `messages` — これまでの会話（最初はユーザーの 1 文だけ）。
-- `tools` — 7 つのツールの **name / description / input_schema**。
+- `tools` — 8 つのツールの **name / description / input_schema**。
   これが「モデルに見せているツールの説明書」です（04 章の主役）。
 
 ### レスポンス（SSE）を読む
@@ -170,7 +170,7 @@ return `${BASE_PROMPT}\n\n## Context\nCurrent date: ${date}\n\nTables in the dat
 
 ## ④ 手を動かす課題
 
-1. 「地図に出さず、人口上位 5 市を **表で** 見せて」と頼み、Network のリクエスト本数を数える。
+1. 「地図に出さず、東京都の自治体を **表で** 見せて」と頼み、Network のリクエスト本数を数える。
    地図まで頼んだ場合と本数がどう変わるか、なぜ変わるかを説明する。
 2. 1 本目のリクエストの `system` 全文をコピーし、`BASE_PROMPT`（静的）と
    末尾の `Context`（動的）の境目を指させる。テーブルを 1 つ追加してから同じ質問をすると、

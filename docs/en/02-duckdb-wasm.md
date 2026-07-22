@@ -160,9 +160,11 @@ DESCRIBE "t";   -- always check the schema after loading
 
 1. Load `japan_prefectures.parquet` as `japan_prefectures` and run `DESCRIBE` and `SUMMARIZE` on it.
    Look for a join key (a code column, etc.) that could work in common with `japan_cities`.
-2. From the `SUMMARIZE` of `japan_cities`, identify the population column and count the number of
-   "cities with a population of 100,000 or more" with `SELECT count(*) … WHERE`.
-   Notice that this reproduces chapter 01's demo **by hand**.
+2. From the `SUMMARIZE` of `japan_cities`, confirm the `prefecture` column and count the municipalities
+   per prefecture with `SELECT prefecture, count(*) … GROUP BY prefecture`.
+   Notice that this reproduces chapter 01's demo (coloring by prefecture) **by hand**.
+   (While you're at it, confirm there is **no** population column in `SUMMARIZE` — which is why the agent,
+   asked to "shade by population," honestly answers that population data is missing.)
 3. In `japan_cities`, pick the single city with the largest area and print its centroid coordinates with
    `ST_AsText(ST_Centroid(...))`. Watch out for the trap that dividing two integer columns truncates
    (`491/2 = 245`) — if you want a ratio, multiply by `* 1.0`.
