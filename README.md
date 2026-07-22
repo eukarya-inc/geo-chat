@@ -8,7 +8,9 @@ declarative map/chart specs, and a markdown-based skill system you extend yourse
 whole thing runs in the browser — no server, no backend — combining DuckDB-WASM for SQL
 analytics, MapLibre GL for maps, Vega-Lite for charts, and Anthropic Claude for the agent.
 
-<!-- TODO: screenshot -->
+![Ask in natural language and the agent runs SQL and styles the map — municipalities colored by prefecture](./docs/images/screenshot-map.png)
+
+![The same loop drives charts: the agent aggregates with SQL and writes a Vega-Lite spec](./docs/images/screenshot-chart.png)
 
 ## Features
 
