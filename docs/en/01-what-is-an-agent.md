@@ -84,6 +84,46 @@ flowchart TB
 - **Context** injects into the brain — at the moment it is needed — knowledge like "what tables exist right now"
   and "the conventions for styling a map."
 
+### Tool calling is just token prediction, extended
+
+When you hear "tools," it may feel like a special feature bolted onto the outside of the LLM. In fact,
+tool calling **rides on top of the LLM's single operating principle** — nothing more.
+
+What an LLM does, boiled down, is **take a sequence of tokens as input and predict-then-output the next token**.
+That's all. Chat, code generation, and **tool calling too are all built on this same one mechanism.**
+
+Early Function Calling was literally that. You had the LLM output markup in a specific format — for example
+
+```text
+<tool_name>duckdb_query</tool_name>
+<param name="sql">SELECT ...</param>
+```
+
+— a token sequence like this, and **the app parsed it mechanically**, called the function, and fed the result
+back into the next input. What a "tool call" really was, was a **learned output format**.
+
+Today the Anthropic Messages API provides this as a built-in feature via `tools` / `tool_use` blocks, so you no
+longer parse it yourself. But internally, the model is still presumed to be **outputting a token sequence in a
+special format, which the API side converts into structured blocks**. The mechanism didn't disappear — it just
+**hid beneath the API.**
+
+You can observe the proof in two ways.
+
+- **Inside this material**: In break-it experiment #1 (§③, below), strip out all the tools and the agent will
+  sometimes **output tool-call-ish XML syntax as plain prose** (behavior observed on a real machine). It is the
+  moment the true nature of a tool call — a "learned output format" — is exposed.
+- **In the real world**: the Opus 4.8 "court problem" reported in 2026. In long sessions, tool calls were not
+  emitted as structured `tool_use` blocks; instead **broken raw XML text plus a stray "court" token leaked into
+  the chat and never executed** — a model-side defect[^court]. A case where "tool call = token sequence,"
+  normally hidden beneath the API, surfaced into the open.
+
+Once this view sinks in, a lot of debates get simpler. Arguments over "MCP vs. CLI" are, **from the model's point
+of view, ultimately all about tools** (= the vocabulary the model can emit, plus whoever executes it). MCP is a
+**standard** for distributing and connecting tools; CLI integration is **one form** a tool takes. "It's all tools
+in the end" — knowing just this makes the discourse around agents much simpler.
+
+[^court]: References: <https://github.com/anthropics/claude-code/issues/69237> / <https://github.com/anthropics/claude-code/issues/65248>
+
 ### The 3 layers of "prompt" (recap)
 
 "Prompt" in this workshop has 3 layers. What you just typed into the chat box, right this moment, is the

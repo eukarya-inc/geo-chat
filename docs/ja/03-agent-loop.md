@@ -157,6 +157,8 @@ return `${BASE_PROMPT}\n\n## Context\nCurrent date: ${date}\n\nTables in the dat
 
 レスポンスは **SSE（Server-Sent Events）ストリーム** です。中に `tool_use` ブロックが
 現れ、モデルが「`duckdb_query` をこの `input` で呼びたい」と言っているのが見えます。
+この `tool_use` ブロックも、結局はモデルが出力したトークン列を API が構造化してくれたものです
+（[01 章「ツール呼び出しは『トークン予測』の延長にすぎない」](./01-what-is-an-agent.md) 参照）。
 
 ### 往復を数える
 
