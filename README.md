@@ -45,7 +45,7 @@ Settings when you are done.
 
 The curriculum lives in [`docs/`](./docs) — a half-day workshop, "Taking an AI agent
 apart: how GIS × LLM actually works." Available in Japanese ([`docs/ja/`](./docs/ja)) and
-English ([`docs/en/`](./docs/en)). See [PLAN.md](./PLAN.md) for the design.
+English ([`docs/en/`](./docs/en)).
 
 ## Tech stack
 
@@ -60,6 +60,25 @@ English ([`docs/en/`](./docs/en)). See [PLAN.md](./PLAN.md) for the design.
 
 Deployed as a static site to GitHub Pages.
 
+## Roadmap — and ideas for your next step
+
+Known gaps and nice-to-haves. If you just finished the workshop, each of these doubles as
+a great exercise: write the development prompt yourself (see
+[`docs/en/appendix-prompts.md`](./docs/en/appendix-prompts.md)) and let an AI coding agent
+implement it with you.
+
+- **Hot-reload skills** — adding a skill `.md` currently requires a dev-server restart
+  (`import.meta.glob` is resolved at build time). HMR support would make the
+  write → try → fix loop of skill authoring seamless.
+- **More map layer types** — `update_map_style` supports point / line / polygon;
+  `heatmap-*` and `fill-extrusion-*` (3D) would unlock new visualizations end-to-end.
+- **More sample datasets & recipes** — PLATEAU (Japanese 3D city models) and
+  Overture Maps GeoParquet make great advanced material (see
+  [`docs/en/07-challenge.md`](./docs/en/07-challenge.md)).
+- **Screenshots / demo GIF in this README.**
+- **Workshop timing variants** — the curriculum assumes a half day; a compressed
+  2-hour variant (skipping ch.05) would fit more conference slots.
+
 ## License
 
-<!-- No LICENSE file is present in this repository; add one before public release. -->
+[MIT](./LICENSE)

@@ -13,7 +13,7 @@ which stays in the browser.
 **Because this is teaching material, optimize for readability over cleverness.** Small,
 well-named modules that a workshop participant can read on one screen beat compact
 abstractions. Keep code generic (works for any dataset/JSON shape), never dataset-specific.
-See PLAN.md for the full rebuild and workshop design; docs/ holds the curriculum.
+The workshop curriculum lives in docs/ (ja + en); the README Roadmap section tracks known gaps.
 
 ## Development Commands
 
