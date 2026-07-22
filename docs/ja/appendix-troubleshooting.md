@@ -1,0 +1,174 @@
+# 付録: トラブルシューティング
+
+ワークショップ中に遭遇しがちな問題と対処です。症状から引いてください。
+
+---
+
+## API キー関連
+
+### `401` / `unauthorized` / `check your API key`
+
+キーが誤っているか未設定です。Settings を開き `sk-ant-…` を貼り直してください。
+`useAgentChat.ts` の `friendlyError` が、401 系のメッセージに
+「check your API key in Settings.」を自動で付け足します。
+
+### `credit balance is too low` / `400`
+
+キーは正しくても、Anthropic アカウントの **クレジット残高が 0** です。
+[console.anthropic.com](https://console.anthropic.com) の Billing で
+プリペイドクレジットをチャージしてください（[00-setup.md](./00-setup.md) ステップ 3）。
+
+### `429` / `rate limit`
+
+短時間にリクエストを送りすぎました。少し待って再送します。`friendlyError` が
+「rate limit reached; wait a moment and try again.」を付けます。当日、多人数が
+同じキーを共有していると起きやすいので、その場合は各自のキーに分けるのが確実です。
+
+---
+
+## リモートファイルの読み込みで失敗する（CORS）
+
+**症状**: SQL タブの「Import from URL」やチャットでの URL 読み込みが、
+`Failed to fetch` や CORS エラーで失敗する。
+
+**原因**: geo-chat は完全クライアントサイドで、ファイルは **ブラウザが直接 fetch** します
+（`createTableFromUrl` in `src/lib/duckdb/db.ts`）。そのため、**配信元サーバが
+CORS（`Access-Control-Allow-Origin`）を許可していない** と、ブラウザがブロックします。
+これはアプリのバグではなく、Web のセキュリティ仕様です。
+
+**対処**:
+
+- **CORS 対応のホストを使う** — GitHub の raw、多くのオープンデータ配信、S3 の
+  CORS 設定済みバケットなど。
+- **ダウンロードして再配信** — ファイルを落として `public/data/` に置き、
+  `/geo-chat/data/<file>` として読む（バンドル済みサンプルと同じ方式。同一オリジンなので CORS 不要）。
+- **プロキシ** — CORS を付与するプロキシ経由にする（ワークショップでは非推奨・自己責任）。
+
+> バンドル済みサンプル（`japan_cities.parquet` 等）が読めて外部 URL が読めない場合、
+> ほぼ CORS が原因です。
+
+---
+
+## 画面が真っ白 / DuckDB が初期化されない（SharedArrayBuffer・COOP/COEP）
+
+**症状**: SQL タブが「Initializing DuckDB…」のまま進まない、コンソールに
+`SharedArrayBuffer is not defined` 等が出る。
+
+**原因**: DuckDB-WASM はマルチスレッド用に **SharedArrayBuffer** を使い、それを有効化するには
+**COOP/COEP ヘッダ**（`Cross-Origin-Opener-Policy: same-origin` /
+`Cross-Origin-Embedder-Policy: require-corp`）が必要です。開発サーバはこれを
+`vite.config.ts` の `server.headers` で設定済みです。
+
+**対処**:
+
+- **`npm run dev` のローカル URL で開く** — 正しくヘッダが付きます。ファイルを直接
+  `file://` で開くと動きません。
+- **別環境に埋め込むと壊れる** — 独自にホスティング（GitHub Pages 等）する場合、
+  その配信元でも同じ COOP/COEP ヘッダを付ける必要があります。ヘッダが無い環境に
+  iframe 等で埋め込むと SharedArrayBuffer が無効化されます。
+- **ブラウザを最新に** — 下記「ブラウザ対応」を参照。
+
+---
+
+## 地図に何も出ない
+
+Map タブが空、または「Table “…” has no geometry column to display.」と出る場合、
+原因は主に 3 つです。
+
+### (a) ジオメトリ列が `GEOMETRY` 型でない
+
+地図に出せるのは `GEOMETRY` 型の列だけです（`detectGeometryColumn` は `GEOMETRY` 型の列を
+探します）。**付属サンプル（GeoParquet）は spatial 拡張が geo メタデータを認識するため、
+読み込むと自動で `GEOMETRY` になります**——なので変換は不要です。
+
+一方、geo メタデータの無い **ただの Parquet** で WKB が `BLOB` 列に入っていたり、CSV に
+**WKT 文字列** で入っていると、そのままでは出ません。`DESCRIBE` で型を確認し、変換してください:
+
+```sql
+CREATE TABLE "t_geom" AS
+SELECT * REPLACE (ST_GeomFromWKB("geom") AS "geom") FROM "t";
+```
+
+（WKT 文字列なら `ST_GeomFromText`。）
+
+### (b) WGS84（EPSG:4326）でない
+
+地図は **経度緯度 (lon, lat)** を前提とします。投影座標系のままだと、範囲計算
+（`getTableBounds` in `src/lib/map/geometry.ts`）が「緯度経度の範囲外」を検知して
+**bounds を null にし、地図が正しい場所へズームしません**。4326 に変換します
+（**軸順の罠に注意**、`always_xy := true`）:
+
+```sql
+CREATE TABLE "t_wgs84" AS
+SELECT * REPLACE (ST_Transform("geom", 'EPSG:6677', 'EPSG:4326', always_xy := true) AS "geom")
+FROM "t";
+```
+
+### (c) 行が 0 件 / ジオメトリが NULL
+
+フィルタや結合で結果が空になっていないか確認します。特に空間結合で
+`INNER JOIN` を使うと該当なしの地物が消えます。カウント表示なら `LEFT JOIN` を検討
+（`map.geospatial` スキル参照）。`SELECT count(*) FROM "t" WHERE "geom" IS NOT NULL` で確認。
+
+> **切り分けのコツ**: 地図が「正しい場所にズームしたのに何も描かれない」なら、
+> ジオメトリは有効だが SELECT で属性/対象を落としている可能性が高い（上記 c）。
+> 「世界地図のまま動かない」なら座標系（b）かジオメトリ型（a）を疑います。
+
+---
+
+## グラフが空 / 描画されない
+
+**症状**: Chart タブでグラフが出ない、軸が空。
+
+**原因の筆頭は列名の不一致** です。`encoding` の `field` が実在列と違う（全角/半角、
+NFC 正規化、大文字小文字の差を含む）と描画できません。
+
+**対処**:
+
+- `DESCRIBE "<table>"` で **正確な列名** を確認し、spec の `field` に使う。
+- チャット経由なら `update_chart_spec` が列名を照合・自動補正し、無い列は error を返します
+  （`updateChartSpec.ts`）。ツールカードの output に `corrected` や error が出ていないか見る。
+- 手編集（ChartPanel のエディタ）では自動補正は効きません。手で合わせてください。
+- `data` / `width` / `height` を spec に **書かない**（アプリが注入。書くと拒否される）。
+- `type`（quantitative / nominal / ordinal / temporal）を各チャネルに明示する
+  （`vega.basics` スキル参照）。
+
+---
+
+## ジオコーディング（Nominatim）
+
+`geocode_address` ツールは OpenStreetMap の Nominatim を使います
+（`src/lib/ai/tools/geocode.ts`）。
+
+- **レート制限**: Nominatim の利用規約に従い、**1 秒あたり 1 リクエスト** に自動スロットルしています
+  （`THROTTLE_MS = 1000`）。多数の地名を一度に頼むと、その分だけ時間がかかります（正常動作）。
+- **結果が変**: 地名が曖昧だと想定外の場所が返ることがあります。都道府県名などを足して
+  クエリを具体化してください。大量・商用利用は Nominatim の規約と自前運用を検討。
+
+---
+
+## npm / 開発サーバ
+
+- **`npm install` が失敗する**: Node.js のバージョンを確認（`node -v`、**20 以上**）。
+  古いと lockfile 解決や WASM 関連で落ちます。
+- **`npm run dev` のポートが使われている**: 別プロセスが 5173 を使用中。停止するか、
+  Vite が自動で次のポートを選ぶのでその URL を開く。
+- **スキルを足したのにカタログに出ない**: スキルは **ビルド時 glob** で読み込むため、
+  ファイル追加後は **開発サーバを再起動**（`Ctrl+C` → `npm run dev`）してください（06 章）。
+- **ツールを足したのにモデルが使わない**: `src/lib/ai/tools/index.ts` の `createTools` に
+  **登録し忘れ** ていないか確認（登録しないと `tools` に出ずモデルから見えません）。
+
+---
+
+## ブラウザ対応
+
+geo-chat は **WebAssembly + Web Worker + SharedArrayBuffer** を必要とします。
+**Chrome / Edge / Firefox の最新版** を推奨します。Safari でも新しめのバージョンなら
+動きますが、WASM / worker 周りの挙動差で問題が出たら Chrome 系で再確認してください。
+モバイルブラウザや、拡張機能でスクリプト/worker を制限している環境は非対応です。
+
+---
+
+困ったら、まず **チャットのツールカードを開いて `input` / `output` を読む**、
+次に **DevTools の Network で `api.anthropic.com` の往復を見る**（03 章）——
+この 2 つで、大半の「なぜ動かない」は原因の層まで切り分けられます。
