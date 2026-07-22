@@ -16,9 +16,14 @@
     "noUnusedParameters": true,*/
         "noFallthroughCasesInSwitch": true,
         "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true
+        "allowSyntheticDefaultImports": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["./src/*"]
+        }
     },
-    "include": ["src"]
+    "include": ["src"],
+    "exclude": ["legacy-src"]
     /* Project references disabled since we don't need to compile vite.config.ts */
     /* "references": [
     {
