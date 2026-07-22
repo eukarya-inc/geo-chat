@@ -1,19 +1,39 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
-import { SendHorizontal } from 'lucide-react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { RotateCcw, SendHorizontal, Settings, Square } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
+import { MessageView } from '@/components/chat/MessageView';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { useAgentChat } from '@/lib/ai/useAgentChat';
+import { settingsOpenAtom } from '@/store/atoms';
+import { apiKeyAtom } from '@/store/settings';
+
+const EXAMPLE_PROMPTS = [
+    `Load ${import.meta.env.BASE_URL}data/japan_cities.parquet and show it on the map`,
+    'Which prefecture has the most cities? Chart it.',
+    'Color the cities on the map by population.',
+];
 
 export function ChatPanel() {
-    const [messages, setMessages] = useState<string[]>([]);
+    const apiKey = useAtomValue(apiKeyAtom);
+    const openSettings = useSetAtom(settingsOpenAtom);
+    const { messages, status, sendMessage, stop, reset } = useAgentChat();
     const [input, setInput] = useState('');
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to the bottom as messages stream in.
+    useEffect(() => {
+        const el = scrollRef.current?.querySelector('[data-slot="scroll-area-viewport"]');
+        if (el) el.scrollTop = el.scrollHeight;
+    }, [messages]);
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
         const text = input.trim();
-        if (!text) return;
-        setMessages(prev => [...prev, text]);
+        if (!text || status === 'streaming') return;
+        void sendMessage(text);
         setInput('');
     };
 
@@ -25,25 +45,54 @@ export function ChatPanel() {
         }
     };
 
+    if (!apiKey) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+                <p className="text-muted-foreground text-sm">Set your API key in Settings to start chatting.</p>
+                <Button onClick={() => openSettings(true)}>
+                    <Settings />
+                    Open Settings
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full flex-col">
-            <ScrollArea className="min-h-0 flex-1">
-                {messages.length === 0 ? (
-                    <div className="text-muted-foreground flex h-full items-center justify-center p-8 text-center text-sm">
-                        Ask questions about your geospatial data…
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-2 p-4">
-                        {messages.map((message, i) => (
-                            <div key={i} className="flex justify-end">
-                                <div className="bg-primary text-primary-foreground max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
-                                    {message}
-                                </div>
+            <div className="flex items-center justify-between border-b px-3 py-1.5">
+                <span className="text-muted-foreground text-xs font-medium">Chat</span>
+                <Button variant="ghost" size="sm" onClick={reset} disabled={messages.length === 0}>
+                    <RotateCcw />
+                    New chat
+                </Button>
+            </div>
+            <div ref={scrollRef} className="min-h-0 flex-1">
+                <ScrollArea className="h-full">
+                    {messages.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                            <p className="text-muted-foreground text-sm">Ask questions about your geospatial data.</p>
+                            <div className="flex flex-col gap-2">
+                                {EXAMPLE_PROMPTS.map(prompt => (
+                                    <button
+                                        key={prompt}
+                                        type="button"
+                                        onClick={() => setInput(prompt)}
+                                        className="bg-muted hover:bg-muted/70 text-muted-foreground rounded-md border px-3 py-1.5 text-left text-xs"
+                                    >
+                                        {prompt}
+                                    </button>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                )}
-            </ScrollArea>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-4 p-4">
+                            {messages.map(message => (
+                                <MessageView key={message.id} message={message} />
+                            ))}
+                        </div>
+                    )}
+                </ScrollArea>
+            </div>
             <form onSubmit={submit} className="flex items-end gap-2 border-t p-3">
                 <Textarea
                     value={input}
@@ -53,9 +102,15 @@ export function ChatPanel() {
                     className="max-h-40 min-h-10 flex-1 resize-none"
                     rows={1}
                 />
-                <Button type="submit" size="icon" aria-label="Send" disabled={!input.trim()}>
-                    <SendHorizontal />
-                </Button>
+                {status === 'streaming' ? (
+                    <Button type="button" size="icon" variant="secondary" aria-label="Stop" onClick={stop}>
+                        <Square />
+                    </Button>
+                ) : (
+                    <Button type="submit" size="icon" aria-label="Send" disabled={!input.trim()}>
+                        <SendHorizontal />
+                    </Button>
+                )}
             </form>
         </div>
     );

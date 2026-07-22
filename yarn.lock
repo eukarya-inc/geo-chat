@@ -7,36 +7,36 @@
   resolved "https://registry.npmjs.org/@adobe/css-tools/-/css-tools-4.4.4.tgz"
   integrity sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==
 
-"@ai-sdk/anthropic@^2.0.39":
-  version "2.0.39"
-  resolved "https://registry.npmjs.org/@ai-sdk/anthropic/-/anthropic-2.0.39.tgz"
-  integrity sha512-8YckXsPN9e0NfU4zZvP23xCIKNESyYb1Y/xVllI1fZ+uVsd/shoz2zplbeGVQHPjXHWfY9aT5tF98Lp920HDIQ==
+"@ai-sdk/anthropic@^3.0.99":
+  version "3.0.99"
+  resolved "https://registry.npmjs.org/@ai-sdk/anthropic/-/anthropic-3.0.99.tgz"
+  integrity sha512-/q4MW3nfwpIHDhfcPcaW6PF8twF7WhfMWVhKMgmFTwFo8oCoFUebp/+Rt4YVSu1a/rEzm7Ap4sQXhfmmzF5xuw==
   dependencies:
-    "@ai-sdk/provider" "2.0.0"
-    "@ai-sdk/provider-utils" "3.0.14"
+    "@ai-sdk/provider" "3.0.14"
+    "@ai-sdk/provider-utils" "4.0.40"
 
-"@ai-sdk/gateway@2.0.3":
-  version "2.0.3"
-  resolved "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-2.0.3.tgz"
-  integrity sha512-/vCoMKtod+A74/BbkWsaAflWKz1ovhX5lmJpIaXQXtd6gyexZncjotBTbFM8rVJT9LKJ/Kx7iVVo3vh+KT+IJg==
+"@ai-sdk/gateway@3.0.155":
+  version "3.0.155"
+  resolved "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-3.0.155.tgz"
+  integrity sha512-gP2i/z8gYqJNONZgUkfSe0u9iEvz+HJ/r+MKxmnJjSluPD9K9wwTs65KYyFl7pX8AEujnPny4Lq4l1ytPQD5TA==
   dependencies:
-    "@ai-sdk/provider" "2.0.0"
-    "@ai-sdk/provider-utils" "3.0.14"
-    "@vercel/oidc" "3.0.3"
+    "@ai-sdk/provider" "3.0.14"
+    "@ai-sdk/provider-utils" "4.0.40"
+    "@vercel/oidc" "3.2.0"
 
-"@ai-sdk/provider-utils@3.0.14":
+"@ai-sdk/provider-utils@4.0.40":
+  version "4.0.40"
+  resolved "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-4.0.40.tgz"
+  integrity sha512-OL5IrpUm9Y8Dwy+w/vvFwPotS6m52O9W0op2oXgXdCROMJIBalBI0oro6OIBYkPxvm5Xg02GSkoQN25RlR0bnw==
+  dependencies:
+    "@ai-sdk/provider" "3.0.14"
+    "@standard-schema/spec" "^1.1.0"
+    eventsource-parser "^3.0.8"
+
+"@ai-sdk/provider@3.0.14":
   version "3.0.14"
-  resolved "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-3.0.14.tgz"
-  integrity sha512-CYRU6L7IlR7KslSBVxvlqlybQvXJln/PI57O8swhOaDIURZbjRP2AY3igKgUsrmWqqnFFUHP+AwTN8xqJAknnA==
-  dependencies:
-    "@ai-sdk/provider" "2.0.0"
-    "@standard-schema/spec" "^1.0.0"
-    eventsource-parser "^3.0.5"
-
-"@ai-sdk/provider@2.0.0":
-  version "2.0.0"
-  resolved "https://registry.npmjs.org/@ai-sdk/provider/-/provider-2.0.0.tgz"
-  integrity sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==
+  resolved "https://registry.npmjs.org/@ai-sdk/provider/-/provider-3.0.14.tgz"
+  integrity sha512-5X1k57JBJ4H7H1QjX7CnJYAB1I19r/trVZTMcSms7/kLNZ8RaU4Nt2agcwZzv82Hfx6Q7/TOLU7agAKeFfc8cA==
   dependencies:
     json-schema "^0.4.0"
 
@@ -427,7 +427,7 @@
   resolved "https://registry.npmjs.org/@open-draft/until/-/until-2.1.0.tgz"
   integrity sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==
 
-"@opentelemetry/api@1.9.0":
+"@opentelemetry/api@^1.9.0":
   version "1.9.0"
   resolved "https://registry.npmjs.org/@opentelemetry/api/-/api-1.9.0.tgz"
   integrity sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==
@@ -474,6 +474,27 @@
   resolved "https://registry.npmjs.org/@radix-ui/react-context/-/react-context-1.2.0.tgz"
   integrity sha512-fOE+JtN9rygNZkCnHRBEP0TAvLldlhyOxMsbwFvTP4nAs+nBmfnna+o/Zski2wkmY1YMrFC0aSzsHoLY47iLrg==
 
+"@radix-ui/react-dialog@^1.1.20":
+  version "1.1.20"
+  resolved "https://registry.npmjs.org/@radix-ui/react-dialog/-/react-dialog-1.1.20.tgz"
+  integrity sha512-cngVJcvK0yMvR7wICJpv+1uW3Qw4T7QM5sdbb+oE/lxOdTdvF00oaRpWUjVgmjyXe3J+xh7eZyXZlVF3g2g59g==
+  dependencies:
+    "@radix-ui/primitive" "1.1.6"
+    "@radix-ui/react-compose-refs" "1.1.3"
+    "@radix-ui/react-context" "1.2.0"
+    "@radix-ui/react-dismissable-layer" "1.1.16"
+    "@radix-ui/react-focus-guards" "1.1.4"
+    "@radix-ui/react-focus-scope" "1.1.13"
+    "@radix-ui/react-id" "1.1.2"
+    "@radix-ui/react-portal" "1.1.14"
+    "@radix-ui/react-presence" "1.1.8"
+    "@radix-ui/react-primitive" "2.1.7"
+    "@radix-ui/react-slot" "1.3.0"
+    "@radix-ui/react-use-controllable-state" "1.2.4"
+    "@radix-ui/react-use-layout-effect" "1.1.2"
+    aria-hidden "^1.2.4"
+    react-remove-scroll "^2.7.2"
+
 "@radix-ui/react-direction@1.1.2":
   version "1.1.2"
   resolved "https://registry.npmjs.org/@radix-ui/react-direction/-/react-direction-1.1.2.tgz"
@@ -490,12 +511,33 @@
     "@radix-ui/react-use-callback-ref" "1.1.2"
     "@radix-ui/react-use-effect-event" "0.0.3"
 
+"@radix-ui/react-focus-guards@1.1.4":
+  version "1.1.4"
+  resolved "https://registry.npmjs.org/@radix-ui/react-focus-guards/-/react-focus-guards-1.1.4.tgz"
+  integrity sha512-cot/aB/mOm0IYVYTTmQcEEK1M48lZWi8FlYe5nDPQQ8NYZUlXEFgncJ9p2Kzer3RKSrY7cTTpEMLZKNo9QoP5Q==
+
+"@radix-ui/react-focus-scope@1.1.13":
+  version "1.1.13"
+  resolved "https://registry.npmjs.org/@radix-ui/react-focus-scope/-/react-focus-scope-1.1.13.tgz"
+  integrity sha512-dE04aPEuP9rvKKT0d0KjSOtTEYNg6bmCYFsoSJpfC+y91Hic28ZfDCGgv6aJ+2Kw/LBXYipMZpyqVj/OD3Z8Gg==
+  dependencies:
+    "@radix-ui/react-compose-refs" "1.1.3"
+    "@radix-ui/react-primitive" "2.1.7"
+    "@radix-ui/react-use-callback-ref" "1.1.2"
+
 "@radix-ui/react-id@1.1.2":
   version "1.1.2"
   resolved "https://registry.npmjs.org/@radix-ui/react-id/-/react-id-1.1.2.tgz"
   integrity sha512-orBC88futVpqCmhX1p4cvquNHsELQ+w+vBJnuj3ftETI5bJb0bZn3Tqu3SWN2IOcPycTnMGnhwoermvISt72sA==
   dependencies:
     "@radix-ui/react-use-layout-effect" "1.1.2"
+
+"@radix-ui/react-label@^2.1.12":
+  version "2.1.12"
+  resolved "https://registry.npmjs.org/@radix-ui/react-label/-/react-label-2.1.12.tgz"
+  integrity sha512-dxioNQ7VOrYKKWJIxMRmJPDSWQN0gNCUy3zaqUSBwsuFAiFzI0yLGJr2q3ml07k/HlOk55N8KEfwa1ZgfprJ3w==
+  dependencies:
+    "@radix-ui/react-primitive" "2.1.7"
 
 "@radix-ui/react-popper@1.3.4":
   version "1.3.4"
@@ -566,6 +608,34 @@
     "@radix-ui/react-primitive" "2.1.7"
     "@radix-ui/react-use-callback-ref" "1.1.2"
     "@radix-ui/react-use-layout-effect" "1.1.2"
+
+"@radix-ui/react-select@^2.3.4":
+  version "2.3.4"
+  resolved "https://registry.npmjs.org/@radix-ui/react-select/-/react-select-2.3.4.tgz"
+  integrity sha512-E2JxqAvaTUEhWtBptWo02g8FnLYPymv9ahEvW/cZQPPV4ySeyo0M8n3sXccsLUAIfMbexnfXt91qF7UjTbTMMg==
+  dependencies:
+    "@radix-ui/number" "1.1.2"
+    "@radix-ui/primitive" "1.1.6"
+    "@radix-ui/react-collection" "1.1.12"
+    "@radix-ui/react-compose-refs" "1.1.3"
+    "@radix-ui/react-context" "1.2.0"
+    "@radix-ui/react-direction" "1.1.2"
+    "@radix-ui/react-dismissable-layer" "1.1.16"
+    "@radix-ui/react-focus-guards" "1.1.4"
+    "@radix-ui/react-focus-scope" "1.1.13"
+    "@radix-ui/react-id" "1.1.2"
+    "@radix-ui/react-popper" "1.3.4"
+    "@radix-ui/react-portal" "1.1.14"
+    "@radix-ui/react-presence" "1.1.8"
+    "@radix-ui/react-primitive" "2.1.7"
+    "@radix-ui/react-slot" "1.3.0"
+    "@radix-ui/react-use-callback-ref" "1.1.2"
+    "@radix-ui/react-use-controllable-state" "1.2.4"
+    "@radix-ui/react-use-layout-effect" "1.1.2"
+    "@radix-ui/react-use-previous" "1.1.2"
+    "@radix-ui/react-visually-hidden" "1.2.8"
+    aria-hidden "^1.2.4"
+    react-remove-scroll "^2.7.2"
 
 "@radix-ui/react-separator@^1.1.12":
   version "1.1.12"
@@ -645,6 +715,11 @@
   resolved "https://registry.npmjs.org/@radix-ui/react-use-layout-effect/-/react-use-layout-effect-1.1.2.tgz"
   integrity sha512-jrBWOxZITuGcnjRCM2t2U5ZPkCLxD+Ym6DjfssS5haTj2iiak/DOb64JeN6OdLfLgptb6/e2kKR+ZuTrGoZTPA==
 
+"@radix-ui/react-use-previous@1.1.2":
+  version "1.1.2"
+  resolved "https://registry.npmjs.org/@radix-ui/react-use-previous/-/react-use-previous-1.1.2.tgz"
+  integrity sha512-IGBQPtRFdhN6MQ8dbegVmBq1LVZluya3F1jWY+puIcQC3MHctRwTDSBWCkL/3ZcnMJLTMJ++Z+ktmvg0F89iCw==
+
 "@radix-ui/react-use-rect@1.1.2":
   version "1.1.2"
   resolved "https://registry.npmjs.org/@radix-ui/react-use-rect/-/react-use-rect-1.1.2.tgz"
@@ -684,10 +759,10 @@
   resolved "https://registry.npmjs.org/@rollup/rollup-darwin-arm64/-/rollup-darwin-arm64-4.52.5.tgz"
   integrity sha512-takF3CR71mCAGA+v794QUZ0b6ZSrgJkArC+gUiG6LB6TQty9T0Mqh3m2ImRBOxS2IeYBo4lKWIieSvnEk2OQWA==
 
-"@standard-schema/spec@^1.0.0":
-  version "1.0.0"
-  resolved "https://registry.npmjs.org/@standard-schema/spec/-/spec-1.0.0.tgz"
-  integrity sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==
+"@standard-schema/spec@^1.1.0":
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/@standard-schema/spec/-/spec-1.1.0.tgz"
+  integrity sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==
 
 "@swc/core-darwin-arm64@1.11.21":
   version "1.11.21"
@@ -1077,10 +1152,10 @@
   resolved "https://registry.npmjs.org/@ungap/structured-clone/-/structured-clone-1.3.0.tgz"
   integrity sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==
 
-"@vercel/oidc@3.0.3":
-  version "3.0.3"
-  resolved "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.0.3.tgz"
-  integrity sha512-yNEQvPcVrK9sIe637+I0jD6leluPxzwJKx/Haw6F4H77CdDsszUn5V3o96LPziXkSNE2B83+Z3mjqGKBK/R6Gg==
+"@vercel/oidc@3.2.0":
+  version "3.2.0"
+  resolved "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.2.0.tgz"
+  integrity sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==
 
 "@vitejs/plugin-react-swc@^3.8.0":
   version "3.9.0"
@@ -1196,15 +1271,15 @@ agent-base@^7.1.0, agent-base@^7.1.2:
   resolved "https://registry.npmjs.org/agent-base/-/agent-base-7.1.3.tgz"
   integrity sha512-jRR5wdylq8CkOe6hei19GGZnxM6rBGwFl3Bg0YItGDimvjGtAvdZk4Pu6Cl4u4Igsws4a1fd1Vq3ezrhn4KmFw==
 
-ai@^5.0.82:
-  version "5.0.82"
-  resolved "https://registry.npmjs.org/ai/-/ai-5.0.82.tgz"
-  integrity sha512-wmZZfsU40qB77umrcj3YzMSk6cUP5gxLXZDPfiSQLBLegTVXPUdSJC603tR7JB5JkhBDzN5VLaliuRKQGKpUXg==
+ai@^6.0.233:
+  version "6.0.233"
+  resolved "https://registry.npmjs.org/ai/-/ai-6.0.233.tgz"
+  integrity sha512-P0dtR/JtnL05CiGZiVVeRePdgeBhe+DZAxwbOK0hpuWAcfysMPHueP6zwWOyEn07bVW4DMIk9nHbW0t9iIiW7g==
   dependencies:
-    "@ai-sdk/gateway" "2.0.3"
-    "@ai-sdk/provider" "2.0.0"
-    "@ai-sdk/provider-utils" "3.0.14"
-    "@opentelemetry/api" "1.9.0"
+    "@ai-sdk/gateway" "3.0.155"
+    "@ai-sdk/provider" "3.0.14"
+    "@ai-sdk/provider-utils" "4.0.40"
+    "@opentelemetry/api" "^1.9.0"
 
 ajv@^6.12.4:
   version "6.12.6"
@@ -1274,6 +1349,13 @@ argparse@^2.0.1:
   version "2.0.1"
   resolved "https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz"
   integrity sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==
+
+aria-hidden@^1.2.4:
+  version "1.2.6"
+  resolved "https://registry.npmjs.org/aria-hidden/-/aria-hidden-1.2.6.tgz"
+  integrity sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==
+  dependencies:
+    tslib "^2.0.0"
 
 aria-query@^5.0.0, aria-query@5.3.0:
   version "5.3.0"
@@ -1724,6 +1806,11 @@ detect-libc@^2.0.3, detect-libc@^2.0.4:
   resolved "https://registry.npmjs.org/detect-libc/-/detect-libc-2.0.4.tgz"
   integrity sha512-3UDv+G9CsCKO1WKMGw9fwq/SWJYbI0c5Y7LU1AXYoDdbhE2AHQ6N6Nb34sG8Fj7T5APy8qXDCKuuIHd1BR0tVA==
 
+detect-node-es@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/detect-node-es/-/detect-node-es-1.1.0.tgz"
+  integrity sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==
+
 devlop@^1.0.0, devlop@^1.1.0:
   version "1.1.0"
   resolved "https://registry.npmjs.org/devlop/-/devlop-1.1.0.tgz"
@@ -1962,10 +2049,10 @@ esutils@^2.0.2:
   resolved "https://registry.npmjs.org/esutils/-/esutils-2.0.3.tgz"
   integrity sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==
 
-eventsource-parser@^3.0.5:
-  version "3.0.6"
-  resolved "https://registry.npmjs.org/eventsource-parser/-/eventsource-parser-3.0.6.tgz"
-  integrity sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==
+eventsource-parser@^3.0.8:
+  version "3.1.0"
+  resolved "https://registry.npmjs.org/eventsource-parser/-/eventsource-parser-3.1.0.tgz"
+  integrity sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==
 
 expect-type@^1.1.0:
   version "1.2.1"
@@ -2121,6 +2208,11 @@ get-caller-file@^2.0.5:
   version "2.0.5"
   resolved "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz"
   integrity sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==
+
+get-nonce@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/get-nonce/-/get-nonce-1.0.1.tgz"
+  integrity sha512-FJhYRoDaiatfEkUK8HKlicmu/3SGFD51q3itKDGoSTysQJBnfOcxU5GxnhE1E6soB76MbT0MBtnKJuXyAx+96Q==
 
 get-stream@^6.0.1:
   version "6.0.1"
@@ -3580,6 +3672,25 @@ react-markdown@^10.1.0:
     unist-util-visit "^5.0.0"
     vfile "^6.0.0"
 
+react-remove-scroll-bar@^2.3.7:
+  version "2.3.8"
+  resolved "https://registry.npmjs.org/react-remove-scroll-bar/-/react-remove-scroll-bar-2.3.8.tgz"
+  integrity sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==
+  dependencies:
+    react-style-singleton "^2.2.2"
+    tslib "^2.0.0"
+
+react-remove-scroll@^2.7.2:
+  version "2.7.2"
+  resolved "https://registry.npmjs.org/react-remove-scroll/-/react-remove-scroll-2.7.2.tgz"
+  integrity sha512-Iqb9NjCCTt6Hf+vOdNIZGdTiH1QSqr27H/Ek9sv/a97gfueI/5h1s3yRi1nngzMUaOOToin5dI1dXKdXiF+u0Q==
+  dependencies:
+    react-remove-scroll-bar "^2.3.7"
+    react-style-singleton "^2.2.3"
+    tslib "^2.1.0"
+    use-callback-ref "^1.3.3"
+    use-sidecar "^1.1.3"
+
 react-resizable-panels@^3.0.6:
   version "3.0.6"
   resolved "https://registry.npmjs.org/react-resizable-panels/-/react-resizable-panels-3.0.6.tgz"
@@ -3601,6 +3712,14 @@ react-responsive-carousel@^3.2.23:
     classnames "^2.2.5"
     prop-types "^15.5.8"
     react-easy-swipe "^0.0.21"
+
+react-style-singleton@^2.2.2, react-style-singleton@^2.2.3:
+  version "2.2.3"
+  resolved "https://registry.npmjs.org/react-style-singleton/-/react-style-singleton-2.2.3.tgz"
+  integrity sha512-b6jSvxvVnyptAiLjbkWLE/lOnR4lfTtDAl+eUC7RZy+QQWc6wRzIV2CE6xBuMmDxc2qIihtDCZD5NPOFl7fRBQ==
+  dependencies:
+    get-nonce "^1.0.0"
+    tslib "^2.0.0"
 
 react-vega@^7.6.0:
   version "7.6.0"
@@ -4087,7 +4206,7 @@ ts-api-utils@^2.0.1:
   resolved "https://registry.npmjs.org/ts-api-utils/-/ts-api-utils-2.1.0.tgz"
   integrity sha512-CUgTZL1irw8u29bzrOD/nH85jqyc74D6SshFgujOIA7osm2Rz7dYH77agkx7H4FBNxDq7Cjf+IjaX/8zwFW+ZQ==
 
-tslib@^2.6.2, tslib@^2.8.0, tslib@^2.8.1, tslib@~2.8.1:
+tslib@^2.0.0, tslib@^2.1.0, tslib@^2.6.2, tslib@^2.8.0, tslib@^2.8.1, tslib@~2.8.1:
   version "2.8.1"
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz"
   integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==
@@ -4218,6 +4337,21 @@ uri-js@^4.2.2:
   integrity sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==
   dependencies:
     punycode "^2.1.0"
+
+use-callback-ref@^1.3.3:
+  version "1.3.3"
+  resolved "https://registry.npmjs.org/use-callback-ref/-/use-callback-ref-1.3.3.tgz"
+  integrity sha512-jQL3lRnocaFtu3V00JToYz/4QkNWswxijDaCVNZRiRTO3HQDLsdu1ZtmIUvV4yPp+rvWm5j0y0TG/S61cuijTg==
+  dependencies:
+    tslib "^2.0.0"
+
+use-sidecar@^1.1.3:
+  version "1.1.3"
+  resolved "https://registry.npmjs.org/use-sidecar/-/use-sidecar-1.1.3.tgz"
+  integrity sha512-Fedw0aZvkhynoPYlA5WXrMCAMm+nSWdZt6lzJQ7Ok8S6Q+VsHmHpRWndVRJ8Be0ZbkfPc5LRYH+5XrzXcEeLRQ==
+  dependencies:
+    detect-node-es "^1.1.0"
+    tslib "^2.0.0"
 
 vega-canvas@^2.0.0:
   version "2.0.0"
@@ -4830,10 +4964,10 @@ yoctocolors-cjs@^2.1.2:
   resolved "https://registry.npmjs.org/yoctocolors-cjs/-/yoctocolors-cjs-2.1.2.tgz"
   integrity sha512-cYVsTjKl8b+FrnidjibDWskAv7UKOfcwaVZdp/it9n1s9fU3IkgDbhdIRKCW4JDsAlECJY0ytoVPT3sK6kideA==
 
-zod@^3.25.65:
-  version "3.25.65"
-  resolved "https://registry.npmjs.org/zod/-/zod-3.25.65.tgz"
-  integrity sha512-kMyE2qsXK1p+TAvO7zsf5wMFiCejU3obrUDs9bR1q5CBKykfvp7QhhXrycUylMoOow0iEUSyjLlZZdCsHwSldQ==
+zod@^3.25.76:
+  version "3.25.76"
+  resolved "https://registry.npmjs.org/zod/-/zod-3.25.76.tgz"
+  integrity sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==
 
 zwitch@^2.0.0:
   version "2.0.4"
