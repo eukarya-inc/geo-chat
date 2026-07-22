@@ -22,8 +22,7 @@
             "@/*": ["./src/*"]
         }
     },
-    "include": ["src"],
-    "exclude": ["legacy-src"]
+    "include": ["src"]
     /* Project references disabled since we don't need to compile vite.config.ts */
     /* "references": [
     {

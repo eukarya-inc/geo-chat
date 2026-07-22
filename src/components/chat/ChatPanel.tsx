@@ -11,9 +11,9 @@ import { settingsOpenAtom } from '@/store/atoms';
 import { apiKeyAtom } from '@/store/settings';
 
 const EXAMPLE_PROMPTS = [
+    `${import.meta.env.BASE_URL}data/japan_cities.parquet を読み込んで地図に表示して`,
+    '都道府県ごとの市区町村数をグラフにして',
     `Load ${import.meta.env.BASE_URL}data/japan_cities.parquet and show it on the map`,
-    'Which prefecture has the most cities? Chart it.',
-    'Color the cities on the map by population.',
 ];
 
 export function ChatPanel() {
