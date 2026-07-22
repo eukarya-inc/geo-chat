@@ -9,6 +9,13 @@ export const tablesAtom = atom<string[]>([]);
 /** The table currently being visualized; shared by the Table/Chart/Map tabs. */
 export const selectedTableAtom = atom<string | null>(null);
 
+/** The workspace tab currently shown. AI tools switch this to reveal their output. */
+export type WorkspaceTab = 'table' | 'chart' | 'map' | 'sql';
+export const activeTabAtom = atom<WorkspaceTab>('table');
+
+/** Whether the Settings dialog is open (opened from the header or the chat empty state). */
+export const settingsOpenAtom = atom(false);
+
 /**
  * Per-table Vega-Lite spec WITHOUT `data`/`width`/`height` (those are injected
  * at render time). Keyed by table name.

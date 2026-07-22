@@ -1,8 +1,10 @@
+import { useAtom } from 'jotai';
 import { lazy, Suspense } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SqlPanel } from '@/components/workspace/SqlPanel';
 import { TablePanel } from '@/components/workspace/TablePanel';
+import { activeTabAtom, type WorkspaceTab } from '@/store/atoms';
 
 // Chart and Map pull in heavy libs (vega, maplibre-gl); load them only when
 // their tab is opened. Radix unmounts inactive tabs, so this also code-splits.
@@ -17,8 +19,14 @@ const TABS = [
 ];
 
 export function WorkspacePanel() {
+    // Controlled by a shared atom so AI tools can switch tabs to reveal their output.
+    const [activeTab, setActiveTab] = useAtom(activeTabAtom);
     return (
-        <Tabs defaultValue="table" className="flex h-full flex-col gap-0">
+        <Tabs
+            value={activeTab}
+            onValueChange={value => setActiveTab(value as WorkspaceTab)}
+            className="flex h-full flex-col gap-0"
+        >
             <div className="border-b px-3 py-2">
                 <TabsList>
                     {TABS.map(tab => (
