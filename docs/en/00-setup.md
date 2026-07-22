@@ -11,8 +11,8 @@ This takes 10–15 minutes. If something goes wrong, see
 - **Node.js 20 or newer** (check with `node -v`; if it is older than 20, update via [nodejs.org](https://nodejs.org)
   or a tool like `nvm` / `volta`)
 - **A modern browser**: the latest Chrome / Edge / Firefox.
-  geo-chat uses **WebAssembly, Web Workers, and SharedArrayBuffer**, so it does not run in old browsers
-  or some embedded environments (the reason is covered in chapter 02).
+  geo-chat uses **WebAssembly and Web Workers**, so it does not run in old browsers
+  or some embedded environments (DuckDB-WASM is covered in chapter 02).
 - **An Anthropic API key** (you will get one in the next step)
 
 ## 2. Clone and run
@@ -63,7 +63,7 @@ geo-chat has no backend and **calls the Anthropic API directly from the browser*
 > workshop** (clear it in Settings, or clear the browser's localStorage).
 > The same warning appears in the Settings dialog (`src/components/settings/SettingsDialog.tsx`).
 
-## 5. Load the sample data
+## 5. About the built-in data
 
 This repository ships the following samples in `public/data/`:
 
@@ -77,36 +77,37 @@ This repository ships the following samples in `public/data/`:
 > Because the spatial extension recognizes the geo metadata of a GeoParquet, once loaded the `geom` column
 > is **already `GEOMETRY` type from the start** (no conversion needed — it goes straight onto the map).
 
-There are two ways to load data.
+Of these, `japan_cities` and `japan_prefectures` are taught to the agent as **built-in datasets**. Their entries
+live in the built-in dataset registry (`src/lib/ai/builtinDatasets.ts`), whose contents are passed to the model
+through the system prompt. So **just asking "show the Japanese municipalities on the map" is enough — the agent
+loads this data itself**; you don't need to type a URL by hand. Adding one entry to the registry teaches the agent
+a new dataset (this "carry knowledge in the ② layer" idea is the same as the skills in chapter 06).
 
-**(A) Read it by hand from the SQL tab** (used in earnest in chapter 02):
-In the SQL tab's "Import from URL", enter a URL and a table name and Import.
-Clicking the `Try the bundled sample:` link auto-fills the URL of `japan_cities.parquet`.
-The URL is `/geo-chat/data/japan_cities.parquet` (`import.meta.env.BASE_URL` + `data/…`).
-
-**(B) Load it from the chat** (the demo in the next step):
-Ask in natural language in the chat box and the agent loads it with the `duckdb_query` tool.
+**When you want to load your own data**, enter a URL and a table name in the SQL tab's "Import from URL" and Import
+(used in the chapter 02 exercise and the chapter 07 challenges). To read a bundled sample by hand, the URL is
+`/geo-chat/data/japan_cities.parquet` (`import.meta.env.BASE_URL` + `data/…`).
 
 ## 6. Verify with a demo prompt
 
 When the chat is empty, three **sample prompt chips** appear above the input box
 (`EXAMPLE_PROMPTS` in `src/components/chat/ChatPanel.tsx`). We use these first to check that things work.
-The first chip is in Japanese; the app handles both languages (see the note below).
+The first two chips are in Japanese and the third in English; the app handles both languages (see the note below).
 
 ```
-/geo-chat/data/japan_cities.parquet を読み込んで地図に表示して
+日本の自治体を地図に表示して
 ```
 
 Clicking this chip puts the sentence into the input box; send it. When it works:
 
 1. Tool cards (`duckdb_query` and others) appear one after another in the chat (click to expand input/output).
+   The agent loads the built-in dataset `japan_cities` **by itself**.
 2. The Map tab opens automatically and Japan's municipalities are drawn on the map.
 
-If this works, you are ready. You can go on to try prompts like these too:
+If this works, you are ready. You can go on to try the remaining chips too:
 
 ```
 都道府県ごとの市区町村数をグラフにして
-Load /geo-chat/data/japan_cities.parquet and show it on the map
+Show the Japanese municipalities on the map
 ```
 
 > **About language**: The sample chips mix Japanese and English, but the agent's system prompt has a rule to
@@ -121,7 +122,7 @@ Load /geo-chat/data/japan_cities.parquet and show it on the map
 - **`credit balance is too low`** → add credit in the console (step 3-2).
 - **Nothing shows on the map / URL loading fails with CORS** → see
   [appendix-troubleshooting.md](./appendix-troubleshooting.md), which includes a CORS explanation.
-- **DuckDB does not initialize / blank screen** → the browser does not support SharedArrayBuffer,
-  or a COOP/COEP header problem. See the appendix as well.
+- **DuckDB does not initialize / blank screen** → check you're on a supported browser (latest Chrome / Edge / Firefox).
+  If it still won't clear, see "The app doesn't boot" in the appendix.
 
 When you are ready, go on to [01. What is an AI agent](./01-what-is-an-agent.md).

@@ -7,6 +7,7 @@ import { createGeocodeTool } from './geocode';
 import { createGetChartSpecTool } from './getChartSpec';
 import { createGetMapStyleTool } from './getMapStyle';
 import { createGetSkillTool } from './getSkill';
+import { createLoadBuiltinDatasetTool } from './loadBuiltinDataset';
 import { createUpdateChartSpecTool } from './updateChartSpec';
 import { createUpdateMapStyleTool } from './updateMapStyle';
 
@@ -38,10 +39,11 @@ function requireSkill<T extends Tool>(domain: string, suggestion: string, tool: 
  * The tool registry handed to the agent loop. Each factory closes over the shared
  * ToolContext so tools can touch app state without importing React or jotai.
  *
- *   name              | purpose
- *   ------------------|-------------------------------------------------------
- *   duckdb_query      | run one SQL statement; explore data / create tables
- *   get_skill         | fetch skill instructions; unlocks the gated tools below
+ *   name                 | purpose
+ *   ---------------------|----------------------------------------------------
+ *   duckdb_query         | run one SQL statement; explore data / create tables
+ *   load_builtin_dataset | load a bundled sample dataset (parquet) into a table
+ *   get_skill            | fetch skill instructions; unlocks the gated tools below
  *   update_map_style  | set a table's MapLibre paint/layout (needs a map.* skill)
  *   get_map_style     | read a table's current (or default) map style
  *   update_chart_spec | set a table's Vega-Lite spec (needs a vega.* skill)
@@ -51,6 +53,7 @@ function requireSkill<T extends Tool>(domain: string, suggestion: string, tool: 
 export function createTools(ctx: ToolContext) {
     return {
         duckdb_query: createDuckdbQueryTool(ctx),
+        load_builtin_dataset: createLoadBuiltinDatasetTool(ctx),
         get_skill: createGetSkillTool(),
         update_map_style: requireSkill('map', 'map.styling', createUpdateMapStyleTool(ctx)),
         get_map_style: createGetMapStyleTool(ctx),

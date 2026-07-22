@@ -27,6 +27,15 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('cities(pop INTEGER, geom GEOMETRY)');
     });
 
+    it('lists the built-in datasets and how to load them', () => {
+        const prompt = buildSystemPrompt({ now, tables: [] });
+        expect(prompt).toContain('Built-in datasets');
+        expect(prompt).toContain('japan_cities');
+        expect(prompt).toContain('japan_prefectures');
+        // Tells the model to load a dataset itself via the dedicated tool.
+        expect(prompt).toContain('load_builtin_dataset');
+    });
+
     it('caps the column list at 20 per table', () => {
         const columns = Array.from({ length: 25 }, (_, i) => ({ name: `c${i}`, type: 'INTEGER' }));
         const prompt = buildSystemPrompt({ now, tables: [{ name: 'wide', columns }] });

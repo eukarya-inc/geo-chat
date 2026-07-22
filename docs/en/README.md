@@ -1,6 +1,6 @@
 # Taking AI Agents Apart — How GIS × LLM Actually Works
 
-Participant curriculum for a half-day (roughly 4-hour) FOSS4G workshop.
+Participant curriculum for a 3-hour FOSS4G workshop.
 
 Using `geo-chat` — a fully client-side SPA — as its subject, this workshop aims to
 **take the "AI agent" apart down to the level of raw API requests and understand how it works.**
@@ -45,21 +45,26 @@ Every chapter follows the same structure:
 
 | Time      | Step / Chapter                                                 | Core experience                                                                             |
 | --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| (setup)   | [00-setup.md](./00-setup.md)                                   | clone / `npm i` / `npm run dev` / get and enter the API key / check the sample data         |
-| 0:00–0:30 | [01. What is an AI agent](./01-what-is-an-agent.md)            | demo → the GeoAI map → tool-stripping experiment → "LLM + tools + loop + context"           |
-| 0:30–1:00 | [02. A GIS foundation inside the browser](./02-duckdb-wasm.md) | Write SQL by hand in DuckDB-WASM (including spatial). Feel "spatial analysis, no server"    |
-| 1:00–1:40 | [03. Witnessing the loop](./03-agent-loop.md)                  | Read `agent.ts` closely and narrate the Anthropic API round-trips in DevTools               |
-| 1:40–2:25 | [04. Anatomy of a tool](./04-building-tools.md)                | name / description / inputSchema / execute. Have a development prompt implement a new tool  |
-| 2:25–2:55 | [05. The declarative-spec boundary](./05-declarative-specs.md) | Why Vega-Lite / MapLibre style pair so well with AI. Watch a broken spec get auto-repaired  |
-| 2:55–3:35 | [06. A skill = one md file](./06-skill-system.md)              | Write your own skill md to make the agent smarter. The write → try → fix loop               |
-| 3:35–4:00 | [07. Challenge and articulation](./07-challenge.md)            | Your own problem (`ST_Buffer` analysis, PLATEAU integration, Overture Maps, etc.) + closing |
+| (setup)   | [00-setup.md](./00-setup.md)                                   | clone / `npm i` / `npm run dev` / get and enter the API key / verify with the built-in data |
+| 0:00–0:20 | [01. What is an AI agent](./01-what-is-an-agent.md)            | demo → the GeoAI map → tool-stripping experiment → "LLM + tools + loop + context"           |
+| 0:20–0:45 | [02. A GIS foundation inside the browser](./02-duckdb-wasm.md) | Write SQL by hand in DuckDB-WASM (including spatial). Feel "spatial analysis, no server"    |
+| 0:45–1:20 | [03. Witnessing the loop](./03-agent-loop.md)                  | Read `agent.ts` closely and narrate the Anthropic API round-trips in DevTools               |
+| 1:20–1:55 | [04. Anatomy of a tool](./04-building-tools.md)                | name / description / inputSchema / execute. Have a development prompt implement a new tool  |
+| 1:55–2:15 | [05. The declarative-spec boundary](./05-declarative-specs.md) | Why Vega-Lite / MapLibre style pair so well with AI. Watch a broken spec get auto-repaired  |
+| 2:15–2:45 | [06. A skill = one md file](./06-skill-system.md)              | Write your own skill md to make the agent smarter. The write → try → fix loop               |
+| 2:45–3:00 | [07. Challenge and articulation](./07-challenge.md)            | Kick off your own problem (`ST_Buffer` analysis, PLATEAU, Overture Maps, etc.) + closing    |
+
+> **About chapter 07**: The final 15 minutes are spent only on **kicking off a challenge and the closing question**,
+> not on finishing one. The challenges are intentionally sized larger than the slot — they are meant to be
+> **carried through at your own pace after the workshop.** In the room you just "pick one → take the first step →
+> write the closing one-liner."
 
 ### Appendices
 
 - [appendix-prompts.md](./appendix-prompts.md) — Collection of development prompts (the layer-③ prompts).
   With templates for "add a tool," "add a skill," and "debug the agent."
 - [appendix-troubleshooting.md](./appendix-troubleshooting.md) — Practical fixes for API-key errors, CORS,
-  COOP/COEP, no map showing, an empty chart, rate limits, and more.
+  the app not booting, no map showing, an empty chart, rate limits, and more.
 
 ## Terminology: The 3 Layers of "Prompt"
 

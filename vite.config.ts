@@ -16,12 +16,6 @@ export default defineConfig({
     optimizeDeps: {
         exclude: ['@duckdb/duckdb-wasm'],
     },
-    server: {
-        headers: {
-            'Cross-Origin-Opener-Policy': 'same-origin',
-            'Cross-Origin-Embedder-Policy': 'require-corp',
-        },
-    },
     build: {
         rollupOptions: {
             output: {

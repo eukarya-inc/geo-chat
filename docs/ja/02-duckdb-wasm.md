@@ -80,11 +80,14 @@ await conn.query("SET memory_limit='4GB';"); // wasm 32bit の上限
 SQL エディタ（Cmd/Ctrl+Enter で実行）、結果テーブルから成ります
 （`src/components/workspace/SqlPanel.tsx`）。
 
-### 1. サンプルを読み込む
+### 1. データを用意する
 
-「Import from URL」の下の `Try the bundled sample:` リンクを押すと、
-`japan_cities.parquet` の URL とテーブル名 `japan_cities` が自動入力されます。**Import** を押します。
-（URL を手で入れるなら `/geo-chat/data/japan_cities.parquet`。）
+`japan_cities` テーブルがまだ無ければ用意します。手っ取り早いのは **チャットで
+「日本の自治体を地図に表示して」** と頼むこと——エージェントが組み込みデータを自分で
+読み込みます（00 章のデモ）。SQL タブで手で読むなら、「Import from URL」の下の
+`Try the bundled sample:` リンクを押すと `japan_cities.parquet` の URL とテーブル名
+`japan_cities` が自動入力されるので **Import** を押します
+（URL を手で入れるなら `/geo-chat/data/japan_cities.parquet`）。
 
 ### 2. スキーマとサマリを見る — 探索の基本動作
 
@@ -141,10 +144,12 @@ LIMIT 10;
 > X と Y が入れ替わってジオメトリが地球の裏側へ飛びます。詳しくは 06 章の
 > `duckdb.spatial` スキルで扱います。
 
-### 4. URL から別データを読む
+### 4. 自分の好きなデータを読み込んでみる
 
-DuckDB は HTTPS 越しにファイルを直接読めます。ただしブラウザから読むため、
-**相手サーバが CORS を許可している必要** があります（詳細は
+組み込みデータだけでなく、**自分の手元のデータ** も読み込んでみましょう。組み込みデータは
+チップ 1 発で出せますが（デモ中に長い URL を手打ちするのはミスの元でした）、任意の外部データは
+SQL タブの「Import from URL」から読み込みます。DuckDB は HTTPS 越しにファイルを直接読めます。
+ただしブラウザから読むため、**相手サーバが CORS を許可している必要** があります（詳細は
 [appendix-troubleshooting.md](./appendix-troubleshooting.md)）。SQL タブなら:
 
 ```sql

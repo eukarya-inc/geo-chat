@@ -80,11 +80,13 @@ Open the **SQL** tab in the right pane. It consists of an "Import from URL" form
 a SQL editor (run with Cmd/Ctrl+Enter), and a result table
 (`src/components/workspace/SqlPanel.tsx`).
 
-### 1. Load a sample
+### 1. Get the data ready
 
-Click the `Try the bundled sample:` link below "Import from URL" and the URL of `japan_cities.parquet` and the
-table name `japan_cities` are auto-filled. Press **Import**.
-(To enter the URL by hand, it is `/geo-chat/data/japan_cities.parquet`.)
+If you don't have the `japan_cities` table yet, get it. The quickest way is to **ask in the chat, "show the Japanese
+municipalities on the map"** — the agent loads the built-in data itself (the chapter 00 demo). To read it by hand in
+the SQL tab, click the `Try the bundled sample:` link below "Import from URL" and the URL of `japan_cities.parquet`
+and the table name `japan_cities` are auto-filled; press **Import**
+(to enter the URL by hand, it is `/geo-chat/data/japan_cities.parquet`).
 
 ### 2. Look at the schema and a summary — the basic move of exploration
 
@@ -141,9 +143,11 @@ LIMIT 10;
 > geometry flies to the other side of the planet. This is covered in more detail by the `duckdb.spatial` skill in
 > chapter 06.
 
-### 4. Read other data from a URL
+### 4. Try loading your own data
 
-DuckDB can read files directly over HTTPS. But since the browser does the reading,
+Beyond the built-in data, let's load **data of your own.** The built-in datasets come up from a single chip
+(typing a long URL during the demo was error-prone), but any external data is loaded from the SQL tab's
+"Import from URL." DuckDB can read files directly over HTTPS. But since the browser does the reading,
 **the remote server must allow CORS** (details in
 [appendix-troubleshooting.md](./appendix-troubleshooting.md)). In the SQL tab:
 
