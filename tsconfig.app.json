@@ -29,6 +29,5 @@
             "@/*": ["./src/*"]
         }
     },
-    "include": ["src"],
-    "exclude": ["legacy-src"]
+    "include": ["src"]
 }
