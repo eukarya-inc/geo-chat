@@ -121,7 +121,7 @@ This is a React application that demonstrates DuckDB-WASM integration with geosp
 
 - **DuckDB Configuration**: Uses manual bundles for DuckDB-WASM with both MVP and EH (Exception Handling) workers. Spatial extension is automatically installed and loaded.
 
-- **Vite Configuration**: Excludes `@duckdb/duckdb-wasm` from optimization and sets required headers for SharedArrayBuffer support (Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy). Base path set to `/duckdb-wasm-prototype/` for GitHub Pages deployment.
+- **Vite Configuration**: Excludes `@duckdb/duckdb-wasm` from optimization and sets required headers for SharedArrayBuffer support (Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy). Base path set to `/geo-chat/` for GitHub Pages deployment.
 
 - **Tile Utilities** (`src/utils/tileUtils.ts`): Contains functions for tile coordinate calculations, GeoJSON to raster conversion, and GeoJSON to MVT conversion with caching optimization.
 
