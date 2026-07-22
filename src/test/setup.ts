@@ -22,3 +22,9 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
     unobserve: vi.fn(),
     disconnect: vi.fn(),
 }));
+
+// jsdom lacks URL.createObjectURL; maplibre-gl reads it at module load time.
+if (!window.URL.createObjectURL) {
+    window.URL.createObjectURL = vi.fn(() => 'blob:mock');
+    window.URL.revokeObjectURL = vi.fn();
+}

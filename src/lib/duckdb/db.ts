@@ -60,6 +60,26 @@ export function executeQuery(sql: string): Promise<QueryResult> {
     });
 }
 
+/**
+ * Runs a tile query and returns the raw MVT bytes from its single `mvt` column,
+ * bypassing `convertArrowToJS` entirely so the binary blob is never replaced
+ * with the `"<geometry>"` placeholder. Uses the same serialization queue as
+ * every other statement. Returns null for empty tiles.
+ */
+export function getTileBytes(sql: string): Promise<Uint8Array | null> {
+    return enqueue(async () => {
+        const conn = await getConnection();
+        const result = await conn.query(sql);
+        if (result.numRows === 0) return null;
+
+        const value = result.getChild('mvt')?.get(0) as Uint8Array | null | undefined;
+        if (!value || value.length === 0) return null;
+
+        // Copy off any shared/underlying ArrayBuffer to avoid detachment issues.
+        return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+    });
+}
+
 /** Lists user tables in the `main` schema (internal schemas excluded). */
 export async function getTables(): Promise<string[]> {
     const result = await executeQuery(
