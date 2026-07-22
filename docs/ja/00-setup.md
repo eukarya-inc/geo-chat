@@ -114,7 +114,7 @@ Show the Japanese municipalities on the map
 
 > **言語について**: サンプルチップは日本語と英語が混在していますが、エージェントの
 > system prompt には「ユーザーが書いた言語で返答する」ルールがあります
-> （`src/lib/ai/systemPrompt.ts`）。日本語で「人口 10 万人以上の市を地図で塗り分けて」と
+> （`src/lib/ai/systemPrompt.ts`）。日本語で「自治体を都道府県ごとに色分けして地図に表示して」と
 > 打てば、日本語で応答します。
 
 ## 7. うまくいかないとき

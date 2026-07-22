@@ -99,7 +99,10 @@ flowchart LR
 
 ### ツールの登録 — `src/lib/ai/tools/index.ts`
 
-`createTools()` が 7 つのツールを 1 つのオブジェクトにまとめ、エージェントに渡します。
+`createTools()` が 8 つのツール（`duckdb_query` / `load_builtin_dataset`（組み込みサンプル
+データセットをテーブルに読み込む） / `get_skill` / `update_map_style` / `get_map_style` /
+`update_chart_spec` / `get_chart_spec` / `geocode_address`）を 1 つのオブジェクトにまとめ、
+エージェントに渡します。
 **新しいツールはここに 1 行足すことで初めてモデルに見えます**（04 章課題で使います）。
 このファイルにはもう一つ、`update_map_style` / `update_chart_spec` を
 「スキル取得前は動かない」ようにする **前提ゲート** の薄いラッパ `requireSkill` があります
@@ -123,7 +126,7 @@ description: '',
 保存してリロードし、01 章と同じ質問を打ちます:
 
 ```
-人口 10 万人以上の市を地図で塗り分けて
+自治体を都道府県ごとに色分けして地図に表示して
 ```
 
 **観察**（モデルや運によって現れ方は変わりますが、傾向として）:

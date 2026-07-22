@@ -6,7 +6,7 @@ Using `geo-chat` — a fully client-side SPA — as its subject, this workshop a
 **take the "AI agent" apart down to the level of raw API requests and understand how it works.**
 geo-chat combines DuckDB-WASM (SQL analysis), MapLibre GL (maps), and Vega-Lite (charts),
 all running inside the browser, with Anthropic Claude wired in as the agent.
-Ask it in natural language — "shade the cities with a population of 100,000 or more" — and SQL runs and the map gets colored.
+Ask it in natural language — "color the municipalities by prefecture and show them on the map" — and SQL runs and the map gets colored.
 
 ## Transfer Goal
 
@@ -70,11 +70,11 @@ Every chapter follows the same structure:
 
 The word "prompt" in this workshop splits into 3 layers. Mixing them up gets you lost, so we distinguish them up front.
 
-| Layer                | What kind of string it goes into                                              | Example                                                 | Chapters                                                           |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
-| ① usage prompt       | typed into the **chat box** of the finished geo-chat                          | "shade the cities with a population of 100,000 or more" | 01–02 (experienced as the entry point)                             |
-| ② in-agent prompt    | the system prompt / tool description / skill md **built into the app itself** | "this tool runs exactly one SQL statement…"             | **the main event.** read in 03, written in 04 and 06               |
-| ③ development prompt | implementation instructions **given to a coding AI** such as Claude Code      | "add an ◯◯ tool to this repository"                     | the means of implementation from 04 on (collected in the appendix) |
+| Layer                | What kind of string it goes into                                              | Example                                     | Chapters                                                           |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| ① usage prompt       | typed into the **chat box** of the finished geo-chat                          | "color the municipalities by prefecture"    | 01–02 (experienced as the entry point)                             |
+| ② in-agent prompt    | the system prompt / tool description / skill md **built into the app itself** | "this tool runs exactly one SQL statement…" | **the main event.** read in 03, written in 04 and 06               |
+| ③ development prompt | implementation instructions **given to a coding AI** such as Claude Code      | "add an ◯◯ tool to this repository"         | the means of implementation from 04 on (collected in the appendix) |
 
 Whether the tool you built in ③ gets used intelligently is decided by how you write the description in ② —
 this **very interplay between ② and ③** is what this workshop is about.

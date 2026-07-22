@@ -161,9 +161,11 @@ DESCRIBE "t";   -- 読み込んだら必ずスキーマを確認
 
 1. `japan_prefectures.parquet` を `japan_prefectures` として読み込み、`DESCRIBE` と
    `SUMMARIZE` をかける。`japan_cities` と共通で使えそうな結合キー（コード列など）を探す。
-2. `japan_cities` の `SUMMARIZE` から人口列を特定し、
-   「人口 10 万人以上の市」の件数を `SELECT count(*) … WHERE` で数える。
-   これは 01 章のデモを **手で** 再現していることに気づく。
+2. `japan_cities` の `SUMMARIZE` から `prefecture` 列を確認し、
+   都道府県ごとの自治体数を `SELECT prefecture, count(*) … GROUP BY prefecture` で数える。
+   これは 01 章のデモ（都道府県ごとの色分け）を **手で** 再現していることに気づく。
+   （ついでに `SUMMARIZE` に人口列が **無い** ことも確認しておく——だからエージェントは
+   「人口で塗って」と頼まれても正直に「人口データが無い」と答えるのだった。）
 3. `japan_cities` で、面積が最大の市を 1 つ選び `ST_AsText(ST_Centroid(...))` で
    重心座標を出す。整数列同士の割り算は切り捨てになる罠（`491/2 = 245`）に注意——
    率を出すなら `* 1.0` を掛ける。

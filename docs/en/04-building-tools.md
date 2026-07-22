@@ -99,7 +99,9 @@ flowchart LR
 
 ### Registering the tool — `src/lib/ai/tools/index.ts`
 
-`createTools()` gathers the 7 tools into a single object and hands it to the agent.
+`createTools()` gathers the 8 tools (`duckdb_query` / `load_builtin_dataset` (loads a bundled sample
+dataset into a table) / `get_skill` / `update_map_style` / `get_map_style` / `update_chart_spec` /
+`get_chart_spec` / `geocode_address`) into a single object and hands it to the agent.
 **A new tool only becomes visible to the model by adding one line here** (used in the chapter 04 exercise).
 This file also has a thin wrapper `requireSkill`, a **prerequisite gate** that makes `update_map_style` /
 `update_chart_spec` "not work until their skill is fetched" (details in chapter 06).
@@ -122,7 +124,7 @@ description: '',
 Save, reload, and type the same question as in chapter 01:
 
 ```
-人口 10 万人以上の市を地図で塗り分けて
+自治体を都道府県ごとに色分けして地図に表示して
 ```
 
 **Observation** (how it shows up varies by model and luck, but as a tendency):

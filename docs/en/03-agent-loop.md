@@ -15,7 +15,7 @@ sequenceDiagram
     participant API as Anthropic API
     participant Tool as Tool execution (DuckDB, etc.)
 
-    U->>App: "shade the cities with a population of 100k+"
+    U->>App: "color the municipalities by prefecture"
     loop until an answer emerges, up to 30 steps
         App->>API: send system + conversation so far + tool definitions
         API-->>App: "I want to call duckdb_query with these arguments" (tool_use)
@@ -61,7 +61,7 @@ const result = streamText({
     model: anthropic(options.model),
     system: buildSystemPrompt(options.promptContext), // ← context (the ② prompt)
     messages: options.messages, // ← the entire conversation so far
-    tools: options.tools, // ← the 7 tool definitions
+    tools: options.tools, // ← the 8 tool definitions
     temperature: 0, // reproducibility-first (nearly the same decision every time)
     maxOutputTokens: 8000,
     stopWhen: stepCountIs(30), // ← the loop's stopping condition
@@ -141,7 +141,7 @@ We confirm the loop we understood in code with the **actual flowing HTTP**. Less
 
 1. Open the browser's **DevTools** and select the **Network** tab.
 2. Type `api.anthropic.com` into the filter.
-3. Send `人口 10 万人以上の市を地図で塗り分けて` to the chat.
+3. Send `自治体を都道府県ごとに色分けして地図に表示して` to the chat.
 4. **Multiple** requests to `messages` appear. **Count how many there are.**
 
 ### Reading a request
@@ -150,7 +150,7 @@ Open the **Payload (the sent JSON)** of the first request and you see these 3 th
 
 - `system` — the full text of the system prompt you just read (with the current tables' schema at the end).
 - `messages` — the conversation so far (at first, just the user's single sentence).
-- `tools` — the **name / description / input_schema** of the 7 tools.
+- `tools` — the **name / description / input_schema** of the 8 tools.
   This is "the instruction manual for the tools shown to the model" (the star of chapter 04).
 
 ### Reading the response (SSE)
@@ -170,7 +170,7 @@ This is "pile up the conversation and resend it each time" in the flesh.
 
 ## ④ Hands-on exercise
 
-1. Ask "don't put it on the map, show me the top 5 cities by population **as a table**," and count the number of
+1. Ask "don't put it on the map, show me the municipalities of Tokyo **as a table**," and count the number of
    requests in Network. Explain how the count changes versus when you also asked for the map, and why.
 2. Copy the full `system` text of the first request and point to the boundary between `BASE_PROMPT` (static) and the
    `Context` at the end (dynamic). Add one table and ask the same question again, then observe how the end of

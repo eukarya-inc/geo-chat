@@ -112,7 +112,7 @@ Show the Japanese municipalities on the map
 
 > **About language**: The sample chips mix Japanese and English, but the agent's system prompt has a rule to
 > "reply in the language the user wrote in" (`src/lib/ai/systemPrompt.ts`). If you type in English —
-> "shade the cities with a population of 100,000 or more on the map" (Japanese: 「人口 10 万人以上の市を地図で塗り分けて」) —
+> "color the municipalities by prefecture and show them on the map" (Japanese: 「自治体を都道府県ごとに色分けして地図に表示して」) —
 > it replies in that language.
 
 ## 7. When it does not work

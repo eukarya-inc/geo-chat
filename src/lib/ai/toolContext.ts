@@ -28,6 +28,10 @@ export interface ToolContext {
 }
 
 export function defaultToolContext(): ToolContext {
+    // The app deliberately uses jotai's DEFAULT store (no <Provider> in main.tsx)
+    // so this non-React tool code and the React UI share the exact same atoms.
+    // Do NOT introduce a scoped Provider without wiring it here, or tool-driven
+    // state changes (setActiveTab, setMapStyle, ...) won't reach the UI.
     const store = getDefaultStore();
     return {
         refreshTables: () => store.set(refreshTablesAtom),
