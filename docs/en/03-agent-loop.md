@@ -33,7 +33,27 @@ There are 2 key points:
    It is not "1 question = 1 API call."
 2. **The model is stateless** — every time, the system prompt, the entire conversation so far, and the tool
    definitions are **resent in full**. The agent's "memory" exists only because the app piles up the conversation
-   history and resends it each time.
+   history and resends it each time. **(This is the most surprising point today — detailed just below.)**
+
+### Surprise: the AI is stateless
+
+This second point is the most surprising part for people new to LLMs. In plain terms, the mechanism is:
+
+**The model has no memory between API calls.** When the model's reply contains a tool call, the app runs the
+tool, **appends the result to the conversation history as just another message**, and, in the next request,
+**re-sends the entire history** (system prompt + every prior message + tool definitions). That is the whole agent
+loop — there is no other magic. The AI SDK's `streamText` hides this round trip, which is exactly why it surprises
+people.
+
+You can **confirm this with your own eyes** in the §③ network exercise. Open DevTools and you will see that the
+second request's `messages` has the first reply (`tool_use`) and the tool result (`tool_result`) appended to it —
+concrete proof that "the AI is stateless."
+
+> **Aside**: In reality, some providers offer stateful, conversation-style APIs that hold state server-side
+> (e.g. OpenAI's Responses / Conversations API). And **prompt caching** (which Anthropic supports) makes resending
+> a long history each call much cheaper. But neither changes the **principle you just observed**. The default
+> mental model is "the full history is resent every call" — and holding that model is what makes
+> **context-window limits**, and **why long agent sessions get expensive**, click into place.
 
 ## ② Where to read the code — a close reading of `src/lib/ai/agent.ts`
 
@@ -164,7 +184,8 @@ This `tool_use` block, too, is ultimately just a token sequence the model emitte
 
 Look at the `messages` of the second request onward and you see appended the
 **`tool_use` (the model's request) and `tool_result` (the execution result)** that were not in the first.
-This is "pile up the conversation and resend it each time" in the flesh.
+This is "pile up the conversation and resend it each time" in the flesh — and also **concrete proof that
+"the AI is stateless"** (see §①).
 
 > **The principle you can see**: The agent's substance is no more than a
 > **`tool_use` → execution → `tool_result` HTTP round-trip loop.** Number of requests = number of loop iterations.
