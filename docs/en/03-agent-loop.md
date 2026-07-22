@@ -157,6 +157,8 @@ Open the **Payload (the sent JSON)** of the first request and you see these 3 th
 
 The response is an **SSE (Server-Sent Events) stream**. Inside it a `tool_use` block appears, and you can see
 the model saying "I want to call `duckdb_query` with this `input`."
+This `tool_use` block, too, is ultimately just a token sequence the model emitted that the API structured for you
+(see [ch. 01, "Tool calling is just token prediction, extended"](./01-what-is-an-agent.md)).
 
 ### Counting the round trips
 
