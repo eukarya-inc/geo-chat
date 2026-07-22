@@ -44,8 +44,8 @@ Settings when you are done.
 ## Workshop docs
 
 The curriculum lives in [`docs/`](./docs) — a half-day workshop, "Taking an AI agent
-apart: how GIS × LLM actually works." It is written in Japanese for now (`docs/ja/`);
-an English translation (`docs/en/`) is coming. See [PLAN.md](./PLAN.md) for the design.
+apart: how GIS × LLM actually works." Available in Japanese ([`docs/ja/`](./docs/ja)) and
+English ([`docs/en/`](./docs/en)). See [PLAN.md](./PLAN.md) for the design.
 
 ## Tech stack
 
