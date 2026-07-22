@@ -1,16 +1,12 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-    ChartPlaceholder,
-    MapPlaceholder,
-    SqlPlaceholder,
-    TablePlaceholder,
-} from '@/components/workspace/placeholders';
+import { ChartPlaceholder, MapPlaceholder, TablePlaceholder } from '@/components/workspace/placeholders';
+import { SqlPanel } from '@/components/workspace/SqlPanel';
 
 const TABS = [
     { value: 'table', label: 'Table', content: <TablePlaceholder /> },
     { value: 'chart', label: 'Chart', content: <ChartPlaceholder /> },
     { value: 'map', label: 'Map', content: <MapPlaceholder /> },
-    { value: 'sql', label: 'SQL', content: <SqlPlaceholder /> },
+    { value: 'sql', label: 'SQL', content: <SqlPanel /> },
 ];
 
 export function WorkspacePanel() {
