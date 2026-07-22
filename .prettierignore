@@ -1,6 +1,7 @@
 dist
 node_modules
 tmp
+legacy-src
 coverage
 package-lock.json
 yarn.lock

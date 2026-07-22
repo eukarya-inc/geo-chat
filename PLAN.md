@@ -6,9 +6,9 @@
   システムプロンプト（1,346 行中 ~350 行がドメイン固有）、回帰・クラスタリングなどの統計ツール群、
   モックの同期レイヤーなど、ワークショップに不要なコードが大半を占める。
 - リファレンス実装 `../links-veda/bi-app` には、移植価値の高い設計が揃っている:
-  - Markdown ファイルベースの**スキルシステム**（frontmatter + `get_skill` ツール + 前提ゲート）
-  - **宣言的 spec 設計**（data 抜き Vega-Lite spec / MapLibre paint layers を table 単位で保持）
-  - shadcn/ui + Tailwind v4 のモダンな UI 構成
+    - Markdown ファイルベースの**スキルシステム**（frontmatter + `get_skill` ツール + 前提ゲート）
+    - **宣言的 spec 設計**（data 抜き Vega-Lite spec / MapLibre paint layers を table 単位で保持）
+    - shadcn/ui + Tailwind v4 のモダンな UI 構成
 - **方針: 新規スキャフォールドに価値あるモジュールを移植する「実質書き直し」。**
   差分改修では国会答弁ロジックの除去と god component の解体に同等以上の工数がかかるため。
 - **完全クライアントサイド SPA を維持**（バックエンドなし、GitHub Pages デプロイ）。
@@ -18,27 +18,27 @@
 
 ## 1. スコープ
 
-| 含む | 含まない |
-|---|---|
-| AI チャット（エージェントループ） | 認証・チーム管理 |
-| DuckDB-WASM + spatial 拡張 | 会話履歴の永続化（リロードで消えて OK） |
-| MapLibre 可視化（DuckDB → MVT） | ダッシュボード / react-grid-layout |
-| Vega-Lite グラフ可視化 | 統計ツール（回帰・クラスタリング） |
-| スキルシステム | 国会答弁など MLIT ドメイン機能 |
-| ワークショップ docs | plan gate / classify_task_shape（docs で紹介のみ） |
+| 含む                              | 含まない                                           |
+| --------------------------------- | -------------------------------------------------- |
+| AI チャット（エージェントループ） | 認証・チーム管理                                   |
+| DuckDB-WASM + spatial 拡張        | 会話履歴の永続化（リロードで消えて OK）            |
+| MapLibre 可視化（DuckDB → MVT）   | ダッシュボード / react-grid-layout                 |
+| Vega-Lite グラフ可視化            | 統計ツール（回帰・クラスタリング）                 |
+| スキルシステム                    | 国会答弁など MLIT ドメイン機能                     |
+| ワークショップ docs               | plan gate / classify_task_shape（docs で紹介のみ） |
 
 ## 2. 技術スタック
 
-| 領域 | 選定 | 備考 |
-|---|---|---|
-| フレームワーク | React 19 + Vite + TypeScript | 現行踏襲 |
-| UI | **Tailwind CSS v4 + shadcn/ui（new-york）** | bi-app と同構成。lucide-react |
-| 状態管理 | jotai（in-memory のみ） | 永続化なし。API キーのみ localStorage |
-| AI | **Vercel AI SDK v6** + `@ai-sdk/anthropic` | クライアント完結の `streamText` ループ |
-| DB | `@duckdb/duckdb-wasm`（安定版に更新） + spatial | 現在 dev ビルド固定なので解消 |
-| 地図 | maplibre-gl v5 | `duckdb://` カスタムプロトコル |
-| グラフ | vega-lite v6 + react-vega | `duckdb://` カスタム Loader |
-| テスト | Vitest（unit / browser 分離を踏襲） | in-source test 併用も検討 |
+| 領域           | 選定                                            | 備考                                   |
+| -------------- | ----------------------------------------------- | -------------------------------------- |
+| フレームワーク | React 19 + Vite + TypeScript                    | 現行踏襲                               |
+| UI             | **Tailwind CSS v4 + shadcn/ui（new-york）**     | bi-app と同構成。lucide-react          |
+| 状態管理       | jotai（in-memory のみ）                         | 永続化なし。API キーのみ localStorage  |
+| AI             | **Vercel AI SDK v6** + `@ai-sdk/anthropic`      | クライアント完結の `streamText` ループ |
+| DB             | `@duckdb/duckdb-wasm`（安定版に更新） + spatial | 現在 dev ビルド固定なので解消          |
+| 地図           | maplibre-gl v5                                  | `duckdb://` カスタムプロトコル         |
+| グラフ         | vega-lite v6 + react-vega                       | `duckdb://` カスタム Loader            |
+| テスト         | Vitest（unit / browser 分離を踏襲）             | in-source test 併用も検討              |
 
 ## 3. アーキテクチャ
 
@@ -68,11 +68,13 @@ public/data/           # サンプルデータ（日本の行政界 Parquet 等�
 ### 3.2 移植する資産
 
 **geo-chat（現リポジトリ）から:**
+
 - `components/map/utils/mvt.ts` — DuckDB spatial `ST_AsMVT` によるブラウザ内ベクタータイル生成 + LRU キャッシュ
 - `duckdb://` MapLibre プロトコル / Vega Loader
 - `lib/duckdb/globalDB.ts` の初期化、`arrowConverter` / `bomUtils`
 
 **bi-app から:**
+
 - **スキルシステム一式**: `skillRegistry.ts`（`import.meta.glob('.../*.md', { query: '?raw' })` で
   ビルド時読み込み、frontmatter = `description` / `tasks` / `deps`）、`get_skill` ツール、
   スキル未取得時にツールがエラーを返す**前提ゲート**（簡略版）
@@ -82,15 +84,15 @@ public/data/           # サンプルデータ（日本の行政界 Parquet 等�
 
 ### 3.3 捨てる・簡素化するもの
 
-| 対象 | 処置 |
-|---|---|
-| `systemPrompt.ts` の国会答弁ルール群 | 削除。汎用 GIS アシスタントプロンプトに書き直し |
-| 回帰・クラスタ・予測子選択ツール + ml-matrix/jstat 等 | 削除（依存ごと） |
-| `dbContext.ts` の 949 行接続プール | 単一スキーマ + 直列実行キューに簡素化（~150 行） |
-| `pages/ChatPage/index.tsx`（1,297 行） | shadcn Resizable ベースのレイアウトに分割 |
-| `StructuredMessageRenderer.tsx`（1,747 行）と HTML コメントマーカー規約 | AI SDK v6 の message parts を素直に描画 |
-| `chat-simple/`、dashboards、`store/sync.ts`、`utils/encryption.ts` | 削除（API キーは平文 localStorage + 注意書き） |
-| チャット複数管理（chatId = スキーマ） | 単一セッション + リセットボタンに簡素化 |
+| 対象                                                                    | 処置                                             |
+| ----------------------------------------------------------------------- | ------------------------------------------------ |
+| `systemPrompt.ts` の国会答弁ルール群                                    | 削除。汎用 GIS アシスタントプロンプトに書き直し  |
+| 回帰・クラスタ・予測子選択ツール + ml-matrix/jstat 等                   | 削除（依存ごと）                                 |
+| `dbContext.ts` の 949 行接続プール                                      | 単一スキーマ + 直列実行キューに簡素化（~150 行） |
+| `pages/ChatPage/index.tsx`（1,297 行）                                  | shadcn Resizable ベースのレイアウトに分割        |
+| `StructuredMessageRenderer.tsx`（1,747 行）と HTML コメントマーカー規約 | AI SDK v6 の message parts を素直に描画          |
+| `chat-simple/`、dashboards、`store/sync.ts`、`utils/encryption.ts`      | 削除（API キーは平文 localStorage + 注意書き）   |
+| チャット複数管理（chatId = スキーマ）                                   | 単一セッション + リセットボタンに簡素化          |
 
 ### 3.4 AI ツール（7 個に厳選）
 
@@ -109,15 +111,15 @@ public/data/           # サンプルデータ（日本の行政界 Parquet 等�
 
 ## 4. 実装フェーズ
 
-| Phase | 内容 | 完了条件 |
-|---|---|---|
-| 0 | リポジトリ掃除: 名称を geo-chat に統一、`dist/`・stale docs・`.DS_Store` 除去 | `npm run check` 通過 |
-| 1 | スキャフォールド: Tailwind v4 + shadcn 導入、2 ペインレイアウト | 空のチャット + タブ UI が表示 |
-| 2 | DuckDB コア: 初期化・spatial・ファイル/URL 取り込み・簡素化 dbContext | SQL 手実行でテーブル作成できる |
-| 3 | 可視化: Map（MVT プロトコル）、Chart（Vega Loader）、Table | 手動でデータが地図・グラフに出る |
-| 4 | AI エージェント: API キー入力 UI、streamText ループ、ツール群 | チャットから SQL→地図→グラフが通る |
-| 5 | スキルシステム: registry + get_skill + 前提ゲート | スキル md 追加で挙動が変わる |
-| 6 | docs 執筆 + サンプルデータ整備 + GitHub Pages デプロイ | ワークショップ通し試走 |
+| Phase | 内容                                                                          | 完了条件                           |
+| ----- | ----------------------------------------------------------------------------- | ---------------------------------- |
+| 0     | リポジトリ掃除: 名称を geo-chat に統一、`dist/`・stale docs・`.DS_Store` 除去 | `npm run check` 通過               |
+| 1     | スキャフォールド: Tailwind v4 + shadcn 導入、2 ペインレイアウト               | 空のチャット + タブ UI が表示      |
+| 2     | DuckDB コア: 初期化・spatial・ファイル/URL 取り込み・簡素化 dbContext         | SQL 手実行でテーブル作成できる     |
+| 3     | 可視化: Map（MVT プロトコル）、Chart（Vega Loader）、Table                    | 手動でデータが地図・グラフに出る   |
+| 4     | AI エージェント: API キー入力 UI、streamText ループ、ツール群                 | チャットから SQL→地図→グラフが通る |
+| 5     | スキルシステム: registry + get_skill + 前提ゲート                             | スキル md 追加で挙動が変わる       |
+| 6     | docs 執筆 + サンプルデータ整備 + GitHub Pages デプロイ                        | ワークショップ通し試走             |
 
 UI レイアウト: 左 = チャットパネル、右 = タブ（Table / Chart / Map / SQL）。
 AI ツールが結果を出したら該当タブを自動アクティブ化（bi-app の `setActiveTab` パターン）。
@@ -181,11 +183,11 @@ flowchart LR
 
 ワークショップに登場する「プロンプト」は 3 層あり、混同すると迷子になるため最初に区別を宣言する:
 
-| 層 | 何に入れる文字列か | 例 | ワークショップでの扱い |
-|---|---|---|---|
-| ① 利用プロンプト | 完成した geo-chat の**チャット欄**に打つ | 「人口 10 万人以上の市を塗り分けて」 | Step 1–2 で体験する入口 |
-| ② エージェント内プロンプト | **アプリの一部として組み込まれる**文字列: system prompt、ツールの description、スキル md | 「このツールは SQL を 1 文だけ実行する。地図表示が目的なら…」 | **本命。** Step 3 で読み、Step 4 で description を書き、Step 6 でスキル md を書く |
-| ③ 開発プロンプト | Claude Code 等の**コーディング AI に与える**実装指示 | 「このリポジトリに◯◯ツールを追加して。既存ツールの構造に合わせて」 | Step 4 以降の**実装手段**（手打ちコーディングの代替） |
+| 層                         | 何に入れる文字列か                                                                       | 例                                                                 | ワークショップでの扱い                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| ① 利用プロンプト           | 完成した geo-chat の**チャット欄**に打つ                                                 | 「人口 10 万人以上の市を塗り分けて」                               | Step 1–2 で体験する入口                                                           |
+| ② エージェント内プロンプト | **アプリの一部として組み込まれる**文字列: system prompt、ツールの description、スキル md | 「このツールは SQL を 1 文だけ実行する。地図表示が目的なら…」      | **本命。** Step 3 で読み、Step 4 で description を書き、Step 6 でスキル md を書く |
+| ③ 開発プロンプト           | Claude Code 等の**コーディング AI に与える**実装指示                                     | 「このリポジトリに◯◯ツールを追加して。既存ツールの構造に合わせて」 | Step 4 以降の**実装手段**（手打ちコーディングの代替）                             |
 
 ③で作ったツールが賢く使われるかは②の description の書き方で決まる——という
 ②③の連関そのものが学習内容。`appendix-prompts.md` には③を収録し、②は各章本文で扱う。
@@ -217,25 +219,25 @@ flowchart LR
 動くものを作る前に、動いているものを壊す。各ステップに fail-first
 （説明の前にまず失敗を体験する）を仕込む:
 
-| Step | 壊す実験 | 見える原理 |
-|---|---|---|
-| 1 | ツールを全部外して同じ質問をする | LLM 単体は「口だけ」。手（ツール）が能力の正体 |
-| 3 | DevTools の Network タブで Anthropic API を覗く | エージェントの実体は tool_use → 実行 → tool_result の HTTP 往復ループ |
-| 4 | ツールの description を空にする | LLM は description だけを頼りにツールを選ぶ。API 設計＝プロンプト設計 |
-| 5 | 「地図を塗る JavaScript を書いて」と頼む vs spec を頼む | 命令的コードは検証不能、宣言的 spec は検証・修復・差分可能 |
-| 6 | スキルなしで複雑な地図スタイルを頼む → 失敗 → スキル md を与える → 成功 | コンテキストは有限資源。必要な知識を必要な時だけ注入する progressive disclosure |
+| Step | 壊す実験                                                                | 見える原理                                                                      |
+| ---- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1    | ツールを全部外して同じ質問をする                                        | LLM 単体は「口だけ」。手（ツール）が能力の正体                                  |
+| 3    | DevTools の Network タブで Anthropic API を覗く                         | エージェントの実体は tool_use → 実行 → tool_result の HTTP 往復ループ           |
+| 4    | ツールの description を空にする                                         | LLM は description だけを頼りにツールを選ぶ。API 設計＝プロンプト設計           |
+| 5    | 「地図を塗る JavaScript を書いて」と頼む vs spec を頼む                 | 命令的コードは検証不能、宣言的 spec は検証・修復・差分可能                      |
+| 6    | スキルなしで複雑な地図スタイルを頼む → 失敗 → スキル md を与える → 成功 | コンテキストは有限資源。必要な知識を必要な時だけ注入する progressive disclosure |
 
 ### 5.7 タイムテーブル（半日・約 4 時間）
 
-| 時間 | Step | 体験の中心 |
-|---|---|---|
-| 0:00–0:30 | 1. 分解の前に、まず魔法を見る | デモ → GeoAI の地図 → ツール剥がし実験 → 「LLM + ツール + ループ」の骨組み提示 |
-| 0:30–1:00 | 2. ブラウザの中の GIS 基盤 | DuckDB-WASM で手で SQL（spatial 含む）。「サーバなしで空間分析」を体感 |
-| 1:00–1:40 | 3. ループを目撃する | DevTools で API 往復を実況。system prompt と tool schema の生 JSON を読む |
-| 1:40–2:25 | 4. ツールの解剖学 | name / description / inputSchema / execute。開発プロンプトで新ツールを AI に実装させる |
-| 2:25–2:55 | 5. 宣言的 spec という境界線 | Vega-Lite / MapLibre style がなぜ AI と相性抜群か。壊れた spec の自動修復を観察 |
-| 2:55–3:35 | 6. スキル＝ md ファイル 1 枚 | 自分のスキル md を書いてエージェントを賢くする。書く → 試す → 直すのループ |
-| 3:35–4:00 | 7. チャレンジ＆言語化 | 各自の課題（`ST_Buffer` 解析、PLATEAU 連携、Overture Maps 等）＋クロージング |
+| 時間      | Step                          | 体験の中心                                                                             |
+| --------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| 0:00–0:30 | 1. 分解の前に、まず魔法を見る | デモ → GeoAI の地図 → ツール剥がし実験 → 「LLM + ツール + ループ」の骨組み提示         |
+| 0:30–1:00 | 2. ブラウザの中の GIS 基盤    | DuckDB-WASM で手で SQL（spatial 含む）。「サーバなしで空間分析」を体感                 |
+| 1:00–1:40 | 3. ループを目撃する           | DevTools で API 往復を実況。system prompt と tool schema の生 JSON を読む              |
+| 1:40–2:25 | 4. ツールの解剖学             | name / description / inputSchema / execute。開発プロンプトで新ツールを AI に実装させる |
+| 2:25–2:55 | 5. 宣言的 spec という境界線   | Vega-Lite / MapLibre style がなぜ AI と相性抜群か。壊れた spec の自動修復を観察        |
+| 2:55–3:35 | 6. スキル＝ md ファイル 1 枚  | 自分のスキル md を書いてエージェントを賢くする。書く → 試す → 直すのループ             |
+| 3:35–4:00 | 7. チャレンジ＆言語化         | 各自の課題（`ST_Buffer` 解析、PLATEAU 連携、Overture Maps 等）＋クロージング           |
 
 冒頭に骨組みだけのコンセプトマップ（エージェント = LLM + ツール + ループ + コンテキスト、
 その下に DuckDB / 地図 / グラフ = 実行系、境界に宣言的 spec）を提示し、
