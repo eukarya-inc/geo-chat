@@ -150,3 +150,34 @@ In Vega-Lite specs, never set `data`/`width`/`height` — the app injects them.
   needs DuckDB-WASM, MapLibre GL, MVT processing, WebAssembly, or other browser-only APIs.
 - Tests live alongside the source they cover. `npm test` runs unit only (fast loop);
   `npm run test:full` (CI) adds browser tests.
+- `*.eval.browser.test.ts` — **evals** (see below), a separate vitest project that is
+  excluded from `test:browser` and CI. Run only with `npm run test:evals`.
+
+## Chapter branches & evals
+
+The workshop is taught as an **observation** workshop: the curriculum walks through
+chapter branches that are each `main` minus one capability layer, created by
+**subtracting** features (deleting files + a few obvious lines), never by adding them.
+`main` is the full app (all tools + the evals capstone). The exact branch set is
+finalized in later tasks; the point here is that the code is structured so subtraction
+is clean.
+
+- **`// CHAPTER SEAM: <layer>` comments** mark where a chapter branch drops a whole
+  capability. They live in `src/lib/ai/tools/index.ts` (`createTools` composes the tool
+  registry from clearly grouped `dataTools` / `visualizationTools` / `skillSystem`
+  sections), in `src/lib/ai/systemPrompt.ts` (the prompt is assembled from named CORE /
+  DATA / VISUALIZATION / SKILLS sections), and — for the validation layer — as
+  `// CHAPTER SEAM: validation layer` in `updateMapStyle.ts` / `updateChartSpec.ts`,
+  where the fuzzy-column-correction + `compile()` preflight + paint-prefix checks are
+  extracted into `mapStyleValidation.ts` / `chartSpecValidation.ts` so a "naive" branch
+  can replace the call with a one-line passthrough. Keep seams and the registry comment
+  table in sync when you touch these files.
+- **`src/evals/`** is the ch6/main capstone: a small, readable harness (`runEval.ts`)
+  that drives the **real** agent loop against the **real** Anthropic API headlessly in
+  the browser test env, plus `basic.eval.browser.test.ts` (a couple of end-state
+  assertions over N runs). Evals **cost real money**, so they are a separate vitest
+  project run only via `npm run test:evals` — never in `npm run check`, `test:browser`,
+  or CI. The key is read from `VITE_ANTHROPIC_API_KEY` / `ANTHROPIC_API_KEY` (the
+  gitignored `.env` at the repo root; injected via `vitest.workspace.ts` `define`), and
+  the suite **skips cleanly** when no key is present. Tune with `VITE_EVAL_RUNS` and
+  `VITE_EVAL_THRESHOLD`.

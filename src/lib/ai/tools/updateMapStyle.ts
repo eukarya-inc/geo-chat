@@ -2,12 +2,9 @@ import { tool } from 'ai';
 import { z } from 'zod';
 
 import { getTableSchema } from '@/lib/duckdb/db';
-import { layerTypeFor, type GeometryKind, type TableMapStyle } from '@/lib/map/mapSpec';
+import type { TableMapStyle } from '@/lib/map/mapSpec';
 import type { ToolContext } from '../toolContext';
-import { collectGetColumns, matchColumn, rewriteGetColumns } from './columnMatch';
-
-/** The paint-property prefix each geometry kind's MapLibre layer accepts. */
-const PAINT_PREFIX: Record<GeometryKind, string> = { point: 'circle-', line: 'line-', polygon: 'fill-' };
+import { validateMapStyleInput } from './mapStyleValidation';
 
 export function createUpdateMapStyleTool(ctx: ToolContext) {
     return tool({
@@ -29,41 +26,22 @@ export function createUpdateMapStyleTool(ctx: ToolContext) {
                 return { error: `Table "${table}" has no geometry column and cannot be shown on the map.` };
             }
 
-            // 1. Paint keys must belong to this geometry kind's layer type.
-            const prefix = PAINT_PREFIX[geometryType];
-            const layerType = layerTypeFor(geometryType);
-            const badKeys = Object.keys(paint).filter(k => !k.startsWith(prefix));
-            if (badKeys.length > 0) {
-                return {
-                    error: `Paint properties [${badKeys.join(', ')}] are not valid for a ${layerType} layer. Use ${prefix}* properties for ${geometryType} geometry.`,
-                };
-            }
-
-            // 2. Every ["get", col] must reference a real column; auto-correct near-misses.
-            const columnNames = schema.map(c => c.name);
-            const referenced = collectGetColumns([...Object.values(paint), ...Object.values(layout ?? {})]);
-            const rename = new Map<string, string>();
-            const corrections: string[] = [];
-            for (const ref of referenced) {
-                const match = matchColumn(ref, columnNames);
-                if (!match.ok) {
-                    return {
-                        error: `Column "${ref}" does not exist in "${table}". Valid columns: ${columnNames.join(', ')}.`,
-                    };
-                }
-                if (match.corrected) {
-                    rename.set(ref, match.name);
-                    corrections.push(`"${ref}" → "${match.name}"`);
-                }
-            }
-
-            const fixedPaint = rewriteGetColumns(paint, rename) as Record<string, unknown>;
-            const fixedLayout = layout ? (rewriteGetColumns(layout, rename) as Record<string, unknown>) : undefined;
+            // CHAPTER SEAM: validation layer — paint-prefix checks + fuzzy column correction.
+            // A "naive" chapter branch replaces this call with a passthrough returning
+            // { ok: true, paint, layout, corrections: [] } (see mapStyleValidation.ts).
+            const validated = validateMapStyleInput({
+                table,
+                geometryType,
+                paint,
+                layout: layout ?? undefined,
+                columns: schema.map(c => c.name),
+            });
+            if (!validated.ok) return { error: validated.error };
 
             const style: TableMapStyle = {
                 geometryType,
-                paint: fixedPaint,
-                ...(fixedLayout ? { layout: fixedLayout } : {}),
+                paint: validated.paint,
+                ...(validated.layout ? { layout: validated.layout } : {}),
             };
             ctx.setMapStyle(table, style);
             ctx.setSelectedTable(table);
@@ -72,7 +50,7 @@ export function createUpdateMapStyleTool(ctx: ToolContext) {
             return {
                 success: true,
                 table,
-                ...(corrections.length > 0 ? { corrected: corrections } : {}),
+                ...(validated.corrections.length > 0 ? { corrected: validated.corrections } : {}),
             };
         },
     });
