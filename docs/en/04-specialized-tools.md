@@ -766,7 +766,7 @@ familiar-looking ways:
     or
 
     ```text
-    Column "populaton" does not exist in "prefecture_areas". Valid columns: prefecture, area_km2.
+    Column "populaton" does not exist in "prefecture_areas". Valid columns: prefecture, geom, area_km2.
     ```
 
     Most of the time the model reads that error and self-corrects on the very next tool call, the
@@ -789,12 +789,15 @@ far (tools, skills, the gate, validation) is present and working exactly as desi
 
 ## ⑤ Hands-on — have the AI implement the `buffer_analysis` tool
 
-Chapter 2's ④ broke on exactly one query class: anything needing `ST_Buffer` in real-world meters,
-correctly projected. `duckdb_query` could run the SQL, but nothing stopped the model from measuring
-in degrees by mistake, and nothing packaged "buffer, then draw it" into one dependable step. Now
-that you've seen what a _specialized_ tool actually requires — a tight `description`, a validated
-shape, a registered entry — turn that exact query class into your own tool, with the AI writing the
-implementation from a **③ development prompt**.
+Chapter 2's ④ broke on getting real-world units right at all: `ST_Area` run straight on unprojected
+WGS84 geometry (the km² prompt), and a meters-vs-degrees mismatch in a radius search (the 30 km
+prompt). `duckdb_query` ran every statement it was asked to without complaint; nothing stopped the
+model from measuring in degrees by mistake, and nothing packaged "project, then measure/buffer" into
+one dependable step. `ST_Buffer` is one more operation from that exact same trap family — same
+projection dance, same `always_xy` requirement — that chapter 2 never even tried. Now that you've
+seen what a _specialized_ tool actually requires — a tight `description`, a validated shape, a
+registered entry — bake the correct projection handling for this operation into a tool of your own,
+with the AI writing the implementation from a **③ development prompt**.
 
 We add a new tool, **`buffer_analysis`**. It applies a buffer with `ST_Buffer` to a specified
 table's features and creates a **new table**. Rather than hand-typing it, paste this to Claude Code
@@ -865,7 +868,8 @@ you'll see the exact same gate refusal ②-3 demonstrated, one tool call earlier
 expect.
 
 This exercise is developed further in chapter 5's challenge, combined with `ST_Intersects` — the
-query class that broke chapter 2 is now, permanently, a specialized, validated tool of your own.
+same failure family that broke chapter 2 (real-world units, correctly projected) is now,
+permanently, a specialized, validated tool of your own.
 
 ## ⑥ Development prompts
 
