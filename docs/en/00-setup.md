@@ -125,4 +125,4 @@ Show the Japanese municipalities on the map
 - **DuckDB does not initialize / blank screen** → check you're on a supported browser (latest Chrome / Edge / Firefox).
   If it still won't clear, see "The app doesn't boot" in the appendix.
 
-When you are ready, go on to [01. What is an AI agent](./01-what-is-an-agent.md).
+When you are ready, go on to [01. A bare model](./01-bare-model.md).

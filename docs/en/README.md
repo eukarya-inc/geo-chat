@@ -1,4 +1,4 @@
-# Taking AI Agents Apart — How GIS × LLM Actually Works
+# Building a Geospatial Agent, One Failure at a Time — GIS × LLM from the inside
 
 Participant curriculum for a 3-hour FOSS4G workshop.
 
@@ -8,14 +8,29 @@ geo-chat combines DuckDB-WASM (SQL analysis), MapLibre GL (maps), and Vega-Lite 
 all running inside the browser, with Anthropic Claude wired in as the agent.
 Ask it in natural language — "color the municipalities by prefecture and show them on the map" — and SQL runs and the map gets colored.
 
+The agent starts bare and gains one tier of capability per chapter, and every chapter ends
+with a real geospatial request that breaks the current stack.
+
 ## Transfer Goal
 
-> The week after the workshop, a participant can **design their own "tools" and "skills" for their
-> own data and work problems, wire them into an agent, and explain and debug its behavior not as
-> magic but at the level of API requests.**
+> The week after the workshop, a participant can **curate the right tool stack for their own
+> geodata** — knowing when a general-purpose tool is enough, when a knowledge gap calls for a
+> skill, and when a task deserves a specialized, validated tool — and can **explain and debug
+> the agent's behavior at the level of API requests.**
 
 The goal is not "memorized how it works" but "can apply it to a problem never seen before (transfer)."
 This material is narrowed down to only what serves the sentence above. It is not a comprehensive API reference.
+
+## Learning Outcomes
+
+By the end of the workshop, you will have:
+
+- experimented with an agent at every tier of capability, from a bare model to a full
+  geospatial tool stack, and watched each tier fail on a real geospatial request
+- learned to extend an agent's capability with skills (one markdown file) and specialized
+  tools (description + schema + validation), and to enforce conventions with a gate
+- gained an intuition for the trade-offs: specialized vs. general-purpose tools,
+  low floor vs. high ceiling, and how to evolve a tool stack from logged behavior
 
 ## Audience and Prerequisites
 
@@ -28,36 +43,31 @@ This material is narrowed down to only what serves the sentence above. It is not
 
 ## "Learn by Breaking" — How This Workshop Works
 
-Every chapter includes a **fail-first** "break-it experiment" (experience the failure before the explanation).
-Before you build something that works, you deliberately break something that already works, so you can see with
-your own eyes what is doing the heavy lifting. Change one line of code, watch the behavior fall apart, then put it
-back and read the concept — that order is the whole point.
+Every chapter includes a **fail-first** "break-it moment" (experience the failure before the explanation).
+Where a purely didactic course would build up to something that works, here the failure is not staged for
+you — it is the honest result of asking the agent, at its current tier, a real geospatial request. You watch
+the current tool stack fall short, then read why, and the next chapter hands the agent the piece that fixes
+it. Break, then explain — that order is the whole point.
 
-Every chapter follows the same structure:
+Every chapter follows the same six-part structure:
 
-1. **Concept** — the idea the chapter deals with
-2. **Where to read the code** — open the actual source files and read them
-3. **Break-it experiment** — fail-first. Change one line to break it and see the principle
-4. **Hands-on exercise** — try it with your own data and your own hands
-5. **Development prompt examples** — instructions for getting Claude Code and the like to implement it (the layer-③ prompts; collected in the appendix)
+1. **① The agent so far** — a diagram of the tool stack, grown one tier from the previous chapter
+2. **② The new piece** — the concept this chapter adds, and where to read the code for it in geo-chat
+3. **③ Run it** — prompts that demonstrably work at this tier
+4. **④ Where this fails** — a real geospatial request that breaks the current stack
+5. **⑤ Hands-on** — try it with your own data and your own hands
+6. **⑥ Development prompts** — instructions for getting Claude Code and the like to implement it (the layer-③ prompts; collected in the appendix)
 
-## Timetable and Chapters
+## Course Outline
 
-| Time      | Step / Chapter                                                 | Core experience                                                                             |
-| --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| (setup)   | [00-setup.md](./00-setup.md)                                   | clone / `npm i` / `npm run dev` / get and enter the API key / verify with the built-in data |
-| 0:00–0:20 | [01. What is an AI agent](./01-what-is-an-agent.md)            | demo → the GeoAI map → tool-stripping experiment → "LLM + tools + loop + context"           |
-| 0:20–0:45 | [02. A GIS foundation inside the browser](./02-duckdb-wasm.md) | Write SQL by hand in DuckDB-WASM (including spatial). Feel "spatial analysis, no server"    |
-| 0:45–1:20 | [03. Witnessing the loop](./03-agent-loop.md)                  | Read `agent.ts` closely and narrate the Anthropic API round-trips in DevTools               |
-| 1:20–1:55 | [04. Anatomy of a tool](./04-building-tools.md)                | name / description / inputSchema / execute. Have a development prompt implement a new tool  |
-| 1:55–2:15 | [05. The declarative-spec boundary](./05-declarative-specs.md) | Why Vega-Lite / MapLibre style pair so well with AI. Watch a broken spec get auto-repaired  |
-| 2:15–2:45 | [06. A skill = one md file](./06-skill-system.md)              | Write your own skill md to make the agent smarter. The write → try → fix loop               |
-| 2:45–3:00 | [07. Challenge and articulation](./07-challenge.md)            | Kick off your own problem (`ST_Buffer` analysis, PLATEAU, Overture Maps, etc.) + closing    |
-
-> **About chapter 07**: The final 15 minutes are spent only on **kicking off a challenge and the closing question**,
-> not on finishing one. The challenges are intentionally sized larger than the slot — they are meant to be
-> **carried through at your own pace after the workshop.** In the room you just "pick one → take the first step →
-> write the closing one-liner."
+| Time      | Chapter                                                      | The agent gains                                   | Where it fails                                      |
+| --------- | ------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------- |
+| (setup)   | [00-setup.md](./00-setup.md)                                 | a running app + API key                           | —                                                   |
+| 0:00–0:30 | [01. A bare model](./01-bare-model.md)                       | nothing — LLM + loop, zero tools                  | all talk: it can describe SQL, it cannot touch data |
+| 0:30–1:20 | [02. One general-purpose tool](./02-general-purpose-tool.md) | `duckdb_query`, `load_builtin_dataset`            | spatial requests: degrees-vs-meters garbage         |
+| 1:20–1:55 | [03. Knowledge on demand](./03-skills.md)                    | `get_skill` + skill files                         | right numbers, trapped in text — no map, no chart   |
+| 1:55–2:35 | [04. Specialized tools](./04-specialized-tools.md)           | map / chart / geocode tools, validation, the gate | occasional wrong tool or wrong parameters           |
+| 2:35–3:00 | [05. Curate your stack](./05-curate-your-stack.md)           | a design theory + your own challenge              | —                                                   |
 
 ### Appendices
 
@@ -73,7 +83,7 @@ The word "prompt" in this workshop splits into 3 layers. Mixing them up gets you
 | Layer                | What kind of string it goes into                                              | Example                                     | Chapters                                                           |
 | -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
 | ① usage prompt       | typed into the **chat box** of the finished geo-chat                          | "color the municipalities by prefecture"    | 01–02 (experienced as the entry point)                             |
-| ② in-agent prompt    | the system prompt / tool description / skill md **built into the app itself** | "this tool runs exactly one SQL statement…" | **the main event.** read in 03, written in 04 and 06               |
+| ② in-agent prompt    | the system prompt / tool description / skill md **built into the app itself** | "this tool runs exactly one SQL statement…" | **the main event.** read in 02–03, written in 03–04                |
 | ③ development prompt | implementation instructions **given to a coding AI** such as Claude Code      | "add an ◯◯ tool to this repository"         | the means of implementation from 04 on (collected in the appendix) |
 
 Whether the tool you built in ③ gets used intelligently is decided by how you write the description in ② —
