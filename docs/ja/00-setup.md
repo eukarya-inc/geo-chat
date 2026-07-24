@@ -12,7 +12,7 @@
   `nvm` / `volta` などで更新）
 - **モダンブラウザ**: Chrome / Edge / Firefox の最新版。
   geo-chat は **WebAssembly と Web Worker** を使うため、
-  古いブラウザや一部の埋め込み環境では動きません（DuckDB-WASM の詳細は 02 章で触れます）。
+  古いブラウザや一部の埋め込み環境では動きません（DuckDB-WASM の詳細は 2 章で触れます）。
 - **Anthropic API キー**（次のステップで取得）
 
 ## 2. クローンして起動
@@ -39,7 +39,7 @@ npm run dev       # 開発サーバ起動（vite）
 
 チャット（AI エージェント）を動かすには、自分の Anthropic API キーが必要です。
 geo-chat はバックエンドを持たず、**ブラウザから直接 Anthropic API を呼びます**
-（この仕組み自体を 03 章で分解します）。
+（この仕組み自体を 2 章で分解します）。
 
 1. [console.anthropic.com](https://console.anthropic.com) でアカウントを作成 / ログイン。
 2. **Billing** で少額の **プリペイドクレジット**（例: 5 ドル）をチャージします。
@@ -83,10 +83,10 @@ geo-chat はバックエンドを持たず、**ブラウザから直接 Anthropi
 （`src/lib/ai/builtinDatasets.ts`）で、その内容が system prompt を通じてモデルに渡ります。
 そのため **「日本の自治体を地図に表示して」と頼むだけで、エージェントが自分でこのデータを
 読み込みます**——URL を手で入力する必要はありません。レジストリに 1 行足せば、新しいデータセットを
-エージェントに教えられます（この「② の層に知識を持たせる」発想は 06 章のスキルと同じです）。
+エージェントに教えられます（この「② の層に知識を持たせる」発想は 3 章のスキルと同じです）。
 
 **自分の好きなデータを読み込みたいとき** は、SQL タブの「Import from URL」に URL と
-テーブル名を入れて Import します（02 章の課題や 07 章のチャレンジで使います）。
+テーブル名を入れて Import します（2 章の課題や 5 章のチャレンジで使います）。
 バンドル済みサンプルを手で読むなら URL は `/geo-chat/data/japan_cities.parquet`
 （`import.meta.env.BASE_URL` + `data/…`）です。
 
@@ -127,4 +127,4 @@ Show the Japanese municipalities on the map
 - **DuckDB が初期化されない / 真っ白** → 対応ブラウザ（Chrome / Edge / Firefox の最新版）か確認。
   直らなければ付録の「アプリが起動しない」を参照。
 
-準備ができたら [01. AI エージェントとは何か](./01-what-is-an-agent.md) へ進みます。
+準備ができたら [01. 裸のモデル](./01-bare-model.md) へ進みます。
