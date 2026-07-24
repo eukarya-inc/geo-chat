@@ -4,6 +4,32 @@
 
 ---
 
+## ブランチ切り替えのハマりどころ
+
+このワークショップは章ブランチを `git switch` で行き来します（[00-setup.md](./00-setup.md)）。
+ここ特有の詰まりポイント:
+
+### 切り替えたのに挙動が変わらない
+
+- **開発サーバを再起動** してください（`Ctrl+C` → `npm run dev`）。Vite は多くの変更を
+  自動で読み直しますが、章によってモジュール構成が変わるため、確実を期すなら再起動が安全です。
+- **特に 50 章（`chapter/04-skills`）と `main` のスキルは、ビルド時 glob** で読み込まれます。
+  スキルの有無が変わるブランチ移動では **必ず再起動** を。
+- ブラウザ側もハードリロード（Cmd/Ctrl+Shift+R）すると、古いバンドルの取り違えを防げます。
+
+### API キーを入れ直す必要はある？
+
+- **いりません。** キーはブラウザの **localStorage** に保存され、`git switch` では消えません。
+  一度入れれば、全章を通して使えます（キーを消したいときは Settings かブラウザの
+  localStorage をクリア）。
+
+### `git switch` がローカル変更で失敗する
+
+- 壊す実験などで編集したまま切り替えようとすると、Git が上書きを拒みます。観察に徹するなら
+  `git restore .`（変更を捨てる）か `git stash`（退避）してから切り替えてください。
+
+---
+
 ## API キー関連
 
 ### `401` / `unauthorized` / `check your API key`
@@ -104,6 +130,10 @@ SELECT * REPLACE (ST_Transform("geom", 'EPSG:6677', 'EPSG:4326', always_xy := tr
 FROM "t";
 ```
 
+> **50 章の観察との関係**: この軸順の罠（`always_xy` 忘れ）は、まさにスキル層の観察で
+> エージェントが踏んだバグです。`duckdb.spatial` スキルを取得したモデルは `always_xy := true`
+> を付けて自己修正しました。人間も同じところで詰まります。
+
 ### (c) 行が 0 件 / ジオメトリが NULL
 
 フィルタや結合で結果が空になっていないか確認します。特に空間結合で
@@ -113,6 +143,13 @@ FROM "t";
 > **切り分けのコツ**: 地図が「正しい場所にズームしたのに何も描かれない」なら、
 > ジオメトリは有効だが SELECT で属性/対象を落としている可能性が高い（上記 c）。
 > 「世界地図のまま動かない」なら座標系（b）かジオメトリ型（a）を疑います。
+
+### (d) 地図ツールが「先にスキルを取れ」と拒否した（50 章 / main のみ）
+
+スキル層のあるブランチ（`chapter/04-skills` / `main`）では、`update_map_style` は
+`map.*` スキルを取得するまで **副作用なしで拒否** します。ツールカードの output に
+`Fetch the 'map.styling' skill…` が出ていたら、それは前提ゲート（50 章）です。バグでは
+ありません——モデルは通常、これを読んで自分で `get_skill` を呼び直します。
 
 ---
 
@@ -126,10 +163,11 @@ NFC 正規化、大文字小文字の差を含む）と描画できません。
 **対処**:
 
 - `DESCRIBE "<table>"` で **正確な列名** を確認し、spec の `field` に使う。
-- チャット経由なら `update_chart_spec` が列名を照合・自動補正し、無い列は error を返します
-  （`updateChartSpec.ts`）。ツールカードの output に `corrected` や error が出ていないか見る。
+- チャット経由なら（検証層のあるブランチでは）`update_chart_spec` が列名を照合・自動補正し、
+  無い列は error を返します（40 章 / `chartSpecValidation.ts`）。ツールカードの output に
+  `corrected` や error が出ていないか見る。**30 章（naive）では自動補正が無い** ことも思い出す。
 - 手編集（ChartPanel のエディタ）では自動補正は効きません。手で合わせてください。
-- `data` / `width` / `height` を spec に **書かない**（アプリが注入。書くと拒否される）。
+- `data` / `width` / `height` を spec に **書かない**（アプリが注入。検証層では拒否される）。
 - `type`（quantitative / nominal / ordinal / temporal）を各チャネルに明示する
   （`vega.basics` スキル参照）。
 
@@ -147,14 +185,24 @@ NFC 正規化、大文字小文字の差を含む）と描画できません。
 
 ---
 
+## evals が動かない（60 章 / main）
+
+- **全部 skip される**: キーが見つかっていません。`.env`（リポジトリ直下、gitignore 済み）に
+  `ANTHROPIC_API_KEY=sk-ant-…` を 1 行置いてください。`vitest.workspace.ts` がこれを
+  evals バンドルに注入します。キーが無いと suite は **綺麗に skip**（失敗ではない）します。
+- **`npm run check` や CI で evals が走ってしまう**: 走りません。evals は独立した vitest
+  プロジェクトで、`test:evals` でしか実行されません（課金対策）。
+- **高くつく / 遅い**: `VITE_EVAL_RUNS=1` で回数を絞る。既定は 2。
+
+---
+
 ## npm / 開発サーバ
 
 - **`npm install` が失敗する**: Node.js のバージョンを確認（`node -v`、**20 以上**）。
-  古いと lockfile 解決や WASM 関連で落ちます。
 - **`npm run dev` のポートが使われている**: 別プロセスが 5173 を使用中。停止するか、
   Vite が自動で次のポートを選ぶのでその URL を開く。
 - **スキルを足したのにカタログに出ない**: スキルは **ビルド時 glob** で読み込むため、
-  ファイル追加後は **開発サーバを再起動**（`Ctrl+C` → `npm run dev`）してください（06 章）。
+  ファイル追加後は **開発サーバを再起動**（`Ctrl+C` → `npm run dev`）してください（50 章）。
 - **ツールを足したのにモデルが使わない**: `src/lib/ai/tools/index.ts` の `createTools` に
   **登録し忘れ** ていないか確認（登録しないと `tools` に出ずモデルから見えません）。
 
@@ -170,5 +218,5 @@ geo-chat は **WebAssembly + Web Worker** を必要とします。
 ---
 
 困ったら、まず **チャットのツールカードを開いて `input` / `output` を読む**、
-次に **DevTools の Network で `api.anthropic.com` の往復を見る**（03 章）——
+次に **DevTools の Network で `api.anthropic.com` の往復を見る**（20 章）——
 この 2 つで、大半の「なぜ動かない」は原因の層まで切り分けられます。

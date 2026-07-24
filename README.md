@@ -37,7 +37,8 @@ npm run dev
 Open the printed local URL, click **Settings**, and paste your
 [Anthropic API key](https://console.anthropic.com/). Then try:
 
-> Load `/geo-chat/data/japan_cities.parquet` and show cities with population over 100,000 on the map.
+> 自治体を都道府県ごとに色分けして地図に表示して
+> (“Show Japanese municipalities on the map, colored by prefecture” — the agent loads the bundled sample data by itself.)
 
 The API key is stored in plain `localStorage` and sent **only** to the Anthropic API,
 directly from your browser (there is no backend). Use a personal key and delete it from
@@ -45,9 +46,11 @@ Settings when you are done.
 
 ## Workshop docs
 
-The curriculum lives in [`docs/`](./docs) — a 3-hour workshop, "Taking an AI agent
-apart: how GIS × LLM actually works." Available in Japanese ([`docs/ja/`](./docs/ja)) and
-English ([`docs/en/`](./docs/en)).
+The curriculum lives in [`docs/`](./docs) — a 3-hour **observation** workshop, "Taking an AI
+agent apart: watching GIS × LLM assemble itself layer by layer." Participants `git switch`
+through **chapter branches** (each `main` minus one capability layer) and watch the same GIS
+problem become progressively solvable as tools, validation, skills, and evals are added back.
+Available in Japanese ([`docs/ja/`](./docs/ja)) and English ([`docs/en/`](./docs/en)).
 
 ## Tech stack
 
@@ -76,10 +79,11 @@ implement it with you.
   `heatmap-*` and `fill-extrusion-*` (3D) would unlock new visualizations end-to-end.
 - **More sample datasets & recipes** — PLATEAU (Japanese 3D city models) and
   Overture Maps GeoParquet make great advanced material (see
-  [`docs/en/07-challenge.md`](./docs/en/07-challenge.md)).
+  [`docs/en/70-beyond.md`](./docs/en/70-beyond.md)).
 - **Screenshots / demo GIF in this README.**
-- **Workshop timing variants** — the curriculum assumes 3 hours; a compressed
-  2-hour variant (skipping ch.05) would fit more conference slots.
+- **Workshop timing variants** — the curriculum assumes 3 hours (six 25-minute chapter
+  slots); a compressed 2-hour variant (e.g. folding the 30/40 validation chapters together)
+  would fit more conference slots.
 
 ## License
 

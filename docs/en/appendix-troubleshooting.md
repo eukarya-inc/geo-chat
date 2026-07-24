@@ -1,6 +1,32 @@
 # Appendix: Troubleshooting
 
-Problems you're likely to hit during the workshop, and how to deal with them. Look them up by symptom.
+Common problems during the workshop and how to fix them. Look yours up by symptom.
+
+---
+
+## Branch-switching gotchas
+
+This workshop moves between chapter branches with `git switch` ([00-setup.md](./00-setup.md)).
+Sticking points specific to that:
+
+### Switched, but behavior didn't change
+
+- **Restart the dev server** (`Ctrl+C` → `npm run dev`). Vite reloads many changes
+  automatically, but module composition changes between chapters, so a restart is the safe move.
+- **Especially the ch. 50 (`chapter/04-skills`) and `main` skills are a build-time glob.** Any
+  branch move that changes whether skills exist **requires a restart**.
+- A hard browser reload (Cmd/Ctrl+Shift+R) also avoids picking up a stale bundle.
+
+### Do I need to re-enter the API key?
+
+- **No.** The key is stored in the browser's **localStorage** and survives `git switch`. Enter it
+  once and it works across all chapters (to remove it, clear Settings or the browser's localStorage).
+
+### `git switch` fails because of local changes
+
+- If you edited files (e.g. during a break-it experiment) and try to switch, Git refuses to
+  overwrite. For pure observation, `git restore .` (discard changes) or `git stash` (shelve them)
+  before switching.
 
 ---
 
@@ -8,87 +34,94 @@ Problems you're likely to hit during the workshop, and how to deal with them. Lo
 
 ### `401` / `unauthorized` / `check your API key`
 
-The key is wrong or not set. Open Settings and paste `sk-ant-…` again.
-`friendlyError` in `useAgentChat.ts` automatically appends "check your API key in Settings." to 401-family messages.
+The key is wrong or unset. Open Settings and re-paste `sk-ant-…`. `useAgentChat.ts`'s
+`friendlyError` appends "check your API key in Settings." to 401-type messages.
 
 ### `credit balance is too low` / `400`
 
-The key is correct, but your Anthropic account's **credit balance is 0.**
-Add prepaid credit under Billing at [console.anthropic.com](https://console.anthropic.com)
-(step 3 of [00-setup.md](./00-setup.md)).
+The key is fine, but your Anthropic account's **credit balance is zero**. Add prepaid credit under
+Billing at [console.anthropic.com](https://console.anthropic.com) ([00-setup.md](./00-setup.md)
+step 3).
 
 ### `429` / `rate limit`
 
-You sent too many requests in a short time. Wait a little and resend. `friendlyError` appends
-"rate limit reached; wait a moment and try again." It's especially likely to happen when many people share the same
-key on the day, so in that case splitting to individual keys is the sure fix.
+Too many requests too fast. Wait a moment and resend. `friendlyError` appends "rate limit reached;
+wait a moment and try again." This is likelier when many people share one key on the day; splitting
+to individual keys is the reliable fix.
 
 ---
 
-## Loading a remote file fails (CORS)
+## Remote file load fails (CORS)
 
-**Symptom**: Loading a URL from the SQL tab's "Import from URL" or from the chat fails with `Failed to fetch` or a
-CORS error.
+**Symptom**: "Import from URL" in the SQL tab, or a URL load via chat, fails with `Failed to
+fetch` or a CORS error.
 
-**Cause**: geo-chat is fully client-side, and the **browser fetches files directly**
-(`createTableFromUrl` in `src/lib/duckdb/db.ts`). So if the **serving server does not allow CORS**
-(`Access-Control-Allow-Origin`), the browser blocks it. This is not an app bug; it's a web security specification.
+**Cause**: geo-chat is fully client-side and the **browser fetches files directly**
+(`createTableFromUrl` in `src/lib/duckdb/db.ts`). So if the **origin server doesn't allow CORS**
+(`Access-Control-Allow-Origin`), the browser blocks it. This is not an app bug — it's a web
+security rule.
 
-**What to do**:
+**Fix**:
 
-- **Use a CORS-enabled host** — GitHub raw, many open-data distributions, an S3 bucket with CORS configured, etc.
-- **Download and re-serve** — grab the file, place it in `public/data/`, and read it as `/geo-chat/data/<file>`
-  (the same method as the bundled samples; same-origin, so no CORS needed).
+- **Use a CORS-enabled host** — GitHub raw, many open-data services, a CORS-configured S3 bucket.
+- **Download and re-serve** — drop the file into `public/data/` and read it as `/geo-chat/data/<file>`
+  (same method as the bundled samples; same-origin, no CORS needed).
 - **Proxy** — go through a proxy that adds CORS (not recommended for the workshop; at your own risk).
 
-> If the bundled samples (`japan_cities.parquet`, etc.) load but an external URL doesn't, it's almost certainly CORS.
+> If the bundled samples (`japan_cities.parquet`, etc.) load but an external URL doesn't, it's
+> almost certainly CORS.
 
 ---
 
-## Blank screen / DuckDB doesn't initialize (the app doesn't boot)
+## Blank screen / DuckDB won't initialize (app won't start)
 
-**Symptom**: The SQL tab is stuck at "Initializing DuckDB…", or the screen stays blank.
+**Symptom**: the SQL tab stays "Initializing DuckDB…", or the screen stays blank.
 
-**Cause**: DuckDB-WASM initialization depends on **WebAssembly and Web Workers.** In environments where these are
-unavailable — an old browser, a page opened directly with `file://`, or an extension that blocks workers/scripts —
-initialization does not proceed.
+**Cause**: DuckDB-WASM init depends on **WebAssembly and Web Workers**. Where those aren't
+available — old browsers, opened directly via `file://`, an extension blocking workers or scripts —
+init stalls.
 
-> geo-chat **does not use SharedArrayBuffer** (`vite.config.ts` sets no COOP/COEP headers either). A
-> `SharedArrayBuffer is not defined`-style error is not the root cause here, so you can skip that avenue.
+> geo-chat **does not use SharedArrayBuffer** (there are no COOP/COEP header settings in
+> `vite.config.ts` either). A `SharedArrayBuffer is not defined`-type error isn't the root cause,
+> so you can skip that avenue.
 
-**What to do**:
+**Fix**:
 
-- **Open it at the `npm run dev` local URL** — opening the file directly with `file://` won't work.
-- **Update to a supported browser** — the latest Chrome / Edge / Firefox is recommended. See "Browser support" below.
-- **Suspect extensions** — if an extension blocks scripts or WebWorkers, disable it or re-check in a private window.
+- **Open the `npm run dev` local URL** — opening the file directly via `file://` won't work.
+- **Use a latest supported browser** — latest Chrome / Edge / Firefox recommended. See "Browser
+  support" below.
+- **Suspect extensions** — disable any that block scripts or Web Workers, or re-check in an
+  incognito window.
 
 ---
 
-## Nothing shows on the map
+## Nothing appears on the map
 
-If the Map tab is empty, or you see "Table “…” has no geometry column to display.", there are mainly 3 causes.
+If the Map tab is empty, or you see "Table "…" has no geometry column to display.", there are three
+main causes.
 
 ### (a) The geometry column isn't `GEOMETRY` type
 
-Only a `GEOMETRY`-type column can go on the map (`detectGeometryColumn` looks for `GEOMETRY`-type columns).
-**The bundled samples (GeoParquet) become `GEOMETRY` automatically on load because the spatial extension recognizes
-the geo metadata** — so no conversion is needed.
+Only a `GEOMETRY`-typed column can be drawn (`detectGeometryColumn` looks for `GEOMETRY` columns).
+**The bundled samples (GeoParquet) become `GEOMETRY` automatically on load** because the spatial
+extension recognizes the geo metadata — so no conversion is needed.
 
-On the other hand, a **plain Parquet** without geo metadata with WKB in a `BLOB` column, or a CSV with a
-**WKT string**, won't show as-is. Check the type with `DESCRIBE` and convert:
+But a **plain Parquet** without geo metadata (WKB in a `BLOB` column), or a CSV with **WKT
+strings**, won't render as-is. `DESCRIBE` the type and convert:
 
 ```sql
 CREATE TABLE "t_geom" AS
 SELECT * REPLACE (ST_GeomFromWKB("geom") AS "geom") FROM "t";
 ```
 
-(For a WKT string, `ST_GeomFromText`.)
+(For WKT strings, `ST_GeomFromText`.)
 
-### (b) It's not WGS84 (EPSG:4326)
+### (b) Not WGS84 (EPSG:4326)
 
-The map assumes **longitude/latitude (lon, lat).** If it's still in a projected CRS, the bounds computation
-(`getTableBounds` in `src/lib/map/geometry.ts`) detects "outside the lat/lon range" and **nulls the bounds, so the
-map doesn't zoom to the right place.** Convert to 4326 (**mind the axis-order trap**, `always_xy := true`):
+The map assumes **lon/lat (lon, lat)**. In a projected CRS, the bounds computation
+(`getTableBounds` in `src/lib/map/geometry.ts`) detects "outside lat/lon range", **nulls the
+bounds, and the map won't zoom to the right place**. Convert to 4326 (**mind the axis-order trap**,
+`always_xy := true`):
 
 ```sql
 CREATE TABLE "t_wgs84" AS
@@ -96,70 +129,96 @@ SELECT * REPLACE (ST_Transform("geom", 'EPSG:6677', 'EPSG:4326', always_xy := tr
 FROM "t";
 ```
 
-### (c) 0 rows / geometry is NULL
+> **Relation to the ch. 50 observation**: this axis-order trap (forgetting `always_xy`) is exactly
+> the bug the agent hit in the skill-layer observation. After fetching the `duckdb.spatial` skill,
+> the model self-corrected with `always_xy := true`. Humans trip on the same spot.
 
-Check that a filter or join hasn't made the result empty. In particular, using an `INNER JOIN` in a spatial join
-drops features with no match. For a count display, consider a `LEFT JOIN` (see the `map.geospatial` skill).
+### (c) Zero rows / NULL geometry
+
+Check a filter or join didn't empty the result. In particular, spatial joins with `INNER JOIN` drop
+features with no match. For a count display, consider `LEFT JOIN` (see the `map.geospatial` skill).
 Confirm with `SELECT count(*) FROM "t" WHERE "geom" IS NOT NULL`.
 
-> **A tip for isolating it**: If the map "zoomed to the right place but nothing is drawn," the geometry is likely valid
-> but the SELECT is dropping the attributes/targets (case c above). If it's "stuck on the world map," suspect the
-> coordinate system (b) or the geometry type (a).
+> **Triage tip**: if the map "zoomed to the right place but draws nothing", geometry is likely
+> valid but the SELECT dropped attributes/targets (c above). If it's "stuck on the world map",
+> suspect the CRS (b) or geometry type (a).
+
+### (d) The map tool refused with "fetch a skill first" (ch. 50 / main only)
+
+On skill-layer branches (`chapter/04-skills` / `main`), `update_map_style` **refuses with no side
+effects** until a `map.*` skill is fetched. If the tool card's output shows
+`Fetch the 'map.styling' skill…`, that's the prerequisite gate (ch. 50). Not a bug — the model
+usually reads it and re-calls `get_skill` on its own.
 
 ---
 
 ## Chart is empty / doesn't render
 
-**Symptom**: The chart doesn't appear in the Chart tab; the axes are empty.
+**Symptom**: the Chart tab shows no chart, empty axes.
 
-**The leading cause is a column-name mismatch.** If a `field` in `encoding` differs from an actual column
-(including full-width/half-width, NFC normalization, and case differences), it can't render.
+**The leading cause is a column-name mismatch**. If `encoding` `field` differs from a real column
+(including full/half-width, NFC normalization, case), it can't render.
 
-**What to do**:
+**Fix**:
 
-- Confirm the **exact column name** with `DESCRIBE "<table>"` and use it in the spec's `field`.
-- Via the chat, `update_chart_spec` matches and auto-corrects column names and errors on a nonexistent column
-  (`updateChartSpec.ts`). Check whether `corrected` or an error appears in the tool card's output.
-- Hand-editing (in the ChartPanel editor) has no auto-correction. Align it by hand.
-- **Don't write** `data` / `width` / `height` in the spec (the app injects them; writing them gets rejected).
-- Specify `type` (quantitative / nominal / ordinal / temporal) explicitly on each channel (see the `vega.basics` skill).
+- `DESCRIBE "<table>"` for the **exact column name** and use it in the spec's `field`.
+- Via chat (on validation-layer branches), `update_chart_spec` matches/auto-corrects names and
+  returns `error` for a missing column (ch. 40 / `chartSpecValidation.ts`). Check the tool card's
+  output for `corrected` or an error. Remember that **ch. 30 (naive) has no auto-correction**.
+- The hand editor (ChartPanel) does not auto-correct — align it by hand.
+- **Never write** `data` / `width` / `height` in the spec (the app injects them; the validation
+  layer rejects them).
+- Set `type` (quantitative / nominal / ordinal / temporal) explicitly per channel (see the
+  `vega.basics` skill).
 
 ---
 
 ## Geocoding (Nominatim)
 
-The `geocode_address` tool uses OpenStreetMap's Nominatim
-(`src/lib/ai/tools/geocode.ts`).
+The `geocode_address` tool uses OpenStreetMap's Nominatim (`src/lib/ai/tools/geocode.ts`).
 
-- **Rate limit**: In line with Nominatim's terms of use, it auto-throttles to **1 request per second**
-  (`THROTTLE_MS = 1000`). Asking for many place names at once takes proportionally longer (normal behavior).
-- **Odd results**: If a place name is ambiguous, an unexpected location may come back. Make the query more specific by
-  adding a prefecture name or the like. For bulk/commercial use, consider Nominatim's terms and self-hosting.
+- **Rate limit**: per Nominatim's terms, it auto-throttles to **1 request per second**
+  (`THROTTLE_MS = 1000`). Asking for many place names at once simply takes proportionally longer
+  (normal behavior).
+- **Weird results**: an ambiguous place name can return an unexpected location. Add a prefecture
+  name to make the query specific. For bulk/commercial use, consider Nominatim's terms and
+  self-hosting.
+
+---
+
+## Evals won't run (ch. 60 / main)
+
+- **Everything skips**: no key found. Put `ANTHROPIC_API_KEY=sk-ant-…` on one line in `.env` (repo
+  root, gitignored). `vitest.workspace.ts` injects it into the evals bundle. With no key the suite
+  **skips cleanly** (not a failure).
+- **Evals run in `npm run check` or CI**: they don't. Evals are a separate vitest project run only
+  via `test:evals` (cost protection).
+- **Expensive / slow**: narrow the count with `VITE_EVAL_RUNS=1` (default is 2).
 
 ---
 
 ## npm / dev server
 
-- **`npm install` fails**: Check your Node.js version (`node -v`, **20 or newer**). Old versions fail on lockfile
-  resolution or WASM-related things.
-- **The `npm run dev` port is in use**: Another process is using 5173. Stop it, or open the URL Vite auto-picks for the
-  next port.
-- **Added a skill but it's not in the catalog**: Skills are loaded by a **build-time glob**, so after adding a file
-  **restart the dev server** (`Ctrl+C` → `npm run dev`) (chapter 06).
-- **Added a tool but the model doesn't use it**: Check that you didn't **forget to register** it in `createTools` in
-  `src/lib/ai/tools/index.ts` (if not registered, it doesn't appear in `tools` and the model can't see it).
+- **`npm install` fails**: check the Node.js version (`node -v`, **20+**).
+- **`npm run dev` port in use**: another process holds 5173. Stop it, or open the URL Vite picks
+  automatically for the next port.
+- **Added a skill but it's not in the catalog**: skills load via a **build-time glob**, so after
+  adding a file, **restart the dev server** (`Ctrl+C` → `npm run dev`) (ch. 50).
+- **Added a tool but the model won't use it**: check you didn't **forget to register** it in
+  `createTools` in `src/lib/ai/tools/index.ts` (unregistered = not in `tools` = invisible to the
+  model).
 
 ---
 
 ## Browser support
 
-geo-chat requires **WebAssembly + Web Worker.**
-We recommend the **latest Chrome / Edge / Firefox.** Safari works too on a recent-enough version, but if problems arise
-from behavior differences around WASM / workers, re-check in a Chrome-family browser. Mobile browsers, and environments
-that restrict scripts/workers via extensions, are not supported.
+geo-chat requires **WebAssembly + Web Workers**. **Latest Chrome / Edge / Firefox** recommended.
+Safari works on recent versions, but if WASM/worker behavior differences cause trouble, re-check on
+a Chrome-family browser. Mobile browsers, and environments that restrict scripts/workers via
+extensions, are unsupported.
 
 ---
 
-If you're stuck, first **open the chat's tool card and read the `input` / `output`**, then **look at the round trips of
-`api.anthropic.com` in DevTools Network** (chapter 03) — with these two, most "why won't it work" can be isolated down
-to the layer that's the cause.
+When stuck, first **open the chat's tool card and read `input` / `output`**, then **watch the
+`api.anthropic.com` round-trips in DevTools Network** (ch. 20) — these two triage most "why won't
+it work" down to the responsible layer.

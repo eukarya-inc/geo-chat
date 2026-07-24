@@ -1,128 +1,169 @@
 # 00. Setup
 
-Before starting the workshop, we get geo-chat running locally, enter an Anthropic API key, and
-confirm that the first demo works with the sample data. Once you get through here, you are ready.
+Before the workshop starts, get geo-chat running locally, paste in your Anthropic API key,
+and confirm the first demo works on the sample data. Then practice this workshop's defining
+move: **switching between chapter branches and observing**.
 
-This takes 10–15 minutes. If something goes wrong, see
+Budget 10–15 minutes. If something goes wrong, see
 [appendix-troubleshooting.md](./appendix-troubleshooting.md).
 
 ## 1. What you need
 
-- **Node.js 20 or newer** (check with `node -v`; if it is older than 20, update via [nodejs.org](https://nodejs.org)
-  or a tool like `nvm` / `volta`)
-- **A modern browser**: the latest Chrome / Edge / Firefox.
-  geo-chat uses **WebAssembly and Web Workers**, so it does not run in old browsers
-  or some embedded environments (DuckDB-WASM is covered in chapter 02).
-- **An Anthropic API key** (you will get one in the next step)
+- **Node.js 20+** (check with `node -v`; update via [nodejs.org](https://nodejs.org) or
+  `nvm` / `volta` if below 20)
+- **A modern browser**: latest Chrome / Edge / Firefox. geo-chat uses **WebAssembly and Web
+  Workers**, so old browsers and some embedded environments won't run it (more on DuckDB-WASM
+  in ch. 20).
+- **Git**: especially `git switch` (branch switching) and `git diff`.
+- **An Anthropic API key** (obtained in step 3)
 
 ## 2. Clone and run
 
 ```bash
-git clone <URL of this repository>
+git clone <this repository URL>
 cd geo-chat
-npm install       # install dependencies (DuckDB-WASM and maplibre-gl are on the large side)
-npm run dev       # start the dev server (vite)
+npm install       # installs dependencies (DuckDB-WASM and maplibre-gl are large)
+npm run dev       # starts the dev server (vite)
 ```
 
-Running `npm run dev` prints a local URL (by default `http://localhost:5173/geo-chat/`).
-Open it in a browser and you get a screen with a chat panel on the left and four tabs —
-**Table / Chart / Map / SQL** — on the right.
+`npm run dev` prints a local URL (default `http://localhost:5173/geo-chat/`). Open it and
+you'll see a chat panel on the left and four tabs on the right — **Table / Chart / Map / SQL**.
 
-> **Note**: The URL path has `/geo-chat/` in it because `vite.config.ts` sets `base: '/geo-chat/'`
-> for GitHub Pages hosting. The sample-data URLs carry this prefix too (more below).
+> **Note**: the `/geo-chat/` path prefix exists because `vite.config.ts` sets
+> `base: '/geo-chat/'` for GitHub Pages hosting. Sample-data URLs carry the same prefix (below).
 
-On the first run, DuckDB-WASM is initialized inside the browser. When the SQL tab shows
-"Initializing DuckDB…", wait a few seconds and you will be able to run `SELECT 1 AS hello;`.
+On first load, DuckDB-WASM initializes in the browser. When the SQL tab says
+"Initializing DuckDB…", wait a few seconds until `SELECT 1 AS hello;` runs.
 
 ## 3. Get an Anthropic API key
 
-To run the chat (the AI agent), you need your own Anthropic API key.
-geo-chat has no backend and **calls the Anthropic API directly from the browser**
-(we take this mechanism apart in chapter 03).
+To drive the chat (the AI agent) you need your own Anthropic API key. geo-chat has no
+backend and **calls the Anthropic API directly from the browser** (we take this mechanism
+apart in ch. 20).
 
-1. Create an account / log in at [console.anthropic.com](https://console.anthropic.com).
-2. Under **Billing**, add a small amount of **prepaid credit** (say $5).
-   For one workshop, $1–2 is plenty.
-   With a zero credit balance, even a correct key gives a `400 / credit balance` error.
-3. Under **API Keys**, create a new key and copy the string that starts with `sk-ant-…`.
-   The key is shown in full only at creation time, so copy it right then.
+1. Create / log in at [console.anthropic.com](https://console.anthropic.com).
+2. Under **Billing**, add a small amount of **prepaid credit** (say $5). One workshop needs
+   only $1–2. A zero balance triggers a `400 / credit balance` error even with a valid key.
+3. Under **API Keys**, create a new key and copy the `sk-ant-…` string. It's only shown in
+   full at creation, so copy it right away.
 
-> **On the day**: In some sessions the organizer hands out a key. In that case, use the key you were given.
-> Either way, the app is built so that each person enters the key in their own browser.
+> **On the day**: some sessions have the organizer hand out a key. In that case, use it.
 
 ## 4. Enter the key in Settings
 
-1. Open **Settings** at the top right of the screen (or in the center when the chat is not yet configured).
+1. Open **Settings** (top-right, or center when the chat isn't configured yet).
 2. Paste `sk-ant-…` into **Anthropic API key**.
-3. You can leave **Model** at the default **Claude Sonnet 4.5**
-   (you can also switch to Opus / Haiku; defined in `MODEL_OPTIONS` in `src/store/settings.ts`).
+3. Leave **Model** at the default **Claude Sonnet 4.5** (defined in
+   `src/store/settings.ts`, `MODEL_OPTIONS`).
 
-> **⚠️ A note on localStorage**: The key you enter is stored in this browser's **localStorage in plain text
-> (not encrypted)** and is sent from the browser straight to the Anthropic API. This is a trade-off that only
-> makes sense because this is a backend-less workshop app. **Use a personal key and delete it after the
-> workshop** (clear it in Settings, or clear the browser's localStorage).
-> The same warning appears in the Settings dialog (`src/components/settings/SettingsDialog.tsx`).
+> **⚠️ localStorage caveat**: the key you enter is stored in this browser's **localStorage
+> in plaintext (unencrypted)** and sent straight from the browser to the Anthropic API. This
+> is a deliberate tradeoff for a backend-less workshop app. **Use a personal key and delete
+> it afterward** (clear it in Settings or wipe the browser's localStorage). ——Note that
+> **localStorage survives branch switches**: once entered, the key carries across chapters —
+> no need to re-enter it after `git switch` (this matters for the branch workflow below).
 
-## 5. About the built-in data
+## 5. Confirm with the finished demo (`main` branch)
 
-This repository ships the following samples in `public/data/`:
-
-| File                        | Contents                                          | Geometry                        |
-| --------------------------- | ------------------------------------------------- | ------------------------------- |
-| `japan_cities.parquet`      | Japanese municipalities (GeoParquet)              | MultiPolygon (GEOMETRY on load) |
-| `japan_prefectures.parquet` | Japanese prefectures (GeoParquet)                 | MultiPolygon (GEOMETRY on load) |
-| `customer.parquet`          | A non-spatial attribute table (for join practice) | none                            |
-| `test.geojson`              | A small GeoJSON for a quick sanity check          | yes                             |
-
-> Because the spatial extension recognizes the geo metadata of a GeoParquet, once loaded the `geom` column
-> is **already `GEOMETRY` type from the start** (no conversion needed — it goes straight onto the map).
-
-Of these, `japan_cities` and `japan_prefectures` are taught to the agent as **built-in datasets**. Their entries
-live in the built-in dataset registry (`src/lib/ai/builtinDatasets.ts`), whose contents are passed to the model
-through the system prompt. So **just asking "show the Japanese municipalities on the map" is enough — the agent
-loads this data itself**; you don't need to type a URL by hand. Adding one entry to the registry teaches the agent
-a new dataset (this "carry knowledge in the ② layer" idea is the same as the skills in chapter 06).
-
-**When you want to load your own data**, enter a URL and a table name in the SQL tab's "Import from URL" and Import
-(used in the chapter 02 exercise and the chapter 07 challenges). To read a bundled sample by hand, the URL is
-`/geo-chat/data/japan_cities.parquet` (`import.meta.env.BASE_URL` + `data/…`).
-
-## 6. Verify with a demo prompt
-
-When the chat is empty, three **sample prompt chips** appear above the input box
-(`EXAMPLE_PROMPTS` in `src/components/chat/ChatPanel.tsx`). We use these first to check that things work.
-The first two chips are in Japanese and the third in English; the app handles both languages (see the note below).
+First experience the fully-loaded finished app. **Confirm you're on `main`** (`git branch`
+shows `* main`). When the chat is empty, **sample prompt chips** appear above the input
+(`EXAMPLE_PROMPTS` in `src/components/chat/ChatPanel.tsx`). Use one to check things work:
 
 ```
-日本の自治体を地図に表示して
+日本の自治体を地図に表示して   (Show the Japanese municipalities on the map)
 ```
 
-Clicking this chip puts the sentence into the input box; send it. When it works:
+Click the chip to fill the input, then send. On success:
 
-1. Tool cards (`duckdb_query` and others) appear one after another in the chat (click to expand input/output).
-   The agent loads the built-in dataset `japan_cities` **by itself**.
-2. The Map tab opens automatically and Japan's municipalities are drawn on the map.
+1. **Tool cards** — `load_builtin_dataset`, `duckdb_query`, and so on — appear in the chat in
+   order (click to expand input/output). The agent loads the built-in dataset `japan_cities`
+   **by itself** — no URL to type.
+2. The Map tab opens automatically and draws the Japanese municipalities.
 
-If this works, you are ready. You can go on to try the remaining chips too:
+This is the "solved" state we aim for today. In the main sessions we **deliberately strip all
+of it away** and add it back one layer at a time. The through-line prompt for the chapters is:
 
 ```
-都道府県ごとの市区町村数をグラフにして
-Show the Japanese municipalities on the map
+自治体を都道府県ごとに色分けして地図に表示して
+(Color the municipalities by prefecture and show them on the map)
 ```
 
-> **About language**: The sample chips mix Japanese and English, but the agent's system prompt has a rule to
-> "reply in the language the user wrote in" (`src/lib/ai/systemPrompt.ts`). If you type in English —
-> "color the municipalities by prefecture and show them on the map" (Japanese: 「自治体を都道府県ごとに色分けして地図に表示して」) —
-> it replies in that language.
+## 6. How the workshop runs — switching chapter branches
 
-## 7. When it does not work
+The star of this workshop is _observation_. Branches that subtract one layer at a time from
+`main` are provided, and you switch between them to see how well the same task gets solved.
 
-- **Chat stays at "Set your API key in Settings…"** → the key is not entered in Settings.
+```bash
+git switch chapter/00-chat-only   # ch. 10: no tools at all
+git switch chapter/01-data        # ch. 20: data tools only
+git switch chapter/02-viz-naive   # ch. 30: + visualization (no validation)
+git switch chapter/03-validation  # ch. 40: + validation layer
+git switch chapter/04-skills      # ch. 50: + skills + gate
+git switch main                   # ch. 60: + evals (everything)
+```
+
+**After switching branches, restart the dev server.** `npm run dev` reloads changed code
+automatically, but module composition changes between chapters, so to be safe do
+`Ctrl+C` → `npm run dev` to **restart** (especially the ch. 50 skills, which are **loaded at
+build time** and require a restart).
+
+> **The key survives**: switching branches keeps the localStorage API key, so you don't need
+> to re-enter it as you move between chapters (see the step 4 caveat).
+
+### Reading diffs as "layers"
+
+Each chapter mainly asks you to confirm **what the next layer adds**, via `git diff`. Start
+at the file level:
+
+```bash
+# e.g. moving from the data layer to the visualization layer — which files appear?
+git diff --stat chapter/01-data..chapter/02-viz-naive
+```
+
+Because the branches are built by **subtraction from `main`**, `git diff chapter/A..chapter/B`
+(A earlier, B next) cleanly shows **the diff B adds over A = that layer**. On GitHub the same
+diff is at the `compare/chapter/A...chapter/B` URL, colorized. The **`// CHAPTER SEAM: <layer>`**
+comments in the code mark exactly the layer boundaries (the parts a chapter branch drops
+wholesale). Each chapter's "⑤ Reading the diff" section practices this.
+
+## 7. Locating today within GeoAI
+
+Before the main sessions, let's calibrate expectations. "GeoAI" is an overloaded term, so
+let's see where today sits on the larger map.
+
+```mermaid
+flowchart LR
+    GeoAI["GeoAI"]
+    GeoAI --> A["① AI that sees (perception)<br/>remote sensing × deep learning"]
+    GeoAI --> B["② AI that predicts<br/>spatial machine learning"]
+    GeoAI --> C["③ AI that converses and operates<br/>LLM × GIS ★we are here today"]
+
+    A --> A1["building extraction, land-cover classification, change detection from imagery<br/>e.g. segmentation, geospatial foundation models (Prithvi, …)"]
+    B --> B1["predict the future or unknown places from spatial data<br/>e.g. land price, traffic, hazard risk; GNNs; kriging × ML"]
+    C --> C1["AI as an analyst operating GIS via natural language<br/>e.g. text-to-SQL, Autonomous GIS, GIS copilots"]
+```
+
+- **①②** are AI becoming an "eye" or a "predictor" — the model itself is **trained** on
+  spatial data.
+- **③** is AI becoming an "analyst" — **no training at all**; you hand an existing LLM the
+  existing GIS tools (SQL, maps, charts).
+
+> **So today we train zero models. We learn how to hand it tools.**
+
+And within ③, today's angle is not _using_ an off-the-shelf copilot but being the one who
+**embeds** it in your own app. This is where "I want to connect AI to my own GIS work" gets
+answered head-on.
+
+## 8. When things go wrong
+
+- **Chat stuck at "Set your API key in Settings…"** → no key entered in Settings.
 - **`401` / `unauthorized`** → wrong key. Re-check Settings.
 - **`credit balance is too low`** → add credit in the console (step 3-2).
-- **Nothing shows on the map / URL loading fails with CORS** → see
-  [appendix-troubleshooting.md](./appendix-troubleshooting.md), which includes a CORS explanation.
-- **DuckDB does not initialize / blank screen** → check you're on a supported browser (latest Chrome / Edge / Firefox).
-  If it still won't clear, see "The app doesn't boot" in the appendix.
+- **Nothing on the map / URL load fails with CORS** → see
+  [appendix-troubleshooting.md](./appendix-troubleshooting.md), including the CORS explanation.
+- **Switched branches but behavior didn't change** → restart the dev server (step 6).
+- **DuckDB won't initialize / blank screen** → check you're on a supported browser (latest
+  Chrome / Edge / Firefox).
 
-When you are ready, go on to [01. What is an AI agent](./01-what-is-an-agent.md).
+Ready? Go to [10. The talk-only AI](./10-chat-only.md), starting by switching to the
+fully-stripped `chapter/00-chat-only`.
