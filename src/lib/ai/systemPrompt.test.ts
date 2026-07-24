@@ -5,10 +5,17 @@ import { buildSystemPrompt } from './systemPrompt';
 describe('buildSystemPrompt', () => {
     const now = new Date('2026-07-22T00:00:00Z');
 
-    it('includes the current date and the MapLibre direct-access rule', () => {
+    it('includes the current date and the data-working guidance', () => {
         const prompt = buildSystemPrompt({ now, tables: [] });
         expect(prompt).toContain('2026-07-22');
-        expect(prompt).toContain('["get", "column_name"]');
+        expect(prompt).toContain('Working with data');
+    });
+
+    it('omits the visualization section (the agent cannot drive the map/chart in ch1)', () => {
+        const prompt = buildSystemPrompt({ now, tables: [] });
+        expect(prompt).not.toContain('Visualizing');
+        expect(prompt).not.toContain('update_map_style');
+        expect(prompt).not.toContain('update_chart_spec');
     });
 
     it('lists each table with its columns and types', () => {

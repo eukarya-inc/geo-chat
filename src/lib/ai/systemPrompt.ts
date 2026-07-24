@@ -46,13 +46,6 @@ const BUILTIN_DATASETS_SECTION = `## Built-in datasets
 These bundled sample datasets can be loaded on demand. When the user asks about data matching one of these and its table is not yet listed in the Context below, load it yourself by calling \`load_builtin_dataset\` with the table name, then continue with the task.
 ${BUILTIN_DATASETS.map(d => `- ${d.table} (${d.url}): ${d.description}`).join('\n')}`;
 
-/** VISUALIZATION_GUIDANCE: map/chart tool usage and their format rules. Goes with the visualization seam. */
-const VISUALIZATION_GUIDANCE = `## Visualizing
-- To draw a map, call \`update_map_style\` with the table, its geometry kind, and MapLibre paint properties. To make a chart, call \`update_chart_spec\` with a Vega-Lite spec. Read the current state first with \`get_map_style\` / \`get_chart_spec\` when adjusting an existing visualization.
-- MapLibre expressions must use DIRECT property access: \`["get", "column_name"]\`. Never wrap it in a "properties" accessor like \`["get", "properties", ...]\`.
-- Match the geometry kind to the data: point → circle-* paint, line → line-* paint, polygon → fill-* paint.
-- In Vega-Lite specs, never set \`data\`, \`width\`, or \`height\` — the app injects them.`;
-
 /** Formats one table as `name(col type, col type, …)`, capping the column list. */
 function formatTable(table: TableContext): string {
     const shown = table.columns.slice(0, MAX_COLUMNS_LISTED).map(c => `${c.name} ${c.type}`);
@@ -72,9 +65,6 @@ export function buildSystemPrompt(context: PromptContext): string {
     // CHAPTER SEAM: data tools — duckdb_query + load_builtin_dataset. Present from ch1;
     // dropped only in ch0 (chat-only). Datasets live with the data tools, not a later layer.
     sections.push(DATA_GUIDANCE, BUILTIN_DATASETS_SECTION);
-
-    // CHAPTER SEAM: visualization tools — map/chart. Added in ch2.
-    sections.push(VISUALIZATION_GUIDANCE);
 
     const date = context.now.toISOString().slice(0, 10);
     const tables =
