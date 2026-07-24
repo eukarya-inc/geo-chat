@@ -172,6 +172,8 @@ When the model calls `get_skill(["duckdb.spatial"])`, `resolveWithDeps()` walks 
 at once:
 
 ```ts
+// (simplified: the real execute also tracks not-found ids and unlocks
+// something we meet in chapter 4 — this is the shape that matters here)
 execute: async ({ skills }) => {
     const resolved = resolveWithDeps(skills); // deps first, e.g. ["duckdb.basics", "duckdb.spatial"]
     const instructions: Record<string, string> = {};
@@ -279,8 +281,8 @@ one more thing:
 (English: "show that result on the map.")
 
 **This is a deterministic failure, not a probabilistic one.** `ENABLED_TOOLS` is still
-`[...TIER_1, ...TIER_2]` — there is no `update_map_style` tool in the list at all, gated or
-otherwise. The model can describe what a choropleth of `prefecture_areas` would look like, it can
+`[...TIER_1, ...TIER_2]` — there is no `update_map_style` tool in the list at all. The model can
+describe what a choropleth of `prefecture_areas` would look like, it can
 even write out the MapLibre paint properties it _would_ use in prose, but it has no tool call
 available that draws anything. Watch what actually happens: either an apology that it cannot show a
 map, or the numbers printed back as a table in the chat — the one output format it does have. Open
