@@ -45,8 +45,7 @@ Settings when you are done.
 
 ## Workshop docs
 
-The curriculum lives in [`docs/`](./docs) — a 3-hour workshop, "Taking an AI agent
-apart: how GIS × LLM actually works." Available in Japanese ([`docs/ja/`](./docs/ja)) and
+The curriculum lives in [`docs/`](./docs) — a 3-hour workshop, "Building a Geospatial Agent, One Failure at a Time." Available in Japanese ([`docs/ja/`](./docs/ja)) and
 English ([`docs/en/`](./docs/en)).
 
 ## Tech stack
@@ -76,7 +75,7 @@ implement it with you.
   `heatmap-*` and `fill-extrusion-*` (3D) would unlock new visualizations end-to-end.
 - **More sample datasets & recipes** — PLATEAU (Japanese 3D city models) and
   Overture Maps GeoParquet make great advanced material (see
-  [`docs/en/07-challenge.md`](./docs/en/07-challenge.md)).
+  [`docs/en/05-curate-your-stack.md`](./docs/en/05-curate-your-stack.md)).
 - **Screenshots / demo GIF in this README.**
 - **Workshop timing variants** — the curriculum assumes 3 hours; a compressed
   2-hour variant (skipping ch.05) would fit more conference slots.
