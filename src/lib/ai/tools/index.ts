@@ -1,6 +1,7 @@
 import type { Tool } from 'ai';
 
 import { hasFetched } from '../skills/gate';
+import { ENABLED_TOOLS, type ToolName } from '../toolTiers';
 import type { ToolContext } from '../toolContext';
 import { createDuckdbQueryTool } from './duckdbQuery';
 import { createGeocodeTool } from './geocode';
@@ -38,6 +39,7 @@ function requireSkill<T extends Tool>(domain: string, suggestion: string, tool: 
 /**
  * The tool registry handed to the agent loop. Each factory closes over the shared
  * ToolContext so tools can touch app state without importing React or jotai.
+ * ENABLED_TOOLS in toolTiers.ts decides which of these the agent actually receives.
  *
  *   name                 | purpose
  *   ---------------------|----------------------------------------------------
@@ -50,8 +52,8 @@ function requireSkill<T extends Tool>(domain: string, suggestion: string, tool: 
  *   get_chart_spec    | read a table's current chart spec
  *   geocode_address   | place name / address -> coordinates via Nominatim
  */
-export function createTools(ctx: ToolContext) {
-    return {
+export function createTools(ctx: ToolContext, enabled: readonly ToolName[] = ENABLED_TOOLS) {
+    const all = {
         duckdb_query: createDuckdbQueryTool(ctx),
         load_builtin_dataset: createLoadBuiltinDatasetTool(ctx),
         get_skill: createGetSkillTool(),
@@ -61,6 +63,11 @@ export function createTools(ctx: ToolContext) {
         get_chart_spec: createGetChartSpecTool(ctx),
         geocode_address: createGeocodeTool(),
     };
+    // Keys outside `enabled` are absent at runtime. The cast keeps the full
+    // static type: the default tier set includes every tool, and workshop
+    // tiers are only ever narrowed by editing ENABLED_TOOLS.
+    const entries = Object.entries(all).filter(([name]) => (enabled as readonly string[]).includes(name));
+    return Object.fromEntries(entries) as typeof all;
 }
 
 export type AgentTools = ReturnType<typeof createTools>;
