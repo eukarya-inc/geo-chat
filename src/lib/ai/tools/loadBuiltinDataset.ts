@@ -37,7 +37,7 @@ export function createLoadBuiltinDatasetTool(ctx: ToolContext) {
                 table: dataset.table,
                 columns,
                 hint: geomCol
-                    ? `Table "${dataset.table}" has a geometry column ("${geomCol.name}"); you can style it with update_map_style.`
+                    ? `Table "${dataset.table}" has a geometry column ("${geomCol.name}"); it is ready to be visualized on the map.`
                     : undefined,
             };
         },

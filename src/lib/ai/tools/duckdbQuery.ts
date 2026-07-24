@@ -65,7 +65,9 @@ export function createDuckdbQueryTool(ctx: ToolContext) {
                 const geomCol = schema.find(c => c.type.toUpperCase().includes('GEOMETRY'));
                 if (geomCol) {
                     ctx.setSelectedTable(created);
-                    hint = `Table "${created}" has a geometry column ("${geomCol.name}"); you can now style it with update_map_style.`;
+                    // Deliberately tool-agnostic: visualization tools belong to a later
+                    // chapter layer, so this hint must not name them (CHAPTER SEAM contract).
+                    hint = `Table "${created}" has a geometry column ("${geomCol.name}"); it is ready to be visualized on the map.`;
                 }
             }
 

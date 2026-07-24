@@ -57,7 +57,7 @@ describe('load_builtin_dataset tool', () => {
             { name: 'city', type: 'VARCHAR' },
             { name: 'geom', type: 'GEOMETRY' },
         ]);
-        expect(String(result.hint)).toContain('update_map_style');
+        expect(String(result.hint)).toContain('visualized on the map');
     });
 
     it('returns an error object when the load fails', async () => {
