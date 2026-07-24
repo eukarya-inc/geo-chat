@@ -53,11 +53,6 @@ const VISUALIZATION_GUIDANCE = `## Visualizing
 - Match the geometry kind to the data: point → circle-* paint, line → line-* paint, polygon → fill-* paint.
 - In Vega-Lite specs, never set \`data\`, \`width\`, or \`height\` — the app injects them.`;
 
-/** SKILLS: progressive-disclosure instructions and the prerequisite gate. Goes with the skill-system seam. */
-const SKILLS = `## Skills
-- Deeper how-to instructions live in *skills*. Call \`get_skill\` to load the ones relevant to the task; its description lists the catalog. Fetch skills the moment the task looks non-trivial — don't guess formats from memory.
-- Some tools are gated: \`update_map_style\` requires a \`map.*\` skill and \`update_chart_spec\` requires a \`vega.*\` skill. If you call them before fetching, they return an error telling you which skill to get first.`;
-
 /** Formats one table as `name(col type, col type, …)`, capping the column list. */
 function formatTable(table: TableContext): string {
     const shown = table.columns.slice(0, MAX_COLUMNS_LISTED).map(c => `${c.name} ${c.type}`);
@@ -80,9 +75,6 @@ export function buildSystemPrompt(context: PromptContext): string {
 
     // CHAPTER SEAM: visualization tools — map/chart. Added in ch2.
     sections.push(VISUALIZATION_GUIDANCE);
-
-    // CHAPTER SEAM: skill system — get_skill + the prerequisite gate. Added in ch4.
-    sections.push(SKILLS);
 
     const date = context.now.toISOString().slice(0, 10);
     const tables =

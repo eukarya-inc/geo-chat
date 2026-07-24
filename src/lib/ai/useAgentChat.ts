@@ -5,7 +5,6 @@ import type { ModelMessage } from 'ai';
 import { getTables, getTableSchema } from '@/lib/duckdb/db';
 import { apiKeyAtom, modelAtom } from '@/store/settings';
 import { runAgent, type AgentEvent } from './agent';
-import { resetGate } from './skills/gate';
 import { defaultToolContext } from './toolContext';
 import { createTools } from './tools';
 import type { PromptContext } from './systemPrompt';
@@ -140,7 +139,6 @@ export function useAgentChat() {
     const reset = useCallback(() => {
         abortRef.current?.abort();
         history.current = [];
-        resetGate();
         setMessages([]);
         setStatus('idle');
     }, []);
