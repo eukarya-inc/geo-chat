@@ -145,7 +145,7 @@ The `geocode_address` tool uses OpenStreetMap's Nominatim
 - **The `npm run dev` port is in use**: Another process is using 5173. Stop it, or open the URL Vite auto-picks for the
   next port.
 - **Added a skill but it's not in the catalog**: Skills are loaded by a **build-time glob**, so after adding a file
-  **restart the dev server** (`Ctrl+C` → `npm run dev`) (chapter 06).
+  **restart the dev server** (`Ctrl+C` → `npm run dev`) (chapter 3).
 - **Added a tool but the model doesn't use it**: Check that you didn't **forget to register** it in `createTools` in
   `src/lib/ai/tools/index.ts` (if not registered, it doesn't appear in `tools` and the model can't see it).
 
@@ -161,5 +161,5 @@ that restrict scripts/workers via extensions, are not supported.
 ---
 
 If you're stuck, first **open the chat's tool card and read the `input` / `output`**, then **look at the round trips of
-`api.anthropic.com` in DevTools Network** (chapter 03) — with these two, most "why won't it work" can be isolated down
+`api.anthropic.com` in DevTools Network** (chapter 2) — with these two, most "why won't it work" can be isolated down
 to the layer that's the cause.

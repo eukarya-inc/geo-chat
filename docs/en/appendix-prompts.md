@@ -16,7 +16,7 @@ That is why the trick is to include "write the description carefully" in the ③
 
 ## 1. The actual prompts used in the main text
 
-### 1-a. The `buffer_analysis` tool (chapter 04)
+### 1-a. The `buffer_analysis` tool (chapter 4)
 
 ```
 Add a new AI tool called buffer_analysis to this repository.
@@ -52,7 +52,7 @@ Create a new table with ST_Buffer applied to the geometry column of a specified 
 After implementing, confirm that npm run typecheck passes.
 ```
 
-### 1-b. A skill md (chapter 06)
+### 1-b. A skill md (chapter 3)
 
 ```
 Modeling it on the existing skills in src/lib/ai/skills/ (map/styling.md, duckdb/spatial.md),
@@ -96,7 +96,7 @@ After implementing, confirm that npm run typecheck passes and that it's register
 ```
 
 **Why this shape**: If you don't spell out registration into `index.ts`, you get the accident of "implemented it but
-the model can't see it" (it doesn't appear in chapter 03's `tools` array). Specifying result truncation every time is
+the model can't see it" (it doesn't appear in chapter 2's `tools` array). Specifying result truncation every time is
 to avoid overflowing the context. The prerequisite gate (`requireSkill`) is added only when needed.
 
 ### 2-b. The "add a skill" template

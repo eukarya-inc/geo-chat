@@ -204,7 +204,7 @@ on [appendix-troubleshooting.md](./appendix-troubleshooting.md) and the body tex
   the `interpolate` in `update_map_style`.
 - **An even easier extension**: for data you use often, add one line to `src/lib/ai/builtinDatasets.ts` to make it a
   **built-in dataset** — after that, just naming it in the chat has the agent load it itself (the mechanism from
-  chapter 00; the ② layer that teaches the model through the system prompt).
+  [00-setup.md](./00-setup.md); the ② layer that teaches the model through the system prompt).
 
 **What you'll learn**: The spatial join of an attribute table and geometry, `SUMMARIZE`-driven color design, and the
 shortest flow to get your own data into the agent.

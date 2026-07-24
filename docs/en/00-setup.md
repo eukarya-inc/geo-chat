@@ -12,7 +12,7 @@ This takes 10–15 minutes. If something goes wrong, see
   or a tool like `nvm` / `volta`)
 - **A modern browser**: the latest Chrome / Edge / Firefox.
   geo-chat uses **WebAssembly and Web Workers**, so it does not run in old browsers
-  or some embedded environments (DuckDB-WASM is covered in chapter 02).
+  or some embedded environments (DuckDB-WASM is covered in chapter 2).
 - **An Anthropic API key** (you will get one in the next step)
 
 ## 2. Clone and run
@@ -38,7 +38,7 @@ On the first run, DuckDB-WASM is initialized inside the browser. When the SQL ta
 
 To run the chat (the AI agent), you need your own Anthropic API key.
 geo-chat has no backend and **calls the Anthropic API directly from the browser**
-(we take this mechanism apart in chapter 03).
+(we take this mechanism apart in chapter 2).
 
 1. Create an account / log in at [console.anthropic.com](https://console.anthropic.com).
 2. Under **Billing**, add a small amount of **prepaid credit** (say $5).
@@ -81,10 +81,10 @@ Of these, `japan_cities` and `japan_prefectures` are taught to the agent as **bu
 live in the built-in dataset registry (`src/lib/ai/builtinDatasets.ts`), whose contents are passed to the model
 through the system prompt. So **just asking "show the Japanese municipalities on the map" is enough — the agent
 loads this data itself**; you don't need to type a URL by hand. Adding one entry to the registry teaches the agent
-a new dataset (this "carry knowledge in the ② layer" idea is the same as the skills in chapter 06).
+a new dataset (this "carry knowledge in the ② layer" idea is the same as the skills in chapter 3).
 
 **When you want to load your own data**, enter a URL and a table name in the SQL tab's "Import from URL" and Import
-(used in the chapter 02 exercise and the chapter 07 challenges). To read a bundled sample by hand, the URL is
+(used in the chapter 2 exercise and the chapter 5 challenges). To read a bundled sample by hand, the URL is
 `/geo-chat/data/japan_cities.parquet` (`import.meta.env.BASE_URL` + `data/…`).
 
 ## 6. Verify with a demo prompt
