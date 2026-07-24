@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { getTableSchema } from '@/lib/duckdb/db';
 import type { TableMapStyle } from '@/lib/map/mapSpec';
 import type { ToolContext } from '../toolContext';
-import { validateMapStyleInput } from './mapStyleValidation';
 
 export function createUpdateMapStyleTool(ctx: ToolContext) {
     return tool({
@@ -26,32 +25,21 @@ export function createUpdateMapStyleTool(ctx: ToolContext) {
                 return { error: `Table "${table}" has no geometry column and cannot be shown on the map.` };
             }
 
-            // CHAPTER SEAM: validation layer — paint-prefix checks + fuzzy column correction.
-            // A "naive" chapter branch replaces this call with a passthrough returning
-            // { ok: true, paint, layout, corrections: [] } (see mapStyleValidation.ts).
-            const validated = validateMapStyleInput({
-                table,
-                geometryType,
-                paint,
-                layout: layout ?? undefined,
-                columns: schema.map(c => c.name),
-            });
-            if (!validated.ok) return { error: validated.error };
-
+            // CHAPTER SEAM: validation layer (removed) — the naive branch trusts the
+            // model's paint/layout blindly: no paint-prefix check, no fuzzy column
+            // correction. A bad paint key or a mistyped ["get", col] now sails through
+            // and breaks in the map instead of being caught here. That fragility is
+            // this chapter's lesson.
             const style: TableMapStyle = {
                 geometryType,
-                paint: validated.paint,
-                ...(validated.layout ? { layout: validated.layout } : {}),
+                paint,
+                ...(layout ? { layout } : {}),
             };
             ctx.setMapStyle(table, style);
             ctx.setSelectedTable(table);
             ctx.setActiveTab('map');
 
-            return {
-                success: true,
-                table,
-                ...(validated.corrections.length > 0 ? { corrected: validated.corrections } : {}),
-            };
+            return { success: true, table };
         },
     });
 }

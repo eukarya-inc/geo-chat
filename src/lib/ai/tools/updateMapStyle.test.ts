@@ -37,38 +37,17 @@ describe('update_map_style', () => {
         ]);
     });
 
-    it('rejects paint properties that do not match the geometry kind', async () => {
-        const ctx = fakeContext();
-        const result = await run(createUpdateMapStyleTool(ctx), {
-            table: 'cities',
-            geometryType: 'point',
-            paint: { 'fill-color': '#f00' },
-        });
-        expect(result.error).toMatch(/not valid for a circle layer/);
-    });
-
-    it('rejects references to unknown columns', async () => {
+    it('applies the paint verbatim and opens the map tab', async () => {
+        // The naive branch trusts the model: whatever paint it sends is applied as-is.
         const ctx = fakeContext();
         const result = await run(createUpdateMapStyleTool(ctx), {
             table: 'cities',
             geometryType: 'polygon',
-            paint: { 'fill-color': ['get', 'nope'] },
-        });
-        expect(result.error).toMatch(/does not exist/);
-    });
-
-    it('auto-corrects a case-insensitive column reference and applies the style', async () => {
-        const ctx = fakeContext();
-        const result = await run(createUpdateMapStyleTool(ctx), {
-            table: 'cities',
-            geometryType: 'polygon',
-            paint: { 'fill-color': ['case', ['>', ['get', 'cityname'], 0], '#f00', '#00f'] },
+            paint: { 'fill-color': ['get', 'population'] },
         });
         expect(result.success).toBe(true);
-        expect(result.corrected).toEqual(['"cityname" → "CityName"']);
         expect(ctx.lastTab).toBe('map');
-        // The applied style should reference the corrected column name.
-        expect(JSON.stringify(ctx.lastStyle)).toContain('CityName');
+        expect(ctx.lastStyle).toEqual({ geometryType: 'polygon', paint: { 'fill-color': ['get', 'population'] } });
     });
 
     it('errors when the table has no geometry column', async () => {

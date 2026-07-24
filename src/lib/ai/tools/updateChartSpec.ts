@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { getTableSchema } from '@/lib/duckdb/db';
 import type { ToolContext } from '../toolContext';
-import { validateChartSpecInput } from './chartSpecValidation';
 
 /** Keys the app injects at render time; the model must not set them. */
 const INJECTED_KEYS = ['data', 'width', 'height'];
@@ -37,20 +36,15 @@ export function createUpdateChartSpecTool(ctx: ToolContext) {
             const schema = await getTableSchema(table).catch(() => null);
             if (!schema) return { error: `Table "${table}" not found.` };
 
-            // CHAPTER SEAM: validation layer — fuzzy field correction + compile() preflight.
-            // A "naive" chapter branch replaces this call with a passthrough returning
-            // { ok: true, spec: parsed, corrections: [] } (see chartSpecValidation.ts).
-            const validated = validateChartSpecInput({ table, spec: parsed, columns: schema.map(c => c.name) });
-            if (!validated.ok) return { error: validated.error };
-
-            ctx.setChartSpec(table, validated.spec);
+            // CHAPTER SEAM: validation layer (removed) — the naive branch trusts the
+            // model's spec blindly: no fuzzy field correction, no compile() pre-flight.
+            // A mistyped encoding field or a spec that won't compile now sails through
+            // and breaks in the chart instead of being caught here. That fragility is
+            // this chapter's lesson.
+            ctx.setChartSpec(table, parsed);
             ctx.setSelectedTable(table);
             ctx.setActiveTab('chart');
-            return {
-                success: true,
-                table,
-                ...(validated.corrections.length > 0 ? { corrected: validated.corrections } : {}),
-            };
+            return { success: true, table };
         },
     });
 }

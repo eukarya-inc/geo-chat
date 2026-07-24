@@ -61,15 +61,6 @@ describe('update_chart_spec', () => {
         expect(ctx.lastSpec).toBeDefined();
     });
 
-    it('rejects encoding fields that are not real columns', async () => {
-        const ctx = fakeContext();
-        const result = await run(createUpdateChartSpecTool(ctx), {
-            table: 'stats',
-            spec: { mark: 'bar', encoding: { x: { field: 'unknown_col', type: 'nominal' } } },
-        });
-        expect(result.error).toMatch(/does not exist/);
-    });
-
     it('accepts a JSON string spec', async () => {
         const ctx = fakeContext();
         const result = await run(createUpdateChartSpecTool(ctx), {
