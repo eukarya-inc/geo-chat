@@ -4,7 +4,7 @@
 
 **Goal:** Restructure the workshop curriculum (`docs/en` + `docs/ja`) into a failure-driven capability ladder, backed by two small app changes: a single-source tool-tier constant and a tier-aware system prompt.
 
-**Architecture:** A new `src/lib/ai/toolTiers.ts` declares three tool tiers and one editable `ENABLED_TOOLS` constant; both `createTools()` and `buildSystemPrompt()` consume it so the agent's hands and its self-description can never disagree. The docs are rewritten as five chapters named by what the agent *has*, each ending in an organic "Where this fails" section that motivates the next chapter.
+**Architecture:** A new `src/lib/ai/toolTiers.ts` declares three tool tiers and one editable `ENABLED_TOOLS` constant; both `createTools()` and `buildSystemPrompt()` consume it so the agent's hands and its self-description can never disagree. The docs are rewritten as five chapters named by what the agent _has_, each ending in an organic "Where this fails" section that motivates the next chapter.
 
 **Tech Stack:** TypeScript + Vitest (jsdom unit tests), Markdown + mermaid for docs. No new dependencies.
 
@@ -27,11 +27,13 @@
 ### Task 1: Tool tiers — `toolTiers.ts` + `createTools` filtering
 
 **Files:**
+
 - Create: `src/lib/ai/toolTiers.ts`
 - Modify: `src/lib/ai/tools/index.ts`
 - Test: `src/lib/ai/tools/index.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `TIER_1`, `TIER_2`, `TIER_3` (readonly string-literal arrays), `type ToolName`, `ENABLED_TOOLS: readonly ToolName[]` — all exported from `src/lib/ai/toolTiers.ts`. `createTools(ctx: ToolContext, enabled: readonly ToolName[] = ENABLED_TOOLS)` — Task 2 and the docs rely on these exact names.
 
@@ -59,7 +61,7 @@ describe('tool tiers', () => {
 ```
 
 - [ ] **Step 2: Run to verify failure** — `npx vitest run src/lib/ai/tools/index.test.ts`
-  Expected: FAIL — `Cannot find module '../toolTiers'`.
+      Expected: FAIL — `Cannot find module '../toolTiers'`.
 
 - [ ] **Step 3: Create `src/lib/ai/toolTiers.ts`:**
 
@@ -125,10 +127,12 @@ Also extend the registry comment block above `createTools` with one line noting 
 ### Task 2: Tier-aware system prompt
 
 **Files:**
+
 - Modify: `src/lib/ai/systemPrompt.ts`
 - Test: `src/lib/ai/systemPrompt.test.ts` (extend; existing 4 tests must keep passing unchanged)
 
 **Interfaces:**
+
 - Consumes: `ENABLED_TOOLS`, `ToolName`, `TIER_1` from `src/lib/ai/toolTiers.ts` (Task 1).
 - Produces: `buildSystemPrompt(context: PromptContext, enabled: readonly ToolName[] = ENABLED_TOOLS): string`. `agent.ts` call site is untouched (default parameter).
 
@@ -160,7 +164,7 @@ describe('tier-aware sections', () => {
 ```
 
 - [ ] **Step 2: Run to verify failure** — `npx vitest run src/lib/ai/systemPrompt.test.ts`
-  Expected: FAIL — tier-1 prompt still contains `update_map_style` (current monolithic `BASE_PROMPT`).
+      Expected: FAIL — tier-1 prompt still contains `update_map_style` (current monolithic `BASE_PROMPT`).
 
 - [ ] **Step 3: Restructure `systemPrompt.ts`.** Split `BASE_PROMPT` into a constant plus four section builders; every string is carried over verbatim from the current file — only regrouped. Shape:
 
@@ -178,21 +182,35 @@ const ROLE_AND_ENV = `You are a geospatial data assistant running entirely in th
 function howToWorkSection(has: (t: ToolName) => boolean): string | null {
     const steps: string[] = [];
     if (has('duckdb_query')) {
-        steps.push('Explore before you answer. Use `duckdb_query` to inspect schemas and sample rows. Always add a LIMIT to exploratory SELECTs.');
-        steps.push('When a result is worth visualizing, CREATE TABLE it (a stable, named table the visual tabs can read) rather than returning a huge SELECT.');
+        steps.push(
+            'Explore before you answer. Use `duckdb_query` to inspect schemas and sample rows. Always add a LIMIT to exploratory SELECTs.'
+        );
+        steps.push(
+            'When a result is worth visualizing, CREATE TABLE it (a stable, named table the visual tabs can read) rather than returning a huge SELECT.'
+        );
     }
     if (has('update_map_style') || has('update_chart_spec')) {
-        steps.push('To draw a map, call `update_map_style` with the table, its geometry kind, and MapLibre paint properties. To make a chart, call `update_chart_spec` with a Vega-Lite spec. Read the current state first with `get_map_style` / `get_chart_spec` when adjusting an existing visualization.');
+        steps.push(
+            'To draw a map, call `update_map_style` with the table, its geometry kind, and MapLibre paint properties. To make a chart, call `update_chart_spec` with a Vega-Lite spec. Read the current state first with `get_map_style` / `get_chart_spec` when adjusting an existing visualization.'
+        );
     }
     if (has('geocode_address')) {
-        steps.push('Use `geocode_address` to turn a place name or address into coordinates when the user gives you one instead of data.');
+        steps.push(
+            'Use `geocode_address` to turn a place name or address into coordinates when the user gives you one instead of data.'
+        );
     }
     return steps.length ? `## How to work\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : null;
 }
 
-function builtinDatasetsSection(has: (t: ToolName) => boolean): string | null { /* current "## Built-in datasets" text, only when has('load_builtin_dataset') */ }
-function skillsSection(has: (t: ToolName) => boolean): string | null { /* current "## Skills" text, only when has('get_skill'); keep the gate sentence only when has('update_map_style') || has('update_chart_spec') */ }
-function rulesSection(has: (t: ToolName) => boolean): string { /* MapLibre + geometry-kind rules only when has('update_map_style'); Vega data/width/height rule only when has('update_chart_spec'); the concise/reply-in-user-language rule always */ }
+function builtinDatasetsSection(has: (t: ToolName) => boolean): string | null {
+    /* current "## Built-in datasets" text, only when has('load_builtin_dataset') */
+}
+function skillsSection(has: (t: ToolName) => boolean): string | null {
+    /* current "## Skills" text, only when has('get_skill'); keep the gate sentence only when has('update_map_style') || has('update_chart_spec') */
+}
+function rulesSection(has: (t: ToolName) => boolean): string {
+    /* MapLibre + geometry-kind rules only when has('update_map_style'); Vega data/width/height rule only when has('update_chart_spec'); the concise/reply-in-user-language rule always */
+}
 ```
 
 `buildSystemPrompt(context, enabled = ENABLED_TOOLS)` builds `has = (t) => enabled.includes(t)`, assembles `[ROLE_AND_ENV, howToWorkSection(has), builtinDatasetsSection(has), skillsSection(has), rulesSection(has)].filter(Boolean).join('\n\n')`, then appends the existing `## Context` block unchanged. Also change the empty-tables fallback line: `'No tables yet. Load data first (e.g. read a Parquet/CSV/GeoJSON file with duckdb_query).'` → keep the sentence only when `has('duckdb_query')`, else just `'No tables yet.'` (the bare-model test asserts no `duckdb_query` mention).
@@ -206,30 +224,32 @@ function rulesSection(has: (t: ToolName) => boolean): string { /* MapLibre + geo
 ### Task 3: `docs/en/README.md` rewrite + `00-setup.md` pointer
 
 **Files:**
+
 - Modify: `docs/en/README.md` (full rewrite), `docs/en/00-setup.md` (last line only)
 
 **Interfaces:**
+
 - Produces: the chapter file names all later tasks link to: `01-bare-model.md`, `02-general-purpose-tool.md`, `03-skills.md`, `04-specialized-tools.md`, `05-curate-your-stack.md`.
 
 - [ ] **Step 1: Rewrite `docs/en/README.md`** with this structure (port prose from the current file where it already says the right thing; title and goal are new):
-  - **Title**: `# Building a Geospatial Agent, One Failure at a Time — GIS × LLM from the inside`. Intro paragraph: keep the current geo-chat description sentences, add one sentence naming the format: the agent starts bare and gains one tier of capability per chapter, and every chapter ends with a real geospatial request that breaks the current stack.
-  - **Transfer Goal** blockquote — replace with the spec's revised transfer goal, verbatim from the spec's "Transfer goal (revised)" section.
-  - **Learning outcomes** — the spec's 3 bullets, verbatim.
-  - **Audience and Prerequisites** — unchanged from current.
-  - **"Learn by breaking"** section — rewrite: failures are now *organic* chapter-ending breaks rather than only sabotage; keep the fail-first philosophy paragraph; present the six-part chapter skeleton (① the agent so far ② the new piece ③ run it ④ where this fails ⑤ hands-on ⑥ development prompts).
-  - **Course outline table** (replaces the timetable table) with columns `Time | Chapter | The agent gains | Where it fails`, rows exactly:
+    - **Title**: `# Building a Geospatial Agent, One Failure at a Time — GIS × LLM from the inside`. Intro paragraph: keep the current geo-chat description sentences, add one sentence naming the format: the agent starts bare and gains one tier of capability per chapter, and every chapter ends with a real geospatial request that breaks the current stack.
+    - **Transfer Goal** blockquote — replace with the spec's revised transfer goal, verbatim from the spec's "Transfer goal (revised)" section.
+    - **Learning outcomes** — the spec's 3 bullets, verbatim.
+    - **Audience and Prerequisites** — unchanged from current.
+    - **"Learn by breaking"** section — rewrite: failures are now _organic_ chapter-ending breaks rather than only sabotage; keep the fail-first philosophy paragraph; present the six-part chapter skeleton (① the agent so far ② the new piece ③ run it ④ where this fails ⑤ hands-on ⑥ development prompts).
+    - **Course outline table** (replaces the timetable table) with columns `Time | Chapter | The agent gains | Where it fails`, rows exactly:
 
-| Time | Chapter | The agent gains | Where it fails |
-| --- | --- | --- | --- |
-| (setup) | [00-setup.md](./00-setup.md) | a running app + API key | — |
-| 0:00–0:30 | [01. A bare model](./01-bare-model.md) | nothing — LLM + loop, zero tools | all talk: it can describe SQL, it cannot touch data |
-| 0:30–1:20 | [02. One general-purpose tool](./02-general-purpose-tool.md) | `duckdb_query`, `load_builtin_dataset` | spatial requests: degrees-vs-meters garbage |
-| 1:20–1:55 | [03. Knowledge on demand](./03-skills.md) | `get_skill` + skill files | right numbers, trapped in text — no map, no chart |
-| 1:55–2:35 | [04. Specialized tools](./04-specialized-tools.md) | map / chart / geocode tools, validation, the gate | occasional wrong tool or wrong parameters |
-| 2:35–3:00 | [05. Curate your stack](./05-curate-your-stack.md) | a design theory + your own challenge | — |
+| Time      | Chapter                                                      | The agent gains                                   | Where it fails                                      |
+| --------- | ------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------- |
+| (setup)   | [00-setup.md](./00-setup.md)                                 | a running app + API key                           | —                                                   |
+| 0:00–0:30 | [01. A bare model](./01-bare-model.md)                       | nothing — LLM + loop, zero tools                  | all talk: it can describe SQL, it cannot touch data |
+| 0:30–1:20 | [02. One general-purpose tool](./02-general-purpose-tool.md) | `duckdb_query`, `load_builtin_dataset`            | spatial requests: degrees-vs-meters garbage         |
+| 1:20–1:55 | [03. Knowledge on demand](./03-skills.md)                    | `get_skill` + skill files                         | right numbers, trapped in text — no map, no chart   |
+| 1:55–2:35 | [04. Specialized tools](./04-specialized-tools.md)           | map / chart / geocode tools, validation, the gate | occasional wrong tool or wrong parameters           |
+| 2:35–3:00 | [05. Curate your stack](./05-curate-your-stack.md)           | a design theory + your own challenge              | —                                                   |
 
-  - **Appendices** section — unchanged links.
-  - **The 3 layers of "prompt"** table — keep verbatim, update the "Chapters" column references: ① experienced in 01–02, ② read in 02–03, written in 03–04, ③ from 04 on.
+- **Appendices** section — unchanged links.
+- **The 3 layers of "prompt"** table — keep verbatim, update the "Chapters" column references: ① experienced in 01–02, ② read in 02–03, written in 03–04, ③ from 04 on.
 - [ ] **Step 2: Update the last line of `00-setup.md`** to `When you are ready, go on to [01. A bare model](./01-bare-model.md).`
 - [ ] **Step 3: `npm run check`** → passes. Commit — `docs: rewrite curriculum README around the capability ladder (en)`
 
@@ -238,6 +258,7 @@ function rulesSection(has: (t: ToolName) => boolean): string { /* MapLibre + geo
 ### Task 4: Chapter 1 — `01-bare-model.md`
 
 **Files:**
+
 - Create: `docs/en/01-bare-model.md`
 - Delete: `docs/en/01-what-is-an-agent.md` (after porting)
 
@@ -255,8 +276,8 @@ flowchart TB
     Agent -.->|"cannot reach"| World["DuckDB / map / chart"]
 ```
 
-- **② The new piece** — port, lightly edited for the new frame: the opening magic demo (full-tier app, the choropleth prompt) explicitly labeled *"a preview of hour 3 — now we rewind to zero"*; the ChatGPT question; the GeoAI positioning map; the agent = LLM + tools + loop + context skeleton; the full "tool calling is just token prediction" section including the Opus 4.8 court aside; the 3-layers-of-prompt recap; "where to read the code" (agent.ts / tools/index.ts / systemPrompt.ts / useAgentChat.ts). New addition: introduce `src/lib/ai/toolTiers.ts` and `ENABLED_TOOLS` as "the workshop's throttle."
-- **③ Run it** — set `export const ENABLED_TOOLS: readonly ToolName[] = [];` in `toolTiers.ts`, ask 「自治体を都道府県ごとに色分けして地図に表示して」. The old break-it experiment #1 observation text ports here as the *expected result*: the model narrates the SQL it would run, no tool cards, no tabs change, sometimes tool-call-shaped XML leaks as prose.
+- **② The new piece** — port, lightly edited for the new frame: the opening magic demo (full-tier app, the choropleth prompt) explicitly labeled _"a preview of hour 3 — now we rewind to zero"_; the ChatGPT question; the GeoAI positioning map; the agent = LLM + tools + loop + context skeleton; the full "tool calling is just token prediction" section including the Opus 4.8 court aside; the 3-layers-of-prompt recap; "where to read the code" (agent.ts / tools/index.ts / systemPrompt.ts / useAgentChat.ts). New addition: introduce `src/lib/ai/toolTiers.ts` and `ENABLED_TOOLS` as "the workshop's throttle."
+- **③ Run it** — set `export const ENABLED_TOOLS: readonly ToolName[] = [];` in `toolTiers.ts`, ask 「自治体を都道府県ごとに色分けして地図に表示して」. The old break-it experiment #1 observation text ports here as the _expected result_: the model narrates the SQL it would run, no tool cards, no tabs change, sometimes tool-call-shaped XML leaks as prose.
 - **④ Where this fails** — this chapter IS the failure; close with: a model without tools is a proposer, not an agent. Handoff sentence: "In chapter 2 we hand it exactly one tool — and it turns out one good general-purpose tool goes a very long way."
 - **⑤ Hands-on** — port exercises 1–3 from the old chapter (empty-tools question, tool-card `input`/`output` inspection after restoring `[...TIER_1]` briefly, concept-map drawing), adjusted to use `ENABLED_TOOLS` edits instead of `tools: {}` in `useAgentChat.ts`.
 - **⑥ Development prompts** — pointer to appendix, as the old chapter's §⑤.
@@ -268,6 +289,7 @@ flowchart TB
 ### Task 5: Chapter 2 — `02-general-purpose-tool.md`
 
 **Files:**
+
 - Create: `docs/en/02-general-purpose-tool.md`
 - Delete: `docs/en/03-agent-loop.md` (after porting; `02-duckdb-wasm.md` is deleted in Task 7)
 
@@ -275,14 +297,14 @@ flowchart TB
 
 - **① The agent so far** — the chapter-1 diagram plus a `duckdb_query` + `load_builtin_dataset` tools node connected to DuckDB; map/chart still unreachable. `ENABLED_TOOLS = [...TIER_1]`.
 - **② The new piece** — three sub-sections:
-  1. *The substrate*: DuckDB / DuckDB-WASM concept, why SQL is the language LLMs speak best, the serialized-connection queue (from old 02).
-  2. *The loop, witnessed*: the entire old chapter 03 — sequence diagram, statelessness surprise, `agent.ts` close reading, system-prompt dissection (note the prompt is now assembled from tier-aware sections — show the tier-1 prompt and point out what is *absent*), DevTools network archaeology. The archaeology lands here because multi-round-trips exist only now that a tool does.
-  3. *Aggregation belongs in the tool*: `duckdb_query` returns ≤5 sample rows + row count; "how many municipalities per prefecture" runs COUNT in SQL rather than retrieving rows for the model to count — context economy as a design principle.
+    1. _The substrate_: DuckDB / DuckDB-WASM concept, why SQL is the language LLMs speak best, the serialized-connection queue (from old 02).
+    2. _The loop, witnessed_: the entire old chapter 03 — sequence diagram, statelessness surprise, `agent.ts` close reading, system-prompt dissection (note the prompt is now assembled from tier-aware sections — show the tier-1 prompt and point out what is _absent_), DevTools network archaeology. The archaeology lands here because multi-round-trips exist only now that a tool does.
+    3. _Aggregation belongs in the tool_: `duckdb_query` returns ≤5 sample rows + row count; "how many municipalities per prefecture" runs COUNT in SQL rather than retrieving rows for the model to count — context economy as a design principle.
 - **③ Run it** — participants first hand-write 2–3 SQL statements in the SQL tab (port the old 02 hands-on exercises), then delegate the same questions to the agent and diff the SQL it writes. Include one deliberate SQL typo prompt to show error → self-correction in the tool cards.
 - **④ Where this fails** — the organic break. Prompts in order of reliability, run each on a fresh chat:
-  1. 「各都道府県の面積を km² で計算して」 (compute each prefecture's area in km²) — `ST_Area` on EPSG:4326 returns degrees².
-  2. 「東京駅から 30km 以内の市を探して」 (cities within 30 km of Tokyo Station) — `ST_DWithin` with 30000 in degree units.
-  Observation text: absurd numbers or zero rows; discuss *zero results: valid answer or failure mode?*. **Fallback paragraph (required):** if the model gets it right from prior knowledge, inspect the transcript for everything it had to already know (projected CRS choice, `always_xy`, unit conversion) and frame chapter 3 as making that reliable instead of lucky. Close: the model lacked *knowledge*, not capability — cliffhanger to skills.
+    1. 「各都道府県の面積を km² で計算して」 (compute each prefecture's area in km²) — `ST_Area` on EPSG:4326 returns degrees².
+    2. 「東京駅から 30km 以内の市を探して」 (cities within 30 km of Tokyo Station) — `ST_DWithin` with 30000 in degree units.
+       Observation text: absurd numbers or zero rows; discuss _zero results: valid answer or failure mode?_. **Fallback paragraph (required):** if the model gets it right from prior knowledge, inspect the transcript for everything it had to already know (projected CRS choice, `always_xy`, unit conversion) and frame chapter 3 as making that reliable instead of lucky. Close: the model lacked _knowledge_, not capability — cliffhanger to skills.
 - **⑤ Hands-on** — the hand-written SQL exercises plus DevTools request-counting (old 03 exercises 1–3).
 - **⑥ Development prompts** — old 03 §⑤ prompt (explaining `runAgent` in 5 lines), unchanged.
 
@@ -293,15 +315,16 @@ flowchart TB
 ### Task 6: Chapter 3 — `03-skills.md`
 
 **Files:**
+
 - Create: `docs/en/03-skills.md`
 - Delete: `docs/en/06-skill-system.md` (after porting)
 
 **Blueprint** (port from `06-skill-system.md`, minus the gate sections which move to chapter 4 — read it fully first):
 
-- **① The agent so far** — diagram gains `get_skill` + a "skill files (*.md)" store node. `ENABLED_TOOLS = [...TIER_1, ...TIER_2]`.
-- **② The new piece** — open with chapter 2's failure diagnosis; present the band-aid escalation ("just add the projection rule to the system prompt… then the next rule, then the whole spatial manual") and its dead end: context is a finite resource. Then progressive disclosure, ported: skill file format, frontmatter, `idFromPath`, build-time glob, catalog embedded in `get_skill`'s description, `resolveWithDeps`. Include the key excerpt of `duckdb/spatial.md` (the projection caveat + `always_xy` trap) as *the knowledge that was missing in chapter 2*.
+- **① The agent so far** — diagram gains `get_skill` + a "skill files (\*.md)" store node. `ENABLED_TOOLS = [...TIER_1, ...TIER_2]`.
+- **② The new piece** — open with chapter 2's failure diagnosis; present the band-aid escalation ("just add the projection rule to the system prompt… then the next rule, then the whole spatial manual") and its dead end: context is a finite resource. Then progressive disclosure, ported: skill file format, frontmatter, `idFromPath`, build-time glob, catalog embedded in `get_skill`'s description, `resolveWithDeps`. Include the key excerpt of `duckdb/spatial.md` (the projection caveat + `always_xy` trap) as _the knowledge that was missing in chapter 2_.
 - **③ Run it** — rerun chapter 2's exact failing prompt on a fresh chat. Expected: the model fetches `duckdb.spatial` (tool card with skill-id badge), then writes correct project → measure → 4326 SQL. Put the two transcripts side by side.
-- **④ Where this fails** — ask 「その結果を地図に表示して」 (show that result on the map). The agent has no map tool — it can only apologize or print a table. Deterministic failure. Cliffhanger: knowledge fixed the *what*, chapter 4 adds specialized *hands* — and shows why they deserve more than a bare `execute`.
+- **④ Where this fails** — ask 「その結果を地図に表示して」 (show that result on the map). The agent has no map tool — it can only apologize or print a table. Deterministic failure. Cliffhanger: knowledge fixed the _what_, chapter 4 adds specialized _hands_ — and shows why they deserve more than a bare `execute`.
 - **⑤ Hands-on** — port "write one skill of your own" (heatmap template, dev-server restart, catalog verification) unchanged.
 - **⑥ Development prompts** — port old 06 §⑤ skill-drafting prompt.
 
@@ -312,6 +335,7 @@ flowchart TB
 ### Task 7: Chapter 4 — `04-specialized-tools.md`
 
 **Files:**
+
 - Create: `docs/en/04-specialized-tools.md`
 - Delete: `docs/en/02-duckdb-wasm.md`, `docs/en/04-building-tools.md`, `docs/en/05-declarative-specs.md` (after porting)
 
@@ -319,13 +343,13 @@ flowchart TB
 
 - **① The agent so far** — full stack diagram: all 8 tools, skills store, gate badge on `update_map_style`/`update_chart_spec`. `ENABLED_TOOLS = [...TIER_1, ...TIER_2, ...TIER_3]` (the app's default — the ladder is complete).
 - **② The new piece** — four sub-sections:
-  1. *Tool anatomy* (old 04): name / description / inputSchema / execute; the model never sees `execute`; description = the model's only clue. Keep the empty-description experiment as an in-chapter experiment (not the chapter break).
-  2. *The declarative-spec boundary* (old 05, whole): imperative vs declarative, the 4-property table (validatable/diffable/repairable/execution-separated), `updateChartSpec.ts` 3-stage validation, `updateMapStyle.ts` paint-prefix + `["get", col]` auto-correction, the "write JS vs write a spec" A/B experiment, spec editor exercise.
-  3. *The gate* (from old 06): `gate.ts` Set, `requireSkill`, per-session reset; run the complex-choropleth-without-skill experiment (refusal → self-fetch → success). Framing sentence: descriptions and system prompts *ask*; the gate *enforces*.
-  4. *Under the map* (from old 02): the `duckdb://` tile protocol / MVT pipeline as a sidebar — the execution layer the specs delegate to.
+    1. _Tool anatomy_ (old 04): name / description / inputSchema / execute; the model never sees `execute`; description = the model's only clue. Keep the empty-description experiment as an in-chapter experiment (not the chapter break).
+    2. _The declarative-spec boundary_ (old 05, whole): imperative vs declarative, the 4-property table (validatable/diffable/repairable/execution-separated), `updateChartSpec.ts` 3-stage validation, `updateMapStyle.ts` paint-prefix + `["get", col]` auto-correction, the "write JS vs write a spec" A/B experiment, spec editor exercise.
+    3. _The gate_ (from old 06): `gate.ts` Set, `requireSkill`, per-session reset; run the complex-choropleth-without-skill experiment (refusal → self-fetch → success). Framing sentence: descriptions and system prompts _ask_; the gate _enforces_.
+    4. _Under the map_ (from old 02): the `duckdb://` tile protocol / MVT pipeline as a sidebar — the execution layer the specs delegate to.
 - **③ Run it** — chapter 3's failing prompt now succeeds end-to-end: 「各都道府県の面積を km² で計算して、地図に塗り分けて」 (compute the areas and shade the map). Follow the tool cards: skill fetch → SQL → gate-passing `update_map_style`.
-- **④ Where this fails** — softer break: occasionally the model still picks the wrong tool or fumbles parameters (e.g., charts a table when asked for a map, or guesses a paint property the validator rejects). No single reliable repro — say so honestly, show what the validation errors look like when it happens. These residual failures are a *design* problem, not a mechanism problem → chapter 5.
-- **⑤ Hands-on** — the `buffer_analysis` development-prompt exercise (old 04 §④, verbatim including the review checklist), reframed: *the query class that broke chapter 2 becomes your own specialized, validated tool*.
+- **④ Where this fails** — softer break: occasionally the model still picks the wrong tool or fumbles parameters (e.g., charts a table when asked for a map, or guesses a paint property the validator rejects). No single reliable repro — say so honestly, show what the validation errors look like when it happens. These residual failures are a _design_ problem, not a mechanism problem → chapter 5.
+- **⑤ Hands-on** — the `buffer_analysis` development-prompt exercise (old 04 §④, verbatim including the review checklist), reframed: _the query class that broke chapter 2 becomes your own specialized, validated tool_.
 - **⑥ Development prompts** — old 04/05 §⑤ prompts, unchanged.
 
 - [ ] **Step 1: Write the file.** **Step 2: Delete the three old files.** **Step 3: `npm run check`** → passes. **Step 4: Commit** — `docs: chapter 4, specialized tools (en)`
@@ -335,6 +359,7 @@ flowchart TB
 ### Task 8: Chapter 5 — `05-curate-your-stack.md`
 
 **Files:**
+
 - Create: `docs/en/05-curate-your-stack.md`
 - Delete: `docs/en/07-challenge.md` (after porting)
 
@@ -342,9 +367,9 @@ flowchart TB
 
 - **① The agent so far** — the full diagram one last time, now annotated with tiers 1–3 and the chapter numbers where each arrived.
 - **② The new piece — a design theory** (new prose, ~3 sections):
-  1. *Specialized ↔ general-purpose*: plot the 8 tools on one axis (mermaid or a table): `geocode_address` (one job, simple params, hard to misuse) → `update_map_style`/`update_chart_spec` (constrained spec writing + validation) → `duckdb_query` (full query language, the ceiling). Low floor = tools the model uses correctly out of the box; high ceiling = tools that handle the questions you didn't anticipate. A good agent needs both.
-  2. *Failure modes → mechanisms*: a recap table mapping each failure met in chapters 1–4 to what fixed it — no hands → tools; missing knowledge → skills (progressive disclosure); unreliable conventions → gate; near-miss parameters → validation + auto-repair; wrong tool choice → descriptions and their trigger conditions/relationships.
-  3. *Evolving your own stack*: start with the general-purpose tool for your data; log the agent's behavior; when you see repeated multi-call fumbling on one task shape, carve out a specialized tool or skill for it. The rule of thumb: too many tool calls per question is the signal that the tool is too hard for the model.
+    1. _Specialized ↔ general-purpose_: plot the 8 tools on one axis (mermaid or a table): `geocode_address` (one job, simple params, hard to misuse) → `update_map_style`/`update_chart_spec` (constrained spec writing + validation) → `duckdb_query` (full query language, the ceiling). Low floor = tools the model uses correctly out of the box; high ceiling = tools that handle the questions you didn't anticipate. A good agent needs both.
+    2. _Failure modes → mechanisms_: a recap table mapping each failure met in chapters 1–4 to what fixed it — no hands → tools; missing knowledge → skills (progressive disclosure); unreliable conventions → gate; near-miss parameters → validation + auto-repair; wrong tool choice → descriptions and their trigger conditions/relationships.
+    3. _Evolving your own stack_: start with the general-purpose tool for your data; log the agent's behavior; when you see repeated multi-call fumbling on one task shape, carve out a specialized tool or skill for it. The rule of thumb: too many tool calls per question is the signal that the tool is too hard for the model.
 - **③ Run it / ⑤ Hands-on** — port the entire challenge menu (1)–(6) and the closing articulation ("write your first tool's `description` in one sentence", neighbor exchange) from old 07, updating internal chapter references (old ch. 04 → new ch. 4, old ch. 06 → new ch. 3).
 - **⑥ Development prompts** — appendix pointer.
 
@@ -355,6 +380,7 @@ flowchart TB
 ### Task 9: English appendices — fix cross-references
 
 **Files:**
+
 - Modify: `docs/en/appendix-prompts.md`, `docs/en/appendix-troubleshooting.md`
 
 - [ ] **Step 1:** In `appendix-prompts.md`: `### 1-a … (chapter 04)` → `(chapter 4)`; `### 1-b A skill md (chapter 06)` → `(chapter 3)`; the line "it doesn't appear in chapter 03's `tools` array" → "chapter 2's `tools` array". Then `grep -n "chapter 0" docs/en/*.md` and fix any remaining old-numbering hits (also grep for the deleted file names: `grep -rn "what-is-an-agent\|duckdb-wasm\|agent-loop\|building-tools\|declarative-specs\|skill-system\|07-challenge" docs/en/`).
@@ -366,6 +392,7 @@ flowchart TB
 ### Task 10: Root README pointer update
 
 **Files:**
+
 - Modify: `README.md` (repo root)
 
 - [ ] **Step 1:** Line ~48: replace the workshop title with `a 3-hour workshop, "Building a Geospatial Agent, One Failure at a Time."` Line ~79: `docs/en/07-challenge.md` → `docs/en/05-curate-your-stack.md`. Then `grep -n "docs/en\|docs/ja" README.md CLAUDE.md` and fix any other stale chapter links (CLAUDE.md has none today; verify).
@@ -376,6 +403,7 @@ flowchart TB
 ### Task 11: Japanese parity — rewrite `docs/ja/`
 
 **Files:**
+
 - Create: `docs/ja/01-bare-model.md`, `docs/ja/02-general-purpose-tool.md`, `docs/ja/03-skills.md`, `docs/ja/04-specialized-tools.md`, `docs/ja/05-curate-your-stack.md`
 - Modify: `docs/ja/README.md` (full rewrite), `docs/ja/00-setup.md` (last-line pointer), `docs/ja/appendix-prompts.md`, `docs/ja/appendix-troubleshooting.md` (cross-references)
 - Delete: `docs/ja/01-what-is-an-agent.md`, `02-duckdb-wasm.md`, `03-agent-loop.md`, `04-building-tools.md`, `05-declarative-specs.md`, `06-skill-system.md`, `07-challenge.md`

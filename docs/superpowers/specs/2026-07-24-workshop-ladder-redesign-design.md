@@ -6,11 +6,11 @@
 
 ## Motivation
 
-The current curriculum is an *anatomical dissection*: each chapter owns one component of a
+The current curriculum is an _anatomical dissection_: each chapter owns one component of a
 finished agent (loop, tools, specs, skills), and each break-it experiment is deliberate
 sabotage of working code. It teaches well, but the chapters are organized around the app's
-architecture rather than around the participant's question — *"how do I make an agent good
-with my geospatial data?"*
+architecture rather than around the participant's question — _"how do I make an agent good
+with my geospatial data?"_
 
 This redesign restructures the workshop as a **failure-driven capability ladder**. The agent
 starts bare and gains one tier of capability per chapter. Every chapter ends with a real
@@ -42,13 +42,13 @@ Learning outcomes (README bullets):
 
 ## The ladder: 5 chapters named by what the agent has
 
-| Ch | File | The agent has | Core experience | **Where this fails** (chapter-ending handoff) |
-| -- | ---- | ------------- | --------------- | --------------------------------------------- |
-| 1 | `01-bare-model.md` | LLM + loop, zero tools | Finished-app demo as a preview of hour 3 → "same Claude as ChatGPT — so what's different?" → run the tier-0 agent: all talk, no hands → tool calling is a learned token format | It can describe the SQL it *would* run, but cannot touch data, and sometimes leaks tool-call-shaped XML as prose |
-| 2 | `02-general-purpose-tool.md` | + `duckdb_query`, `load_builtin_dataset` | Participants write SQL by hand first (know the substrate), then delegate: text-to-SQL, joins, aggregation pushed into the tool; DevTools archaeology — count round trips, statelessness proof; SQL error → self-correction | Spatial request → **degrees-vs-meters garbage** (`ST_Area` on 4326, `ST_DWithin` with meters passed as degrees). High ceiling, but the model lacks *knowledge*, not capability |
-| 3 | `03-skills.md` | + `get_skill` + skill files | Fatten-the-system-prompt band-aid vs. progressive disclosure; the same broken query now fetches `duckdb.spatial` and produces correct project → measure → 4326 SQL; hands-on: write your own skill md | The numbers are right but **trapped in text** — the agent has no way to draw a map or chart |
-| 4 | `04-specialized-tools.md` | + `update_map_style`, `get_map_style`, `update_chart_spec`, `get_chart_spec`, `geocode_address` | Tool anatomy (name / description / inputSchema / execute); empty-description experiment; declarative specs vs. imperative code; validation + auto-repair as the closed self-correction loop; the gate (prompts ask, gates *enforce*); hands-on: build `buffer_analysis` — the query that broke ch. 2 becomes your specialized tool | Occasional wrong-tool / wrong-parameter choices remain — motivating design theory rather than another mechanism |
-| 5 | `05-curate-your-stack.md` | everything | The 8 tools plotted on a specialized ↔ general-purpose axis; low floor / high ceiling; the failure-mode recap mapped to which mechanism fixes each; "start general → log → specialize"; challenge kickoff; closing: write your first tool's `description` in one sentence | — |
+| Ch  | File                         | The agent has                                                                                   | Core experience                                                                                                                                                                                                                                                                                                                    | **Where this fails** (chapter-ending handoff)                                                                                                                                  |
+| --- | ---------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `01-bare-model.md`           | LLM + loop, zero tools                                                                          | Finished-app demo as a preview of hour 3 → "same Claude as ChatGPT — so what's different?" → run the tier-0 agent: all talk, no hands → tool calling is a learned token format                                                                                                                                                     | It can describe the SQL it _would_ run, but cannot touch data, and sometimes leaks tool-call-shaped XML as prose                                                               |
+| 2   | `02-general-purpose-tool.md` | + `duckdb_query`, `load_builtin_dataset`                                                        | Participants write SQL by hand first (know the substrate), then delegate: text-to-SQL, joins, aggregation pushed into the tool; DevTools archaeology — count round trips, statelessness proof; SQL error → self-correction                                                                                                         | Spatial request → **degrees-vs-meters garbage** (`ST_Area` on 4326, `ST_DWithin` with meters passed as degrees). High ceiling, but the model lacks _knowledge_, not capability |
+| 3   | `03-skills.md`               | + `get_skill` + skill files                                                                     | Fatten-the-system-prompt band-aid vs. progressive disclosure; the same broken query now fetches `duckdb.spatial` and produces correct project → measure → 4326 SQL; hands-on: write your own skill md                                                                                                                              | The numbers are right but **trapped in text** — the agent has no way to draw a map or chart                                                                                    |
+| 4   | `04-specialized-tools.md`    | + `update_map_style`, `get_map_style`, `update_chart_spec`, `get_chart_spec`, `geocode_address` | Tool anatomy (name / description / inputSchema / execute); empty-description experiment; declarative specs vs. imperative code; validation + auto-repair as the closed self-correction loop; the gate (prompts ask, gates _enforce_); hands-on: build `buffer_analysis` — the query that broke ch. 2 becomes your specialized tool | Occasional wrong-tool / wrong-parameter choices remain — motivating design theory rather than another mechanism                                                                |
+| 5   | `05-curate-your-stack.md`    | everything                                                                                      | The 8 tools plotted on a specialized ↔ general-purpose axis; low floor / high ceiling; the failure-mode recap mapped to which mechanism fixes each; "start general → log → specialize"; challenge kickoff; closing: write your first tool's `description` in one sentence                                                         | —                                                                                                                                                                              |
 
 `00-setup.md`, `appendix-prompts.md`, `appendix-troubleshooting.md` survive with edits only
 where they reference old chapter numbers. The old `01`–`07` chapter files are removed.
@@ -66,22 +66,22 @@ Every chapter follows the same six-part structure (replacing the current five-pa
 6. **Development prompts** — links into `appendix-prompts.md`
 
 The sabotage-style experiments that remain valuable (emptying a description, comparing
-"write JS" vs. "write a spec", triggering the gate) become *in-chapter experiments* inside
+"write JS" vs. "write a spec", triggering the gate) become _in-chapter experiments_ inside
 part 2/3 of the relevant chapter; the chapter-ending break is always an organic failure.
 
 ### Content mapping (old → new)
 
-| Current | Lands in |
-| ------- | -------- |
-| 01 magic demo, GeoAI map, agent skeleton, token-prediction framing | Ch. 1 (the `tools: {}` state becomes the *starting* state, not a sabotage) |
-| 02 DuckDB-WASM concept + hands-on SQL | Ch. 2 opening |
-| 03 DevTools round trips, statelessness, `agent.ts` close reading | Ch. 2 (archaeology lands right when multi-round-trips first exist) |
-| 04 tool anatomy, `buffer_analysis` exercise | Ch. 4 |
-| 05 declarative-spec boundary, validation/repair | Ch. 4 |
-| 06 skills + progressive disclosure | Ch. 3; the prerequisite gate moves to Ch. 4 (it needs the gated tools to exist) |
-| 07 challenges + closing articulation | Ch. 5 |
-| 3-layers-of-prompt terminology | README + Ch. 1, unchanged |
-| Appendices | Unchanged apart from chapter cross-references |
+| Current                                                            | Lands in                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| 01 magic demo, GeoAI map, agent skeleton, token-prediction framing | Ch. 1 (the `tools: {}` state becomes the _starting_ state, not a sabotage)      |
+| 02 DuckDB-WASM concept + hands-on SQL                              | Ch. 2 opening                                                                   |
+| 03 DevTools round trips, statelessness, `agent.ts` close reading   | Ch. 2 (archaeology lands right when multi-round-trips first exist)              |
+| 04 tool anatomy, `buffer_analysis` exercise                        | Ch. 4                                                                           |
+| 05 declarative-spec boundary, validation/repair                    | Ch. 4                                                                           |
+| 06 skills + progressive disclosure                                 | Ch. 3; the prerequisite gate moves to Ch. 4 (it needs the gated tools to exist) |
+| 07 challenges + closing articulation                               | Ch. 5                                                                           |
+| 3-layers-of-prompt terminology                                     | README + Ch. 1, unchanged                                                       |
+| Appendices                                                         | Unchanged apart from chapter cross-references                                   |
 
 ## Staging mechanics (the app changes)
 
@@ -93,8 +93,13 @@ prompt so they can never disagree:
 ```ts
 export const TIER_1 = ['duckdb_query', 'load_builtin_dataset'] as const;
 export const TIER_2 = ['get_skill'] as const;
-export const TIER_3 = ['update_map_style', 'get_map_style',
-                       'update_chart_spec', 'get_chart_spec', 'geocode_address'] as const;
+export const TIER_3 = [
+    'update_map_style',
+    'get_map_style',
+    'update_chart_spec',
+    'get_chart_spec',
+    'geocode_address',
+] as const;
 
 // The workshop ladder: each chapter enables one more tier.
 // Chapter 1 sets this to [] — the bare model.
@@ -104,7 +109,7 @@ export const ENABLED_TOOLS = [...TIER_1, ...TIER_2, ...TIER_3];
 - `createTools()` filters its registry to `ENABLED_TOOLS`. Default = all tiers, so the app
   behaves exactly as today for anyone not following the workshop.
 - Participants stage each chapter by editing this one visible line (Vite hot-reloads).
-  The edit itself teaches the lesson: *a tool exists only if it is handed to the loop.*
+  The edit itself teaches the lesson: _a tool exists only if it is handed to the loop._
 - This also makes the ch. 2 failure reliable: without `get_skill` in the tier, the model
   cannot rescue itself by fetching `duckdb.spatial`. No skill files are moved or renamed.
 
@@ -113,7 +118,7 @@ export const ENABLED_TOOLS = [...TIER_1, ...TIER_2, ...TIER_3];
 `BASE_PROMPT` is reassembled from sections conditioned on which tools are enabled
 (role/environment always; "How to work" steps, built-in datasets, skills section, and
 map/chart rules only when their tools are present). A tier-1 agent is not told about tools
-it does not have. Side benefit: the docs can show the system prompt *growing* across
+it does not have. Side benefit: the docs can show the system prompt _growing_ across
 chapters — a teachable, diffable artifact.
 
 Existing unit tests that assert on `BASE_PROMPT` content or the tool registry shape are
@@ -130,7 +135,7 @@ The ch. 2 break offers 2–3 candidate prompts, ordered by observed failure rate
 
 Each break section documents an honest fallback: if the model happens to get it right from
 prior knowledge, the docs pivot to "look at everything it had to already know — now watch
-the skill make that *reliable* instead of lucky," and compare the two transcripts.
+the skill make that _reliable_ instead of lucky," and compare the two transcripts.
 The ch. 3 → 4 break (no map tool exists) and ch. 1 break (no tools at all) are
 deterministic and need no fallback.
 
@@ -164,5 +169,5 @@ deterministic and need no fallback.
 
 - No workshop-mode UI, no settings dropdown, no per-chapter git tags or branches.
 - No changes to the skill system, gate, validation logic, or agent loop — the ladder only
-  changes *when* each existing mechanism enters the story.
+  changes _when_ each existing mechanism enters the story.
 - No renaming of the repo, sample data, or tools.
