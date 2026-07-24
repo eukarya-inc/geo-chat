@@ -5,17 +5,10 @@ import { buildSystemPrompt } from './systemPrompt';
 describe('buildSystemPrompt', () => {
     const now = new Date('2026-07-22T00:00:00Z');
 
-    it('includes the current date and the data-working guidance', () => {
+    it('includes the current date and the core role', () => {
         const prompt = buildSystemPrompt({ now, tables: [] });
         expect(prompt).toContain('2026-07-22');
-        expect(prompt).toContain('Working with data');
-    });
-
-    it('omits the visualization section (the agent cannot drive the map/chart in ch1)', () => {
-        const prompt = buildSystemPrompt({ now, tables: [] });
-        expect(prompt).not.toContain('Visualizing');
-        expect(prompt).not.toContain('update_map_style');
-        expect(prompt).not.toContain('update_chart_spec');
+        expect(prompt).toContain('geospatial data assistant');
     });
 
     it('lists each table with its columns and types', () => {
@@ -34,13 +27,13 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('cities(pop INTEGER, geom GEOMETRY)');
     });
 
-    it('lists the built-in datasets and how to load them', () => {
+    it('omits the data, visualization, and skills sections (chat-only has no tools)', () => {
         const prompt = buildSystemPrompt({ now, tables: [] });
-        expect(prompt).toContain('Built-in datasets');
-        expect(prompt).toContain('japan_cities');
-        expect(prompt).toContain('japan_prefectures');
-        // Tells the model to load a dataset itself via the dedicated tool.
-        expect(prompt).toContain('load_builtin_dataset');
+        expect(prompt).not.toContain('Working with data');
+        expect(prompt).not.toContain('Built-in datasets');
+        expect(prompt).not.toContain('duckdb_query');
+        expect(prompt).not.toContain('Visualizing');
+        expect(prompt).not.toContain('Skills');
     });
 
     it('caps the column list at 20 per table', () => {

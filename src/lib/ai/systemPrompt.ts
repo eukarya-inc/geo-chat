@@ -1,5 +1,4 @@
 import type { QueryColumn } from '@/lib/duckdb/db';
-import { BUILTIN_DATASETS } from './builtinDatasets';
 
 /** A table and its columns, used to give the model schema context. */
 export interface TableContext {
@@ -35,17 +34,6 @@ const CORE = `You are a geospatial data assistant running entirely in the user's
 ## Answering
 - Keep answers concise and reply in the same language the user writes in.`;
 
-/** DATA_GUIDANCE: how to explore/build tables and geocode. Goes with the data-tools seam. */
-const DATA_GUIDANCE = `## Working with data
-1. Explore before you answer. Use \`duckdb_query\` to inspect schemas and sample rows. Always add a LIMIT to exploratory SELECTs.
-2. When a result is worth visualizing, CREATE TABLE it (a stable, named table the visual tabs can read) rather than returning a huge SELECT.
-3. Use \`geocode_address\` to turn a place name or address into coordinates when the user gives you one instead of data.`;
-
-/** BUILTIN_DATASETS: catalog of bundled datasets. Goes with the data-tools seam. */
-const BUILTIN_DATASETS_SECTION = `## Built-in datasets
-These bundled sample datasets can be loaded on demand. When the user asks about data matching one of these and its table is not yet listed in the Context below, load it yourself by calling \`load_builtin_dataset\` with the table name, then continue with the task.
-${BUILTIN_DATASETS.map(d => `- ${d.table} (${d.url}): ${d.description}`).join('\n')}`;
-
 /** Formats one table as `name(col type, col type, …)`, capping the column list. */
 function formatTable(table: TableContext): string {
     const shown = table.columns.slice(0, MAX_COLUMNS_LISTED).map(c => `${c.name} ${c.type}`);
@@ -62,14 +50,13 @@ function formatTable(table: TableContext): string {
 export function buildSystemPrompt(context: PromptContext): string {
     const sections: string[] = [CORE];
 
-    // CHAPTER SEAM: data tools — duckdb_query + load_builtin_dataset. Present from ch1;
-    // dropped only in ch0 (chat-only). Datasets live with the data tools, not a later layer.
-    sections.push(DATA_GUIDANCE, BUILTIN_DATASETS_SECTION);
+    // CHAPTER SEAM: data tools — DATA_GUIDANCE + BUILTIN_DATASETS. Added in ch1, together
+    // with the data tools in tools/index.ts. Chat-only has no data sections at all.
 
     const date = context.now.toISOString().slice(0, 10);
     const tables =
         context.tables.length === 0
-            ? 'No tables yet. Load data first (e.g. read a Parquet/CSV/GeoJSON file with duckdb_query).'
+            ? 'No tables yet. The user can load data manually in the SQL tab.'
             : context.tables.map(formatTable).join('\n');
     sections.push(`## Context\nCurrent date: ${date}\n\nTables in the database:\n${tables}`);
 
