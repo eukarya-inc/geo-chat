@@ -45,8 +45,9 @@ Settings when you are done.
 
 ## Workshop docs
 
-The curriculum lives in [`docs/`](./docs) — a 3-hour workshop, "Building a Geospatial Agent, One Failure at a Time." Available in Japanese ([`docs/ja/`](./docs/ja)) and
-English ([`docs/en/`](./docs/en)).
+The curriculum lives in [`docs/`](./docs) — a 3-hour workshop,
+"Building a Geospatial Agent, One Failure at a Time." Available in Japanese
+([`docs/ja/`](./docs/ja)) and English ([`docs/en/`](./docs/en)).
 
 ## Tech stack
 
@@ -78,7 +79,7 @@ implement it with you.
   [`docs/en/05-curate-your-stack.md`](./docs/en/05-curate-your-stack.md)).
 - **Screenshots / demo GIF in this README.**
 - **Workshop timing variants** — the curriculum assumes 3 hours; a compressed
-  2-hour variant (skipping ch.05) would fit more conference slots.
+  2-hour variant (skipping ch.05's closing challenge) would fit more conference slots.
 
 ## License
 
