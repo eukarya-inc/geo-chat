@@ -399,7 +399,7 @@ validates like this.
 ```ts
 export function matchColumn(name: string, columns: string[]): ColumnMatch {
     if (columns.includes(name)) return { ok: true, name, corrected: false };
-    const target = normalize(name); // NFC + lowercase
+    const target = normalize(name); // NFC + lowercase (comment added)
     const hit = columns.find(c => normalize(c) === target);
     if (hit) return { ok: true, name: hit, corrected: true };
     return { ok: false };

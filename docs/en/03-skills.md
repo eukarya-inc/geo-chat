@@ -53,7 +53,7 @@ statement it was asked to, without complaint:
 
 Chapter 2's own principle-callout named the diagnosis precisely: **"`duckdb_query` never once
 refused to run these queries, and it never will — a general-purpose tool has no opinion about
-whether the SQL it executes is geospatially sound. Every failure was a knowledge gap … never a
+whether the SQL it executes is geospatially sound. Every failure above was a knowledge gap … never a
 capability gap."** The tool worked. The model just didn't reliably know, every time, which CRS to
 project into, that `ST_Transform` needs `always_xy := true` for this app's coordinate order, or
 that raw lon/lat units are degrees, not meters. Even the "it happened to get it right" case chapter

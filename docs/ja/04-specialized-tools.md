@@ -319,7 +319,7 @@ geo-chat は徹底して **(B)** を採ります。理由は、spec が **コー
 ```ts
 export function matchColumn(name: string, columns: string[]): ColumnMatch {
     if (columns.includes(name)) return { ok: true, name, corrected: false };
-    const target = normalize(name); // NFC + lowercase
+    const target = normalize(name); // NFC + lowercase（コメントは追加分）
     const hit = columns.find(c => normalize(c) === target);
     if (hit) return { ok: true, name: hit, corrected: true };
     return { ok: false };

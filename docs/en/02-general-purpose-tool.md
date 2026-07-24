@@ -530,9 +530,10 @@ That gap — knowledge, not capability — is exactly what
    case takes one more round trip than the second — tie it back to `load_builtin_dataset` being a
    separate tool call from `duckdb_query`, both inside the same loop from ②.
 5. Copy the full `system` text of a request and mark, in the copy, the boundary between
-   `ROLE_AND_ENV` / `## How to work` / `## Built-in datasets` / `## Rules` (all static per tier)
-   and `## Context` at the end (dynamic every turn). Load one more table and ask the same question
-   again; observe how only the end changes.
+   `ROLE_AND_ENV` (the untitled block before `## How to work`) / `## How to work` /
+   `## Built-in datasets` / `## Rules` (all static per tier) and `## Context` at the end (dynamic
+   every turn). Load one more table and ask the same question again; observe how only the end
+   changes.
 6. Find `duckdb_query`'s (and `load_builtin_dataset`'s) `description` inside the `tools` array and
    read them aloud. This is your first close look at a tool description doing its job; chapter 4
    has you write one yourself when you build a specialized tool — keep in mind that this
