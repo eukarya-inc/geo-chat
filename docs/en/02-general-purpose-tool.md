@@ -179,7 +179,7 @@ const result = streamText({
     model: anthropic(options.model),
     system: buildSystemPrompt(options.promptContext), // ← context (the ② prompt)
     messages: options.messages, // ← the entire conversation so far
-    tools: options.tools, // ← the 8 tool definitions
+    tools: options.tools, // ← the enabled tool definitions (2 at TIER_1)
     temperature: 0, // reproducibility-first (nearly the same decision every time)
     maxOutputTokens: 8000,
     stopWhen: stepCountIs(30), // ← the loop's stopping condition
@@ -257,8 +257,8 @@ export function buildSystemPrompt(context: PromptContext, enabled: readonly Tool
 
 Each `...Section(has)` function returns either a chunk of prompt text or `null`, by checking the
 same `has(t)` closure the tool registry uses. With `enabled = [...TIER_1]` (`duckdb_query`,
-`load_builtin_dataset`), here is the **entire** prompt the model actually receives (tables
-omitted since no data is loaded yet):
+`load_builtin_dataset`) and no tables loaded yet, here is the **entire** prompt the model actually
+receives — only the date will differ on your machine:
 
 ```text
 You are a geospatial data assistant running entirely in the user's web browser.
@@ -274,8 +274,8 @@ You are a geospatial data assistant running entirely in the user's web browser.
 
 ## Built-in datasets
 These bundled sample datasets can be loaded on demand. When the user asks about data matching one of these and its table is not yet listed in the Context below, load it yourself by calling `load_builtin_dataset` with the table name, then continue with the task.
-- japan_cities (…/data/japan_cities.parquet): Japanese municipalities (市区町村) polygons, GeoParquet. Columns: city, ward, code, prefecture, geom (GEOMETRY, WGS84).
-- japan_prefectures (…/data/japan_prefectures.parquet): Japanese prefectures (都道府県) polygons, GeoParquet. Columns: fid, N03_001, geom (GEOMETRY, WGS84).
+- japan_cities (/data/japan_cities.parquet): Japanese municipalities (市区町村) polygons, GeoParquet. Columns: city (VARCHAR, city/county name), ward (VARCHAR, ward or subdivision), code (VARCHAR, JIS municipality code), prefecture (VARCHAR, prefecture name), geom (GEOMETRY, WGS84).
+- japan_prefectures (/data/japan_prefectures.parquet): Japanese prefectures (都道府県) polygons, GeoParquet. Columns: fid (INTEGER, feature id), N03_001 (VARCHAR, prefecture name), geom (GEOMETRY, WGS84).
 
 ## Rules
 - Keep answers concise and reply in the same language the user writes in.
