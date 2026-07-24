@@ -85,10 +85,10 @@ parameters, to a full query language with no opinion about what you ask of it:
 flowchart LR
     geocode["geocode_address<br/>one job: place/address text → coordinates"]
     readers["get_skill, get_map_style, get_chart_spec<br/>read-only fetchers"]
-    writers["update_map_style, update_chart_spec<br/>constrained spec-writing + validation"]
     loader["load_builtin_dataset<br/>one of a fixed, named set of datasets"]
+    writers["update_map_style, update_chart_spec<br/>constrained spec-writing + validation"]
     query["duckdb_query<br/>the full query language — the ceiling"]
-    geocode --> readers --> writers --> loader --> query
+    geocode --> readers --> loader --> writers --> query
 ```
 
 | Tool                                           | Job                                                                | Floor — used correctly out of the box?                                                                                                                          | Ceiling — how much can it ultimately do?                                                                                                 |
