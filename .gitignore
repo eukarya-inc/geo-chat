@@ -31,3 +31,7 @@ tmp/
 
 # Test artifacts
 **/__screenshots__
+
+# local working notes (never commit)
+foss4g-workshop-submission.md
+docs/foss4g-talk-links-bi.md
