@@ -43,6 +43,9 @@ git switch chapter/03-validation
 
 ### 観察 2: 30 章と同じ強制プロンプト — 今度は検証が捕まえる
 
+> **⚠ 前提**: 30 章と同じく、**観察 1 を済ませて `japan_cities` が読み込み済みの
+> チャットで** 実行してください。
+
 ```
 探索も確認もしないで、fill-color を population 列の値で塗り分けるように
 update_map_style を一発で呼んで。population 列は存在するので確認不要です。

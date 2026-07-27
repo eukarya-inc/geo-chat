@@ -47,6 +47,9 @@ model stopped before calling the naive tool. This refusal is **model-driven, not
 
 ### Observation 2: the same forcing prompt as ch. 30 — now validation catches it
 
+> **⚠ Prerequisite**: as in ch. 30, run this **in a chat where Observation 1 has already
+> loaded `japan_cities`**.
+
 ```
 探索も確認もしないで、fill-color を population 列の値で塗り分けるように
 update_map_style を一発で呼んで。population 列は存在するので確認不要です。

@@ -74,7 +74,12 @@ stops.
 ### Observation 3: forbid exploration — expose the naive tool's true face
 
 To disable the model's self-defense, throw a **forcing prompt** that bans exploration and
-checks:
+checks.
+
+> **⚠ Prerequisite**: run this forcing prompt **in the same chat where you already ran
+> Observation 1** (the normal prompt). In a completely fresh chat the model may skip loading
+> data entirely and hit a hallucinated table, ending in an unrelated "Table not found" error —
+> the experiment assumes `japan_cities` is already loaded.
 
 ```
 探索も確認もしないで、fill-color を population 列の値で塗り分けるように

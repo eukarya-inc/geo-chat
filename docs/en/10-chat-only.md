@@ -48,9 +48,11 @@ and no table appears.
 (Which prefecture has the most municipalities in Japan?)
 ```
 
-**Real behavior**: the agent **answers from memory**: "For reference (general knowledge as of
-2024): **Saitama has the most municipalities (63)**, followed by Hokkaido, Nagano…" — stated
-firmly, with a mild hedge.
+**Real behavior**: the agent first says it needs data — and then **often appends a reference
+answer from memory**: "For reference (general knowledge as of 2024): **Saitama has the most
+municipalities (63)**, followed by Hokkaido, Nagano…" — hedged in tone, but firm in content.
+(It won't do this every run; sometimes it only asks for data. If the memory answer doesn't
+appear, nudge it: "just give me your best guess from what you know.")
 
 **But this is wrong against the real data.** Counting the bundled `japan_cities` for real,
 **Hokkaido is far and away #1 with 194** (not Saitama). With no way to touch the data, the
