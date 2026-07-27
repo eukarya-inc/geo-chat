@@ -25,6 +25,7 @@
         "@ai-sdk/anthropic": "^3.0.99",
         "@duckdb/duckdb-wasm": "^1.30.1-dev2.0",
         "@maplibre/maplibre-gl-style-spec": "^23.3.0",
+        "@protomaps/basemaps": "^5.7.2",
         "@radix-ui/react-dialog": "^1.1.20",
         "@radix-ui/react-label": "^2.1.12",
         "@radix-ui/react-scroll-area": "^1.2.15",

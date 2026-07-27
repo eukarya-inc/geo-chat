@@ -8,7 +8,8 @@ import { defaultMapStyle, type GeometryKind } from '@/lib/map/mapSpec';
 import { invalidateTable, registerTileProtocol } from '@/lib/map/tileProtocol';
 import { mapStylesAtom, selectedTableAtom } from '@/store/atoms';
 import { NoTableHint, TablePicker } from '@/components/workspace/TablePicker';
-import { BASE_STYLE, clearTableSource, LAYER_ID, setTableLayer, setTableSource } from './mapLayers';
+import { BASE_STYLE } from './basemap';
+import { clearTableSource, LAYER_ID, setTableLayer, setTableSource } from './mapLayers';
 
 registerTileProtocol();
 

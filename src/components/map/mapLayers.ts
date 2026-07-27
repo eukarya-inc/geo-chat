@@ -1,24 +1,10 @@
-import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import maplibregl from 'maplibre-gl';
 
 import { buildLayer, type TableMapStyle } from '@/lib/map/mapSpec';
 import { tileUrlTemplate } from '@/lib/map/tileProtocol';
 
 export const SOURCE_ID = 'duckdb-table';
 export const LAYER_ID = 'duckdb-layer';
-
-/** OSM raster basemap style. */
-export const BASE_STYLE: StyleSpecification = {
-    version: 8,
-    sources: {
-        osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-        },
-    },
-    layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-};
 
 /** Adds (or replaces) the vector tile source for the given table. */
 export function setTableSource(map: maplibregl.Map, table: string): void {
