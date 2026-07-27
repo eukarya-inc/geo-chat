@@ -32,6 +32,9 @@ tmp/
 # Test artifacts
 **/__screenshots__
 
+# Workshop walkthrough recordings (large binaries; not committed)
+recordings/
+
 # local working notes (never commit)
 foss4g-workshop-submission.md
 docs/foss4g-talk-links-bi.md
