@@ -37,9 +37,9 @@ export function ChatPanel() {
         setInput('');
     };
 
-    // Send on Enter, newline on Shift+Enter.
+    // Send on Enter, newline on Shift+Enter. Enter during IME composition only confirms the candidate.
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             submit(e);
         }
