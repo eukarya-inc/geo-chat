@@ -85,7 +85,7 @@ export function ChatPanel() {
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-4 p-4">
+                        <div className="flex min-w-0 flex-col gap-4 p-4">
                             {messages.map(message => (
                                 <MessageView key={message.id} message={message} />
                             ))}
