@@ -29,7 +29,7 @@ export function MessageView({ message }: { message: ChatMessage }) {
 function PartView({ part }: { part: MessagePart }) {
     if (part.type === 'text') {
         return (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm break-words">
+            <div className="prose prose-sm dark:prose-invert max-w-none min-w-0 text-sm break-words [&_pre]:overflow-x-auto">
                 <Markdown remarkPlugins={[remarkGfm]}>{part.text}</Markdown>
             </div>
         );
