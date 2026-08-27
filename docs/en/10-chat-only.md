@@ -127,7 +127,6 @@ Files that mainly appear:
 
 - `src/lib/ai/tools/duckdbQuery.ts` — the first tool (run one SQL statement).
 - `src/lib/ai/tools/loadBuiltinDataset.ts` / `builtinDatasets.ts` — loading built-in data.
-- `src/lib/ai/tools/geocode.ts` — address → coordinates.
 - `src/lib/ai/tools/index.ts` — the `// CHAPTER SEAM: data tools` body grows; three tools
   land in the previously empty registry.
 - `src/lib/ai/systemPrompt.ts` — the CORE-only prompt gains `DATA_GUIDANCE` and
