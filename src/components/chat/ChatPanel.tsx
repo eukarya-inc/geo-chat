@@ -10,12 +10,6 @@ import { useAgentChat } from '@/lib/ai/useAgentChat';
 import { settingsOpenAtom } from '@/store/atoms';
 import { apiKeyAtom } from '@/store/settings';
 
-const EXAMPLE_PROMPTS = [
-    '日本の自治体を地図に表示して',
-    '都道府県ごとの市区町村数をグラフにして',
-    'Show the Japanese municipalities on the map',
-];
-
 export function ChatPanel() {
     const apiKey = useAtomValue(apiKeyAtom);
     const openSettings = useSetAtom(settingsOpenAtom);
@@ -71,18 +65,6 @@ export function ChatPanel() {
                     {messages.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                             <p className="text-muted-foreground text-sm">Ask questions about your geospatial data.</p>
-                            <div className="flex flex-col gap-2">
-                                {EXAMPLE_PROMPTS.map(prompt => (
-                                    <button
-                                        key={prompt}
-                                        type="button"
-                                        onClick={() => setInput(prompt)}
-                                        className="bg-muted hover:bg-muted/70 text-muted-foreground rounded-md border px-3 py-1.5 text-left text-xs"
-                                    >
-                                        {prompt}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
                     ) : (
                         <div className="flex min-w-0 flex-col gap-4 p-4">
