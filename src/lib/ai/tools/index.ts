@@ -54,7 +54,7 @@ function requireSkill<T extends Tool>(domain: string, suggestion: string, tool: 
  *   skill system   | get_skill            | fetch skill instructions; unlocks the gated tools
  */
 export function createTools(ctx: ToolContext) {
-    // CHAPTER SEAM: data tools — the base kept from ch1 (SQL + built-in datasets +
+    // CHAPTER SEAM: data tools — the base kept from ch1 (SQL + built-in datasets).
     // Dropped entirely only in ch0 (chat-only). Its system-prompt
     // counterpart is the DATA_GUIDANCE + BUILTIN_DATASETS sections in systemPrompt.ts.
     const dataTools = {
