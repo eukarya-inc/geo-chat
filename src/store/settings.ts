@@ -15,7 +15,14 @@ export const DEFAULT_MODEL = 'claude-sonnet-4-5';
  * browser to the Anthropic API. Participants use a personal key and delete it
  * afterwards (the Settings dialog states this).
  */
-export const apiKeyAtom = atomWithStorage<string>('geo-chat:apiKey', '', undefined, { getOnInit: true });
+export const apiKeyAtom = atomWithStorage<string>(
+    'geo-chat:apiKey',
+    // Workshops can ship a key via `.env` (VITE_ANTHROPIC_API_KEY=...) instead
+    // of having every participant paste it into the Settings dialog.
+    (import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined) ?? '',
+    undefined,
+    { getOnInit: true }
+);
 
 /** Selected Claude model, persisted in localStorage. */
 export const modelAtom = atomWithStorage<string>('geo-chat:model', DEFAULT_MODEL, undefined, { getOnInit: true });
