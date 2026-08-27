@@ -126,7 +126,6 @@ git diff --stat chapter/00-chat-only..chapter/01-data
 
 - `src/lib/ai/tools/duckdbQuery.ts` — 最初のツール（SQL を 1 文実行）。
 - `src/lib/ai/tools/loadBuiltinDataset.ts` / `builtinDatasets.ts` — 組み込みデータの読込。
-- `src/lib/ai/tools/geocode.ts` — 住所→座標。
 - `src/lib/ai/tools/index.ts` — `// CHAPTER SEAM: data tools` の中身が増え、
   空だった registry に 3 つのツールが載る。
 - `src/lib/ai/systemPrompt.ts` — CORE だけだった prompt に

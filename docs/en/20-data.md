@@ -1,7 +1,6 @@
 # 20. The first tool and the loop — a hand that touches data
 
-> The ch. 10 agent only talked. Here we give it **three hands** (run SQL, load data,
-> geocode). Only now does the "agent loop" start moving. This is the heart of the workshop —
+> The ch. 10 agent only talked. Here we give it **two hands** (run SQL, load data). Only now does the "agent loop" start moving. This is the heart of the workshop —
 > we dissect the loop and statelessness from both **~100 lines of code** and the **raw HTTP
 > round-trips in DevTools**.
 
@@ -19,7 +18,6 @@ This branch has **up to the data layer**. The `// CHAPTER SEAM: data tools` insi
 | ---------------------- | ------------------------------------------------------------------ |
 | `duckdb_query`         | run **one** SQL statement; return column types, sample rows, count |
 | `load_builtin_dataset` | load a built-in dataset (`japan_cities`, …) into a table           |
-| `geocode_address`      | turn a place name / address into coordinates (Nominatim)           |
 
 - **Present**: hands to read data, run SQL, build tables.
 - **Absent**: a map-painting tool, a chart tool, skills. So it can **touch data but not yet

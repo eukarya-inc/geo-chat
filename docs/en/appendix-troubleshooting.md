@@ -173,19 +173,6 @@ usually reads it and re-calls `get_skill` on its own.
 
 ---
 
-## Geocoding (Nominatim)
-
-The `geocode_address` tool uses OpenStreetMap's Nominatim (`src/lib/ai/tools/geocode.ts`).
-
-- **Rate limit**: per Nominatim's terms, it auto-throttles to **1 request per second**
-  (`THROTTLE_MS = 1000`). Asking for many place names at once simply takes proportionally longer
-  (normal behavior).
-- **Weird results**: an ambiguous place name can return an unexpected location. Add a prefecture
-  name to make the query specific. For bulk/commercial use, consider Nominatim's terms and
-  self-hosting.
-
----
-
 ## Evals won't run (ch. 60 / main)
 
 - **Everything skips**: no key found. Put `ANTHROPIC_API_KEY=sk-ant-…` on one line in `.env` (repo
